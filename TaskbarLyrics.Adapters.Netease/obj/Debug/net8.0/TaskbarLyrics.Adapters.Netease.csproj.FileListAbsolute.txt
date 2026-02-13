@@ -16,3 +16,4 @@ D:\Projects\VSProjects\TaskbarLyrics\TaskbarLyrics.Adapters.Netease\obj\Debug\ne
 D:\Projects\VSProjects\TaskbarLyrics\build_verify\TaskbarLyrics.Adapters.Netease.deps.json
 D:\Projects\VSProjects\TaskbarLyrics\build_verify\TaskbarLyrics.Adapters.Netease.dll
 D:\Projects\VSProjects\TaskbarLyrics\build_verify\TaskbarLyrics.Adapters.Netease.pdb
+D:\Projects\VSProjects\TaskbarLyrics\TaskbarLyrics.Adapters.Netease\obj\Debug\net8.0\TaskbarLyrics.Adapters.Netease.sourcelink.json

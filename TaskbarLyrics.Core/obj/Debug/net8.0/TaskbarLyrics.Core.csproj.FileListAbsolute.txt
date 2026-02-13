@@ -12,3 +12,4 @@ D:\Projects\VSProjects\TaskbarLyrics\TaskbarLyrics.Core\obj\Debug\net8.0\ref\Tas
 D:\Projects\VSProjects\TaskbarLyrics\build_verify\TaskbarLyrics.Core.deps.json
 D:\Projects\VSProjects\TaskbarLyrics\build_verify\TaskbarLyrics.Core.dll
 D:\Projects\VSProjects\TaskbarLyrics\build_verify\TaskbarLyrics.Core.pdb
+D:\Projects\VSProjects\TaskbarLyrics\TaskbarLyrics.Core\obj\Debug\net8.0\TaskbarLyrics.Core.sourcelink.json

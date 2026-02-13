@@ -16,3 +16,4 @@ D:\Projects\VSProjects\TaskbarLyrics\TaskbarLyrics.Adapters.QQMusic\obj\Debug\ne
 D:\Projects\VSProjects\TaskbarLyrics\build_verify\TaskbarLyrics.Adapters.QQMusic.deps.json
 D:\Projects\VSProjects\TaskbarLyrics\build_verify\TaskbarLyrics.Adapters.QQMusic.dll
 D:\Projects\VSProjects\TaskbarLyrics\build_verify\TaskbarLyrics.Adapters.QQMusic.pdb
+D:\Projects\VSProjects\TaskbarLyrics\TaskbarLyrics.Adapters.QQMusic\obj\Debug\net8.0\TaskbarLyrics.Adapters.QQMusic.sourcelink.json
