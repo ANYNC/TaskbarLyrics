@@ -1,0 +1,270 @@
+{
+  "format": 1,
+  "restore": {
+    "D:\\Projects\\VSProjects\\TaskbarLyrics\\TaskbarLyrics.App\\TaskbarLyrics.App.csproj": {}
+  },
+  "projects": {
+    "D:\\Projects\\VSProjects\\TaskbarLyrics\\TaskbarLyrics.Adapters.Netease\\TaskbarLyrics.Adapters.Netease.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "D:\\Projects\\VSProjects\\TaskbarLyrics\\TaskbarLyrics.Adapters.Netease\\TaskbarLyrics.Adapters.Netease.csproj",
+        "projectName": "TaskbarLyrics.Adapters.Netease",
+        "projectPath": "D:\\Projects\\VSProjects\\TaskbarLyrics\\TaskbarLyrics.Adapters.Netease\\TaskbarLyrics.Adapters.Netease.csproj",
+        "packagesPath": "C:\\Users\\ANYN\\.nuget\\packages\\",
+        "outputPath": "D:\\Projects\\VSProjects\\TaskbarLyrics\\TaskbarLyrics.Adapters.Netease\\obj\\",
+        "projectStyle": "PackageReference",
+        "configFilePaths": [
+          "C:\\Users\\ANYN\\AppData\\Roaming\\NuGet\\NuGet.Config"
+        ],
+        "originalTargetFrameworks": [
+          "net8.0"
+        ],
+        "sources": {
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net8.0": {
+            "targetAlias": "net8.0",
+            "projectReferences": {
+              "D:\\Projects\\VSProjects\\TaskbarLyrics\\TaskbarLyrics.Core\\TaskbarLyrics.Core.csproj": {
+                "projectPath": "D:\\Projects\\VSProjects\\TaskbarLyrics\\TaskbarLyrics.Core\\TaskbarLyrics.Core.csproj"
+              }
+            }
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
+        }
+      },
+      "frameworks": {
+        "net8.0": {
+          "targetAlias": "net8.0",
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48",
+            "net481"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "frameworkReferences": {
+            "Microsoft.NETCore.App": {
+              "privateAssets": "all"
+            }
+          },
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.418/PortableRuntimeIdentifierGraph.json"
+        }
+      }
+    },
+    "D:\\Projects\\VSProjects\\TaskbarLyrics\\TaskbarLyrics.Adapters.QQMusic\\TaskbarLyrics.Adapters.QQMusic.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "D:\\Projects\\VSProjects\\TaskbarLyrics\\TaskbarLyrics.Adapters.QQMusic\\TaskbarLyrics.Adapters.QQMusic.csproj",
+        "projectName": "TaskbarLyrics.Adapters.QQMusic",
+        "projectPath": "D:\\Projects\\VSProjects\\TaskbarLyrics\\TaskbarLyrics.Adapters.QQMusic\\TaskbarLyrics.Adapters.QQMusic.csproj",
+        "packagesPath": "C:\\Users\\ANYN\\.nuget\\packages\\",
+        "outputPath": "D:\\Projects\\VSProjects\\TaskbarLyrics\\TaskbarLyrics.Adapters.QQMusic\\obj\\",
+        "projectStyle": "PackageReference",
+        "configFilePaths": [
+          "C:\\Users\\ANYN\\AppData\\Roaming\\NuGet\\NuGet.Config"
+        ],
+        "originalTargetFrameworks": [
+          "net8.0"
+        ],
+        "sources": {
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net8.0": {
+            "targetAlias": "net8.0",
+            "projectReferences": {
+              "D:\\Projects\\VSProjects\\TaskbarLyrics\\TaskbarLyrics.Core\\TaskbarLyrics.Core.csproj": {
+                "projectPath": "D:\\Projects\\VSProjects\\TaskbarLyrics\\TaskbarLyrics.Core\\TaskbarLyrics.Core.csproj"
+              }
+            }
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
+        }
+      },
+      "frameworks": {
+        "net8.0": {
+          "targetAlias": "net8.0",
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48",
+            "net481"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "frameworkReferences": {
+            "Microsoft.NETCore.App": {
+              "privateAssets": "all"
+            }
+          },
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.418/PortableRuntimeIdentifierGraph.json"
+        }
+      }
+    },
+    "D:\\Projects\\VSProjects\\TaskbarLyrics\\TaskbarLyrics.App\\TaskbarLyrics.App.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "D:\\Projects\\VSProjects\\TaskbarLyrics\\TaskbarLyrics.App\\TaskbarLyrics.App.csproj",
+        "projectName": "TaskbarLyrics.App",
+        "projectPath": "D:\\Projects\\VSProjects\\TaskbarLyrics\\TaskbarLyrics.App\\TaskbarLyrics.App.csproj",
+        "packagesPath": "C:\\Users\\ANYN\\.nuget\\packages\\",
+        "outputPath": "D:\\Projects\\VSProjects\\TaskbarLyrics\\TaskbarLyrics.App\\obj\\",
+        "projectStyle": "PackageReference",
+        "configFilePaths": [
+          "C:\\Users\\ANYN\\AppData\\Roaming\\NuGet\\NuGet.Config"
+        ],
+        "originalTargetFrameworks": [
+          "net8.0-windows10.0.22621.0"
+        ],
+        "sources": {
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net8.0-windows10.0.22621": {
+            "targetAlias": "net8.0-windows10.0.22621.0",
+            "projectReferences": {
+              "D:\\Projects\\VSProjects\\TaskbarLyrics\\TaskbarLyrics.Adapters.Netease\\TaskbarLyrics.Adapters.Netease.csproj": {
+                "projectPath": "D:\\Projects\\VSProjects\\TaskbarLyrics\\TaskbarLyrics.Adapters.Netease\\TaskbarLyrics.Adapters.Netease.csproj"
+              },
+              "D:\\Projects\\VSProjects\\TaskbarLyrics\\TaskbarLyrics.Adapters.QQMusic\\TaskbarLyrics.Adapters.QQMusic.csproj": {
+                "projectPath": "D:\\Projects\\VSProjects\\TaskbarLyrics\\TaskbarLyrics.Adapters.QQMusic\\TaskbarLyrics.Adapters.QQMusic.csproj"
+              },
+              "D:\\Projects\\VSProjects\\TaskbarLyrics\\TaskbarLyrics.Core\\TaskbarLyrics.Core.csproj": {
+                "projectPath": "D:\\Projects\\VSProjects\\TaskbarLyrics\\TaskbarLyrics.Core\\TaskbarLyrics.Core.csproj"
+              }
+            }
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
+        }
+      },
+      "frameworks": {
+        "net8.0-windows10.0.22621": {
+          "targetAlias": "net8.0-windows10.0.22621.0",
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48",
+            "net481"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "downloadDependencies": [
+            {
+              "name": "Microsoft.Windows.SDK.NET.Ref",
+              "version": "[10.0.22621.56, 10.0.22621.56]"
+            }
+          ],
+          "frameworkReferences": {
+            "Microsoft.NETCore.App": {
+              "privateAssets": "all"
+            },
+            "Microsoft.Windows.SDK.NET.Ref": {
+              "privateAssets": "all"
+            },
+            "Microsoft.WindowsDesktop.App": {
+              "privateAssets": "none"
+            }
+          },
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.418/PortableRuntimeIdentifierGraph.json"
+        }
+      }
+    },
+    "D:\\Projects\\VSProjects\\TaskbarLyrics\\TaskbarLyrics.Core\\TaskbarLyrics.Core.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "D:\\Projects\\VSProjects\\TaskbarLyrics\\TaskbarLyrics.Core\\TaskbarLyrics.Core.csproj",
+        "projectName": "TaskbarLyrics.Core",
+        "projectPath": "D:\\Projects\\VSProjects\\TaskbarLyrics\\TaskbarLyrics.Core\\TaskbarLyrics.Core.csproj",
+        "packagesPath": "C:\\Users\\ANYN\\.nuget\\packages\\",
+        "outputPath": "D:\\Projects\\VSProjects\\TaskbarLyrics\\TaskbarLyrics.Core\\obj\\",
+        "projectStyle": "PackageReference",
+        "configFilePaths": [
+          "C:\\Users\\ANYN\\AppData\\Roaming\\NuGet\\NuGet.Config"
+        ],
+        "originalTargetFrameworks": [
+          "net8.0"
+        ],
+        "sources": {
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net8.0": {
+            "targetAlias": "net8.0",
+            "projectReferences": {}
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
+        }
+      },
+      "frameworks": {
+        "net8.0": {
+          "targetAlias": "net8.0",
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48",
+            "net481"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "frameworkReferences": {
+            "Microsoft.NETCore.App": {
+              "privateAssets": "all"
+            }
+          },
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.418/PortableRuntimeIdentifierGraph.json"
+        }
+      }
+    }
+  }
+}

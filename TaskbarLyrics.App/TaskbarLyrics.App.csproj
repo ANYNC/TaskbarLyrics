@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\TaskbarLyrics.Core\TaskbarLyrics.Core.csproj" />
+    <ProjectReference Include="..\TaskbarLyrics.Adapters.Netease\TaskbarLyrics.Adapters.Netease.csproj" />
+    <ProjectReference Include="..\TaskbarLyrics.Adapters.QQMusic\TaskbarLyrics.Adapters.QQMusic.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows10.0.22621.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+  </PropertyGroup>
+
+</Project>
