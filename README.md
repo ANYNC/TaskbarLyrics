@@ -1,6 +1,5 @@
 # TaskbarLyrics
-使用codex开发
-一个 Windows 任务栏歌词工具，支持基于 SMTC 的播放状态识别与多歌词源检索。
+一个 Windows 任务栏歌词工具，支持基于 SMTC 的播放状态识别与多歌词源检索，使用codex开发。
 ![效果图](doc/images/preview.gif)
 
 ## 功能
