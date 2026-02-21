@@ -1,8 +1,10 @@
 {
   "version": 2,
-  "dgSpecHash": "JLZ1iDHRtps=",
+  "dgSpecHash": "7AMQlab6rbQ=",
   "success": true,
   "projectFilePath": "D:\\Projects\\VSProjects\\TaskbarLyrics\\TaskbarLyrics.Core\\TaskbarLyrics.Core.csproj",
-  "expectedPackageFiles": [],
+  "expectedPackageFiles": [
+    "C:\\Users\\ANYN\\.nuget\\packages\\microsoft.net.illink.tasks\\8.0.24\\microsoft.net.illink.tasks.8.0.24.nupkg.sha512"
+  ],
   "logs": []
 }

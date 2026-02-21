@@ -1,4 +1,4 @@
-namespace TaskbarLyrics.App;
+﻿namespace TaskbarLyrics.App;
 
 public enum LyricsHorizontalAnchor
 {
@@ -9,6 +9,13 @@ public enum LyricsHorizontalAnchor
 
 public sealed class AppSettings
 {
+    public List<string> SourceRecognitionOrder { get; set; } = new()
+    {
+        "QQMusic",
+        "Netease",
+        "Spotify"
+    };
+
     public bool EnableNetease { get; set; } = true;
 
     public bool EnableQQMusic { get; set; } = true;
@@ -16,6 +23,10 @@ public sealed class AppSettings
     public bool ShowLyricsOnStartup { get; set; } = true;
 
     public double FontSize { get; set; } = 14;
+
+    public string FontFamily { get; set; } = "SF Pro Display, SF Pro Text, Segoe UI Variable Text, Segoe UI, Microsoft YaHei UI, Microsoft YaHei";
+
+    public string FontWeight { get; set; } = "SemiBold";
 
     public string ForegroundColor { get; set; } = "#FFFFFFFF";
 
@@ -33,8 +44,16 @@ public sealed class AppSettings
 
     public double YOffset { get; set; }
 
+    // Reserved for future manual mismatch correction workflow.
+    public bool EnableLyricMismatchResolver { get; set; } = false;
+
+    // Debug only: show real-time SMTC timeline diagnostics window.
+    public bool EnableSmtcTimelineMonitor { get; set; } = false;
+
     public AppSettings Clone()
     {
-        return (AppSettings)MemberwiseClone();
+        var cloned = (AppSettings)MemberwiseClone();
+        cloned.SourceRecognitionOrder = SourceRecognitionOrder.ToList();
+        return cloned;
     }
 }

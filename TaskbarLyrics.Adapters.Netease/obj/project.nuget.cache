@@ -1,8 +1,10 @@
 {
   "version": 2,
-  "dgSpecHash": "s4ZKX6xhC/o=",
+  "dgSpecHash": "YZzHQX64rqo=",
   "success": true,
   "projectFilePath": "D:\\Projects\\VSProjects\\TaskbarLyrics\\TaskbarLyrics.Adapters.Netease\\TaskbarLyrics.Adapters.Netease.csproj",
-  "expectedPackageFiles": [],
+  "expectedPackageFiles": [
+    "C:\\Users\\ANYN\\.nuget\\packages\\microsoft.net.illink.tasks\\8.0.24\\microsoft.net.illink.tasks.8.0.24.nupkg.sha512"
+  ],
   "logs": []
 }

@@ -13,6 +13,7 @@ public partial class App : System.Windows.Application
     public AppSettings Settings { get; private set; } = new();
 
     public bool IsExiting { get; private set; }
+    public bool UserWantsLyricsVisible { get; private set; }
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -35,6 +36,7 @@ public partial class App : System.Windows.Application
         {
             _mainWindow.Show();
         }
+        UserWantsLyricsVisible = Settings.ShowLyricsOnStartup;
 
         _trayService = new TrayService(ToggleLyricsWindow, OpenSettingsWindow, ExitApplication);
     }
@@ -62,12 +64,24 @@ public partial class App : System.Windows.Application
 
         if (_mainWindow.IsVisible)
         {
+            UserWantsLyricsVisible = false;
             _mainWindow.Hide();
         }
         else
         {
+            UserWantsLyricsVisible = true;
             _mainWindow.Show();
         }
+    }
+
+    public void MarkLyricsHiddenByUser()
+    {
+        UserWantsLyricsVisible = false;
+    }
+
+    public void MarkLyricsVisibleBySystem()
+    {
+        UserWantsLyricsVisible = true;
     }
 
     private void OpenSettingsWindow()
@@ -79,7 +93,6 @@ public partial class App : System.Windows.Application
         }
 
         _settingsWindow = new SettingsWindow(Settings.Clone());
-        _settingsWindow.Owner = _mainWindow;
         _settingsWindow.Show();
     }
 

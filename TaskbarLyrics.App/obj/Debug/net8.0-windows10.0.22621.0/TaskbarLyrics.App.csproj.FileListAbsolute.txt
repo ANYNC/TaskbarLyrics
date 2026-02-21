@@ -35,3 +35,5 @@ D:\Projects\VSProjects\TaskbarLyrics\TaskbarLyrics.App\bin\Debug\net8.0-windows1
 D:\Projects\VSProjects\TaskbarLyrics\TaskbarLyrics.App\bin\Debug\net8.0-windows10.0.22621.0\TaskbarLyrics.Adapters.Netease.pdb
 D:\Projects\VSProjects\TaskbarLyrics\TaskbarLyrics.App\bin\Debug\net8.0-windows10.0.22621.0\TaskbarLyrics.Adapters.QQMusic.pdb
 D:\Projects\VSProjects\TaskbarLyrics\TaskbarLyrics.App\obj\Debug\net8.0-windows10.0.22621.0\TaskbarLyrics.App.sourcelink.json
+D:\Projects\VSProjects\TaskbarLyrics\TaskbarLyrics.App\obj\Debug\net8.0-windows10.0.22621.0\SmtcTimelineMonitorWindow.baml
+D:\Projects\VSProjects\TaskbarLyrics\TaskbarLyrics.App\obj\Debug\net8.0-windows10.0.22621.0\SmtcTimelineMonitorWindow.g.cs

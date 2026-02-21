@@ -10,11 +10,11 @@ none
 false
 TRACE;DEBUG;NET;NET8_0;NETCOREAPP
 D:\Projects\VSProjects\TaskbarLyrics\TaskbarLyrics.App\App.xaml
-2-2121854466
+3-193454122
 
-10-588934201
+16-1283850829
 2121889448472
-MainWindow.xaml;SettingsWindow.xaml;
+MainWindow.xaml;SettingsWindow.xaml;SmtcTimelineMonitorWindow.xaml;
 
 False
 
