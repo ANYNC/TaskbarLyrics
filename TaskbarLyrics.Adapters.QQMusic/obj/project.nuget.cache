@@ -1,10 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "lYyXTnGg1Mo=",
+  "dgSpecHash": "BwT3YZip9Eg=",
   "success": true,
   "projectFilePath": "D:\\Projects\\VSProjects\\TaskbarLyrics\\TaskbarLyrics.Adapters.QQMusic\\TaskbarLyrics.Adapters.QQMusic.csproj",
-  "expectedPackageFiles": [
-    "C:\\Users\\ANYN\\.nuget\\packages\\microsoft.net.illink.tasks\\8.0.24\\microsoft.net.illink.tasks.8.0.24.nupkg.sha512"
-  ],
+  "expectedPackageFiles": [],
   "logs": []
 }

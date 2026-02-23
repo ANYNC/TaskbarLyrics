@@ -20,111 +20,64 @@
             BorderBrush="Transparent"
             BorderThickness="0"
             Padding="8,3">
-        <Grid>
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="38" />
-                <ColumnDefinition Width="10" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
+        <Grid ClipToBounds="True"
+              MinHeight="30"
+              VerticalAlignment="Stretch">
+            <Grid x:Name="LyricsWebHost"
+                  HorizontalAlignment="Stretch"
+                  VerticalAlignment="Stretch" />
 
-            <Grid Grid.Column="0"
-                  Width="34"
-                  Height="34">
-                <Border x:Name="CoverFallbackBorder"
-                        CornerRadius="6"
-                        Background="#FF2E7D32" />
-                <TextBlock x:Name="CoverFallbackText"
-                           Text="N"
-                           Foreground="White"
-                           FontSize="13"
-                           FontWeight="Bold"
-                           HorizontalAlignment="Center"
-                           VerticalAlignment="Center" />
-                <Border x:Name="CoverImageHost"
-                        CornerRadius="6"
-                        ClipToBounds="True"
-                        Visibility="Collapsed">
-                    <Image x:Name="CoverImage"
-                           Stretch="UniformToFill"
-                           SnapsToDevicePixels="True">
-                        <Image.Clip>
-                            <RectangleGeometry Rect="0,0,34,34" RadiusX="6" RadiusY="6" />
-                        </Image.Clip>
-                    </Image>
-                </Border>
-            </Grid>
+            <Grid x:Name="LyricsStack"
+                  Visibility="Collapsed"
+                  IsHitTestVisible="False">
+                <Grid.RenderTransform>
+                    <TranslateTransform x:Name="LyricsTranslateTransform" Y="0" />
+                </Grid.RenderTransform>
+                <Grid.RowDefinitions>
+                    <RowDefinition x:Name="CurrentLineTrackRow" Height="Auto" />
+                    <RowDefinition x:Name="NextLineTrackRow" Height="Auto" />
+                    <RowDefinition x:Name="IncomingLineTrackRow" Height="Auto" />
+                </Grid.RowDefinitions>
 
-            <Grid Grid.Column="2"
-                  ClipToBounds="True"
-                  VerticalAlignment="Center">
-                <Grid x:Name="LyricsStack"
-                      TextOptions.TextFormattingMode="Ideal"
-                      TextOptions.TextRenderingMode="Auto">
+                <Grid x:Name="CurrentLineHost"
+                      Grid.Row="0"
+                      RenderTransformOrigin="0,0.5">
                     <Grid.RenderTransform>
-                        <TranslateTransform x:Name="LyricsTranslateTransform" Y="0" />
+                        <TransformGroup>
+                            <ScaleTransform x:Name="CurrentLineScaleTransform" ScaleX="1" ScaleY="1" />
+                            <TranslateTransform x:Name="CurrentLineTranslateTransform" Y="0" />
+                        </TransformGroup>
                     </Grid.RenderTransform>
-                    <Grid.RowDefinitions>
-                        <RowDefinition x:Name="CurrentLineTrackRow" Height="Auto" />
-                        <RowDefinition x:Name="NextLineTrackRow" Height="Auto" />
-                        <RowDefinition x:Name="IncomingLineTrackRow" Height="Auto" />
-                    </Grid.RowDefinitions>
+                    <TextBlock x:Name="CurrentLineTextBlock"
+                               Text="TaskbarLyrics started"
+                               Foreground="White" />
+                </Grid>
 
-                    <Grid x:Name="CurrentLineHost"
-                          Grid.Row="0"
-                          ClipToBounds="False"
-                          RenderTransformOrigin="0,0.5">
-                        <Grid.RenderTransform>
-                            <TransformGroup>
-                                <ScaleTransform x:Name="CurrentLineScaleTransform" ScaleX="1" ScaleY="1" />
-                                <TranslateTransform x:Name="CurrentLineTranslateTransform" Y="0" />
-                            </TransformGroup>
-                        </Grid.RenderTransform>
-                        <TextBlock x:Name="CurrentLineTextBlock"
-                                   Text="{Binding DisplayCurrentLine}"
-                                   Foreground="White"
-                                   Opacity="1"
-                                   FontSize="13"
-                                   FontWeight="Normal"
-                                   VerticalAlignment="Center"
-                                   TextTrimming="CharacterEllipsis" />
-                    </Grid>
+                <Grid x:Name="NextLineHost"
+                      Grid.Row="1"
+                      RenderTransformOrigin="0,0">
+                    <Grid.RenderTransform>
+                        <TransformGroup>
+                            <ScaleTransform x:Name="NextLineScaleTransform" ScaleX="1" ScaleY="1" />
+                            <TranslateTransform x:Name="NextLineTranslateTransform" Y="0" />
+                        </TransformGroup>
+                    </Grid.RenderTransform>
+                    <TextBlock x:Name="NextLineTextBlock"
+                               Text="Waiting for lyrics..."
+                               Foreground="White" />
+                </Grid>
 
-                    <Grid x:Name="NextLineHost"
-                          Grid.Row="1"
-                          RenderTransformOrigin="0,0"
-                          ClipToBounds="False">
-                        <Grid.RenderTransform>
-                            <TransformGroup>
-                                <ScaleTransform x:Name="NextLineScaleTransform" ScaleX="1" ScaleY="1" />
-                                <TranslateTransform x:Name="NextLineTranslateTransform" Y="0" />
-                            </TransformGroup>
-                        </Grid.RenderTransform>
-                        <TextBlock x:Name="NextLineTextBlock"
-                                   Text="{Binding DisplayNextLine}"
-                                   Foreground="White"
-                                   FontSize="11"
-                                   VerticalAlignment="Center"
-                                   TextTrimming="CharacterEllipsis" />
-                    </Grid>
-
-                    <Grid x:Name="IncomingNextLineHost"
-                          Grid.Row="2"
-                          RenderTransformOrigin="0,0"
-                          ClipToBounds="False"
-                          Opacity="0">
-                        <Grid.RenderTransform>
-                            <TransformGroup>
-                                <ScaleTransform x:Name="IncomingNextLineScaleTransform" ScaleX="1" ScaleY="1" />
-                                <TranslateTransform x:Name="IncomingNextLineTranslateTransform" Y="0" />
-                            </TransformGroup>
-                        </Grid.RenderTransform>
-                        <TextBlock x:Name="IncomingNextLineTextBlock"
-                                   Foreground="White"
-                                   FontSize="11"
-                                   VerticalAlignment="Center"
-                                   TextTrimming="CharacterEllipsis" />
-                    </Grid>
-
+                <Grid x:Name="IncomingNextLineHost"
+                      Grid.Row="2"
+                      Opacity="0">
+                    <Grid.RenderTransform>
+                        <TransformGroup>
+                            <ScaleTransform x:Name="IncomingNextLineScaleTransform" ScaleX="1" ScaleY="1" />
+                            <TranslateTransform x:Name="IncomingNextLineTranslateTransform" Y="0" />
+                        </TransformGroup>
+                    </Grid.RenderTransform>
+                    <TextBlock x:Name="IncomingNextLineTextBlock"
+                               Foreground="White" />
                 </Grid>
             </Grid>
         </Grid>

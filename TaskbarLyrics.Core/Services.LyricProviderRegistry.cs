@@ -1,5 +1,6 @@
 using TaskbarLyrics.Core.Abstractions;
 using TaskbarLyrics.Core.Models;
+using TaskbarLyrics.Core.Utilities;
 
 namespace TaskbarLyrics.Core.Services;
 
@@ -27,7 +28,8 @@ public sealed class LyricProviderRegistry : ILyricProviderRegistry
         TrackInfo track,
         CancellationToken cancellationToken = default)
     {
-        var route = LyricSourceRoutingPolicy.BuildRoute(track);
+        var normalizedTrack = BuildNormalizedSearchTrack(track);
+        var route = LyricSourceRoutingPolicy.BuildRoute(normalizedTrack);
         foreach (var sourceKey in route)
         {
             if (!_providers.TryGetValue(sourceKey, out var providersForSource))
@@ -39,9 +41,9 @@ public sealed class LyricProviderRegistry : ILyricProviderRegistry
             {
                 var effectiveTrack =
                     string.Equals(sourceKey, "*", StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(sourceKey, track.SourceApp, StringComparison.OrdinalIgnoreCase)
-                        ? track
-                        : track with { SourceApp = sourceKey };
+                    string.Equals(sourceKey, normalizedTrack.SourceApp, StringComparison.OrdinalIgnoreCase)
+                        ? normalizedTrack
+                        : normalizedTrack with { SourceApp = sourceKey };
 
                 var result = await provider.GetLyricsAsync(effectiveTrack, cancellationToken);
                 if (result is not null && result.Lines.Count > 0)
@@ -56,6 +58,24 @@ public sealed class LyricProviderRegistry : ILyricProviderRegistry
         return new LyricResolveResult(
             Document: null,
             SourceApp: null);
+    }
+
+    private static TrackInfo BuildNormalizedSearchTrack(TrackInfo track)
+    {
+        var normalizedTitle = ChineseScriptConverter.ToSimplified(track.Title);
+        var normalizedArtist = ChineseScriptConverter.ToSimplified(track.Artist);
+
+        if (string.Equals(normalizedTitle, track.Title, StringComparison.Ordinal) &&
+            string.Equals(normalizedArtist, track.Artist, StringComparison.Ordinal))
+        {
+            return track;
+        }
+
+        return track with
+        {
+            Title = normalizedTitle,
+            Artist = normalizedArtist
+        };
     }
 
     public async Task<LyricDocument?> GetLyricsAsync(TrackInfo track, CancellationToken cancellationToken = default)
