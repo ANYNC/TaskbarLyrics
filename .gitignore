@@ -1,6 +1,8 @@
 # Build outputs
 [Bb]in/
 [Oo]bj/
+**/[Bb]in/
+**/[Oo]bj/
 build/
 build_verify/
 publish/
