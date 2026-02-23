@@ -31,7 +31,10 @@
 
             <Grid x:Name="LyricsStack"
                   Visibility="Collapsed"
-                  IsHitTestVisible="False">
+                  IsHitTestVisible="False"
+                  TextOptions.TextFormattingMode="Ideal"
+                  TextOptions.TextRenderingMode="Auto"
+                  TextOptions.TextHintingMode="Animated">
                 <Grid.RenderTransform>
                     <TranslateTransform x:Name="LyricsTranslateTransform" Y="0" />
                 </Grid.RenderTransform>
