@@ -471,7 +471,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         var promotedSizeProgress = GetPromotionSizeProgress(progress);
         var travel = _lineTransitionTravel;
 
-        CurrentLineTranslateTransform.Y = -travel * travelProgress;
+        var translatedY = AlignToPhysicalPixel(-travel * travelProgress);
+        CurrentLineTranslateTransform.Y = translatedY;
         CurrentLineHost.Opacity = 1 - currentFade;
         CurrentLineScaleTransform.ScaleX = 1;
         CurrentLineScaleTransform.ScaleY = 1;
@@ -479,14 +480,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         var promotedFontSize = _suppressPromotedSizeAnimation
             ? _secondaryLineFontSize
             : Lerp(_secondaryLineFontSize, CurrentLineTextBlock.FontSize, promotedSizeProgress);
-        promotedFontSize = Math.Round(promotedFontSize * 20, MidpointRounding.AwayFromZero) / 20.0;
-        NextLineTranslateTransform.Y = -travel * travelProgress;
+        NextLineTranslateTransform.Y = translatedY;
         NextLineHost.Opacity = 1;
         NextLineTextBlock.FontSize = promotedFontSize;
         NextLineScaleTransform.ScaleX = 1;
         NextLineScaleTransform.ScaleY = 1;
 
-        IncomingNextLineTranslateTransform.Y = -travel * travelProgress;
+        IncomingNextLineTranslateTransform.Y = translatedY;
         IncomingNextLineHost.Opacity = string.IsNullOrWhiteSpace(IncomingNextLineTextBlock.Text)
             ? 0
             : incomingProgress;
@@ -495,6 +495,17 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         var nextBrightness = Lerp(SecondaryLineBrightness, 1.0, promotedProgress);
         SetLineBrushes(1.0, nextBrightness, SecondaryLineBrightness);
+    }
+
+    private double AlignToPhysicalPixel(double dipValue)
+    {
+        var dpiScaleY = Media.VisualTreeHelper.GetDpi(this).DpiScaleY;
+        if (dpiScaleY <= 0)
+        {
+            return dipValue;
+        }
+
+        return Math.Round(dipValue * dpiScaleY, MidpointRounding.AwayFromZero) / dpiScaleY;
     }
 
     private static double GetAppleMusicTravelProgress(double t)

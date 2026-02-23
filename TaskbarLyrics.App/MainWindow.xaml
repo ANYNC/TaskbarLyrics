@@ -13,6 +13,8 @@
         ShowActivated="False"
         Topmost="True"
         AllowsTransparency="True"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
         Background="Transparent">
     <Border x:Name="RootBorder"
             CornerRadius="8"
@@ -58,8 +60,10 @@
                   ClipToBounds="True"
                   VerticalAlignment="Center">
                 <Grid x:Name="LyricsStack"
+                      SnapsToDevicePixels="True"
                       TextOptions.TextFormattingMode="Ideal"
-                      TextOptions.TextRenderingMode="Auto">
+                      TextOptions.TextRenderingMode="Auto"
+                      TextOptions.TextHintingMode="Animated">
                     <Grid.RenderTransform>
                         <TranslateTransform x:Name="LyricsTranslateTransform" Y="0" />
                     </Grid.RenderTransform>
@@ -85,6 +89,7 @@
                                    Opacity="1"
                                    FontSize="13"
                                    FontWeight="Normal"
+                                   SnapsToDevicePixels="True"
                                    VerticalAlignment="Center"
                                    TextTrimming="CharacterEllipsis" />
                     </Grid>
@@ -103,6 +108,7 @@
                                    Text="{Binding DisplayNextLine}"
                                    Foreground="White"
                                    FontSize="11"
+                                   SnapsToDevicePixels="True"
                                    VerticalAlignment="Center"
                                    TextTrimming="CharacterEllipsis" />
                     </Grid>
@@ -121,6 +127,7 @@
                         <TextBlock x:Name="IncomingNextLineTextBlock"
                                    Foreground="White"
                                    FontSize="11"
+                                   SnapsToDevicePixels="True"
                                    VerticalAlignment="Center"
                                    TextTrimming="CharacterEllipsis" />
                     </Grid>
