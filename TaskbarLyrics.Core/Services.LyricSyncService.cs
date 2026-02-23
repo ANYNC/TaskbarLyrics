@@ -81,44 +81,29 @@ public sealed class LyricSyncService
             var firstLine = lines[0];
             if (firstLine.Timestamp > TimeSpan.Zero && timelinePosition < firstLine.Timestamp)
             {
-                return new LyricDisplayFrame("...", firstLine.Text, 0);
+                return new LyricDisplayFrame("...", firstLine.Text, 0, -1);
             }
 
-            return new LyricDisplayFrame(firstLine.Text, lines.Count > 1 ? lines[1].Text : string.Empty, 0);
+            return new LyricDisplayFrame(firstLine.Text, lines.Count > 1 ? lines[1].Text : string.Empty, 0, 0);
         }
 
         var currentText = lines[currentIndex].Text;
         var nextText = currentIndex + 1 < lines.Count ? lines[currentIndex + 1].Text : string.Empty;
         var progress = 0.0;
-        var segmentStartIndex = currentIndex;
-        while (segmentStartIndex > 0 &&
-               string.Equals(lines[segmentStartIndex - 1].Text, currentText, StringComparison.Ordinal))
-        {
-            segmentStartIndex--;
-        }
 
-        var segmentEndIndex = currentIndex + 1;
-        while (segmentEndIndex < lines.Count &&
-               string.Equals(lines[segmentEndIndex].Text, currentText, StringComparison.Ordinal))
+        if (currentIndex + 1 < lines.Count)
         {
-            segmentEndIndex++;
-        }
-
-        if (segmentEndIndex < lines.Count)
-        {
-            var start = lines[segmentStartIndex].Timestamp;
-            var end = lines[segmentEndIndex].Timestamp;
+            var start = lines[currentIndex].Timestamp;
+            var end = lines[currentIndex + 1].Timestamp;
             var segment = end - start;
             if (segment > TimeSpan.Zero)
             {
                 var elapsed = timelinePosition - start;
                 progress = Math.Clamp(elapsed.TotalMilliseconds / segment.TotalMilliseconds, 0, 1);
             }
-
-            nextText = lines[segmentEndIndex].Text;
         }
 
-        return new LyricDisplayFrame(currentText, nextText, progress);
+        return new LyricDisplayFrame(currentText, nextText, progress, currentIndex);
     }
 
     private async Task TryApplyLoadedLyricsAsync(string sourceApp)
