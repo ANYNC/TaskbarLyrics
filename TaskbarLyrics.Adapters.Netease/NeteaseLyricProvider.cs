@@ -196,7 +196,7 @@ public sealed class NeteaseLyricProvider : ILyricProvider
         long songId,
         CancellationToken cancellationToken)
     {
-        var url = $"{OfficialLyricEndpoint}?id={songId}&lv=1&kv=1&tv=-1";
+        var url = $"{OfficialLyricEndpoint}?id={songId}&lv=-1&kv=1&tv=1";
 
         try
         {
