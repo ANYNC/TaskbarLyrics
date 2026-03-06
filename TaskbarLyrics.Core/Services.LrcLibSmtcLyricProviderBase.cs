@@ -12,7 +12,7 @@ public abstract class LrcLibSmtcLyricProviderBase : ILyricProvider
     private const bool EnableTraditionalToSimplified = false;
     private const int SearchParallelism = 3;
     private static readonly HttpClient Http = CreateHttpClient();
-    private static readonly Regex LrcRegex = new(@"\[(\d{1,2})(?:[:\uFF1A])(\d{2})(?:[\.\uFF0E:\uFF1A](\d{1,3}))?\]([^\r\n]*)", RegexOptions.Compiled);
+    private static readonly Regex LrcTimestampRegex = new(@"\[(\d{1,2})(?:[:\uFF1A])(\d{2})(?:[\.\uFF0E:\uFF1A](\d{1,3}))?\]", RegexOptions.Compiled);
     private static readonly Regex BracketSuffixRegex = new(@"\s*[\(\[\{（【].*?[\)\]\}）】]\s*", RegexOptions.Compiled);
     private static readonly Regex FeatureSuffixRegex = new(@"\s+(feat\.?|ft\.?|with)\s+.*$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private static readonly ConcurrentDictionary<string, ProviderCacheState> ProviderCaches = new(StringComparer.OrdinalIgnoreCase);
@@ -629,13 +629,14 @@ public abstract class LrcLibSmtcLyricProviderBase : ILyricProvider
 
         foreach (var rawLine in lines)
         {
-            var matches = LrcRegex.Matches(rawLine);
+            var matches = LrcTimestampRegex.Matches(rawLine);
             if (matches.Count == 0)
             {
                 continue;
             }
 
-            var text = NormalizeLyricText(matches[^1].Groups[4].Value);
+            var textStart = matches[^1].Index + matches[^1].Length;
+            var text = NormalizeLyricText(textStart < rawLine.Length ? rawLine[textStart..] : string.Empty);
             if (string.IsNullOrWhiteSpace(text))
             {
                 continue;

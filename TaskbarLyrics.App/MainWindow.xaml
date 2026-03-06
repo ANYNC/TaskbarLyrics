@@ -22,12 +22,13 @@
             BorderBrush="Transparent"
             BorderThickness="0"
             Padding="8,3">
-        <Grid ClipToBounds="True"
+        <Grid ClipToBounds="False"
               MinHeight="30"
               VerticalAlignment="Stretch">
             <Grid x:Name="LyricsWebHost"
                   HorizontalAlignment="Stretch"
-                  VerticalAlignment="Stretch" />
+                  VerticalAlignment="Stretch"
+                  Margin="0,0,0,-2" />
 
             <Grid x:Name="LyricsStack"
                   Visibility="Collapsed"

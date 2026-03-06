@@ -1077,7 +1077,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
       --line-pitch: 15px;
       --current-size: 13px;
       --next-size: 12px;
-      --primary-offset-y: 0px;
+      --primary-offset-y: 1px;
       --secondary-offset-y: 2px;
     }
 
@@ -1103,7 +1103,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     .layout {
       width: 100%;
       height: 100%;
-      padding: 2px 0px 0px 0px;
+      padding: 0px 0px 0px 0px;
       overflow: hidden;
       background: transparent;
       border: 0;
@@ -1152,7 +1152,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
       min-width: 0;
       height: 100%;
       overflow: hidden;
-      padding: 2px 0 0 5px;
+      padding: 3px 0 0 5px;
     }
 
     .viewport {
@@ -1237,7 +1237,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     .next-line.promoting {
       color: var(--primary);
-      transform: none;
+      transform: translateY(var(--primary-offset-y));
     }
 
   </style>
@@ -1500,7 +1500,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     }
 
     function updateMetrics() {
-      const hostHeight = Math.max(26, viewportEl.clientHeight || 30);
+      // WPF host extends the WebView 2px downward for descender safety; exclude that buffer from row metrics.
+      const viewportDescenderBufferPx = 2;
+      const measuredViewportHeight = viewportEl.clientHeight || 30;
+      const hostHeight = Math.max(26, measuredViewportHeight - viewportDescenderBufferPx);
       rowHeightPx = Math.max(13, Math.floor(hostHeight / 2));
       rowGapPx = Math.max(0, hostHeight - (rowHeightPx * 2));
       linePitchPx = rowHeightPx + rowGapPx;
@@ -1656,9 +1659,15 @@ public partial class MainWindow : Window, INotifyPropertyChanged
           if (uri.length > 0) {
             coverImageEl.src = uri;
             coverImageEl.style.display = "block";
+            if (coverFallbackEl) {
+              coverFallbackEl.style.display = "none";
+            }
           } else {
             coverImageEl.removeAttribute("src");
             coverImageEl.style.display = "none";
+            if (coverFallbackEl) {
+              coverFallbackEl.style.display = "flex";
+            }
           }
         }
       },
@@ -1736,9 +1745,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         var workArea = SystemParameters.WorkArea;
         var screenWidth = SystemParameters.PrimaryScreenWidth;
         var screenHeight = SystemParameters.PrimaryScreenHeight;
-        var taskbarHeight = Math.Max(32, screenHeight - workArea.Height);
-
-        Height = Math.Max(36, taskbarHeight - 4);
+        const double normalTaskbarHeight = 48;
+        var taskbarHeight = Math.Max(normalTaskbarHeight, screenHeight - workArea.Height);
+        var desiredHeight = Math.Max(36, taskbarHeight - 4);
+        Height = Math.Min(desiredHeight, taskbarHeight);
 
         var settings = (System.Windows.Application.Current as App)?.Settings ?? new AppSettings();
         Left = settings.HorizontalAnchor switch
