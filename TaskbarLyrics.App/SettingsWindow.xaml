@@ -1,164 +1,296 @@
-﻿<Window x:Class="TaskbarLyrics.App.SettingsWindow"
+<ui:FluentWindow x:Class="TaskbarLyrics.App.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         Title="TaskbarLyrics 设置"
-        Width="520"
-        Height="680"
-        WindowStartupLocation="CenterScreen">
-    <Window.Resources>
-        <Style TargetType="TextBox">
-            <Setter Property="HorizontalAlignment" Value="Left" />
-            <Setter Property="TextAlignment" Value="Left" />
-        </Style>
-        <Style TargetType="ComboBox">
-            <Setter Property="HorizontalAlignment" Value="Left" />
-            <Setter Property="HorizontalContentAlignment" Value="Left" />
-        </Style>
-    </Window.Resources>
-    <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <StackPanel Margin="16,12,16,16">
-            <GroupBox Header="识别顺序" Margin="0,0,0,10">
-                <StackPanel Margin="12,10,12,8">
-                    <TextBlock Text="已支持：QQ音乐、网易云音乐、Spotify"
-                               Margin="0,0,0,6" />
-                    <TextBlock Text="拖拽列表可调整优先级。多个播放器同时播放时，按从上到下顺序优先识别。"
-                               Foreground="#AAFFFFFF"
-                               TextWrapping="Wrap"
-                               Margin="0,0,0,8" />
-                    <Border BorderThickness="1"
-                            BorderBrush="#33FFFFFF"
-                            CornerRadius="6"
-                            Background="#12000000"
-                            Padding="6">
-                        <ListBox x:Name="RecognitionOrderListBox"
-                                 Background="Transparent"
-                                 BorderThickness="0"
-                                 AllowDrop="True"
-                                 PreviewMouseLeftButtonDown="RecognitionOrderListBox_PreviewMouseLeftButtonDown"
-                                 PreviewMouseMove="RecognitionOrderListBox_PreviewMouseMove"
-                                 DragOver="RecognitionOrderListBox_DragOver"
-                                 Drop="RecognitionOrderListBox_Drop"
-                                 MinHeight="110">
-                            <ListBox.ItemTemplate>
-                                <DataTemplate>
-                                    <Border CornerRadius="4" Padding="8,6" Margin="0,2" Background="#1FFFFFFF">
-                                        <DockPanel LastChildFill="True">
-                                            <TextBlock Text="≡"
-                                                       Width="18"
-                                                       Margin="0,0,8,0"
-                                                       Foreground="#BFFFFFFF"
-                                                       VerticalAlignment="Center" />
-                                            <TextBlock Text="{Binding DisplayName}" VerticalAlignment="Center" />
-                                        </DockPanel>
-                                    </Border>
-                                </DataTemplate>
-                            </ListBox.ItemTemplate>
-                        </ListBox>
-                    </Border>
-                </StackPanel>
-            </GroupBox>
+        Width="640"
+        Height="800"
+        WindowStartupLocation="CenterScreen"
+        WindowBackdropType="Mica"
+        ExtendsContentIntoTitleBar="True">
 
-            <GroupBox Header="显示" Margin="0,0,0,10">
-                <StackPanel Margin="12,10,12,8">
-                    <CheckBox x:Name="StartupCheckBox" Content="启动时显示歌词" Margin="0,0,0,6" />
-                    <CheckBox x:Name="BackgroundCheckBox" Content="显示背景" Margin="0,0,0,6" />
-                    <CheckBox x:Name="BorderCheckBox" Content="显示边框" />
-                </StackPanel>
-            </GroupBox>
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
 
-            <GroupBox Header="歌词与调试" Margin="0,0,0,10">
-                <StackPanel Margin="12,10,12,8">
-                    <CheckBox x:Name="LyricMismatchResolverCheckBox"
-                              Content="启用歌词错配修正（预留）"
-                              Margin="0,0,0,6" />
-                    <CheckBox x:Name="SmtcTimelineMonitorCheckBox"
-                              Content="显示 SMTC 时间轴监视器（调试）"
-                              Margin="0,0,0,8" />
-                    <Button Content="清除歌词缓存"
-                            Width="140"
-                            HorizontalAlignment="Left"
-                            Click="ClearLyricCacheButton_Click" />
-                </StackPanel>
-            </GroupBox>
+        <!-- Title Bar -->
+        <ui:TitleBar Grid.Row="0" Title="TaskbarLyrics 设置" />
 
-            <GroupBox Header="字体" Margin="0,0,0,10">
-                <Grid Margin="12,10,12,10">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="120" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                    </Grid.RowDefinitions>
+        <!-- Navigation View -->
+        <ui:NavigationView x:Name="SettingsNav" Grid.Row="1" IsBackButtonVisible="Collapsed" PaneDisplayMode="Auto">
+            <ui:NavigationView.MenuItems>
+                <ui:NavigationViewItem Content="通用设置" Icon="{ui:SymbolIcon Tag24}">
+                    <ui:NavigationViewItem.Tag>
+                        GeneralPage
+                    </ui:NavigationViewItem.Tag>
+                </ui:NavigationViewItem>
+                <ui:NavigationViewItem Content="字体与外观" Icon="{ui:SymbolIcon TextFont24}">
+                    <ui:NavigationViewItem.Tag>
+                        AppearancePage
+                    </ui:NavigationViewItem.Tag>
+                </ui:NavigationViewItem>
+                <ui:NavigationViewItem Content="窗口与布局" Icon="{ui:SymbolIcon FullScreenMaximize24}">
+                    <ui:NavigationViewItem.Tag>
+                        LayoutPage
+                    </ui:NavigationViewItem.Tag>
+                </ui:NavigationViewItem>
+                <ui:NavigationViewItem Content="识别与调试" Icon="{ui:SymbolIcon Code24}">
+                    <ui:NavigationViewItem.Tag>
+                        DebugPage
+                    </ui:NavigationViewItem.Tag>
+                </ui:NavigationViewItem>
+            </ui:NavigationView.MenuItems>
 
-                    <TextBlock Grid.Row="0" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,8" Text="字号" />
-                    <TextBox x:Name="FontSizeTextBox" Grid.Row="0" Grid.Column="1" Width="180" Margin="0,0,0,8" />
+            <!-- Page Content Host -->
+            <ui:NavigationView.ContentOverlay>
+                <Grid>
+                    <!-- Because Wpf.Ui NavigationView usually works with Page types, 
+                         and we want to keep all data bindings in one window codebehind for simplicity, 
+                         we will place a ContentControl and manually switch contents based on selection, 
+                         or host panels directly mapped to the selection.
+                         Using Frame/INZ for simple apps works, but directly nesting StackPanels is easier here. -->
+                    <ScrollViewer Margin="8,0,0,0">
+                        <Grid x:Name="ContentArea">
+                            
+                            <!-- General Page -->
+                            <StackPanel x:Name="GeneralPage" Visibility="Visible" Margin="12,12,24,24">
+                                <TextBlock Text="通用设置" FontSize="28" FontWeight="SemiBold" Margin="0,0,0,24" />
+                                <ui:CardControl Margin="0,0,0,12">
+                                    <ui:CardControl.Header>
+                                        <StackPanel>
+                                            <TextBlock Text="启动时显示歌词" FontWeight="SemiBold" />
+                                            <TextBlock Text="如果启用，TaskbarLyrics 会在启动时自动展示歌词窗口。" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                        </StackPanel>
+                                    </ui:CardControl.Header>
+                                    <CheckBox x:Name="StartupCheckBox" />
+                                </ui:CardControl>
 
-                    <TextBlock Grid.Row="1" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,8" Text="字体" />
-                    <ComboBox x:Name="FontFamilyComboBox"
-                              Grid.Row="1"
-                              Grid.Column="1"
-                              Width="180"
-                              IsEditable="True"
-                              IsTextSearchEnabled="True"
-                              Margin="0,0,0,8" />
+                                <ui:CardControl Margin="0,0,0,12">
+                                    <ui:CardControl.Header>
+                                        <TextBlock Text="显示背景" FontWeight="SemiBold" />
+                                    </ui:CardControl.Header>
+                                    <CheckBox x:Name="BackgroundCheckBox" />
+                                </ui:CardControl>
 
-                    <TextBlock Grid.Row="2" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,8" Text="字重" />
-                    <ComboBox x:Name="FontWeightComboBox" Grid.Row="2" Grid.Column="1" Width="180" Margin="0,0,0,8">
-                        <ComboBoxItem Content="细体" />
-                        <ComboBoxItem Content="常规" />
-                        <ComboBoxItem Content="中等" />
-                        <ComboBoxItem Content="半粗体" />
-                        <ComboBoxItem Content="粗体" />
-                    </ComboBox>
+                                <ui:CardControl Margin="0,0,0,12">
+                                    <ui:CardControl.Header>
+                                        <TextBlock Text="显示边框" FontWeight="SemiBold" />
+                                    </ui:CardControl.Header>
+                                    <CheckBox x:Name="BorderCheckBox" />
+                                </ui:CardControl>
+                            </StackPanel>
 
-                    <TextBlock Grid.Row="3" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,0" Text="文字颜色" />
-                    <TextBox x:Name="ForegroundColorTextBox" Grid.Row="3" Grid.Column="1" Width="180" />
+                            <!-- Appearance Page -->
+                            <StackPanel x:Name="AppearancePage" Visibility="Collapsed" Margin="12,12,24,24">
+                                <TextBlock Text="字体与外观" FontSize="28" FontWeight="SemiBold" Margin="0,0,0,24" />
+                                
+                                <ui:CardAction Margin="0,0,0,12" IsChevronVisible="False">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="200" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0">
+                                            <TextBlock Text="字体族 (Font Family)" FontWeight="SemiBold" />
+                                            <TextBlock Text="首选的系统渲染字体，可以使用逗号分隔后备。" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                        </StackPanel>
+                                        <ComboBox x:Name="FontFamilyComboBox" Grid.Column="1" HorizontalAlignment="Stretch" VerticalAlignment="Center" IsEditable="True" IsTextSearchEnabled="True" />
+                                    </Grid>
+                                </ui:CardAction>
+
+                                <ui:CardAction Margin="0,0,0,12" IsChevronVisible="False">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="200" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0">
+                                            <TextBlock Text="字号大小" FontWeight="SemiBold" />
+                                        </StackPanel>
+                                        <ui:TextBox x:Name="FontSizeTextBox" Grid.Column="1" HorizontalAlignment="Stretch" VerticalAlignment="Center" />
+                                    </Grid>
+                                </ui:CardAction>
+
+                                <ui:CardAction Margin="0,0,0,12" IsChevronVisible="False">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="200" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0">
+                                            <TextBlock Text="字体粗细 (Font Weight)" FontWeight="SemiBold" />
+                                        </StackPanel>
+                                        <ComboBox x:Name="FontWeightComboBox" Grid.Column="1" HorizontalAlignment="Stretch" VerticalAlignment="Center">
+                                            <ComboBoxItem Content="细体" />
+                                            <ComboBoxItem Content="常规" />
+                                            <ComboBoxItem Content="中等" />
+                                            <ComboBoxItem Content="半粗体" />
+                                            <ComboBoxItem Content="粗体" />
+                                        </ComboBox>
+                                    </Grid>
+                                </ui:CardAction>
+
+                                <ui:CardAction Margin="0,0,0,12" IsChevronVisible="False">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="200" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0">
+                                            <TextBlock Text="首选文字颜色" FontWeight="SemiBold" />
+                                        </StackPanel>
+                                        <ui:TextBox x:Name="ForegroundColorTextBox" Grid.Column="1" HorizontalAlignment="Stretch" VerticalAlignment="Center" />
+                                    </Grid>
+                                </ui:CardAction>
+                            </StackPanel>
+
+                            <!-- Layout Page -->
+                            <StackPanel x:Name="LayoutPage" Visibility="Collapsed" Margin="12,12,24,24">
+                                <TextBlock Text="窗口与布局" FontSize="28" FontWeight="SemiBold" Margin="0,0,0,24" />
+                                
+                                <ui:CardAction Margin="0,0,0,12" IsChevronVisible="False">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="200" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0">
+                                            <TextBlock Text="背景不透明度" FontWeight="SemiBold" />
+                                        </StackPanel>
+                                        <ui:TextBox x:Name="BackgroundOpacityTextBox" Grid.Column="1" HorizontalAlignment="Stretch" VerticalAlignment="Center" />
+                                    </Grid>
+                                </ui:CardAction>
+
+                                <ui:CardAction Margin="0,0,0,12" IsChevronVisible="False">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="200" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0">
+                                            <TextBlock Text="窗口总宽度 (px)" FontWeight="SemiBold" />
+                                        </StackPanel>
+                                        <ui:TextBox x:Name="WindowWidthTextBox" Grid.Column="1" HorizontalAlignment="Stretch" VerticalAlignment="Center" />
+                                    </Grid>
+                                </ui:CardAction>
+
+                                <ui:CardAction Margin="0,0,0,12" IsChevronVisible="False">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="200" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0">
+                                            <TextBlock Text="水平挂靠位置" FontWeight="SemiBold" />
+                                        </StackPanel>
+                                        <ComboBox x:Name="AnchorComboBox" Grid.Column="1" HorizontalAlignment="Stretch" VerticalAlignment="Center">
+                                            <ComboBoxItem Content="左侧" />
+                                            <ComboBoxItem Content="居中" />
+                                            <ComboBoxItem Content="右侧" />
+                                        </ComboBox>
+                                    </Grid>
+                                </ui:CardAction>
+
+                                <ui:CardAction Margin="0,0,0,12" IsChevronVisible="False">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="200" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0">
+                                            <TextBlock Text="X 轴位置偏移 (px)" FontWeight="SemiBold" />
+                                        </StackPanel>
+                                        <ui:TextBox x:Name="XOffsetTextBox" Grid.Column="1" HorizontalAlignment="Stretch" VerticalAlignment="Center" />
+                                    </Grid>
+                                </ui:CardAction>
+
+                                <ui:CardAction Margin="0,0,0,12" IsChevronVisible="False">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="200" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0">
+                                            <TextBlock Text="Y 轴位置偏移 (px)" FontWeight="SemiBold" />
+                                        </StackPanel>
+                                        <ui:TextBox x:Name="YOffsetTextBox" Grid.Column="1" HorizontalAlignment="Stretch" VerticalAlignment="Center" />
+                                    </Grid>
+                                </ui:CardAction>
+                            </StackPanel>
+
+                            <!-- Debug & Source Page -->
+                            <StackPanel x:Name="DebugPage" Visibility="Collapsed" Margin="12,12,24,24">
+                                <TextBlock Text="识别与调试" FontSize="28" FontWeight="SemiBold" Margin="0,0,0,24" />
+
+                                <GroupBox Header="来源识别顺序" Margin="0,0,0,24" Padding="12">
+                                    <StackPanel>
+                                        <TextBlock Text="已支持：QQ音乐、网易云音乐、Spotify" Margin="0,0,0,6" />
+                                        <TextBlock Text="可拖拽列表来调整优先级。多个播放器存在时，从上到下按序匹配。" Foreground="{DynamicResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" Margin="0,0,0,12" />
+                                        
+                                        <Border BorderThickness="1" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}" CornerRadius="4" Background="{DynamicResource ControlFillColorDefaultBrush}">
+                                            <ListBox x:Name="RecognitionOrderListBox"
+                                                     AllowDrop="True" Background="Transparent" BorderThickness="0"
+                                                     PreviewMouseLeftButtonDown="RecognitionOrderListBox_PreviewMouseLeftButtonDown"
+                                                     PreviewMouseMove="RecognitionOrderListBox_PreviewMouseMove"
+                                                     DragOver="RecognitionOrderListBox_DragOver"
+                                                     Drop="RecognitionOrderListBox_Drop"
+                                                     MinHeight="110" Padding="0">
+                                                <ListBox.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Border Padding="12,10" Margin="4,2" CornerRadius="4" Background="{DynamicResource LayerOnAccentAcrylicFillColorDefaultBrush}">
+                                                            <DockPanel LastChildFill="True">
+                                                                <ui:SymbolIcon Symbol="ReOrder24" Margin="0,0,12,0" Foreground="{DynamicResource TextFillColorTertiaryBrush}" VerticalAlignment="Center" />
+                                                                <TextBlock Text="{Binding DisplayName}" VerticalAlignment="Center" FontWeight="Medium" />
+                                                            </DockPanel>
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </ListBox.ItemTemplate>
+                                            </ListBox>
+                                        </Border>
+                                    </StackPanel>
+                                </GroupBox>
+
+                                <TextBlock Text="高级开关" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,16" />
+
+                                <ui:CardControl Margin="0,0,0,12">
+                                    <ui:CardControl.Header>
+                                        <TextBlock Text="启用歌词错配修正 (预留)" FontWeight="SemiBold" />
+                                    </ui:CardControl.Header>
+                                    <CheckBox x:Name="LyricMismatchResolverCheckBox" />
+                                </ui:CardControl>
+
+                                <ui:CardControl Margin="0,0,0,12">
+                                    <ui:CardControl.Header>
+                                        <TextBlock Text="显示 SMTC 时间轴监视器 (调试)" FontWeight="SemiBold" />
+                                    </ui:CardControl.Header>
+                                    <CheckBox x:Name="SmtcTimelineMonitorCheckBox" />
+                                </ui:CardControl>
+
+                                <ui:CardAction Margin="0,0,0,12" Click="ClearLyricCacheButton_Click" IsChevronVisible="True" Icon="{ui:SymbolIcon Delete24}">
+                                    <StackPanel>
+                                        <TextBlock Text="清除本地缓存" FontWeight="SemiBold" />
+                                        <TextBlock Text="清理已下载的歌词解析，清理后首次匹配可能变慢。" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                    </StackPanel>
+                                </ui:CardAction>
+
+                            </StackPanel>
+                        </Grid>
+                    </ScrollViewer>
+
+                    <Grid VerticalAlignment="Bottom" Margin="12,12,32,24" HorizontalAlignment="Right">
+                        <StackPanel Orientation="Horizontal">
+                            <ui:Button Appearance="Primary" Content="保存更改" Width="100" Margin="0,0,12,0" Click="SaveButton_Click" Icon="{ui:SymbolIcon Save24}" />
+                            <ui:Button Content="全部取消" Width="100" Click="CancelButton_Click" />
+                        </StackPanel>
+                    </Grid>
                 </Grid>
-            </GroupBox>
+            </ui:NavigationView.ContentOverlay>
+        </ui:NavigationView>
 
-            <GroupBox Header="窗口与布局">
-                <Grid Margin="12,10,12,10">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="120" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                    </Grid.RowDefinitions>
+        <!-- Toast Notification Area -->
+        <ui:SnackbarPresenter x:Name="RootSnackbar" Grid.Row="1" />
 
-                    <TextBlock Grid.Row="0" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,8" Text="背景不透明度" />
-                    <TextBox x:Name="BackgroundOpacityTextBox" Grid.Row="0" Grid.Column="1" Width="180" Margin="0,0,0,8" />
-
-                    <TextBlock Grid.Row="1" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,8" Text="窗口宽度（px）" />
-                    <TextBox x:Name="WindowWidthTextBox" Grid.Row="1" Grid.Column="1" Width="180" Margin="0,0,0,8" />
-
-                    <TextBlock Grid.Row="2" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,8" Text="水平锚点" />
-                    <ComboBox x:Name="AnchorComboBox" Grid.Row="2" Grid.Column="1" Width="180" Margin="0,0,0,8">
-                        <ComboBoxItem Content="左侧" />
-                        <ComboBoxItem Content="居中" />
-                        <ComboBoxItem Content="右侧" />
-                    </ComboBox>
-
-                    <TextBlock Grid.Row="3" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,8" Text="X 偏移（px）" />
-                    <TextBox x:Name="XOffsetTextBox" Grid.Row="3" Grid.Column="1" Width="180" Margin="0,0,0,8" />
-
-                    <TextBlock Grid.Row="4" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,0" Text="Y 偏移（px）" />
-                    <TextBox x:Name="YOffsetTextBox" Grid.Row="4" Grid.Column="1" Width="180" />
-                </Grid>
-            </GroupBox>
-
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
-                <Button Content="保存" Width="88" Margin="0,0,8,0" Click="SaveButton_Click" />
-                <Button Content="取消" Width="88" Click="CancelButton_Click" />
-            </StackPanel>
-        </StackPanel>
-    </ScrollViewer>
-</Window>
+    </Grid>
+</ui:FluentWindow>

@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
@@ -6,13 +6,15 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
+using System.Threading.Tasks;
 using TaskbarLyrics.Adapters.Netease;
 using TaskbarLyrics.Adapters.QQMusic;
 using TaskbarLyrics.Core.Services;
 
 namespace TaskbarLyrics.App;
 
-public partial class SettingsWindow : Window
+public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
 {
     private readonly AppSettings _settings;
     private readonly ObservableCollection<RecognitionSourceItem> _recognitionOrderItems = new();
@@ -60,6 +62,39 @@ public partial class SettingsWindow : Window
             "Center" => 1,
             _ => 2
         };
+
+        IsVisibleChanged += (s, e) =>
+        {
+            if (IsVisible)
+            {
+                SettingsNav.Loaded += (s2, e2) =>
+                {
+                    // Wpf.Ui auto selects first item, just trigger selection logic manually once
+                    if (SettingsNav.SelectedItem is Wpf.Ui.Controls.NavigationViewItem item)
+                    {
+                        var tag = item.Tag as string;
+                        GeneralPage.Visibility = tag == "GeneralPage" ? Visibility.Visible : Visibility.Collapsed;
+                        AppearancePage.Visibility = tag == "AppearancePage" ? Visibility.Visible : Visibility.Collapsed;
+                        LayoutPage.Visibility = tag == "LayoutPage" ? Visibility.Visible : Visibility.Collapsed;
+                        DebugPage.Visibility = tag == "DebugPage" ? Visibility.Visible : Visibility.Collapsed;
+                    }
+                };
+            }
+        };
+
+        SettingsNav.SelectionChanged += SettingsNav_SelectionChanged;
+    }
+
+    private void SettingsNav_SelectionChanged(Wpf.Ui.Controls.NavigationView sender, RoutedEventArgs args)
+    {
+        if (sender.SelectedItem is Wpf.Ui.Controls.NavigationViewItem item)
+        {
+            var tag = item.Tag as string;
+            GeneralPage.Visibility = tag == "GeneralPage" ? Visibility.Visible : Visibility.Collapsed;
+            AppearancePage.Visibility = tag == "AppearancePage" ? Visibility.Visible : Visibility.Collapsed;
+            LayoutPage.Visibility = tag == "LayoutPage" ? Visibility.Visible : Visibility.Collapsed;
+            DebugPage.Visibility = tag == "DebugPage" ? Visibility.Visible : Visibility.Collapsed;
+        }
     }
 
     private void SaveButton_Click(object sender, RoutedEventArgs e)
@@ -115,27 +150,24 @@ public partial class SettingsWindow : Window
 
     private void ClearLyricCacheButton_Click(object sender, RoutedEventArgs e)
     {
-        var result = System.Windows.MessageBox.Show(
-            "清除歌词缓存后，首次重新匹配会变慢，是否继续？",
-            "清除缓存",
-            System.Windows.MessageBoxButton.YesNo,
-            System.Windows.MessageBoxImage.Warning);
-
-        if (result != System.Windows.MessageBoxResult.Yes)
-        {
-            return;
-        }
-
         QQMusicLyricProvider.ClearCache();
         NeteaseLyricProvider.ClearCache();
         LrcLibLyricProvider.ClearCache();
         GenericSmtcLyricProvider.ClearCache();
 
-        System.Windows.MessageBox.Show(
-            "歌词缓存已清除。",
-            "完成",
-            System.Windows.MessageBoxButton.OK,
-            System.Windows.MessageBoxImage.Information);
+        ShowToast("歌词缓存已清除");
+    }
+
+    private void ShowToast(string message)
+    {
+        var snackbarService = new Wpf.Ui.SnackbarService();
+        snackbarService.SetSnackbarPresenter(RootSnackbar);
+        snackbarService.Show(
+            "提示",
+            message,
+            Wpf.Ui.Controls.ControlAppearance.Success,
+            new Wpf.Ui.Controls.SymbolIcon(Wpf.Ui.Controls.SymbolRegular.Checkmark24),
+            TimeSpan.FromMilliseconds(2500));
     }
 
     private static double ParseDouble(System.Windows.Controls.TextBox input, double fallback, double min, double max)
