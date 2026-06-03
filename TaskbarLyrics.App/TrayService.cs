@@ -1,4 +1,4 @@
-using System.Drawing;
+ï»¿using System.Drawing;
 using Forms = System.Windows.Forms;
 
 namespace TaskbarLyrics.App;
@@ -30,13 +30,13 @@ public sealed class TrayService : IDisposable
     {
         var menu = new Forms.ContextMenuStrip();
 
-        var toggleItem = new Forms.ToolStripMenuItem("ÏÔÊ¾/Òþ²Ø¸è´Ê");
+        var toggleItem = new Forms.ToolStripMenuItem("æ˜¾ç¤º/éšè—æ­Œè¯");
         toggleItem.Click += (_, _) => toggleLyricsWindow();
 
-        var settingsItem = new Forms.ToolStripMenuItem("ÉèÖÃ");
+        var settingsItem = new Forms.ToolStripMenuItem("è®¾ç½®");
         settingsItem.Click += (_, _) => openSettings();
 
-        var exitItem = new Forms.ToolStripMenuItem("ÍË³ö");
+        var exitItem = new Forms.ToolStripMenuItem("é€€å‡º");
         exitItem.Click += (_, _) => exitApp();
 
         menu.Items.Add(toggleItem);

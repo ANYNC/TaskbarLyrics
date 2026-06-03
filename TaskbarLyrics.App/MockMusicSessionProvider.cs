@@ -9,7 +9,8 @@ public sealed class MockMusicSessionProvider : IMusicSessionProvider
         Id: "netease-demo-001",
         Title: "MVP Demo",
         Artist: "TaskbarLyrics",
-        SourceApp: "Netease");
+        SourceApp: "Netease",
+        Duration: TimeSpan.FromSeconds(25));
 
     private readonly DateTimeOffset _startedAt = DateTimeOffset.UtcNow;
 

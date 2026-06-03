@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using TaskbarLyrics.Core.Abstractions;
@@ -11,8 +12,11 @@ public abstract class LrcLibSmtcLyricProviderBase : ILyricProvider
 {
     private const bool EnableTraditionalToSimplified = false;
     private const int SearchParallelism = 3;
+    private const int MinimumSearchScore = 70;
+    private const int ImmediateStructuredSearchScore = 95;
     private static readonly HttpClient Http = CreateHttpClient();
     private static readonly Regex LrcTimestampRegex = new(@"\[(\d{1,2})(?:[:\uFF1A])(\d{2})(?:[\.\uFF0E:\uFF1A](\d{1,3}))?\]", RegexOptions.Compiled);
+    private static readonly Regex OffsetRegex = new(@"\[offset\s*[:\uFF1A]\s*(?<value>[+-]?\d+)\]", RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private static readonly Regex BracketSuffixRegex = new(@"\s*[\(\[\{（【].*?[\)\]\}）】]\s*", RegexOptions.Compiled);
     private static readonly Regex FeatureSuffixRegex = new(@"\s+(feat\.?|ft\.?|with)\s+.*$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private static readonly ConcurrentDictionary<string, ProviderCacheState> ProviderCaches = new(StringComparer.OrdinalIgnoreCase);
@@ -42,7 +46,12 @@ public abstract class LrcLibSmtcLyricProviderBase : ILyricProvider
             return null;
         }
 
-        var payload = await FetchLyricsPayloadAsync(track.SourceApp, track.Title, track.Artist, cancellationToken);
+        var payload = await FetchLyricsPayloadAsync(
+            track.SourceApp,
+            track.Title,
+            track.Artist,
+            track.Duration,
+            cancellationToken);
         if (payload is null)
         {
             return null;
@@ -100,43 +109,86 @@ public abstract class LrcLibSmtcLyricProviderBase : ILyricProvider
         string sourceApp,
         string title,
         string artist,
+        TimeSpan duration,
         CancellationToken cancellationToken)
     {
-        var cacheKey = BuildCacheKey(sourceApp, title, artist);
+        var cacheKey = BuildCacheKey(sourceApp, title, artist, duration);
         if (TryGetCachedPayload(cacheKey, out var cached) && HasAnyLyrics(cached))
         {
             return cached;
         }
 
-        foreach (var candidate in BuildGetCandidates(title, artist))
+        var structured = await SearchStructuredCandidatesAsync(
+            title,
+            artist,
+            duration,
+            cancellationToken);
+        if (structured is not null)
         {
-            var exact = await FetchExactPayloadAsync(candidate.Title, candidate.Artist, cancellationToken);
-            if (!HasAnyLyrics(exact))
-            {
-                continue;
-            }
-
-            StoreCachedPayload(cacheKey, exact.Value);
-            return exact;
+            StoreCachedPayload(cacheKey, structured.Payload);
+            return structured.Payload;
         }
 
-        var searched = await SearchPayloadAsync(title, artist, cancellationToken);
-        if (HasAnyLyrics(searched))
+        var searched = await SearchPayloadAsync(title, artist, duration, cancellationToken);
+        if (searched is not null)
         {
-            StoreCachedPayload(cacheKey, searched!.Value);
+            StoreCachedPayload(cacheKey, searched.Payload);
         }
 
-        return searched;
+        return searched?.Payload;
     }
 
-    private static async Task<(string? SyncedLyrics, string? PlainLyrics)?> FetchExactPayloadAsync(
+    private static async Task<SearchResult?> SearchStructuredCandidatesAsync(
         string title,
         string artist,
+        TimeSpan duration,
         CancellationToken cancellationToken)
     {
-        var trackName = Uri.EscapeDataString(title ?? string.Empty);
-        var artistName = Uri.EscapeDataString(artist ?? string.Empty);
-        var url = $"https://lrclib.net/api/get?track_name={trackName}&artist_name={artistName}";
+        var candidates = BuildStructuredSearchCandidates(title, artist).ToList();
+        if (candidates.Count == 0)
+        {
+            return null;
+        }
+
+        var firstCandidate = candidates[0];
+        var best = await SearchStructuredSingleCandidateAsync(
+            firstCandidate.Title,
+            firstCandidate.Artist,
+            title,
+            artist,
+            duration,
+            cancellationToken);
+        if (best?.Score >= ImmediateStructuredSearchScore || candidates.Count == 1)
+        {
+            return best;
+        }
+
+        var relaxedResults = await RunSearchesAsync(
+            candidates
+                .Skip(1)
+                .Select(candidate => new Func<Task<SearchResult?>>(() =>
+                    SearchStructuredSingleCandidateAsync(
+                        candidate.Title,
+                        candidate.Artist,
+                        title,
+                        artist,
+                        duration,
+                        cancellationToken))),
+            cancellationToken);
+        return SelectBest(relaxedResults.Append(best));
+    }
+
+    private static async Task<SearchResult?> SearchStructuredSingleCandidateAsync(
+        string queryTitle,
+        string queryArtist,
+        string targetTitle,
+        string targetArtist,
+        TimeSpan targetDuration,
+        CancellationToken cancellationToken)
+    {
+        var trackName = Uri.EscapeDataString(queryTitle ?? string.Empty);
+        var artistName = Uri.EscapeDataString(queryArtist ?? string.Empty);
+        var url = $"https://lrclib.net/api/search?track_name={trackName}&artist_name={artistName}";
 
         try
         {
@@ -148,7 +200,7 @@ public abstract class LrcLibSmtcLyricProviderBase : ILyricProvider
 
             await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
             using var json = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
-            return ExtractPayload(json.RootElement);
+            return FindBestSearchResult(json.RootElement, targetTitle, targetArtist, targetDuration);
         }
         catch
         {
@@ -156,9 +208,10 @@ public abstract class LrcLibSmtcLyricProviderBase : ILyricProvider
         }
     }
 
-    private static async Task<(string? SyncedLyrics, string? PlainLyrics)?> SearchPayloadAsync(
+    private static async Task<SearchResult?> SearchPayloadAsync(
         string title,
         string artist,
+        TimeSpan duration,
         CancellationToken cancellationToken)
     {
         var queries = BuildSearchQueries(title, artist).ToList();
@@ -167,43 +220,51 @@ public abstract class LrcLibSmtcLyricProviderBase : ILyricProvider
             return null;
         }
 
-        using var semaphore = new SemaphoreSlim(SearchParallelism, SearchParallelism);
-        var tasks = queries.Select(async query =>
+        var results = await RunSearchesAsync(
+            queries.Select(query => new Func<Task<SearchResult?>>(() =>
+                SearchSingleQueryAsync(query, title, artist, duration, cancellationToken))),
+            cancellationToken);
+        return SelectBest(results);
+    }
+
+    private static async Task<IReadOnlyList<SearchResult?>> RunSearchesAsync(
+        IEnumerable<Func<Task<SearchResult?>>> searches,
+        CancellationToken cancellationToken)
+    {
+        var results = new List<SearchResult?>();
+        foreach (var batch in searches.Chunk(SearchParallelism))
         {
-            await semaphore.WaitAsync(cancellationToken);
-            try
+            cancellationToken.ThrowIfCancellationRequested();
+            var batchResults = await Task.WhenAll(batch.Select(search => search()));
+            results.AddRange(batchResults);
+            if (batchResults.Any(result => result?.Score >= ImmediateStructuredSearchScore))
             {
-                return await SearchSingleQueryAsync(query, title, artist, cancellationToken);
+                break;
             }
-            finally
-            {
-                semaphore.Release();
-            }
-        }).ToArray();
+        }
 
-        var results = await Task.WhenAll(tasks);
+        return results;
+    }
 
+    private static SearchResult? SelectBest(IEnumerable<SearchResult?> results)
+    {
         SearchResult? best = null;
         foreach (var result in results)
         {
-            if (result is null)
-            {
-                continue;
-            }
-
-            if (best is null || result.Score > best.Score)
+            if (result is not null && (best is null || result.Score > best.Score))
             {
                 best = result;
             }
         }
 
-        return best?.Payload;
+        return best;
     }
 
     private static async Task<SearchResult?> SearchSingleQueryAsync(
         string query,
         string targetTitle,
         string targetArtist,
+        TimeSpan targetDuration,
         CancellationToken cancellationToken)
     {
         var encoded = Uri.EscapeDataString(query);
@@ -220,40 +281,68 @@ public abstract class LrcLibSmtcLyricProviderBase : ILyricProvider
             await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
             using var json = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
 
-            if (json.RootElement.ValueKind != JsonValueKind.Array)
-            {
-                return null;
-            }
-
-            SearchResult? best = null;
-            foreach (var item in json.RootElement.EnumerateArray())
-            {
-                var payload = ExtractPayload(item);
-                if (!HasAnyLyrics(payload))
-                {
-                    continue;
-                }
-
-                var itemTitle = GetStringProperty(item, "trackName", "track_name", "name", "title");
-                var itemArtist = GetStringProperty(item, "artistName", "artist_name", "artist");
-                var score = ScoreSearchResult(targetTitle, targetArtist, itemTitle, itemArtist);
-
-                var candidate = new SearchResult(score, payload!.Value);
-                if (best is null || candidate.Score > best.Score)
-                {
-                    best = candidate;
-                }
-            }
-
-            return best;
+            return FindBestSearchResult(json.RootElement, targetTitle, targetArtist, targetDuration);
         }
-        catch
+        catch (Exception ex)
         {
+            Debug.WriteLine($"[LrcLib] Search error: {ex.Message}");
             return null;
         }
     }
 
-    private static IEnumerable<(string Title, string Artist)> BuildGetCandidates(string title, string artist)
+    private static SearchResult? FindBestSearchResult(
+        JsonElement root,
+        string targetTitle,
+        string targetArtist,
+        TimeSpan targetDuration)
+    {
+        if (root.ValueKind != JsonValueKind.Array)
+        {
+            return null;
+        }
+
+        SearchResult? best = null;
+        foreach (var item in root.EnumerateArray())
+        {
+            var payload = ExtractPayload(item);
+            if (!HasAnyLyrics(payload))
+            {
+                continue;
+            }
+
+            var itemTitle = GetStringProperty(item, "trackName", "track_name", "name", "title");
+            var itemArtist = GetStringProperty(item, "artistName", "artist_name", "artist");
+
+            var itemDuration = 0;
+            if (item.TryGetProperty("duration", out var durationProperty) &&
+                durationProperty.ValueKind == JsonValueKind.Number)
+            {
+                itemDuration = (int)durationProperty.GetDouble();
+            }
+
+            var score = ScoreSearchResult(
+                targetTitle,
+                targetArtist,
+                targetDuration,
+                itemTitle,
+                itemArtist,
+                itemDuration);
+            if (score < MinimumSearchScore)
+            {
+                continue;
+            }
+
+            var candidate = new SearchResult(score, payload!.Value);
+            if (best is null || candidate.Score > best.Score)
+            {
+                best = candidate;
+            }
+        }
+
+        return best;
+    }
+
+    private static IEnumerable<(string Title, string Artist)> BuildStructuredSearchCandidates(string title, string artist)
     {
         var list = new List<(string Title, string Artist)>();
 
@@ -392,57 +481,34 @@ public abstract class LrcLibSmtcLyricProviderBase : ILyricProvider
         }
     }
 
-    private static int ScoreSearchResult(string targetTitle, string targetArtist, string? resultTitle, string? resultArtist)
+    private static int ScoreSearchResult(
+        string targetTitle,
+        string targetArtist,
+        TimeSpan targetDuration,
+        string? resultTitle,
+        string? resultArtist,
+        int resultDurationInSeconds = 0)
     {
-        var titleTarget = NormalizeForMatch(targetTitle);
-        var artistTarget = NormalizeForMatch(targetArtist);
-        var titleResult = NormalizeForMatch(resultTitle);
-        var artistResult = NormalizeForMatch(resultArtist);
+        if (string.IsNullOrWhiteSpace(resultTitle)) return 0;
 
-        var score = 0;
-
-        score += ScoreField(titleTarget, titleResult, 100, 60, 30);
-        score += ScoreField(artistTarget, artistResult, 60, 35, 15);
-
-        if (!string.IsNullOrWhiteSpace(titleTarget) && !string.IsNullOrWhiteSpace(titleResult) &&
-            !string.IsNullOrWhiteSpace(artistTarget) && !string.IsNullOrWhiteSpace(artistResult) &&
-            titleTarget == titleResult && artistTarget == artistResult)
-        {
-            score += 80;
-        }
-
-        return score;
+        var target = new TrackInfo(
+            "lrclib-search",
+            targetTitle,
+            targetArtist,
+            "LrcLib",
+            targetDuration);
+        return LyricMatcher.Score(target, resultTitle, resultArtist ?? string.Empty, resultDurationInSeconds);
     }
 
     private static int ScoreField(string target, string result, int exact, int contains, int overlap)
     {
-        if (string.IsNullOrWhiteSpace(target) || string.IsNullOrWhiteSpace(result))
-        {
-            return 0;
-        }
-
-        if (target == result)
-        {
-            return exact;
-        }
-
-        if (target.Contains(result, StringComparison.Ordinal) || result.Contains(target, StringComparison.Ordinal))
-        {
-            return contains;
-        }
-
+        // Deprecated helper but keeping for now if used elsewhere
+        if (string.IsNullOrWhiteSpace(target) || string.IsNullOrWhiteSpace(result)) return 0;
+        if (target == result) return exact;
+        if (target.Contains(result, StringComparison.Ordinal) || result.Contains(target, StringComparison.Ordinal)) return contains;
         var commonPrefix = 0;
         var max = Math.Min(target.Length, result.Length);
-        for (var i = 0; i < max; i++)
-        {
-            if (target[i] != result[i])
-            {
-                break;
-            }
-
-            commonPrefix++;
-        }
-
+        for (var i = 0; i < max; i++) { if (target[i] != result[i]) break; commonPrefix++; }
         return commonPrefix >= 2 ? overlap : 0;
     }
 
@@ -467,12 +533,15 @@ public abstract class LrcLibSmtcLyricProviderBase : ILyricProvider
         return idx == 0 ? string.Empty : new string(buffer, 0, idx);
     }
 
-    private static string BuildCacheKey(string sourceApp, string title, string artist)
+    private static string BuildCacheKey(string sourceApp, string title, string artist, TimeSpan duration)
     {
         var sourceKey = NormalizeForMatch(sourceApp);
         var titleKey = NormalizeForMatch(title);
         var artistKey = NormalizeForMatch(artist);
-        return $"{sourceKey}|{titleKey}|{artistKey}";
+        var durationKey = duration > TimeSpan.Zero
+            ? (int)Math.Round(duration.TotalSeconds / 2, MidpointRounding.AwayFromZero) * 2
+            : 0;
+        return $"{sourceKey}|{titleKey}|{artistKey}|{durationKey}";
     }
 
     private bool TryGetCachedPayload(string cacheKey, out (string? SyncedLyrics, string? PlainLyrics) payload)
@@ -625,6 +694,13 @@ public abstract class LrcLibSmtcLyricProviderBase : ILyricProvider
         }
 
         var result = new List<LyricLine>();
+        var offsetMilliseconds = 0;
+        var offsetMatch = OffsetRegex.Match(lrc);
+        if (offsetMatch.Success &&
+            int.TryParse(offsetMatch.Groups["value"].Value, out var parsedOffset))
+        {
+            offsetMilliseconds = parsedOffset;
+        }
         var lines = lrc.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
         foreach (var rawLine in lines)
@@ -649,7 +725,9 @@ public abstract class LrcLibSmtcLyricProviderBase : ILyricProvider
                 var fractionRaw = match.Groups[3].Value;
                 var millisecond = ParseMillisecond(fractionRaw);
 
-                result.Add(new LyricLine(new TimeSpan(0, 0, minute, second, millisecond), text));
+                var timestamp = new TimeSpan(0, 0, minute, second, millisecond)
+                    .Add(TimeSpan.FromMilliseconds(offsetMilliseconds));
+                result.Add(new LyricLine(ClampTimestamp(timestamp), text));
             }
         }
 
@@ -707,6 +785,11 @@ public abstract class LrcLibSmtcLyricProviderBase : ILyricProvider
             2 => int.Parse(fractionRaw) * 10,
             _ => int.Parse(fractionRaw[..3])
         };
+    }
+
+    private static TimeSpan ClampTimestamp(TimeSpan timestamp)
+    {
+        return timestamp < TimeSpan.Zero ? TimeSpan.Zero : timestamp;
     }
 
     private static HttpClient CreateHttpClient()

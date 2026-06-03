@@ -1,171 +1,213 @@
-﻿using TaskbarLyrics.Core.Abstractions;
+using TaskbarLyrics.Core.Abstractions;
 using TaskbarLyrics.Core.Models;
+using TaskbarLyrics.Core.Utilities;
 
 namespace TaskbarLyrics.Core.Services;
 
-public sealed class LyricSyncService
+public sealed class LyricSyncService : IDisposable
 {
-    private static readonly TimeSpan QqMusicLineSwitchLead = TimeSpan.FromMilliseconds(500);
-    private static readonly TimeSpan NeteaseLineSwitchLead = TimeSpan.FromMilliseconds(300);
-    private static readonly TimeSpan SpotifyLineSwitchLead = TimeSpan.FromMilliseconds(300);
-    private static readonly TimeSpan DefaultLineSwitchLead = TimeSpan.FromMilliseconds(300);
-    private readonly ILyricProviderRegistry _lyricProviderRegistry;
+    private static readonly TimeSpan PlayerCompDefault = TimeSpan.Zero;
+    private static readonly TimeSpan PlayerCompSpotify = TimeSpan.FromMilliseconds(150);
+    private static readonly TimeSpan PlayerCompNetease = TimeSpan.FromMilliseconds(50);
+    private static readonly TimeSpan PlayerCompQqMusic = TimeSpan.FromMilliseconds(100);
+    private static readonly TimeSpan PlayerCompKugou = TimeSpan.FromMilliseconds(100);
+
+    private readonly ILyricProviderRegistry _registry;
+    private TrackInfo? _currentTrack;
     private string? _currentTrackId;
     private LyricDocument? _currentDocument;
     private string? _currentLyricSourceApp;
-    private string? _loadingTrackId;
-    private Task<LyricResolveResult>? _loadingTask;
-
-    public LyricSyncService(ILyricProviderRegistry lyricProviderRegistry)
-    {
-        _lyricProviderRegistry = lyricProviderRegistry;
-    }
+    private bool _isUpdating;
+    private CancellationTokenSource? _searchCts;
+    private bool _isDisposed;
 
     public string? CurrentLyricSourceApp => _currentLyricSourceApp;
 
-    public async Task<string> GetCurrentLineAsync(PlaybackSnapshot snapshot, CancellationToken cancellationToken = default)
+    public LyricSyncService(ILyricProviderRegistry registry)
     {
-        var frame = await GetDisplayFrameAsync(snapshot, cancellationToken);
-        return frame.CurrentLine;
+        _registry = registry;
     }
 
-    public async Task<LyricDisplayFrame> GetDisplayFrameAsync(
-        PlaybackSnapshot snapshot,
-        CancellationToken cancellationToken = default)
+    public Task<LyricDisplayFrame> GetDisplayFrameAsync(PlaybackSnapshot snapshot)
     {
-        if (snapshot.Track is null)
+        if (snapshot.Track == null)
         {
+            CancelPendingSearch();
+            _currentTrack = null;
             _currentTrackId = null;
             _currentDocument = null;
             _currentLyricSourceApp = null;
-            _loadingTrackId = null;
-            _loadingTask = null;
-            return new LyricDisplayFrame(string.Empty, string.Empty);
+            return Task.FromResult(new LyricDisplayFrame("", "", "", 0, -1));
         }
 
-        if (!string.Equals(_currentTrackId, snapshot.Track.Id, StringComparison.Ordinal))
+        var trackId = BuildTrackIdentity(snapshot.Track);
+        if (trackId != _currentTrackId)
         {
-            // Track switched: clear stale lyrics immediately and start loading for new track.
-            _currentTrackId = snapshot.Track.Id;
+            _currentTrack = snapshot.Track;
+            _currentTrackId = trackId;
             _currentDocument = null;
             _currentLyricSourceApp = null;
-            _loadingTrackId = snapshot.Track.Id;
-            _loadingTask = _lyricProviderRegistry.ResolveLyricsAsync(snapshot.Track, cancellationToken);
+            _ = UpdateLyricsAsync(snapshot.Track, trackId);
         }
 
-        await TryApplyLoadedLyricsAsync(snapshot.Track.SourceApp);
-
-        if (_currentDocument is null || _currentDocument.Lines.Count == 0)
+        if (_currentDocument == null || _currentDocument.Lines.Count == 0)
         {
-            return new LyricDisplayFrame(string.Empty, string.Empty);
+            return Task.FromResult(new LyricDisplayFrame(
+                _isUpdating ? "正在匹配歌词..." : "暂未找到歌词",
+                "",
+                _currentTrack?.Title ?? "",
+                0, -1));
         }
+
+        // Apply player-specific compensation
+        var sourceLead = GetPlayerLeadTime(_currentTrack?.SourceApp);
+        var position = snapshot.Position + sourceLead;
 
         var lines = _currentDocument.Lines;
-        var currentIndex = -1;
-        var timelinePosition = snapshot.Position;
-        var displayPosition = timelinePosition + GetLineSwitchLead(_currentLyricSourceApp);
-        for (var i = 0; i < lines.Count; i++)
+        var currentIdx = -1;
+        for (int i = 0; i < lines.Count; i++)
         {
-            if (lines[i].Timestamp <= displayPosition)
-            {
-                currentIndex = i;
-            }
-            else
-            {
-                break;
-            }
+            if (lines[i].Timestamp <= position) currentIdx = i;
+            else break;
         }
 
-        if (currentIndex < 0)
+        if (currentIdx == -1)
         {
+            // If before first line, show the first line as prepared current
             var firstLine = lines[0];
-            if (firstLine.Timestamp > TimeSpan.Zero && timelinePosition < firstLine.Timestamp)
+            string firstText = firstLine.Text;
+            if (!string.IsNullOrWhiteSpace(firstLine.Translation))
             {
-                return new LyricDisplayFrame("...", firstLine.Text, 0, -1);
+                firstText += " (" + firstLine.Translation + ")";
             }
 
-            return new LyricDisplayFrame(firstLine.Text, lines.Count > 1 ? lines[1].Text : string.Empty, 0, 0);
+            var nextTxt = lines.Count > 1 ? lines[1].Text : "";
+            if (lines.Count > 1 && !string.IsNullOrWhiteSpace(lines[1].Translation))
+            {
+                nextTxt += " (" + lines[1].Translation + ")";
+            }
+
+            return Task.FromResult(new LyricDisplayFrame(firstText, nextTxt, _currentTrack?.Title ?? "", 0, 0));
         }
 
-        var currentText = lines[currentIndex].Text;
-        var nextText = currentIndex + 1 < lines.Count ? lines[currentIndex + 1].Text : string.Empty;
-        var progress = 0.0;
+        var currentLine = lines[currentIdx];
+        var nextLine = (currentIdx + 1 < lines.Count) ? lines[currentIdx + 1] : null;
 
-        if (currentIndex + 1 < lines.Count)
+        // Smart text merging: if translation exists, append it.
+        // This ensures the "NextLine" correctly shows the next lyric for animation,
+        // while still making translations visible in the taskbar's limited space.
+        string currentText = currentLine.Text;
+        if (!string.IsNullOrWhiteSpace(currentLine.Translation))
         {
-            var start = lines[currentIndex].Timestamp;
-            var end = lines[currentIndex + 1].Timestamp;
-            var segment = end - start;
-            if (segment > TimeSpan.Zero)
+            // We use a small space and parens for a clean look in the taskbar
+            currentText += " (" + currentLine.Translation + ")";
+        }
+
+        string nextText = nextLine?.Text ?? "";
+        if (nextLine != null && !string.IsNullOrWhiteSpace(nextLine.Translation))
+        {
+            nextText += " (" + nextLine.Translation + ")";
+        }
+
+        // Calculate progress within line for syllable animation
+        double progress = 0;
+        if (nextLine != null)
+        {
+            var duration = nextLine.Timestamp - currentLine.Timestamp;
+            var elapsed = position - currentLine.Timestamp;
+            if (duration > TimeSpan.Zero)
             {
-                var elapsed = timelinePosition - start;
-                progress = Math.Clamp(elapsed.TotalMilliseconds / segment.TotalMilliseconds, 0, 1);
+                progress = Math.Clamp(elapsed.TotalMilliseconds / duration.TotalMilliseconds, 0, 1);
             }
         }
 
-        return new LyricDisplayFrame(currentText, nextText, progress, currentIndex);
+        return Task.FromResult(new LyricDisplayFrame(
+            currentText,
+            nextText,
+            _currentTrack?.Title ?? "",
+            progress,
+            currentIdx
+        ));
     }
 
-    private async Task TryApplyLoadedLyricsAsync(string sourceApp)
+    private async Task UpdateLyricsAsync(TrackInfo track, string trackId)
     {
-        if (_loadingTask is null || !_loadingTask.IsCompleted || string.IsNullOrWhiteSpace(_loadingTrackId))
+        // Cancel any ongoing search for the previous track immediately
+        CancelPendingSearch();
+        _searchCts = new CancellationTokenSource();
+        var cts = _searchCts;
+
+        _isUpdating = true;
+
+        try
+        {
+            var results = await _registry.ResolveLyricsAsync(track, cts.Token);
+
+            if (cts.IsCancellationRequested) return;
+            // Pick the best match
+            var bestResult = results
+                .Where(r => r.Document != null && r.Document.Lines.Count > 0)
+                .OrderByDescending(r => r.Document!.BestScore)
+                .ThenBy(r => r.SourceApp == "QQMusic" || r.SourceApp == "Netease" ? 0 : 1) 
+                .FirstOrDefault();
+
+            if (bestResult != null && _currentTrackId == trackId)
+            {
+                _currentDocument = bestResult.Document;
+                _currentLyricSourceApp = bestResult.SourceApp;
+            }
+        }
+        catch (OperationCanceledException) when (cts.IsCancellationRequested)
+        {
+            // A newer track replaced this request.
+        }
+        finally
+        {
+            if (ReferenceEquals(_searchCts, cts))
+            {
+                _searchCts = null;
+                _isUpdating = false;
+            }
+
+            cts.Dispose();
+        }
+    }
+
+    private static string BuildTrackIdentity(TrackInfo track)
+    {
+        return $"{track.Id}|{track.SourceApp}|{track.Title}|{track.Artist}|{track.SongId}|{track.Duration.TotalMilliseconds:F0}";
+    }
+
+    private void CancelPendingSearch()
+    {
+        var cts = _searchCts;
+        _searchCts = null;
+        _isUpdating = false;
+        cts?.Cancel();
+    }
+
+    public void Dispose()
+    {
+        if (_isDisposed)
         {
             return;
         }
 
-        var loadingTrackId = _loadingTrackId;
-        var loaded = await _loadingTask;
-
-        _loadingTask = null;
-        _loadingTrackId = null;
-
-        if (!string.Equals(_currentTrackId, loadingTrackId, StringComparison.Ordinal))
-        {
-            return;
-        }
-
-        _currentDocument = loaded.Document ?? BuildFallbackDocument(sourceApp);
-        _currentLyricSourceApp = loaded.SourceApp;
+        _isDisposed = true;
+        CancelPendingSearch();
     }
 
-    private static LyricDocument BuildFallbackDocument(string sourceApp)
+    private static TimeSpan GetPlayerLeadTime(string? sourceApp)
     {
-        var header = string.Equals(sourceApp, "QQMusic", StringComparison.OrdinalIgnoreCase)
-            ? "QQMusic adapter fallback"
-            : string.Equals(sourceApp, "Netease", StringComparison.OrdinalIgnoreCase)
-                ? "Netease adapter fallback"
-                : "Lyrics fallback";
+        if (string.IsNullOrEmpty(sourceApp)) return PlayerCompDefault;
 
-        return new LyricDocument(new[]
+        return sourceApp.ToLowerInvariant() switch
         {
-            new LyricLine(TimeSpan.Zero, header),
-            new LyricLine(TimeSpan.FromSeconds(5), "Lyrics source is not ready yet"),
-            new LyricLine(TimeSpan.FromSeconds(10), "You can continue playback while adapter initializes")
-        });
-    }
-
-    private static TimeSpan GetLineSwitchLead(string? lyricSourceApp)
-    {
-        if (string.IsNullOrWhiteSpace(lyricSourceApp))
-        {
-            return DefaultLineSwitchLead;
-        }
-
-        if (string.Equals(lyricSourceApp, "QQMusic", StringComparison.OrdinalIgnoreCase))
-        {
-            return QqMusicLineSwitchLead;
-        }
-
-        if (string.Equals(lyricSourceApp, "Netease", StringComparison.OrdinalIgnoreCase))
-        {
-            return NeteaseLineSwitchLead;
-        }
-
-        if (lyricSourceApp.Contains("Spotify", StringComparison.OrdinalIgnoreCase))
-        {
-            return SpotifyLineSwitchLead;
-        }
-
-        return DefaultLineSwitchLead;
+            "spotify" => PlayerCompSpotify,
+            "neteasemusic" or "netease" => PlayerCompNetease,
+            "qqmusic" => PlayerCompQqMusic,
+            "kugou" => PlayerCompKugou,
+            _ => PlayerCompDefault
+        };
     }
 }

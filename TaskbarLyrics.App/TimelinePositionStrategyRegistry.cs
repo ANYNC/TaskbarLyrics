@@ -34,7 +34,7 @@ public sealed class TimelinePositionStrategyRegistry
         return new TimelinePositionStrategyRegistry(
             new ITimelinePositionStrategy[]
             {
-                new SpotifyExtrapolatedTimelinePositionStrategy()
+                new CommonExtrapolatedTimelinePositionStrategy()
             },
             fallback);
     }

@@ -1,4 +1,4 @@
-﻿using System.ComponentModel;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
@@ -14,11 +14,10 @@ using System.Windows.Threading;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
 using Microsoft.Win32;
-using TaskbarLyrics.Adapters.Netease;
-using TaskbarLyrics.Adapters.QQMusic;
 using TaskbarLyrics.Core.Abstractions;
 using TaskbarLyrics.Core.Models;
 using TaskbarLyrics.Core.Services;
+using TaskbarLyrics.Core.Utilities;
 
 namespace TaskbarLyrics.App;
 
@@ -42,10 +41,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private bool _suppressPromotedSizeAnimation;
     private bool _isLineTransitionAnimating;
     private LyricSyncService _lyricSyncService;
-    private string _currentLine = "TaskbarLyrics started";
-    private string _nextLine = "Waiting for lyrics...";
-    private string _displayCurrentLine = "TaskbarLyrics started";
-    private string _displayNextLine = "Waiting for lyrics...";
+    private string _currentLine = "TaskbarLyrics 已启动";
+    private string _nextLine = "等待歌词...";
+    private string _displayCurrentLine = "TaskbarLyrics 已启动";
+    private string _displayNextLine = "等待歌词...";
     private string? _pendingCurrentLine;
     private string? _pendingNextLine;
     private string? _lastCoverTrackId;
@@ -66,6 +65,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private EventInfo? _lyricsNavigationCompletedEvent;
     private Delegate? _lyricsNavigationCompletedHandler;
     private bool _usingCompositionWebView;
+    private DateTimeOffset _nextTickDiagnosticsLogUtc;
 
     public MainWindow()
     {
@@ -134,9 +134,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     public void ApplySettings(AppSettings settings)
     {
+        Log.SetVerboseEnabled(settings.EnableSmtcTimelineMonitor);
+
         if (_musicSessionProvider is SmtcMusicSessionProvider smtcProvider)
         {
-            smtcProvider.SetRecognitionOrder(settings.SourceRecognitionOrder);
+            smtcProvider.SetRecognitionOrder(
+                settings.SourceRecognitionOrder,
+                BuildEnabledPlayerSources(settings));
         }
 
         Width = Math.Clamp(settings.WindowWidth, 320, 1400);
@@ -181,12 +185,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             _primaryTextColor.B);
         SetLineBrushes(1.0, SecondaryLineBrightness, SecondaryLineBrightness);
 
-        // Web renderer is now fully transparent by design.
+        // Keep the WPF host transparent; the WebView draws the optional surface.
         RootBorder.Background = Media.Brushes.Transparent;
         RootBorder.BorderBrush = Media.Brushes.Transparent;
         RootBorder.BorderThickness = new Thickness(0);
 
-        _lyricSyncService = BuildLyricSyncService();
+        _lyricSyncService.Dispose();
+        _lyricSyncService = BuildLyricSyncService(settings);
         AnchorToTaskbar();
         AttachToTaskbarHost();
         ResetLineTransforms();
@@ -199,16 +204,37 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
     }
 
-    private LyricSyncService BuildLyricSyncService()
+    private static IReadOnlyCollection<string> BuildEnabledPlayerSources(AppSettings settings)
+    {
+        var sources = new List<string>();
+        if (settings.EnableQQMusic) sources.Add("QQMusic");
+        if (settings.EnableNetease) sources.Add("Netease");
+        if (settings.EnableKugou) sources.Add("Kugou");
+        if (settings.EnableSpotify) sources.Add("Spotify");
+        return sources;
+    }
+
+    private LyricSyncService BuildLyricSyncService(AppSettings? settings = null)
     {
         var providers = new List<ILyricProvider>
         {
-            new LrcLibLyricProvider(),
-            new GenericSmtcLyricProvider(),
-            new NeteaseLyricProvider(),
-            new QQMusicLyricProvider()
+            new GenericSmtcLyricProvider()
         };
 
+        if (settings?.EnableNetease != false)
+        {
+            providers.Add(new LyricifyLyricProvider("Netease", Lyricify.Lyrics.Searchers.Searchers.Netease));
+        }
+
+        if (settings?.EnableQQMusic != false)
+        {
+            providers.Add(new LyricifyLyricProvider("QQMusic", Lyricify.Lyrics.Searchers.Searchers.QQMusic));
+        }
+
+        if (settings?.EnableKugou != false)
+        {
+            providers.Add(new LyricifyLyricProvider("Kugou", Lyricify.Lyrics.Searchers.Searchers.Kugou));
+        }
         return new LyricSyncService(new LyricProviderRegistry(providers));
     }
 
@@ -271,6 +297,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         DetachWebViewNavigationHandler();
 
         Media.CompositionTarget.Rendering -= OnCompositionRendering;
+        _lyricSyncService.Dispose();
     }
 
     private void UpdateSmtcTimelineMonitorWindow()
@@ -328,6 +355,20 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         });
     }
 
+    private static readonly object LogLock = new();
+    private static void LogToFile(string message)
+    {
+        try
+        {
+            var logPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "app_debug.log");
+            lock (LogLock)
+            {
+                File.AppendAllText(logPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] {message}\n");
+            }
+        }
+        catch {}
+    }
+
     private async void OnTimerTick(object? sender, EventArgs e)
     {
         if (_isTimerTickRunning)
@@ -342,13 +383,15 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
             var snapshot = await _musicSessionProvider.GetCurrentAsync();
             var frame = await _lyricSyncService.GetDisplayFrameAsync(snapshot);
+            LogTickDiagnostics(snapshot, frame);
+
             if (_musicSessionProvider is SmtcMusicSessionProvider smtcProvider)
             {
                 smtcProvider.SetCurrentLyricSource(_lyricSyncService.CurrentLyricSourceApp);
             }
 
             var current = string.IsNullOrWhiteSpace(frame.CurrentLine)
-                ? "Waiting for lyrics..."
+                ? "等待播放..."
                 : frame.CurrentLine;
 
             var next = frame.NextLine;
@@ -361,7 +404,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
         catch (Exception ex)
         {
-            _currentLine = $"Lyric service error: {ex.Message}";
+            LogToFile($"EXCEPTION in OnTimerTick: {ex}");
+            _currentLine = $"歌词服务异常: {ex.Message}";
             _nextLine = string.Empty;
             DisplayCurrentLine = _currentLine;
             DisplayNextLine = _nextLine;
@@ -372,6 +416,26 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
             _isTimerTickRunning = false;
         }
+    }
+
+    private void LogTickDiagnostics(PlaybackSnapshot snapshot, LyricDisplayFrame frame)
+    {
+        if (!_enableSmtcTimelineMonitor || DateTimeOffset.UtcNow < _nextTickDiagnosticsLogUtc)
+        {
+            return;
+        }
+
+        _nextTickDiagnosticsLogUtc = DateTimeOffset.UtcNow.AddSeconds(1);
+        if (snapshot.Track is null)
+        {
+            LogToFile("SMTC: No active track found (Track is null)");
+        }
+        else
+        {
+            LogToFile($"SMTC: Title='{snapshot.Track.Title}', Artist='{snapshot.Track.Artist}', App='{snapshot.Track.SourceApp}', Playing={snapshot.IsPlaying}, Pos={snapshot.Position}, CoverLen={snapshot.CoverImageBytes?.Length ?? 0}");
+        }
+
+        LogToFile($"Sync: Current='{frame.CurrentLine}', Next='{frame.NextLine}', Prog={frame.LineProgress:F3}, SourceApp='{_lyricSyncService.CurrentLyricSourceApp}'");
     }
 
     private void UpdateLyricLines(string current, string next, double lineProgress)
@@ -710,16 +774,17 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         var trackId = snapshot.Track?.Id;
         if (string.Equals(trackId, _lastCoverTrackId, StringComparison.Ordinal))
         {
-            return;
+            // Proceed only if we previously had no cover for this track but now we have bytes.
+            if (_currentCoverDataUri != null || snapshot.CoverImageBytes == null)
+            {
+                return;
+            }
         }
 
         _lastCoverTrackId = trackId;
 
         var sourceApp = snapshot.Track?.SourceApp ?? string.Empty;
-        _currentCoverFallbackText = sourceApp.StartsWith("Q", StringComparison.OrdinalIgnoreCase) ? "Q" : "N";
-        var fallbackColor = sourceApp.StartsWith("Q", StringComparison.OrdinalIgnoreCase)
-            ? Media.Color.FromRgb(41, 182, 246)
-            : Media.Color.FromRgb(67, 160, 71);
+        (_currentCoverFallbackText, var fallbackColor) = GetCoverFallback(sourceApp);
         _currentCoverFallbackColorCss = ToCssColor(fallbackColor);
 
         if (snapshot.CoverImageBytes is { Length: > 0 } bytes)
@@ -731,6 +796,31 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         _currentCoverDataUri = null;
         PushCoverToWebView();
+    }
+
+    private static (string Text, Media.Color Color) GetCoverFallback(string sourceApp)
+    {
+        if (sourceApp.Equals("QQMusic", StringComparison.OrdinalIgnoreCase))
+        {
+            return ("Q", Media.Color.FromRgb(41, 182, 246));
+        }
+
+        if (sourceApp.Equals("Spotify", StringComparison.OrdinalIgnoreCase))
+        {
+            return ("S", Media.Color.FromRgb(30, 215, 96));
+        }
+
+        if (sourceApp.Equals("Netease", StringComparison.OrdinalIgnoreCase))
+        {
+            return ("N", Media.Color.FromRgb(229, 57, 53));
+        }
+
+        if (sourceApp.Equals("Kugou", StringComparison.OrdinalIgnoreCase))
+        {
+            return ("K", Media.Color.FromRgb(52, 152, 219));
+        }
+
+        return ("♫", Media.Color.FromRgb(99, 102, 241));
     }
 
     private async Task EnsureLyricsWebViewReadyAsync()
@@ -909,7 +999,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             fontSize = Math.Clamp(settings.FontSize, 10, 40),
             fontWeight = settings.FontWeight,
             primaryColor = ToCssColor(_primaryTextColor),
-            secondaryColor = ToCssColor(_secondaryTextColor)
+            secondaryColor = ToCssColor(_secondaryTextColor),
+            surfaceColor = settings.ShowBackground
+                ? $"rgba(18, 18, 24, {Math.Clamp(settings.BackgroundOpacity, 0, 1).ToString("0.####", CultureInfo.InvariantCulture)})"
+                : "transparent",
+            surfaceShadow = settings.ShowBorder
+                ? "inset 0 0 0 1px rgba(255, 255, 255, 0.16)"
+                : "none"
         };
 
         var payloadJson = JsonSerializer.Serialize(stylePayload);
@@ -1057,25 +1153,690 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         return $"rgba({color.R}, {color.G}, {color.B}, {alpha.ToString(CultureInfo.InvariantCulture)})";
     }
 
-    private static string LoadLyricsWebAssetText(string fileName)
-    {
-        var assetPath = Path.Combine(AppContext.BaseDirectory, "Web", "Lyrics", fileName);
-        if (!File.Exists(assetPath))
-        {
-            throw new FileNotFoundException($"Lyrics web asset not found: {assetPath}", assetPath);
-        }
-
-        return File.ReadAllText(assetPath);
-    }
-
     private static string GetLyricsWebUiHtml()
     {
-        var htmlTemplate = LoadLyricsWebAssetText("index.html");
-        var styleCss = LoadLyricsWebAssetText("style.css");
-        var scriptJs = LoadLyricsWebAssetText("app.js");
-        return htmlTemplate
-            .Replace("{{STYLE_CSS}}", styleCss, StringComparison.Ordinal)
-            .Replace("{{APP_JS}}", scriptJs, StringComparison.Ordinal);
+        return """
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    :root {
+      --font-family: "SF Pro Display", "Segoe UI Variable Display", "Segoe UI Variable Text", "Microsoft YaHei UI", sans-serif;
+      --font-size: 13px;
+      --font-weight: 500;
+      --primary: rgba(255, 255, 255, 1);
+      --secondary: rgba(255, 255, 255, 0.68);
+      --row-height: 14px;
+      --row-gap: 1px;
+      --line-pitch: 15px;
+      --current-size: 13px;
+      --next-size: 12px;
+      --primary-offset-y: 1px;
+      --secondary-offset-y: 2px;
+      --surface-color: transparent;
+      --surface-shadow: none;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: transparent;
+      font-family: var(--font-family);
+      color: var(--primary);
+      -webkit-font-smoothing: antialiased;
+      text-rendering: geometricPrecision;
+    }
+
+    .layout {
+      width: 100%;
+      height: 100%;
+      padding: 0px 0px 0px 0px;
+      overflow: hidden;
+      background: var(--surface-color);
+      border: 0;
+      border-radius: 8px;
+      box-shadow: var(--surface-shadow);
+    }
+
+    .shell {
+      width: 100%;
+      height: 100%;
+      display: grid;
+      grid-template-columns: 34px 8px minmax(0, 1fr);
+      align-items: center;
+    }
+
+    .cover {
+      width: 34px;
+      height: 34px;
+      border-radius: 6px;
+      overflow: hidden;
+      position: relative;
+      background: #43a047;
+      box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08) inset;
+    }
+
+    .cover-fallback {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 700;
+      color: rgba(255, 255, 255, 0.96);
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    .cover-image {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: none;
+      opacity: 0;
+      transition: opacity 180ms ease-out;
+    }
+
+    .lyrics-pane {
+      min-width: 0;
+      height: 100%;
+      overflow: hidden;
+      padding: 3px 0 0 5px;
+    }
+
+    .viewport {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      display: block;
+      transform: translateZ(0);
+    }
+
+    .track {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: var(--row-gap);
+      transform: translateY(0);
+      will-change: transform;
+    }
+
+    .track.animating {
+      transition: transform 560ms cubic-bezier(0.22, 0.72, 0.24, 1);
+    }
+
+    .track.no-anim {
+      transition: none !important;
+    }
+
+    .track.no-anim .line {
+      transition: none !important;
+    }
+
+    .line {
+      height: var(--row-height);
+      min-height: var(--row-height);
+      display: flex;
+      align-items: center;
+      line-height: 1.12;
+      letter-spacing: 0.06px;
+      transform-origin: left center;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.36);
+      overflow: visible;
+      transition:
+        opacity 560ms cubic-bezier(0.22, 0.72, 0.24, 1),
+        color 280ms ease,
+        transform 560ms cubic-bezier(0.22, 0.72, 0.24, 1);
+    }
+
+    .line-text {
+      display: block;
+      width: 100%;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      line-height: inherit;
+      padding-bottom: 2px;
+    }
+
+    .current-line {
+      font-size: var(--current-size);
+      font-weight: var(--font-weight);
+      color: var(--primary);
+      opacity: 0.98;
+      transform: translateY(var(--primary-offset-y));
+    }
+
+    .next-line {
+      font-size: var(--next-size);
+      font-weight: var(--font-weight);
+      color: var(--secondary);
+      opacity: 0.72;
+      transform: translateY(var(--secondary-offset-y));
+    }
+
+    .incoming-line {
+      opacity: 0;
+    }
+
+    .current-line.leaving {
+      opacity: 0.16;
+      transform: translateY(var(--primary-offset-y)) scale(0.972);
+    }
+
+    .next-line.promoting {
+      color: var(--primary);
+      transform: translateY(var(--primary-offset-y));
+    }
+
+  </style>
+</head>
+<body>
+  <div id="layout" class="layout">
+    <div class="shell">
+      <div id="cover" class="cover">
+        <div id="coverFallback" class="cover-fallback">N</div>
+        <img id="coverImage" class="cover-image" alt="" />
+      </div>
+      <div></div>
+      <div class="lyrics-pane">
+        <div id="viewport" class="viewport">
+          <div id="track" class="track">
+            <div id="currentLine" class="line current-line"><span id="currentLineText" class="line-text">TaskbarLyrics 已启动</span></div>
+            <div id="nextLine" class="line next-line"><span id="nextLineText" class="line-text">等待歌词...</span></div>
+            <div id="incomingLine" class="line next-line incoming-line"><span id="incomingLineText" class="line-text"> </span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const layoutEl = document.getElementById("layout");
+    const viewportEl = document.getElementById("viewport");
+    const trackEl = document.getElementById("track");
+    const currentLineEl = document.getElementById("currentLine");
+    const nextLineEl = document.getElementById("nextLine");
+    const incomingLineEl = document.getElementById("incomingLine");
+    const currentLineTextEl = document.getElementById("currentLineText");
+    const nextLineTextEl = document.getElementById("nextLineText");
+    const incomingLineTextEl = document.getElementById("incomingLineText");
+    const coverEl = document.getElementById("cover");
+    const coverImageEl = document.getElementById("coverImage");
+    const coverFallbackEl = document.getElementById("coverFallback");
+    const root = document.documentElement;
+
+    let displayedCurrent = currentLineTextEl?.textContent || "";
+    let displayedNext = nextLineTextEl?.textContent || "";
+    let requestedFontSize = 13;
+    let rowHeightPx = 14;
+    let rowGapPx = 1;
+    let linePitchPx = 15;
+    let isTransitioning = false;
+    let queuedFrame = null;
+    let transitionFallbackTimer = 0;
+    let transitionOpacityAnimation = 0;
+    let transitionStartTime = 0;
+    let transitionBaseNextOpacity = 0.72;
+    let transitionBaseNextFontSize = 12;
+    let transitionTargetCurrentFontSize = 13;
+    let secondaryOpacity = 0.72;
+    let lastLineProgress = Number.NaN;
+    let lastCurrentLineIndex = -1;
+    let lastTrackId = "";
+    let metricsUpdatePending = false;
+    const transitionDurationMs = 560;
+
+    function normalizeWeight(weight) {
+      const normalized = String(weight || "").trim().toLowerCase();
+      switch (normalized) {
+        case "light": return "300";
+        case "medium": return "500";
+        case "semibold": return "600";
+        case "bold": return "700";
+        default: return "500";
+      }
+    }
+
+    function clamp01(value) {
+      const parsed = Number(value);
+      if (Number.isNaN(parsed)) {
+        return 0;
+      }
+      return Math.max(0, Math.min(1, parsed));
+    }
+
+    function normalizeTrackId(trackId) {
+      if (trackId === null || trackId === undefined) {
+        return "";
+      }
+
+      return String(trackId);
+    }
+
+    function toDisplayLine(line, fallback = " ") {
+      const text = (line ?? "").toString().trim();
+      return text.length > 0 ? text : fallback;
+    }
+
+    function setTrackOffset(rowCount) {
+      trackEl.style.transform = `translateY(${-linePitchPx * rowCount}px)`;
+    }
+
+    function setCurrentLine(line) {
+      const safe = toDisplayLine(line, "正在匹配歌词...");
+      if (currentLineTextEl) {
+        currentLineTextEl.textContent = safe;
+      }
+      displayedCurrent = safe;
+    }
+
+    function setSecondaryLine(line) {
+      const safe = toDisplayLine(line, " ");
+      if (nextLineTextEl) {
+        nextLineTextEl.textContent = safe;
+      }
+      displayedNext = safe;
+    }
+
+    function setIncomingLine(line) {
+      if (incomingLineTextEl) {
+        incomingLineTextEl.textContent = toDisplayLine(line, " ");
+      }
+    }
+
+    function updateSecondaryOpacity(progress) {
+      const p = clamp01(progress);
+      const target = 0.58 + ((1 - p) * 0.16);
+      secondaryOpacity += (target - secondaryOpacity) * 0.28;
+      nextLineEl.style.opacity = secondaryOpacity.toFixed(3);
+    }
+
+    function easeOutCubic(t) {
+      const x = 1 - clamp01(t);
+      return 1 - (x * x * x);
+    }
+
+    function getSizeEase(t) {
+      // Follow the same direction as slide easing, but settle slightly earlier to reduce tail-end perceptual jumps.
+      return easeOutCubic(clamp01(t / 0.86));
+    }
+
+    function getFadeOutEase(t) {
+      const normalized = clamp01(t / 0.74);
+      if (normalized >= 0.97) {
+        return 1;
+      }
+
+      return easeOutCubic(normalized);
+    }
+
+    function getFadeInEase(t) {
+      const normalized = clamp01(t / 0.72);
+      if (normalized >= 0.96) {
+        return 1;
+      }
+
+      return easeOutCubic(normalized);
+    }
+
+    function stopTransitionOpacityAnimation() {
+      if (transitionOpacityAnimation) {
+        window.cancelAnimationFrame(transitionOpacityAnimation);
+        transitionOpacityAnimation = 0;
+      }
+    }
+
+    function resetForTrackSwitch(safeCurrent, safeNext, progress, currentLineIndex, trackId) {
+      stopTransitionOpacityAnimation();
+      if (transitionFallbackTimer) {
+        window.clearTimeout(transitionFallbackTimer);
+        transitionFallbackTimer = 0;
+      }
+      queuedFrame = null;
+      isTransitioning = false;
+
+      trackEl.classList.add("no-anim");
+      trackEl.classList.remove("animating");
+      currentLineEl.classList.remove("leaving");
+      nextLineEl.classList.remove("promoting");
+      setTrackOffset(0);
+      setCurrentLine(safeCurrent);
+      setSecondaryLine(safeNext);
+      setIncomingLine("");
+      currentLineEl.style.opacity = "";
+      nextLineEl.style.opacity = "";
+      nextLineEl.style.fontSize = "";
+      incomingLineEl.style.opacity = "";
+      updateSecondaryOpacity(progress);
+      void trackEl.offsetHeight;
+      trackEl.classList.remove("no-anim");
+
+      lastLineProgress = clamp01(progress);
+      lastCurrentLineIndex = Number.isInteger(currentLineIndex) ? currentLineIndex : -1;
+      lastTrackId = trackId;
+    }
+
+    function runTransitionOpacityAnimation(now) {
+      if (!isTransitioning) {
+        return;
+      }
+
+      const elapsed = Math.max(0, now - transitionStartTime);
+      const t = clamp01(elapsed / transitionDurationMs);
+      const e = easeOutCubic(t);
+      const sizeE = getSizeEase(t);
+      const fadeOutE = getFadeOutEase(t);
+      const fadeInE = getFadeInEase(t);
+
+      currentLineEl.style.opacity = String(0.98 + ((0.16 - 0.98) * fadeOutE));
+      nextLineEl.style.opacity = String(transitionBaseNextOpacity + ((0.98 - transitionBaseNextOpacity) * fadeInE));
+      incomingLineEl.style.opacity = secondaryOpacity.toFixed(3);
+      nextLineEl.style.fontSize = `${(transitionBaseNextFontSize + ((transitionTargetCurrentFontSize - transitionBaseNextFontSize) * sizeE)).toFixed(3)}px`;
+
+      if (t < 1) {
+        transitionOpacityAnimation = window.requestAnimationFrame(runTransitionOpacityAnimation);
+      } else {
+        transitionOpacityAnimation = 0;
+      }
+    }
+
+    function applyFrame(safeCurrent, safeNext, progress, currentLineIndex) {
+      const p = clamp01(progress);
+      const hasLineIndex = Number.isInteger(currentLineIndex) && currentLineIndex >= 0;
+
+      if (hasLineIndex) {
+        if (!Number.isInteger(lastCurrentLineIndex) || lastCurrentLineIndex < 0) {
+          // If we were in a non-lyric state (e.g. "正在匹配歌词..."),
+          // use a transition to slide into the first line smoothly.
+          if (displayedCurrent === "正在匹配歌词...") {
+            startTransition(safeCurrent, safeNext, p, currentLineIndex);
+          } else {
+            setCurrentLine(safeCurrent);
+            setSecondaryLine(safeNext);
+            updateSecondaryOpacity(p);
+          }
+          lastCurrentLineIndex = currentLineIndex;
+          lastLineProgress = p;
+          return;
+        }
+
+        if (currentLineIndex !== lastCurrentLineIndex) {
+          startTransition(safeCurrent, safeNext, p, currentLineIndex);
+        } else {
+          setSecondaryLine(safeNext);
+          updateSecondaryOpacity(p);
+        }
+
+        lastLineProgress = p;
+        return;
+      }
+
+      const isRepeatedPromotionCandidate =
+        safeCurrent === displayedCurrent &&
+        displayedNext === displayedCurrent &&
+        safeNext !== displayedNext;
+      const isUnchangedTextFrame =
+        safeCurrent === displayedCurrent &&
+        safeNext === displayedNext;
+      const wrappedProgressForSameText =
+        isUnchangedTextFrame &&
+        Number.isFinite(lastLineProgress) &&
+        (lastLineProgress - p) > 0.16 &&
+        lastLineProgress > 0.62;
+
+      if (safeCurrent !== displayedCurrent || isRepeatedPromotionCandidate || wrappedProgressForSameText) {
+        startTransition(safeCurrent, safeNext, p, -1);
+      } else {
+        setSecondaryLine(safeNext);
+        updateSecondaryOpacity(p);
+      }
+
+      lastLineProgress = p;
+    }
+
+    function updateMetrics() {
+      if (isTransitioning) {
+        metricsUpdatePending = true;
+        return;
+      }
+
+      metricsUpdatePending = false;
+      // WPF host extends the WebView 2px downward for descender safety; exclude that buffer from row metrics.
+      const viewportDescenderBufferPx = 2;
+      const measuredViewportHeight = viewportEl.clientHeight || 30;
+      const hostHeight = Math.max(26, measuredViewportHeight - viewportDescenderBufferPx);
+      rowHeightPx = Math.max(13, Math.floor(hostHeight / 2));
+      rowGapPx = Math.max(0, hostHeight - (rowHeightPx * 2));
+      linePitchPx = rowHeightPx + rowGapPx;
+      const currentSizeMax = Math.max(11.2, rowHeightPx * 0.88);
+      const currentSize = Math.min(requestedFontSize, currentSizeMax);
+      const nextSize = Math.max(9, currentSize * 0.92);
+      root.style.setProperty("--row-height", `${rowHeightPx}px`);
+      root.style.setProperty("--row-gap", `${rowGapPx}px`);
+      root.style.setProperty("--line-pitch", `${linePitchPx}px`);
+      root.style.setProperty("--current-size", `${currentSize.toFixed(2)}px`);
+      root.style.setProperty("--next-size", `${nextSize.toFixed(2)}px`);
+      setTrackOffset(0);
+    }
+
+    function finalizeTransition(promotedCurrent, upcomingNext, progress, promotedLineIndex = -1) {
+      const incomingEndOpacity = Number.parseFloat(window.getComputedStyle(incomingLineEl).opacity || "0.72");
+
+      // Freeze transitions while swapping layers to avoid visible "grow then shrink" rebound.
+      trackEl.classList.add("no-anim");
+      stopTransitionOpacityAnimation();
+      setCurrentLine(promotedCurrent);
+      setSecondaryLine(upcomingNext);
+      setIncomingLine("");
+      trackEl.classList.remove("animating");
+      currentLineEl.classList.remove("leaving");
+      nextLineEl.classList.remove("promoting");
+      setTrackOffset(0);
+      // Reset inline opacity channels while transitions are disabled; otherwise a brief flash can appear.
+      currentLineEl.style.opacity = "";
+      nextLineEl.style.opacity = "";
+      secondaryOpacity = Number.isFinite(incomingEndOpacity) ? incomingEndOpacity : 0.72;
+      incomingLineEl.style.opacity = "";
+      nextLineEl.style.fontSize = "";
+      updateSecondaryOpacity(progress);
+      void trackEl.offsetHeight;
+      trackEl.classList.remove("no-anim");
+      isTransitioning = false;
+      lastLineProgress = clamp01(progress);
+      if (Number.isInteger(promotedLineIndex) && promotedLineIndex >= 0) {
+        lastCurrentLineIndex = promotedLineIndex;
+      }
+      if (metricsUpdatePending) {
+        updateMetrics();
+      }
+
+      if (queuedFrame) {
+        const frame = queuedFrame;
+        queuedFrame = null;
+        applyFrame(frame.current, frame.next, frame.progress, frame.currentLineIndex);
+      }
+    }
+
+    function startTransition(newCurrent, newNext, progress, currentLineIndex = -1) {
+      if (isTransitioning) {
+        queuedFrame = { current: newCurrent, next: newNext, progress, currentLineIndex };
+        return;
+      }
+
+      isTransitioning = true;
+      const promoted = toDisplayLine(newCurrent, "正在匹配歌词...");
+      const upcoming = toDisplayLine(newNext, " ");
+      transitionBaseNextOpacity = secondaryOpacity;
+      transitionBaseNextFontSize = Number.parseFloat(window.getComputedStyle(nextLineEl).fontSize || "12");
+      transitionTargetCurrentFontSize = Number.parseFloat(window.getComputedStyle(currentLineEl).fontSize || "13");
+      transitionStartTime = 0;
+      stopTransitionOpacityAnimation();
+
+      // Start from baseline state first so promoting font-size always animates from second-line size.
+      trackEl.classList.add("no-anim");
+      trackEl.classList.remove("animating");
+      currentLineEl.classList.remove("leaving");
+      nextLineEl.classList.remove("promoting");
+      setTrackOffset(0);
+      if (nextLineTextEl) {
+        nextLineTextEl.textContent = promoted;
+      }
+      setIncomingLine(upcoming);
+      currentLineEl.style.opacity = "";
+      nextLineEl.style.opacity = "";
+      nextLineEl.style.fontSize = `${transitionBaseNextFontSize.toFixed(3)}px`;
+      incomingLineEl.style.opacity = secondaryOpacity.toFixed(3);
+      void trackEl.offsetHeight;
+      trackEl.classList.remove("no-anim");
+
+      const onTransitionEnd = (event) => {
+        if (!event || event.target !== trackEl || event.propertyName !== "transform") {
+          return;
+        }
+
+        trackEl.removeEventListener("transitionend", onTransitionEnd);
+        if (transitionFallbackTimer) {
+          window.clearTimeout(transitionFallbackTimer);
+          transitionFallbackTimer = 0;
+        }
+        finalizeTransition(promoted, upcoming, progress, currentLineIndex);
+      };
+
+      trackEl.addEventListener("transitionend", onTransitionEnd);
+      window.requestAnimationFrame(() => {
+        transitionStartTime = window.performance.now();
+        transitionOpacityAnimation = window.requestAnimationFrame(runTransitionOpacityAnimation);
+        currentLineEl.classList.add("leaving");
+        nextLineEl.classList.add("promoting");
+        trackEl.classList.add("animating");
+        window.requestAnimationFrame(() => setTrackOffset(1));
+      });
+      transitionFallbackTimer = window.setTimeout(() => {
+        trackEl.removeEventListener("transitionend", onTransitionEnd);
+        finalizeTransition(promoted, upcoming, progress, currentLineIndex);
+      }, transitionDurationMs + 120);
+    }
+
+    updateMetrics();
+    setCurrentLine(displayedCurrent);
+    setSecondaryLine(displayedNext);
+    setIncomingLine("");
+    updateSecondaryOpacity(0);
+
+    if (typeof ResizeObserver !== "undefined") {
+      new ResizeObserver(updateMetrics).observe(layoutEl);
+    } else {
+      window.addEventListener("resize", updateMetrics);
+    }
+
+    window.taskbarLyrics = {
+      setLyrics(current, next, progress, currentLineIndex, trackId) {
+        const safeCurrent = toDisplayLine(current, "正在匹配歌词...");
+        const safeNext = toDisplayLine(next, " ");
+        const p = clamp01(progress);
+        const lineIndex = Number(currentLineIndex);
+        const normalizedTrackId = normalizeTrackId(trackId);
+        if (normalizedTrackId.length > 0 && normalizedTrackId !== lastTrackId) {
+          resetForTrackSwitch(safeCurrent, safeNext, p, lineIndex, normalizedTrackId);
+          return;
+        }
+
+        if (normalizedTrackId.length > 0) {
+          lastTrackId = normalizedTrackId;
+        }
+
+        applyFrame(safeCurrent, safeNext, p, lineIndex);
+      },
+
+      setCover(dataUri, fallbackText, fallbackColor) {
+        const uri = (dataUri ?? "").toString().trim();
+        const text = toDisplayLine(fallbackText, "N").slice(0, 1).toUpperCase();
+        if (coverFallbackEl) {
+          coverFallbackEl.textContent = text;
+        }
+
+        if (coverEl && fallbackColor && CSS.supports("color", fallbackColor)) {
+          coverEl.style.background = fallbackColor;
+        }
+
+        if (coverImageEl) {
+          if (uri.length > 0) {
+            coverImageEl.style.opacity = "0";
+            coverImageEl.onload = () => {
+              coverImageEl.style.display = "block";
+              window.requestAnimationFrame(() => {
+                coverImageEl.style.opacity = "1";
+              });
+              if (coverFallbackEl) {
+                coverFallbackEl.style.display = "none";
+              }
+            };
+            coverImageEl.onerror = () => {
+              coverImageEl.style.display = "none";
+              coverImageEl.style.opacity = "0";
+              if (coverFallbackEl) {
+                coverFallbackEl.style.display = "flex";
+              }
+            };
+            coverImageEl.src = uri;
+          } else {
+            coverImageEl.onload = null;
+            coverImageEl.onerror = null;
+            coverImageEl.removeAttribute("src");
+            coverImageEl.style.display = "none";
+            coverImageEl.style.opacity = "0";
+            if (coverFallbackEl) {
+              coverFallbackEl.style.display = "flex";
+            }
+          }
+        }
+      },
+
+      applyStyle(payload) {
+        if (!payload || typeof payload !== "object") {
+          return;
+        }
+
+        root.style.setProperty("--font-family", payload.fontFamily || "\"SF Pro Display\", \"Segoe UI Variable Display\", \"Segoe UI Variable Text\", \"Microsoft YaHei UI\", sans-serif");
+        requestedFontSize = Number(payload.fontSize) || 13;
+        root.style.setProperty("--font-size", `${requestedFontSize}px`);
+        updateMetrics();
+        root.style.setProperty("--font-weight", normalizeWeight(payload.fontWeight));
+
+        if (payload.primaryColor && CSS.supports("color", payload.primaryColor)) {
+          root.style.setProperty("--primary", payload.primaryColor);
+        }
+
+        if (payload.secondaryColor && CSS.supports("color", payload.secondaryColor)) {
+          root.style.setProperty("--secondary", payload.secondaryColor);
+        }
+
+        if (payload.surfaceColor && CSS.supports("background-color", payload.surfaceColor)) {
+          root.style.setProperty("--surface-color", payload.surfaceColor);
+        }
+
+        if (payload.surfaceShadow && CSS.supports("box-shadow", payload.surfaceShadow)) {
+          root.style.setProperty("--surface-shadow", payload.surfaceShadow);
+        }
+      }
+    };
+  </script>
+</body>
+</html>
+""";
     }
 
     private static string GetLyricsWebErrorHtml(string message)

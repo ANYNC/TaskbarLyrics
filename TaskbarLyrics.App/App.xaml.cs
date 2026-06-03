@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 using System.Windows;
 
 namespace TaskbarLyrics.App;
@@ -18,6 +18,9 @@ public partial class App : System.Windows.Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        // 初始化 SQLite 别名与纯音乐映射库
+        TaskbarLyrics.Core.Database.SongSearchMapDbContext.InitializeDatabase();
 
         ShutdownMode = ShutdownMode.OnExplicitShutdown;
 

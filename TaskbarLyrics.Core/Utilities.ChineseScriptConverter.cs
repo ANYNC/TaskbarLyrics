@@ -1,6 +1,4 @@
 ﻿using System.Runtime.InteropServices;
-using System.Text;
-
 namespace TaskbarLyrics.Core.Utilities;
 
 public static class ChineseScriptConverter
@@ -32,19 +30,21 @@ public static class ChineseScriptConverter
                 return text;
             }
 
-            var builder = new StringBuilder(required);
+            var buffer = new char[required];
             var written = LCMapStringEx(
                 "zh-CN",
                 LCMAP_SIMPLIFIED_CHINESE,
                 text,
                 text.Length,
-                builder,
-                builder.Capacity,
+                buffer,
+                buffer.Length,
                 IntPtr.Zero,
                 IntPtr.Zero,
                 IntPtr.Zero);
 
-            return written > 0 ? builder.ToString() : text;
+            return written > 0
+                ? new string(buffer, 0, Math.Min(written, buffer.Length)).TrimEnd('\0')
+                : text;
         }
         catch
         {
@@ -58,7 +58,7 @@ public static class ChineseScriptConverter
         uint dwMapFlags,
         string lpSrcStr,
         int cchSrc,
-        StringBuilder? lpDestStr,
+        char[]? lpDestStr,
         int cchDest,
         IntPtr lpVersionInformation,
         IntPtr lpReserved,

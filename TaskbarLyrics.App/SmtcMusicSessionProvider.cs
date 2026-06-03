@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
+using System.Linq;
 using System.Text.RegularExpressions;
 using TaskbarLyrics.Core.Abstractions;
 using TaskbarLyrics.Core.Models;
@@ -9,7 +10,8 @@ namespace TaskbarLyrics.App;
 
 public sealed class SmtcMusicSessionProvider : IMusicSessionProvider
 {
-    private static readonly string[] DefaultRecognitionOrder = { "QQMusic", "Netease", "Spotify" };
+    private static readonly string[] DefaultRecognitionOrder = { "QQMusic", "Netease", "Kugou", "Spotify" };
+    private static readonly TimeSpan MissingCoverRetryInterval = TimeSpan.FromSeconds(5);
     private static readonly Regex TitleArtistRegex = new(
         @"^(?<title>.+?)\s*[-|—]\s*(?<artist>.+)$",
         RegexOptions.Compiled);
@@ -20,10 +22,19 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider
     private SmtcTimelineDiagnostics? _lastTimelineDiagnostics;
     private string? _currentLyricSourceApp;
     private string[] _recognitionOrder = DefaultRecognitionOrder;
+    private HashSet<string> _enabledSources = new(DefaultRecognitionOrder, StringComparer.OrdinalIgnoreCase);
+    private string _lastCoverMetadataKey = string.Empty;
+    private byte[]? _lastCoverImageBytes;
+    private DateTimeOffset _nextMissingCoverRetryUtc;
 
-    public void SetRecognitionOrder(IReadOnlyList<string>? order)
+    public void SetRecognitionOrder(
+        IReadOnlyList<string>? order,
+        IReadOnlyCollection<string>? enabledSources = null)
     {
-        var normalized = NormalizeRecognitionOrder(order);
+        _enabledSources = enabledSources is null
+            ? new HashSet<string>(DefaultRecognitionOrder, StringComparer.OrdinalIgnoreCase)
+            : new HashSet<string>(enabledSources, StringComparer.OrdinalIgnoreCase);
+        var normalized = NormalizeRecognitionOrder(order, _enabledSources);
         _recognitionOrder = normalized.ToArray();
     }
 
@@ -62,7 +73,6 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider
 
         var rawSource = NormalizeSource(session.SourceAppUserModelId);
         var sourceApp = ResolveSourceWithProcessFallback(rawSource);
-        var sourceFromFallback = !IsSupportedSource(rawSource) && IsSupportedSource(sourceApp);
 
         var isPlaying = playbackInfo?.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
         var position = timeline.Position;
@@ -71,6 +81,7 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider
         string title = string.Empty;
         string artist = string.Empty;
         byte[]? coverImageBytes = null;
+        string? songId = null;
 
         try
         {
@@ -78,9 +89,29 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider
             title = media?.Title?.Trim() ?? string.Empty;
             artist = media?.Artist?.Trim() ?? string.Empty;
 
-            if (!sourceFromFallback)
+            coverImageBytes = await GetCoverBytesAsync(
+                sourceApp,
+                title,
+                artist,
+                media?.Thumbnail,
+                nowUtc,
+                cancellationToken);
+
+            // 从 Genres 流派元数据列表中解析播放器写入的 SongId (例如网易云 NCM-, QQ音乐 QQ-)
+            if (media?.Genres != null)
             {
-                coverImageBytes = await ReadCoverBytesAsync(media?.Thumbnail, cancellationToken);
+                if (sourceApp.Equals("Netease", StringComparison.OrdinalIgnoreCase))
+                {
+                    songId = media.Genres
+                        .FirstOrDefault(x => x.StartsWith("NCM-", StringComparison.OrdinalIgnoreCase))?
+                        .Replace("NCM-", "");
+                }
+                else if (sourceApp.Equals("QQMusic", StringComparison.OrdinalIgnoreCase))
+                {
+                    songId = media.Genres
+                        .FirstOrDefault(x => x.StartsWith("QQ-", StringComparison.OrdinalIgnoreCase))?
+                        .Replace("QQ-", "");
+                }
             }
         }
         catch
@@ -109,7 +140,7 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider
         }
 
         var trackId = $"{sourceApp}|{title}|{artist}";
-        var track = new TrackInfo(trackId, title, artist, sourceApp);
+        var track = new TrackInfo(trackId, title, artist, sourceApp, timeline.EndTime, songId);
         var diagnostics = new SmtcTimelineDiagnostics(
             CapturedAtUtc: nowUtc,
             SourceAppUserModelId: session.SourceAppUserModelId ?? string.Empty,
@@ -160,7 +191,8 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider
                         Id: $"Netease|{inferredTitle}|{inferredArtist}",
                         Title: inferredTitle,
                         Artist: inferredArtist,
-                        SourceApp: "Netease"),
+                        SourceApp: "Netease",
+                        Duration: TimeSpan.Zero),
                     CoverImageBytes: null);
             }
 
@@ -176,7 +208,8 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider
                     Id: "Netease|ProcessFallback",
                     Title: "Unknown Title",
                     Artist: "Unknown Artist",
-                    SourceApp: "Netease"),
+                    SourceApp: "Netease",
+                    Duration: TimeSpan.Zero),
                 CoverImageBytes: null);
         }
 
@@ -194,7 +227,27 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider
                     Id: "QQMusic|ProcessFallback",
                     Title: "Unknown Title",
                     Artist: "Unknown Artist",
-                    SourceApp: "QQMusic"),
+                    SourceApp: "QQMusic",
+                    Duration: TimeSpan.Zero),
+                CoverImageBytes: null);
+        }
+
+        if (string.Equals(preferredSource, "Kugou", StringComparison.OrdinalIgnoreCase))
+        {
+            PublishFallbackDiagnostics(
+                sourceAppUserModelId: string.Empty,
+                resolvedSource: "Kugou",
+                title: "Unknown Title",
+                artist: "Unknown Artist");
+            return new PlaybackSnapshot(
+                IsPlaying: false,
+                Position: TimeSpan.Zero,
+                Track: new TrackInfo(
+                    Id: "Kugou|ProcessFallback",
+                    Title: "Unknown Title",
+                    Artist: "Unknown Artist",
+                    SourceApp: "Kugou",
+                    Duration: TimeSpan.Zero),
                 CoverImageBytes: null);
         }
 
@@ -262,7 +315,10 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider
                     Session = candidate,
                     Source = NormalizeSource(candidate.SourceAppUserModelId)
                 })
-                .Where(x => IsSupportedSource(x.Source) && IsSessionPlaying(x.Session))
+                .Where(x =>
+                    !IsBlockedSource(x.Session.SourceAppUserModelId) &&
+                    IsSupportedSource(x.Source) &&
+                    IsSessionPlaying(x.Session))
                 .OrderBy(x => GetRecognitionPriority(x.Source))
                 .FirstOrDefault();
             if (supportedPlaying is not null)
@@ -270,23 +326,9 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider
                 return supportedPlaying.Session;
             }
 
-            var supportedAny = sessions
-                .Select(candidate => new
-                {
-                    Session = candidate,
-                    Source = NormalizeSource(candidate.SourceAppUserModelId)
-                })
-                .Where(x => IsSupportedSource(x.Source))
-                .OrderBy(x => GetRecognitionPriority(x.Source))
-                .FirstOrDefault();
-            if (supportedAny is not null)
-            {
-                return supportedAny.Session;
-            }
-
             foreach (var candidate in sessions)
             {
-                if (IsBlockedSource(candidate.SourceAppUserModelId))
+                if (!CanUseGenericSession(candidate.SourceAppUserModelId))
                 {
                     continue;
                 }
@@ -298,9 +340,25 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider
                 }
             }
 
+            var supportedAny = sessions
+                .Select(candidate => new
+                {
+                    Session = candidate,
+                    Source = NormalizeSource(candidate.SourceAppUserModelId)
+                })
+                .Where(x =>
+                    !IsBlockedSource(x.Session.SourceAppUserModelId) &&
+                    IsSupportedSource(x.Source))
+                .OrderBy(x => GetRecognitionPriority(x.Source))
+                .FirstOrDefault();
+            if (supportedAny is not null)
+            {
+                return supportedAny.Session;
+            }
+
             foreach (var candidate in sessions)
             {
-                if (!IsBlockedSource(candidate.SourceAppUserModelId))
+                if (CanUseGenericSession(candidate.SourceAppUserModelId))
                 {
                     return candidate;
                 }
@@ -354,20 +412,22 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider
             return "Netease";
         }
 
-        if (sourceAppUserModelId.Contains("qqmusic", StringComparison.OrdinalIgnoreCase) ||
-            sourceAppUserModelId.Contains("qq", StringComparison.OrdinalIgnoreCase))
+        if (sourceAppUserModelId.Contains("qqmusic", StringComparison.OrdinalIgnoreCase))
         {
             return "QQMusic";
+        }
+
+        if (sourceAppUserModelId.Contains("kugou", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Kugou";
         }
 
         return sourceAppUserModelId;
     }
 
-    private static bool IsSupportedSource(string sourceApp)
+    private bool IsSupportedSource(string sourceApp)
     {
-        return string.Equals(sourceApp, "Netease", StringComparison.OrdinalIgnoreCase) ||
-               string.Equals(sourceApp, "QQMusic", StringComparison.OrdinalIgnoreCase) ||
-               string.Equals(sourceApp, "Spotify", StringComparison.OrdinalIgnoreCase);
+        return _enabledSources.Contains(sourceApp);
     }
 
     private static bool IsBlockedSource(string sourceAppUserModelId)
@@ -444,13 +504,32 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider
 
     private string ResolveSourceWithProcessFallback(string sourceApp)
     {
-        if (!string.IsNullOrWhiteSpace(sourceApp) && !IsBlockedSource(sourceApp))
+        if (!string.IsNullOrWhiteSpace(sourceApp) &&
+            !IsBlockedSource(sourceApp) &&
+            !IsDisabledKnownSource(sourceApp))
         {
             return sourceApp;
         }
 
         var detected = DetectRunningSource();
         return detected ?? sourceApp;
+    }
+
+    private bool CanUseGenericSession(string sourceAppUserModelId)
+    {
+        return !IsBlockedSource(sourceAppUserModelId) &&
+               !IsDisabledKnownSource(sourceAppUserModelId);
+    }
+
+    private bool IsDisabledKnownSource(string sourceAppUserModelId)
+    {
+        var normalized = NormalizeSource(sourceAppUserModelId);
+        return IsKnownSource(normalized) && !_enabledSources.Contains(normalized);
+    }
+
+    private static bool IsKnownSource(string sourceApp)
+    {
+        return DefaultRecognitionOrder.Contains(sourceApp, StringComparer.OrdinalIgnoreCase);
     }
 
     private string? DetectRunningSource()
@@ -473,6 +552,12 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider
                 IsAnyProcessRunning("spotify"))
             {
                 return "Spotify";
+            }
+
+            if (source.Equals("Kugou", StringComparison.OrdinalIgnoreCase) &&
+                IsAnyProcessRunning("kugou", "kugoumusic", "kgmusic"))
+            {
+                return "Kugou";
             }
         }
 
@@ -498,7 +583,9 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider
         return playback?.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
     }
 
-    private static List<string> NormalizeRecognitionOrder(IReadOnlyList<string>? order)
+    private static List<string> NormalizeRecognitionOrder(
+        IReadOnlyList<string>? order,
+        IReadOnlySet<string> enabledSources)
     {
         var result = new List<string>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -508,7 +595,9 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider
             foreach (var item in order)
             {
                 var normalized = NormalizeRecognitionSource(item);
-                if (!string.IsNullOrWhiteSpace(normalized) && seen.Add(normalized))
+                if (!string.IsNullOrWhiteSpace(normalized) &&
+                    enabledSources.Contains(normalized) &&
+                    seen.Add(normalized))
                 {
                     result.Add(normalized);
                 }
@@ -517,7 +606,7 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider
 
         foreach (var source in DefaultRecognitionOrder)
         {
-            if (seen.Add(source))
+            if (enabledSources.Contains(source) && seen.Add(source))
             {
                 result.Add(source);
             }
@@ -533,7 +622,7 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider
             return string.Empty;
         }
 
-        if (source.Contains("qq", StringComparison.OrdinalIgnoreCase))
+        if (source.Contains("qqmusic", StringComparison.OrdinalIgnoreCase))
         {
             return "QQMusic";
         }
@@ -547,6 +636,11 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider
         if (source.Contains("spotify", StringComparison.OrdinalIgnoreCase))
         {
             return "Spotify";
+        }
+
+        if (source.Contains("kugou", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Kugou";
         }
 
         return string.Empty;
@@ -648,6 +742,31 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider
         {
             return null;
         }
+    }
+
+    private async Task<byte[]?> GetCoverBytesAsync(
+        string sourceApp,
+        string title,
+        string artist,
+        IRandomAccessStreamReference? thumbnail,
+        DateTimeOffset nowUtc,
+        CancellationToken cancellationToken)
+    {
+        var metadataKey = $"{sourceApp}|{title}|{artist}";
+        var trackChanged = !string.Equals(metadataKey, _lastCoverMetadataKey, StringComparison.Ordinal);
+        var shouldRetryMissingCover = _lastCoverImageBytes is null && nowUtc >= _nextMissingCoverRetryUtc;
+
+        if (!trackChanged && !shouldRetryMissingCover)
+        {
+            return _lastCoverImageBytes;
+        }
+
+        _lastCoverMetadataKey = metadataKey;
+        _lastCoverImageBytes = await ReadCoverBytesAsync(thumbnail, cancellationToken);
+        _nextMissingCoverRetryUtc = _lastCoverImageBytes is null
+            ? nowUtc + MissingCoverRetryInterval
+            : DateTimeOffset.MaxValue;
+        return _lastCoverImageBytes;
     }
 
 }

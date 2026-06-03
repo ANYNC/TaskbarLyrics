@@ -4,7 +4,7 @@ public sealed class GenericSmtcLyricProvider : LrcLibSmtcLyricProviderBase
 {
     private const string GenericCacheFileName = "smtc-generic-lyrics.json";
 
-    public GenericSmtcLyricProvider() : base("*", GenericCacheFileName, strictSourceMatch: false)
+    public GenericSmtcLyricProvider() : base("LRCLIB", GenericCacheFileName, strictSourceMatch: false)
     {
     }
 

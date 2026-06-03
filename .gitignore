@@ -34,6 +34,7 @@ coverage/
 *.tmp
 *.temp
 *.cache
+tmp/
 
 # OS files
 .DS_Store

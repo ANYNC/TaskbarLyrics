@@ -13,12 +13,17 @@ public sealed class AppSettings
     {
         "QQMusic",
         "Netease",
+        "Kugou",
         "Spotify"
     };
 
     public bool EnableNetease { get; set; } = true;
 
     public bool EnableQQMusic { get; set; } = true;
+
+    public bool EnableKugou { get; set; } = true;
+
+    public bool EnableSpotify { get; set; } = true;
 
     public bool ShowLyricsOnStartup { get; set; } = true;
 
@@ -43,9 +48,6 @@ public sealed class AppSettings
     public double XOffset { get; set; }
 
     public double YOffset { get; set; }
-
-    // Reserved for future manual mismatch correction workflow.
-    public bool EnableLyricMismatchResolver { get; set; } = false;
 
     // Debug only: show real-time SMTC timeline diagnostics window.
     public bool EnableSmtcTimelineMonitor { get; set; } = false;

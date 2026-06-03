@@ -2,8 +2,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\TaskbarLyrics.Core\TaskbarLyrics.Core.csproj" />
-    <ProjectReference Include="..\TaskbarLyrics.Adapters.Netease\TaskbarLyrics.Adapters.Netease.csproj" />
-    <ProjectReference Include="..\TaskbarLyrics.Adapters.QQMusic\TaskbarLyrics.Adapters.QQMusic.csproj" />
   </ItemGroup>
 
   <PropertyGroup>
