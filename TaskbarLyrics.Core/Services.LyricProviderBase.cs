@@ -90,7 +90,7 @@ public abstract class LyricProviderBase : ILyricProvider
 
         lines = NormalizeOpeningLines(lines);
 
-        return new LyricDocument(EnsureSyllables(lines), doc.BestScore);
+        return new LyricDocument(EnsureSyllables(lines), doc.BestScore, doc.IsPureMusic);
     }
 
     // ========================================================

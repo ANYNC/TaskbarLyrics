@@ -24,7 +24,9 @@ public partial class MainWindow : Window
 {
     private const int WmShowWindow = 0x0018;
     private readonly IMusicSessionProvider _musicSessionProvider;
+    private readonly SystemAudioSpectrumService _audioSpectrumService = new();
     private readonly DispatcherTimer _timer;
+    private readonly DispatcherTimer _spectrumTimer;
     private readonly uint _taskbarCreatedMessage;
     private Media.Color _primaryTextColor = Media.Colors.White;
     private Media.Color _secondaryTextColor = Media.Color.FromArgb(190, 255, 255, 255);
@@ -37,12 +39,18 @@ public partial class MainWindow : Window
     private string _currentCoverFallbackText = "N";
     private string _currentCoverFallbackColorCss = "rgba(67, 160, 71, 1)";
     private bool _enableSmtcTimelineMonitor;
+    private bool _enablePureMusicSpectrum = true;
     private SmtcTimelineMonitorWindow? _smtcTimelineMonitorWindow;
     private bool _isWebViewReady;
     private bool _isWebViewInitializing;
     private bool _isWebDocumentReady;
     private bool _isShowingWebErrorPage;
     private bool _isTimerTickRunning;
+    private bool _isSpectrumScriptPending;
+    private bool _isCurrentFramePureMusic;
+    private bool _isCurrentPlaybackPlaying;
+    private string? _pendingSpectrumValuesJson;
+    private SpectrumTuningSettings _spectrumTuningSettings = SpectrumTuningSettings.CreateDefault();
     private int _lastWebCurrentLineIndex = -1;
     private string _lastWebTrackId = string.Empty;
     private FrameworkElement? _lyricsWebViewElement;
@@ -65,6 +73,11 @@ public partial class MainWindow : Window
         };
 
         _timer.Tick += OnTimerTick;
+        _spectrumTimer = new DispatcherTimer(DispatcherPriority.Render)
+        {
+            Interval = TimeSpan.FromMilliseconds(33)
+        };
+        _spectrumTimer.Tick += OnSpectrumTimerTick;
 
         Loaded += OnLoaded;
         SourceInitialized += OnSourceInitialized;
@@ -121,10 +134,11 @@ public partial class MainWindow : Window
 
         _lyricSyncService.Dispose();
         _lyricSyncService = BuildLyricSyncService(settings);
+        _enablePureMusicSpectrum = settings.EnablePureMusicSpectrum;
         AnchorToTaskbar();
         AttachToTaskbarHost();
         PushStyleToWebView(settings);
-        PushLyricsToWebView(_currentLine, _nextLine, 0, _lastWebCurrentLineIndex, _lastWebTrackId);
+        PushLyricsToWebView(_currentLine, _nextLine, 0, _lastWebCurrentLineIndex, _lastWebTrackId, false, false);
         _enableSmtcTimelineMonitor = settings.EnableSmtcTimelineMonitor;
         if (IsLoaded)
         {
@@ -173,9 +187,12 @@ public partial class MainWindow : Window
         AnchorToTaskbar();
         AttachToTaskbarHost();
         await EnsureLyricsWebViewReadyAsync();
-        PushLyricsToWebView(_currentLine, _nextLine, 0, _lastWebCurrentLineIndex, _lastWebTrackId);
+        _audioSpectrumService.Start();
+        ApplySpectrumTuning(_spectrumTuningSettings);
+        PushLyricsToWebView(_currentLine, _nextLine, 0, _lastWebCurrentLineIndex, _lastWebTrackId, false, false);
         UpdateSmtcTimelineMonitorWindow();
         _timer.Start();
+        _spectrumTimer.Start();
     }
 
     private void OnSourceInitialized(object? sender, EventArgs e)
@@ -194,13 +211,24 @@ public partial class MainWindow : Window
             {
                 _timer.Start();
             }
+            if (!_spectrumTimer.IsEnabled)
+            {
+                _spectrumTimer.Start();
+            }
 
             AnchorToTaskbar();
             AttachToTaskbarHost();
         }
-        else if (_timer.IsEnabled)
+        else
         {
-            _timer.Stop();
+            if (_timer.IsEnabled)
+            {
+                _timer.Stop();
+            }
+            if (_spectrumTimer.IsEnabled)
+            {
+                _spectrumTimer.Stop();
+            }
         }
     }
 
@@ -218,7 +246,9 @@ public partial class MainWindow : Window
     {
         CloseSmtcTimelineMonitorWindow();
         _timer.Stop();
+        _spectrumTimer.Stop();
         _timer.Tick -= OnTimerTick;
+        _spectrumTimer.Tick -= OnSpectrumTimerTick;
         SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
         Loaded -= OnLoaded;
         SourceInitialized -= OnSourceInitialized;
@@ -234,6 +264,7 @@ public partial class MainWindow : Window
         DetachWebViewNavigationHandler();
 
         _lyricSyncService.Dispose();
+        _audioSpectrumService.Dispose();
     }
 
     private void UpdateSmtcTimelineMonitorWindow()
@@ -335,20 +366,45 @@ public partial class MainWindow : Window
                 : LyricSyncService.BuildStableTrackIdentity(snapshot.Track);
 
             UpdateLyricLines(current, next, frame.LineProgress);
-            PushLyricsToWebView(current, next, frame.LineProgress, frame.CurrentLineIndex, _lastWebTrackId);
+            _isCurrentFramePureMusic = frame.IsPureMusic && _enablePureMusicSpectrum;
+            _isCurrentPlaybackPlaying = snapshot.IsPlaying;
+            PushLyricsToWebView(current, next, frame.LineProgress, frame.CurrentLineIndex, _lastWebTrackId, _isCurrentFramePureMusic, snapshot.IsPlaying);
         }
         catch (Exception ex)
         {
             LogToFile($"EXCEPTION in OnTimerTick: {ex}");
             _currentLine = $"歌词服务异常: {ex.Message}";
             _nextLine = string.Empty;
-            PushLyricsToWebView(_currentLine, _nextLine, 0, _lastWebCurrentLineIndex, _lastWebTrackId);
+            _isCurrentFramePureMusic = false;
+            _isCurrentPlaybackPlaying = false;
+            PushLyricsToWebView(_currentLine, _nextLine, 0, _lastWebCurrentLineIndex, _lastWebTrackId, false, false);
             Debug.WriteLine(ex);
         }
         finally
         {
             _isTimerTickRunning = false;
         }
+    }
+
+    public void ApplySpectrumTuning(SpectrumTuningSettings settings)
+    {
+        var snapshot = settings.Clone();
+        _spectrumTuningSettings = snapshot;
+        _audioSpectrumService.ApplyTuning(snapshot);
+        _spectrumTimer.Interval = TimeSpan.FromMilliseconds(Math.Clamp(snapshot.UpdateIntervalMs, 16, 100));
+        PushSpectrumTuningToWebView(snapshot);
+    }
+
+    private void OnSpectrumTimerTick(object? sender, EventArgs e)
+    {
+        if (!_isCurrentFramePureMusic)
+        {
+            return;
+        }
+
+        PushSpectrumToWebView(_isCurrentPlaybackPlaying && _audioSpectrumService.IsAvailable
+            ? _audioSpectrumService.GetSpectrum()
+            : SystemAudioSpectrumService.Silence);
     }
 
     private void LogTickDiagnostics(PlaybackSnapshot snapshot, LyricDisplayFrame frame)
@@ -490,7 +546,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private void PushLyricsToWebView(string current, string next, double lineProgress, int currentLineIndex, string? trackId)
+    private void PushLyricsToWebView(string current, string next, double lineProgress, int currentLineIndex, string? trackId, bool isPureMusic, bool isPlaying)
     {
         if (!_isWebViewReady || !_isWebDocumentReady || _isShowingWebErrorPage)
         {
@@ -502,7 +558,9 @@ public partial class MainWindow : Window
         var progressJson = JsonSerializer.Serialize(Math.Clamp(lineProgress, 0, 1));
         var lineIndexJson = JsonSerializer.Serialize(currentLineIndex);
         var trackIdJson = JsonSerializer.Serialize(trackId ?? string.Empty);
-        var script = $"window.taskbarLyrics?.setLyrics({currentJson}, {nextJson}, {progressJson}, {lineIndexJson}, {trackIdJson});";
+        var isPureMusicJson = JsonSerializer.Serialize(isPureMusic);
+        var isPlayingJson = JsonSerializer.Serialize(isPlaying);
+        var script = $"window.taskbarLyrics?.setLyrics({currentJson}, {nextJson}, {progressJson}, {lineIndexJson}, {trackIdJson}, {isPureMusicJson}, {isPlayingJson});";
         _ = ExecuteWebScriptAsync(script);
     }
 
@@ -518,6 +576,71 @@ public partial class MainWindow : Window
         var fallbackColorJson = JsonSerializer.Serialize(_currentCoverFallbackColorCss);
         var script = $"window.taskbarLyrics?.setCover({dataUriJson}, {fallbackTextJson}, {fallbackColorJson});";
         _ = ExecuteWebScriptAsync(script);
+    }
+
+    private void PushSpectrumToWebView(IReadOnlyList<float> bars)
+    {
+        if (!_isWebViewReady || !_isWebDocumentReady || _isShowingWebErrorPage)
+        {
+            return;
+        }
+
+        var valuesJson = JsonSerializer.Serialize(bars.Select(value => Math.Clamp(value, 0f, 1f)));
+        if (_isSpectrumScriptPending)
+        {
+            _pendingSpectrumValuesJson = valuesJson;
+            return;
+        }
+
+        SendSpectrumToWebView(valuesJson);
+    }
+
+    private void PushSpectrumTuningToWebView(SpectrumTuningSettings settings)
+    {
+        if (!_isWebViewReady || !_isWebDocumentReady || _isShowingWebErrorPage)
+        {
+            return;
+        }
+
+        var payload = new
+        {
+            rise = settings.FrontendRise,
+            fall = settings.FrontendFall,
+            minHeight = settings.MinBarHeight,
+            heightRange = settings.BarHeightRange,
+            opacity = settings.BarOpacity
+        };
+        var payloadJson = JsonSerializer.Serialize(payload);
+        var script = $"window.taskbarLyrics?.setSpectrumTuning({payloadJson});";
+        _ = ExecuteWebScriptAsync(script);
+    }
+
+    private void SendSpectrumToWebView(string valuesJson)
+    {
+        var script = $"window.taskbarLyrics?.setSpectrum({valuesJson});";
+        var task = ExecuteWebScriptAsync(script);
+        if (task is null)
+        {
+            return;
+        }
+
+        _isSpectrumScriptPending = true;
+        _ = task.ContinueWith(_ =>
+        {
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                _isSpectrumScriptPending = false;
+                var pendingValuesJson = _pendingSpectrumValuesJson;
+                _pendingSpectrumValuesJson = null;
+                if (!string.IsNullOrEmpty(pendingValuesJson) &&
+                    _isWebViewReady &&
+                    _isWebDocumentReady &&
+                    !_isShowingWebErrorPage)
+                {
+                    SendSpectrumToWebView(pendingValuesJson);
+                }
+            }));
+        }, TaskScheduler.Default);
     }
 
     private static string BuildCoverDataUri(byte[] bytes)
@@ -593,8 +716,9 @@ public partial class MainWindow : Window
             PushStyleToWebView(app.Settings);
         }
 
-        PushLyricsToWebView(_currentLine, _nextLine, 0, _lastWebCurrentLineIndex, _lastWebTrackId);
+        PushLyricsToWebView(_currentLine, _nextLine, 0, _lastWebCurrentLineIndex, _lastWebTrackId, false, false);
         PushCoverToWebView();
+        PushSpectrumTuningToWebView(_spectrumTuningSettings);
     }
 
     private void PushStyleToWebView(AppSettings settings)

@@ -194,7 +194,7 @@ public sealed class LyricProviderRegistry : ILyricProviderRegistry
             : 0;
         var weightedScore = Math.Min(100, document.BestScore + qualityWeight);
         Log.Info($"回退歌词源 [{provider.SourceApp}] 基础分: {document.BestScore}，质量权重: +{qualityWeight}，最终分: {weightedScore}");
-        return new LyricDocument(document.Lines, weightedScore);
+        return new LyricDocument(document.Lines, weightedScore, document.IsPureMusic);
     }
 
     private MappingResult ResolveMapping(TrackInfo track)
@@ -217,7 +217,8 @@ public sealed class LyricProviderRegistry : ILyricProviderRegistry
             {
                 var pureMusic = new LyricDocument(
                     new[] { new LyricLine(TimeSpan.Zero, "🎶🎶🎶") },
-                    100);
+                    100,
+                    isPureMusic: true);
                 return new MappingResult(targetTitle, targetArtist, null, pureMusic);
             }
 

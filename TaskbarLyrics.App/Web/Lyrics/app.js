@@ -12,6 +12,7 @@ const coverImageEl = document.getElementById("coverImage");
 const coverImageNextEl = document.getElementById("coverImageNext");
 const coverFallbackEl = document.getElementById("coverFallback");
 const root = document.documentElement;
+const spectrumBarEls = Array.from(document.querySelectorAll(".spectrum span"));
 
 let displayedCurrent = currentLineTextEl?.textContent || "";
 let displayedNext = nextLineTextEl?.textContent || "";
@@ -48,6 +49,20 @@ let activeCoverImageEl = coverImageEl;
 let standbyCoverImageEl = coverImageNextEl;
 let currentCoverUri = "";
 let coverGeneration = 0;
+let isSpectrumMode = false;
+let hasAudioDrivenSpectrum = false;
+let spectrumAnimationFrame = 0;
+let lastSpectrumFrameTime = 0;
+const spectrumTargets = spectrumBarEls.map(() => 0);
+const spectrumVisuals = spectrumBarEls.map(() => 0);
+const spectrumSilence = spectrumBarEls.map(() => 0);
+const spectrumTuning = {
+  rise: 0.56,
+  fall: 0.24,
+  minHeight: 5,
+  heightRange: 17,
+  opacity: 0.78
+};
 
 function normalizeWeight(weight) {
   const normalized = String(weight || "").trim().toLowerCase();
@@ -151,6 +166,108 @@ function stopTransitionOpacityAnimation() {
 
 function isSearchingLine(line) {
   return line === SEARCHING_TEXT || line === LEGACY_SEARCHING_TEXT;
+}
+
+function setDisplayMode(showSpectrum) {
+  const shouldShowSpectrum = Boolean(showSpectrum);
+  if (isSpectrumMode === shouldShowSpectrum) {
+    return;
+  }
+
+  isSpectrumMode = shouldShowSpectrum;
+  layoutEl.classList.toggle("spectrum-mode", shouldShowSpectrum);
+}
+
+function setSpectrumTargetValues(values) {
+  const hasValues = Array.isArray(values) && values.length > 0;
+  for (let i = 0; i < spectrumTargets.length; i++) {
+    spectrumTargets[i] = hasValues ? clamp01(values[i] ?? 0) : 0;
+  }
+}
+
+function startSpectrumRenderer() {
+  if (spectrumAnimationFrame) {
+    return;
+  }
+
+  lastSpectrumFrameTime = 0;
+  spectrumAnimationFrame = window.requestAnimationFrame(renderSpectrumFrame);
+}
+
+function stopSpectrumRenderer() {
+  if (!spectrumAnimationFrame) {
+    return;
+  }
+
+  window.cancelAnimationFrame(spectrumAnimationFrame);
+  spectrumAnimationFrame = 0;
+  lastSpectrumFrameTime = 0;
+}
+
+function renderSpectrumFrame(now) {
+  if (!lastSpectrumFrameTime) {
+    lastSpectrumFrameTime = now;
+  }
+
+  const elapsedFrames = Math.max(0.5, Math.min(2.4, (now - lastSpectrumFrameTime) / 16.67));
+  lastSpectrumFrameTime = now;
+  let isSettled = true;
+
+  for (let i = 0; i < spectrumBarEls.length; i++) {
+    const target = spectrumTargets[i] ?? 0;
+    const current = spectrumVisuals[i] ?? 0;
+    const baseRate = target > current ? spectrumTuning.rise : spectrumTuning.fall;
+    const rate = 1 - Math.pow(1 - baseRate, elapsedFrames);
+    const next = current + ((target - current) * rate);
+    spectrumVisuals[i] = Math.abs(next - target) < 0.002 ? target : next;
+
+    if (Math.abs(spectrumVisuals[i] - target) >= 0.002) {
+      isSettled = false;
+    }
+
+    const level = spectrumVisuals[i];
+    const height = spectrumTuning.minHeight + (level * spectrumTuning.heightRange);
+    const bar = spectrumBarEls[i];
+    bar.style.height = `${height.toFixed(2)}px`;
+    bar.style.transform = "scaleY(1)";
+    bar.style.opacity = spectrumTuning.opacity.toFixed(3);
+  }
+
+  if (hasAudioDrivenSpectrum || !isSettled) {
+    spectrumAnimationFrame = window.requestAnimationFrame(renderSpectrumFrame);
+  } else {
+    spectrumAnimationFrame = 0;
+    lastSpectrumFrameTime = 0;
+  }
+}
+
+function setAudioDrivenSpectrum(values) {
+  if (!Array.isArray(values) || values.length === 0) {
+    hasAudioDrivenSpectrum = false;
+    layoutEl.classList.remove("spectrum-audio-driven");
+    setSpectrumTargetValues([]);
+    startSpectrumRenderer();
+    return;
+  }
+
+  hasAudioDrivenSpectrum = true;
+  layoutEl.classList.add("spectrum-audio-driven");
+  setSpectrumTargetValues(values);
+  startSpectrumRenderer();
+}
+
+function clearSpectrumBars() {
+  hasAudioDrivenSpectrum = false;
+  setSpectrumTargetValues([]);
+  stopSpectrumRenderer();
+  layoutEl.classList.remove("spectrum-audio-driven");
+  for (let i = 0; i < spectrumBarEls.length; i++) {
+    spectrumVisuals[i] = 0;
+    const bar = spectrumBarEls[i];
+    bar.style.height = "";
+    bar.style.transform = "";
+    bar.style.opacity = "";
+  }
 }
 
 function setCoverLoadingState(isLoading) {
@@ -588,12 +705,37 @@ if (typeof ResizeObserver !== "undefined") {
 }
 
 window.taskbarLyrics = {
-  setLyrics(current, next, progress, currentLineIndex, trackId) {
+  setLyrics(current, next, progress, currentLineIndex, trackId, isPureMusic, isPlaying) {
     const safeCurrent = toDisplayLine(current, SEARCHING_TEXT);
     const safeNext = toDisplayLine(next, " ");
     const p = clamp01(progress);
     const lineIndex = Number(currentLineIndex);
     const normalizedTrackId = normalizeTrackId(trackId);
+    const shouldShowSpectrum = Boolean(isPureMusic);
+    const shouldAnimateSpectrum = isPlaying !== false;
+
+    if (shouldShowSpectrum) {
+      if (normalizedTrackId.length > 0) {
+        lastTrackId = normalizedTrackId;
+      }
+
+      cancelActiveTransition();
+      trackSwitchSearchStartedAt = 0;
+      setCurrentLine(safeCurrent);
+      setSecondaryLine(" ");
+      setIncomingLine("");
+      lastCurrentLineIndex = Number.isInteger(lineIndex) ? lineIndex : -1;
+      lastLineProgress = p;
+      setDisplayMode(true);
+      if (!shouldAnimateSpectrum) {
+        setAudioDrivenSpectrum(spectrumSilence);
+      }
+      return;
+    }
+
+    setDisplayMode(false);
+    clearSpectrumBars();
+
     if (normalizedTrackId.length > 0 && normalizedTrackId !== lastTrackId) {
       resetForTrackSwitch(safeCurrent, safeNext, p, lineIndex, normalizedTrackId);
       return;
@@ -604,6 +746,29 @@ window.taskbarLyrics = {
     }
 
     applyFrame(safeCurrent, safeNext, p, lineIndex);
+  },
+
+  setSpectrum(values) {
+    if (!isSpectrumMode) {
+      return;
+    }
+
+    setAudioDrivenSpectrum(values);
+  },
+
+  setSpectrumTuning(payload) {
+    if (!payload || typeof payload !== "object") {
+      return;
+    }
+
+    spectrumTuning.rise = Math.max(0.02, Math.min(1, Number(payload.rise) || spectrumTuning.rise));
+    spectrumTuning.fall = Math.max(0.02, Math.min(1, Number(payload.fall) || spectrumTuning.fall));
+    spectrumTuning.minHeight = Math.max(1, Math.min(18, Number(payload.minHeight) || spectrumTuning.minHeight));
+    spectrumTuning.heightRange = Math.max(2, Math.min(40, Number(payload.heightRange) || spectrumTuning.heightRange));
+    spectrumTuning.opacity = Math.max(0.2, Math.min(1, Number(payload.opacity) || spectrumTuning.opacity));
+    if (isSpectrumMode) {
+      startSpectrumRenderer();
+    }
   },
 
   setCover(dataUri, fallbackText, fallbackColor) {

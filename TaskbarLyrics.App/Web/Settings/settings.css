@@ -584,7 +584,8 @@ select:focus,
   transition: transform .16s cubic-bezier(.2, .8, .2, 1);
 }
 
-.danger {
+.danger,
+.primary {
   justify-self: end;
   width: 96px;
   height: 38px;
@@ -597,6 +598,21 @@ select:focus,
     background .14s ease,
     border-color .14s ease,
     transform .16s cubic-bezier(.2, .8, .2, 1);
+}
+
+.primary {
+  border-color: #5f87ff;
+  background: #4d7aff;
+}
+
+.primary:hover {
+  border-color: #7da0ff;
+  background: #638cff;
+  transform: translateY(-1px);
+}
+
+.primary:active {
+  transform: translateY(0) scale(.985);
 }
 
 .danger:hover {

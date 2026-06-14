@@ -240,6 +240,10 @@ function setupEvents() {
     bridge.post({ type: "clearCache" });
   });
 
+  document.getElementById("spectrumTuningButton")?.addEventListener("click", () => {
+    bridge.post({ type: "openSpectrumTuning" });
+  });
+
   document.getElementById("sidebarToggle")?.addEventListener("click", () => {
     const windowElement = document.querySelector(".window");
     const toggle = document.getElementById("sidebarToggle");

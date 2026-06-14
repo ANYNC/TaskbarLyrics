@@ -51,6 +51,7 @@
           <div class="rows">
             <label class="row"><span><strong>启动时显示歌词</strong><small>应用启动后自动显示歌词悬浮窗口。</small></span><input data-key="showLyricsOnStartup" type="checkbox"></label>
             <label class="row"><span><strong>显示歌词翻译</strong><small>统一控制各歌词源的翻译显示。</small></span><input data-key="showLyricTranslation" type="checkbox"></label>
+            <label class="row"><span><strong>纯音乐时显示频谱</strong><small>歌曲识别为纯音乐时，在歌词区域显示实时频谱。</small></span><input data-key="enablePureMusicSpectrum" type="checkbox"></label>
             <label class="row"><span><strong>显示背景</strong><small>为歌词窗口启用半透明背景。</small></span><input data-key="showBackground" type="checkbox"></label>
             <label class="row"><span><strong>显示边框</strong><small>为歌词窗口绘制边框，便于深浅背景上分辨。</small></span><input data-key="showBorder" type="checkbox"></label>
           </div>
@@ -85,6 +86,7 @@
           <p class="section-desc">清理缓存或打开辅助调试选项。</p>
           <div class="rows">
             <label class="row"><span><strong>SMTC 时间轴监视器</strong><small>用于观察播放器时间轴数据，排查同步问题。</small></span><input data-key="enableSmtcTimelineMonitor" type="checkbox"></label>
+            <div class="row"><span><strong>频谱调试</strong><small>打开临时滑块面板，实时调整频谱响应参数。</small></span><button id="spectrumTuningButton" class="primary">打开调试</button></div>
             <div class="row"><span><strong>歌词缓存</strong><small>清除后首次重新匹配会稍慢。</small></span><button id="clearCacheButton" class="danger">清除缓存</button></div>
           </div>
         </section>

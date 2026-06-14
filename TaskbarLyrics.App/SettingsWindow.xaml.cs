@@ -144,6 +144,12 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             case "clearCache":
                 ClearLyricCache();
                 break;
+            case "openSpectrumTuning":
+                if (System.Windows.Application.Current is App app)
+                {
+                    app.OpenSpectrumTuningWindow();
+                }
+                break;
             case "pickColor":
                 await PickForegroundColorAsync();
                 break;
@@ -180,6 +186,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             EnableSpotify = _settings.EnableSpotify,
             ShowLyricsOnStartup = _settings.ShowLyricsOnStartup,
             ShowLyricTranslation = _settings.ShowLyricTranslation,
+            EnablePureMusicSpectrum = _settings.EnablePureMusicSpectrum,
             FontSize = _settings.FontSize,
             FontFamily = ResolveInstalledFontFamily(_settings.FontFamily) ?? ResolveInstalledFontFamily(AppSettings.DefaultFontFamily) ?? "Microsoft YaHei UI",
             FontWeight = NormalizeFontWeight(_settings.FontWeight),
@@ -321,6 +328,9 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 break;
             case "showLyricTranslation":
                 _settings.ShowLyricTranslation = ReadBool(element, _settings.ShowLyricTranslation);
+                break;
+            case "enablePureMusicSpectrum":
+                _settings.EnablePureMusicSpectrum = ReadBool(element, _settings.EnablePureMusicSpectrum);
                 break;
             case "showBackground":
                 _settings.ShowBackground = ReadBool(element, _settings.ShowBackground);
@@ -524,6 +534,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         target.EnableSpotify = source.EnableSpotify;
         target.ShowLyricsOnStartup = source.ShowLyricsOnStartup;
         target.ShowLyricTranslation = source.ShowLyricTranslation;
+        target.EnablePureMusicSpectrum = source.EnablePureMusicSpectrum;
         target.FontSize = source.FontSize;
         target.FontFamily = source.FontFamily;
         target.FontWeight = source.FontWeight;
@@ -715,6 +726,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         public bool EnableSpotify { get; set; }
         public bool ShowLyricsOnStartup { get; set; }
         public bool ShowLyricTranslation { get; set; }
+        public bool EnablePureMusicSpectrum { get; set; }
         public double FontSize { get; set; }
         public string FontFamily { get; set; } = "";
         public string FontWeight { get; set; } = "";

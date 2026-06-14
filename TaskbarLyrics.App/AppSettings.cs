@@ -44,6 +44,8 @@ public sealed class AppSettings
 
     public bool ShowLyricTranslation { get; set; } = false;
 
+    public bool EnablePureMusicSpectrum { get; set; } = true;
+
     public double FontSize { get; set; } = 14;
 
     public string FontFamily { get; set; } = DefaultFontFamily;

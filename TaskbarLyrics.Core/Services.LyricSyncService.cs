@@ -104,7 +104,7 @@ public sealed class LyricSyncService : IDisposable
                 nextTxt += " (" + lines[1].Translation + ")";
             }
 
-            return Task.FromResult(new LyricDisplayFrame(firstText, nextTxt, _currentTrack?.Title ?? "", 0, 0));
+            return Task.FromResult(new LyricDisplayFrame(firstText, nextTxt, _currentTrack?.Title ?? "", 0, 0, _currentDocument.IsPureMusic));
         }
 
         var currentLine = lines[displayIdx];
@@ -143,7 +143,8 @@ public sealed class LyricSyncService : IDisposable
             nextText,
             _currentTrack?.Title ?? "",
             progress,
-            displayIdx
+            displayIdx,
+            _currentDocument.IsPureMusic
         ));
     }
 

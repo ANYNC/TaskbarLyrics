@@ -5,4 +5,5 @@ public sealed record LyricDisplayFrame(
     string NextLine,
     string Title,
     double LineProgress = 0.0,
-    int CurrentLineIndex = -1);
+    int CurrentLineIndex = -1,
+    bool IsPureMusic = false);

@@ -9,7 +9,9 @@ public partial class App : System.Windows.Application
     private SettingsStore? _settingsStore;
     private TrayService? _trayService;
     private SettingsWindow? _settingsWindow;
+    private SpectrumTuningWindow? _spectrumTuningWindow;
     private LyricsWindowHost? _lyricsWindowHost;
+    private SpectrumTuningSettings _spectrumTuningSettings = SpectrumTuningSettings.CreateDefault();
 
     public AppSettings Settings { get; private set; } = new();
 
@@ -43,6 +45,7 @@ public partial class App : System.Windows.Application
         }
         UserWantsLyricsVisible = Settings.ShowLyricsOnStartup;
 
+        _lyricsWindowHost.ApplySpectrumTuning(_spectrumTuningSettings);
         _trayService = new TrayService(ToggleLyricsWindow, OpenSettingsWindow, ExitApplication);
         SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
     }
@@ -51,6 +54,7 @@ public partial class App : System.Windows.Application
     {
         SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
         _settingsStore?.Save(Settings);
+        _spectrumTuningWindow?.Close();
         _lyricsWindowHost?.Dispose();
         _trayService?.Dispose();
         base.OnExit(e);
@@ -188,6 +192,34 @@ public partial class App : System.Windows.Application
         {
             _settingsWindow.Closed -= SettingsWindow_Closed;
             _settingsWindow = null;
+        }
+    }
+
+    public void OpenSpectrumTuningWindow()
+    {
+        if (_spectrumTuningWindow is { IsVisible: true })
+        {
+            _spectrumTuningWindow.Activate();
+            return;
+        }
+
+        _spectrumTuningWindow = new SpectrumTuningWindow(_spectrumTuningSettings, ApplySpectrumTuning);
+        _spectrumTuningWindow.Closed += SpectrumTuningWindow_Closed;
+        _spectrumTuningWindow.Show();
+    }
+
+    private void ApplySpectrumTuning(SpectrumTuningSettings settings)
+    {
+        _spectrumTuningSettings = settings.Clone();
+        _lyricsWindowHost?.ApplySpectrumTuning(_spectrumTuningSettings);
+    }
+
+    private void SpectrumTuningWindow_Closed(object? sender, EventArgs e)
+    {
+        if (_spectrumTuningWindow is not null)
+        {
+            _spectrumTuningWindow.Closed -= SpectrumTuningWindow_Closed;
+            _spectrumTuningWindow = null;
         }
     }
 

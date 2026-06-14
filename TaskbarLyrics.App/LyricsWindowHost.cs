@@ -55,6 +55,12 @@ internal sealed class LyricsWindowHost : IDisposable
         InvokeAsync(() => _window?.ApplySettings(snapshot));
     }
 
+    public void ApplySpectrumTuning(SpectrumTuningSettings settings)
+    {
+        var snapshot = settings.Clone();
+        InvokeAsync(() => _window?.ApplySpectrumTuning(snapshot));
+    }
+
     public void Close()
     {
         if (_disposed)
