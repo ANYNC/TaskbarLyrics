@@ -16,9 +16,11 @@ public enum ForegroundColorMode
 
 public sealed class AppSettings
 {
-    public const string DefaultFontFamily = "Source Han Sans CN, 思源黑体 CN, Microsoft YaHei UI, Microsoft YaHei";
+    public const string BundledFontFamily = "Source Han Sans SC";
 
-    public const string DefaultFontWeight = "SemiBold";
+    public const string DefaultFontFamily = "Source Han Sans SC, Source Han Sans CN, 思源黑体 CN, Microsoft YaHei UI, Microsoft YaHei";
+
+    public const string DefaultFontWeight = "Bold";
 
     public const string DarkForegroundColor = "#FF111827";
 

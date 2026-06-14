@@ -230,7 +230,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
 
     private static List<FontOption> GetFontOptions()
     {
-        return Fonts.SystemFontFamilies
+        var fonts = Fonts.SystemFontFamilies
             .Select(x => new FontOption
             {
                 Value = x.Source,
@@ -238,6 +238,17 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             })
             .OrderBy(x => x.Label, StringComparer.CurrentCultureIgnoreCase)
             .ToList();
+
+        if (!fonts.Any(x => string.Equals(x.Value, AppSettings.BundledFontFamily, StringComparison.OrdinalIgnoreCase)))
+        {
+            fonts.Insert(0, new FontOption
+            {
+                Value = AppSettings.BundledFontFamily,
+                Label = $"{AppSettings.BundledFontFamily} (内置)"
+            });
+        }
+
+        return fonts;
     }
 
     private static string GetLocalizedFontName(System.Windows.Media.FontFamily fontFamily)
@@ -278,6 +289,11 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
 
         foreach (var candidate in fontFamily.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
+            if (string.Equals(candidate, AppSettings.BundledFontFamily, StringComparison.OrdinalIgnoreCase))
+            {
+                return AppSettings.BundledFontFamily;
+            }
+
             if (byValue.TryGetValue(candidate, out var value) ||
                 byLabel.TryGetValue(candidate, out value))
             {

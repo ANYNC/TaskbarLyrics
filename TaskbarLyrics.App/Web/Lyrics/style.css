@@ -1,5 +1,21 @@
+@font-face {
+  font-family: "Source Han Sans SC";
+  src: url("../../Assets/Fonts/SourceHanSansSC-Regular.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Source Han Sans SC";
+  src: url("../../Assets/Fonts/SourceHanSansSC-Bold.otf") format("opentype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
-  --font-family: "SF Pro Display", "Segoe UI Variable Display", "Segoe UI Variable Text", "Microsoft YaHei UI", sans-serif;
+  --font-family: "Source Han Sans SC", "SF Pro Display", "Segoe UI Variable Display", "Segoe UI Variable Text", "Microsoft YaHei UI", sans-serif;
   --font-size: 13px;
   --font-weight: 500;
   --primary: rgba(255, 255, 255, 1);
