@@ -4,7 +4,7 @@ Windows 任务栏歌词工具。它通过 SMTC 识别当前播放歌曲，并从
 ## 效果
 演示字体为Source Han Sans SC（已内置，无需安装）
 
-![效果图1](doc/images/preview1.gif)
+![效果图](doc/images/preview.gif)
 
 ## 功能
 - 跟随系统进行黑白主题切换
