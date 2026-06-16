@@ -12,6 +12,8 @@ public partial class TrayMenuWindow : Window
     private const int GwlExStyle = -20;
     private const int WsExNoActivate = 0x08000000;
     private const int WsExToolWindow = 0x00000080;
+    private const uint MonitorDefaultToNearest = 0x00000002;
+    private const int MonitorDpiTypeEffective = 0;
     private const int VkLButton = 0x01;
     private const int VkRButton = 0x02;
     private const int VkMButton = 0x04;
@@ -63,24 +65,31 @@ public partial class TrayMenuWindow : Window
 
     public void ShowAtCursor()
     {
-        var cursor = Forms.Cursor.Position;
-        var screen = Forms.Screen.FromPoint(cursor).WorkingArea;
+        var cursorPhysical = Forms.Cursor.Position;
+        var dpi = GetDpiScaleForPoint(cursorPhysical);
+        var cursorX = cursorPhysical.X / dpi.X;
+        var cursorY = cursorPhysical.Y / dpi.Y;
+        var screenPhysical = Forms.Screen.FromPoint(cursorPhysical).WorkingArea;
+        var screenLeft = screenPhysical.Left / dpi.X;
+        var screenTop = screenPhysical.Top / dpi.Y;
+        var screenRight = screenPhysical.Right / dpi.X;
+        var screenBottom = screenPhysical.Bottom / dpi.Y;
         const int gap = 8;
-        var left = cursor.X - Width + 22;
-        var top = cursor.Y - Height - gap;
+        var left = cursorX - Width + 22;
+        var top = cursorY - Height - gap;
 
-        if (left < screen.Left + gap)
+        if (left < screenLeft + gap)
         {
-            left = cursor.X - 22;
+            left = cursorX - 22;
         }
 
-        if (top < screen.Top + gap)
+        if (top < screenTop + gap)
         {
-            top = cursor.Y + gap;
+            top = cursorY + gap;
         }
 
-        Left = Math.Clamp(left, screen.Left + gap, screen.Right - Width - gap);
-        Top = Math.Clamp(top, screen.Top + gap, screen.Bottom - Height - gap);
+        Left = Math.Clamp(left, screenLeft + gap, screenRight - Width - gap);
+        Top = Math.Clamp(top, screenTop + gap, screenBottom - Height - gap);
         Show();
         _closeTimer.Start();
     }
@@ -174,4 +183,39 @@ public partial class TrayMenuWindow : Window
         keybd_event(VkEscape, 0, 0, UIntPtr.Zero);
         keybd_event(VkEscape, 0, KeyEventKeyUp, UIntPtr.Zero);
     }
+
+    private static DpiScale GetDpiScaleForPoint(System.Drawing.Point point)
+    {
+        var monitor = MonitorFromPoint(new NativePoint(point.X, point.Y), MonitorDefaultToNearest);
+        if (monitor != IntPtr.Zero &&
+            GetDpiForMonitor(monitor, MonitorDpiTypeEffective, out var dpiX, out var dpiY) == 0 &&
+            dpiX > 0 &&
+            dpiY > 0)
+        {
+            return new DpiScale(dpiX / 96.0, dpiY / 96.0);
+        }
+
+        return new DpiScale(1.0, 1.0);
+    }
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr MonitorFromPoint(NativePoint point, uint flags);
+
+    [DllImport("shcore.dll")]
+    private static extern int GetDpiForMonitor(IntPtr monitor, int dpiType, out uint dpiX, out uint dpiY);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private readonly struct NativePoint
+    {
+        public NativePoint(int x, int y)
+        {
+            X = x;
+            Y = y;
+        }
+
+        public readonly int X;
+        public readonly int Y;
+    }
+
+    private readonly record struct DpiScale(double X, double Y);
 }
