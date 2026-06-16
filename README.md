@@ -18,7 +18,7 @@ Windows 任务栏歌词工具。它通过 SMTC 识别当前播放歌曲，并从
 ## 已支持播放器
 - QQ音乐
 - 网易云音乐（建议安装 [inflink-rs](https://github.com/apoint123/inflink-rs) 插件，以获得更完整的 SMTC 元数据）
-- 酷狗音乐（SMTC信息不完整无法滚动歌词，可以尝试支持较好的第三方酷狗播放器）
+- 酷狗音乐（SMTC信息不完整无法滚动歌词，可以尝试支持较好的第三方酷狗播放器[MoeKoeMusic](https://github.com/MoeKoeMusic/MoeKoeMusic)）
 - Spotify
 - 所有支持SMTC协议的播放器
 

@@ -76,7 +76,10 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         if (SettingsWebView.CoreWebView2 is not null)
         {
             SettingsWebView.CoreWebView2.WebMessageReceived -= SettingsWebView_WebMessageReceived;
+            SettingsWebView.CoreWebView2.Navigate("about:blank");
         }
+
+        SettingsWebView.Dispose();
     }
 
     private async Task InitializeSettingsWebViewAsync()
