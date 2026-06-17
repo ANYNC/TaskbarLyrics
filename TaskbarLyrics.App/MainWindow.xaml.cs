@@ -195,13 +195,17 @@ public partial class MainWindow : Window
         _spectrumTimer.Start();
     }
 
-    private void OnSourceInitialized(object? sender, EventArgs e)
+private void OnSourceInitialized(object? sender, EventArgs e)
+{
+    if (PresentationSource.FromVisual(this) is HwndSource source)
     {
-        if (PresentationSource.FromVisual(this) is HwndSource source)
-        {
-            source.AddHook(WndProc);
-        }
+        source.AddHook(WndProc);
+
+        var hwnd = source.Handle;
+        var extendedStyle = NativeMethods.GetWindowLongPtr(hwnd, NativeMethods.GWL_EXSTYLE);
+        NativeMethods.SetWindowLongPtr(hwnd, NativeMethods.GWL_EXSTYLE, (IntPtr)(extendedStyle.ToInt64() | NativeMethods.WS_EX_TOOLWINDOW));
     }
+}
 
     private void OnIsVisibleChanged(object sender, DependencyPropertyChangedEventArgs e)
     {
@@ -1054,6 +1058,14 @@ internal static class NativeMethods
     internal const uint SWP_NOOWNERZORDER = 0x0200;
     internal const uint SWP_SHOWWINDOW = 0x0040;
     internal const int SW_SHOWNOACTIVATE = 4;
+    internal const int GWL_EXSTYLE = -20;
+    internal const int WS_EX_TOOLWINDOW = 0x00000080;
+
+    [DllImport("user32.dll", SetLastError = true)]
+    internal static extern IntPtr GetWindowLongPtr(IntPtr hWnd, int nIndex);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    internal static extern IntPtr SetWindowLongPtr(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
 
     [DllImport("user32.dll", SetLastError = true)]
     internal static extern bool SetWindowPos(
