@@ -36,8 +36,6 @@ public partial class App : System.Windows.Application
         _settingsStore = new SettingsStore(settingsPath);
         Settings = _settingsStore.Load();
         ApplyStartupForegroundColor(Settings);
-        Settings.StartWithWindows = Settings.StartWithWindows || StartupService.IsEnabled();
-        StartupService.SetEnabled(Settings.StartWithWindows);
 
         _lyricsWindowHost = new LyricsWindowHost(Settings);
 

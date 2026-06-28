@@ -44,8 +44,6 @@ public sealed class AppSettings
 
     public bool ShowLyricsOnStartup { get; set; } = true;
 
-    public bool StartWithWindows { get; set; } = false;
-
     public bool ShowLyricTranslation { get; set; } = false;
 
     public bool EnablePureMusicSpectrum { get; set; } = true;

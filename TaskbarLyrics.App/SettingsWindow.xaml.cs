@@ -188,7 +188,6 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             EnableKugou = _settings.EnableKugou,
             EnableSpotify = _settings.EnableSpotify,
             ShowLyricsOnStartup = _settings.ShowLyricsOnStartup,
-            StartWithWindows = _settings.StartWithWindows,
             ShowLyricTranslation = _settings.ShowLyricTranslation,
             EnablePureMusicSpectrum = _settings.EnablePureMusicSpectrum,
             FontSize = _settings.FontSize,
@@ -345,10 +344,6 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 break;
             case "showLyricsOnStartup":
                 _settings.ShowLyricsOnStartup = ReadBool(element, _settings.ShowLyricsOnStartup);
-                break;
-            case "startWithWindows":
-                _settings.StartWithWindows = ReadBool(element, _settings.StartWithWindows);
-                StartupService.SetEnabled(_settings.StartWithWindows);
                 break;
             case "showLyricTranslation":
                 _settings.ShowLyricTranslation = ReadBool(element, _settings.ShowLyricTranslation);
@@ -557,7 +552,6 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         target.EnableKugou = source.EnableKugou;
         target.EnableSpotify = source.EnableSpotify;
         target.ShowLyricsOnStartup = source.ShowLyricsOnStartup;
-        target.StartWithWindows = source.StartWithWindows;
         target.ShowLyricTranslation = source.ShowLyricTranslation;
         target.EnablePureMusicSpectrum = source.EnablePureMusicSpectrum;
         target.FontSize = source.FontSize;
@@ -750,7 +744,6 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         public bool EnableKugou { get; set; }
         public bool EnableSpotify { get; set; }
         public bool ShowLyricsOnStartup { get; set; }
-        public bool StartWithWindows { get; set; }
         public bool ShowLyricTranslation { get; set; }
         public bool EnablePureMusicSpectrum { get; set; }
         public double FontSize { get; set; }
