@@ -89,9 +89,6 @@ public static class LyricMatcher
 
     private static double GetStringSimilarity(string? s1, string? s2)
     {
-        s1 = NormalizeForSearch(s1);
-        s2 = NormalizeForSearch(s2);
-
         if (string.IsNullOrEmpty(s1) && string.IsNullOrEmpty(s2)) return 1.0;
         if (string.IsNullOrEmpty(s1) || string.IsNullOrEmpty(s2)) return 0.0;
 
