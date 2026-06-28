@@ -11,7 +11,6 @@
         ResizeMode="NoResize"
         ShowInTaskbar="False"
         ShowActivated="False"
-        Topmost="True"
         AllowsTransparency="True"
         UseLayoutRounding="True"
         SnapsToDevicePixels="True"
