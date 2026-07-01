@@ -8,7 +8,8 @@ internal static class LyricProviderComposer
 {
     public static LyricSyncService CreateSyncService(
         AppSettings settings,
-        Action<TrackInfo, IReadOnlyList<LyricResolveResult>, TimeSpan>? publishDiagnostics = null)
+        Action<TrackInfo, IReadOnlyList<LyricResolveResult>, TimeSpan>? publishDiagnostics = null,
+        Func<string?, bool>? shouldShowTranslation = null)
     {
         var registry = CreateRegistry(settings);
         if (publishDiagnostics is not null)
@@ -16,7 +17,7 @@ internal static class LyricProviderComposer
             registry = new DiagnosticLyricProviderRegistry(registry, publishDiagnostics);
         }
 
-        return new LyricSyncService(registry, _ => false);
+        return new LyricSyncService(registry, shouldShowTranslation ?? (_ => settings.ShowLyricTranslation));
     }
 
     private static ILyricProviderRegistry CreateRegistry(AppSettings settings)

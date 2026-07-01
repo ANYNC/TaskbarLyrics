@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
@@ -32,6 +33,8 @@ public partial class SettingsWindow : Window
     private bool _isUpdatingNavFromScroll;
     private bool _fontOptionsPopulated;
     private bool _isCheckingUpdate;
+    private bool _isInstallingUpdate;
+    private UpdateCheckResult? _latestUpdateResult;
     private CancellationTokenSource? _localFoldersStatusCancellation;
 
     public SettingsWindow(AppSettings settings)
@@ -114,6 +117,8 @@ public partial class SettingsWindow : Window
         AutoShowLyricsWhenPlayerOpensCheck.Unchecked += (_, _) => OnSettingChanged();
         AutoHideLyricsWhenPlayerClosesCheck.Checked += (_, _) => OnSettingChanged();
         AutoHideLyricsWhenPlayerClosesCheck.Unchecked += (_, _) => OnSettingChanged();
+        ShowLyricTranslationCheck.Checked += (_, _) => OnSettingChanged();
+        ShowLyricTranslationCheck.Unchecked += (_, _) => OnSettingChanged();
         EnablePureMusicSpectrumCheck.Checked += (_, _) => OnSettingChanged();
         EnablePureMusicSpectrumCheck.Unchecked += (_, _) => OnSettingChanged();
         EnableSpectrumCheck.Checked += (_, _) => OnSettingChanged();
@@ -343,25 +348,26 @@ public partial class SettingsWindow : Window
             EnableNeteaseCheck.IsChecked = _settings.EnableNetease;
             EnableKugouCheck.IsChecked = _settings.EnableKugou;
             EnableSpotifyCheck.IsChecked = _settings.EnableSpotify;
-        ShowLyricsOnStartupCheck.IsChecked = _settings.ShowLyricsOnStartup;
-        StartWithWindowsCheck.IsChecked = _settings.StartWithWindows;
-        AutoShowLyricsWhenPlayerOpensCheck.IsChecked = _settings.AutoShowLyricsWhenPlayerOpens;
-        AutoHideLyricsWhenPlayerClosesCheck.IsChecked = _settings.AutoHideLyricsWhenPlayerCloses;
-        EnablePureMusicSpectrumCheck.IsChecked = _settings.EnablePureMusicSpectrum;
-        EnableSpectrumCheck.IsChecked = _settings.EnableSpectrum;
-        ShowSpectrumWhenLyricsNotFoundCheck.IsChecked = _settings.ShowSpectrumWhenLyricsNotFound;
-        ShowSpectrumWhenLyricsAvailableCheck.IsChecked = _settings.ShowSpectrumWhenLyricsAvailable;
-        SelectComboByTag(SpectrumStyleCombo, _settings.SpectrumStyle.ToString());
-        LyricOffsetStepper.Value = _settings.LyricOffsetMs;
-        QqMusicLyricOffsetStepper.Value = _settings.QqMusicLyricOffsetMs;
-        NeteaseLyricOffsetStepper.Value = _settings.NeteaseLyricOffsetMs;
-        KugouLyricOffsetStepper.Value = _settings.KugouLyricOffsetMs;
-        SpotifyLyricOffsetStepper.Value = _settings.SpotifyLyricOffsetMs;
-        EnableLocalLyricsCheck.IsChecked = _settings.EnableLocalLyrics;
-        SelectComboByTag(LocalLyricsModeCombo, _settings.LocalLyricsSearchMode.ToString());
-        SelectComboByTag(LocalCoverModeCombo, _settings.LocalCoverSearchMode.ToString());
-        ShowCoverImageCheck.IsChecked = _settings.ShowCoverImage;
-        LocalMusicFoldersBox.Text = string.Join(Environment.NewLine, _settings.LocalMusicFolders);
+            ShowLyricsOnStartupCheck.IsChecked = _settings.ShowLyricsOnStartup;
+            StartWithWindowsCheck.IsChecked = _settings.StartWithWindows;
+            AutoShowLyricsWhenPlayerOpensCheck.IsChecked = _settings.AutoShowLyricsWhenPlayerOpens;
+            AutoHideLyricsWhenPlayerClosesCheck.IsChecked = _settings.AutoHideLyricsWhenPlayerCloses;
+            ShowLyricTranslationCheck.IsChecked = _settings.ShowLyricTranslation;
+            EnablePureMusicSpectrumCheck.IsChecked = _settings.EnablePureMusicSpectrum;
+            EnableSpectrumCheck.IsChecked = _settings.EnableSpectrum;
+            ShowSpectrumWhenLyricsNotFoundCheck.IsChecked = _settings.ShowSpectrumWhenLyricsNotFound;
+            ShowSpectrumWhenLyricsAvailableCheck.IsChecked = _settings.ShowSpectrumWhenLyricsAvailable;
+            SelectComboByTag(SpectrumStyleCombo, _settings.SpectrumStyle.ToString());
+            LyricOffsetStepper.Value = _settings.LyricOffsetMs;
+            QqMusicLyricOffsetStepper.Value = _settings.QqMusicLyricOffsetMs;
+            NeteaseLyricOffsetStepper.Value = _settings.NeteaseLyricOffsetMs;
+            KugouLyricOffsetStepper.Value = _settings.KugouLyricOffsetMs;
+            SpotifyLyricOffsetStepper.Value = _settings.SpotifyLyricOffsetMs;
+            EnableLocalLyricsCheck.IsChecked = _settings.EnableLocalLyrics;
+            SelectComboByTag(LocalLyricsModeCombo, _settings.LocalLyricsSearchMode.ToString());
+            SelectComboByTag(LocalCoverModeCombo, _settings.LocalCoverSearchMode.ToString());
+            ShowCoverImageCheck.IsChecked = _settings.ShowCoverImage;
+            LocalMusicFoldersBox.Text = string.Join(Environment.NewLine, _settings.LocalMusicFolders);
             ShowBackgroundCheck.IsChecked = _settings.ShowBackground;
             ShowBorderCheck.IsChecked = _settings.ShowBorder;
             ShowTextShadowCheck.IsChecked = _settings.ShowTextShadow;
@@ -629,6 +635,7 @@ public partial class SettingsWindow : Window
         _settings.StartWithWindows = StartWithWindowsCheck.IsChecked == true;
         _settings.AutoShowLyricsWhenPlayerOpens = AutoShowLyricsWhenPlayerOpensCheck.IsChecked == true;
         _settings.AutoHideLyricsWhenPlayerCloses = AutoHideLyricsWhenPlayerClosesCheck.IsChecked == true;
+        _settings.ShowLyricTranslation = ShowLyricTranslationCheck.IsChecked == true;
         _settings.EnablePureMusicSpectrum = EnablePureMusicSpectrumCheck.IsChecked == true;
         _settings.EnableSpectrum = EnableSpectrumCheck.IsChecked == true;
         _settings.ShowSpectrumWhenLyricsNotFound = ShowSpectrumWhenLyricsNotFoundCheck.IsChecked == true;
@@ -741,6 +748,8 @@ public partial class SettingsWindow : Window
         {
             UpdateStatusText.Text = string.Empty;
         }
+
+        UpdateInstallButtonState(null);
     }
 
     private async void CheckUpdateButton_Click(object sender, RoutedEventArgs e)
@@ -751,13 +760,16 @@ public partial class SettingsWindow : Window
         }
 
         _isCheckingUpdate = true;
+        _latestUpdateResult = null;
         CheckUpdateButton.IsEnabled = false;
+        InstallUpdateButton.Visibility = Visibility.Collapsed;
         CheckUpdateButton.Content = "检查中...";
         UpdateStatusText.Text = "正在检查更新...";
 
         try
         {
             var result = await UpdateChecker.CheckLatestAsync();
+            _latestUpdateResult = result;
             _settings.LastUpdateCheckUtc = DateTimeOffset.UtcNow;
             _settings.AutoCheckUpdates = AutoCheckUpdatesCheck.IsChecked == true;
 
@@ -768,15 +780,18 @@ public partial class SettingsWindow : Window
             else
             {
                 UpdateStatusText.Text = result.State switch
-            {
-                UpdateCheckState.Available =>
-                    $"发现新版本 {result.Version}，当前版本 {result.CurrentVersion}。",
-                UpdateCheckState.Latest =>
-                    $"已是最新版本（{result.CurrentVersion}）。",
-                _ => "检查更新失败，请稍后重试。"
+                {
+                    UpdateCheckState.Available when result.Asset is not null =>
+                        $"发现新版本 {result.Version}，当前版本 {result.CurrentVersion}。可下载并安装：{result.Asset.Name}",
+                    UpdateCheckState.Available =>
+                        $"发现新版本 {result.Version}，当前版本 {result.CurrentVersion}，但未找到 Light 版 zip 更新包，请打开 GitHub 发布页手动下载。",
+                    UpdateCheckState.Latest =>
+                        $"已是最新版本（{result.CurrentVersion}）。",
+                    _ => "检查更新失败，请稍后重试。"
                 };
             }
 
+            UpdateInstallButtonState(result);
             FlushPendingSettings();
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or NotSupportedException)
@@ -788,7 +803,73 @@ public partial class SettingsWindow : Window
             _isCheckingUpdate = false;
             CheckUpdateButton.IsEnabled = true;
             CheckUpdateButton.Content = "检查更新";
+            UpdateInstallButtonState(_latestUpdateResult);
         }
+    }
+
+    private async void InstallUpdateButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_isInstallingUpdate || _latestUpdateResult?.Asset is null)
+        {
+            return;
+        }
+
+        _isInstallingUpdate = true;
+        CheckUpdateButton.IsEnabled = false;
+        InstallUpdateButton.IsEnabled = false;
+        InstallUpdateButton.Content = "准备中...";
+
+        try
+        {
+            var progress = new Progress<UpdateInstallProgress>(state =>
+            {
+                UpdateStatusText.Text = state.Percent is { } percent
+                    ? $"{state.Message}（{percent:P0}）"
+                    : state.Message;
+            });
+
+            var update = await UpdateInstaller.DownloadAndPrepareAsync(_latestUpdateResult, progress);
+            UpdateStatusText.Text = "更新包已下载，即将退出并覆盖安装。";
+            InstallUpdateButton.Content = "即将安装...";
+            FlushPendingSettings();
+
+            UpdateInstaller.LaunchInstaller(update);
+            if (System.Windows.Application.Current is App app)
+            {
+                app.ShutdownForUpdate();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            UpdateStatusText.Text = "更新已取消。";
+            ResetInstallUpdateUi();
+        }
+        catch (Win32Exception ex) when (ex.NativeErrorCode == 1223)
+        {
+            UpdateStatusText.Text = "已取消管理员授权，未安装更新。";
+            ResetInstallUpdateUi();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or IOException or InvalidDataException or InvalidOperationException or NotSupportedException or UnauthorizedAccessException or JsonException)
+        {
+            UpdateStatusText.Text = $"安装更新失败：{ex.Message}";
+            ResetInstallUpdateUi();
+        }
+    }
+
+    private void UpdateInstallButtonState(UpdateCheckResult? result)
+    {
+        var canInstall = result?.HasUpdate == true && result.Asset is not null && !_isCheckingUpdate && !_isInstallingUpdate;
+        InstallUpdateButton.Visibility = result?.HasUpdate == true ? Visibility.Visible : Visibility.Collapsed;
+        InstallUpdateButton.IsEnabled = canInstall;
+        InstallUpdateButton.Content = result?.Asset is null ? "暂无可安装包" : "下载并安装更新";
+    }
+
+    private void ResetInstallUpdateUi()
+    {
+        _isInstallingUpdate = false;
+        CheckUpdateButton.IsEnabled = true;
+        CheckUpdateButton.Content = "检查更新";
+        UpdateInstallButtonState(_latestUpdateResult);
     }
 
     private void OpenRepositoryButton_Click(object sender, RoutedEventArgs e)
@@ -1227,6 +1308,7 @@ public partial class SettingsWindow : Window
         target.StartWithWindows = source.StartWithWindows;
         target.AutoShowLyricsWhenPlayerOpens = source.AutoShowLyricsWhenPlayerOpens;
         target.AutoHideLyricsWhenPlayerCloses = source.AutoHideLyricsWhenPlayerCloses;
+        target.ShowLyricTranslation = source.ShowLyricTranslation;
         target.AutoCheckUpdates = source.AutoCheckUpdates;
         target.LastUpdateCheckUtc = source.LastUpdateCheckUtc;
         target.LastNotifiedUpdateVersion = source.LastNotifiedUpdateVersion;

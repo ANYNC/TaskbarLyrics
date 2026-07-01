@@ -10,7 +10,7 @@
     <RootNamespace>TaskbarLyrics.Light.App</RootNamespace>
     <AssemblyName>TaskbarLyrics.Light</AssemblyName>
     <ApplicationIcon>Assets\AppIcon\TaskbarLyrics.ico</ApplicationIcon>
-    <Version>1.2.1</Version>
+    <Version>1.2.2</Version>
     <StartupObject>TaskbarLyrics.Light.App.Program</StartupObject>
   </PropertyGroup>
 

@@ -55,7 +55,11 @@ internal static class UpdateChecker
             return BuildErrorResult("GitHub 返回的版本信息为空。");
         }
 
-        return BuildVersionResult(latestVersion, release?.TagName, release?.HtmlUrl);
+        return BuildVersionResult(
+            latestVersion,
+            release?.TagName,
+            release?.HtmlUrl,
+            SelectUpdateAsset(release?.Assets, latestVersion));
     }
 
     private static async Task<UpdateCheckResult> CheckLatestFromReleaseRedirectAsync(CancellationToken cancellationToken)
@@ -81,7 +85,11 @@ internal static class UpdateChecker
         return BuildVersionResult(latestVersion, latestVersion, finalUrl);
     }
 
-    private static UpdateCheckResult BuildVersionResult(string latestVersion, string? displayVersion, string? url)
+    private static UpdateCheckResult BuildVersionResult(
+        string latestVersion,
+        string? displayVersion,
+        string? url,
+        UpdateReleaseAsset? asset = null)
     {
         latestVersion = NormalizeVersionTag(latestVersion);
         var currentVersion = NormalizeVersionTag(GetCurrentVersion());
@@ -92,7 +100,8 @@ internal static class UpdateChecker
             GetCurrentVersion(),
             string.IsNullOrWhiteSpace(url) ? ReleasesUrl : url,
             hasUpdate,
-            string.Empty);
+            string.Empty,
+            hasUpdate ? asset : null);
     }
 
     private static UpdateCheckResult BuildErrorResult(string message)
@@ -103,7 +112,8 @@ internal static class UpdateChecker
             GetCurrentVersion(),
             ReleasesUrl,
             false,
-            message);
+            message,
+            null);
     }
 
     public static string GetCurrentVersion()
@@ -141,6 +151,110 @@ internal static class UpdateChecker
             : string.Compare(latestVersion, currentVersion, StringComparison.OrdinalIgnoreCase) > 0;
     }
 
+    private static UpdateReleaseAsset? SelectUpdateAsset(IReadOnlyList<GitHubReleaseAsset>? assets, string latestVersion)
+    {
+        if (assets is null || assets.Count == 0)
+        {
+            return null;
+        }
+
+        return assets
+            .Where(IsSupportedLightPackageAsset)
+            .Select(asset => new
+            {
+                Asset = new UpdateReleaseAsset(
+                    asset.Name ?? string.Empty,
+                    asset.BrowserDownloadUrl ?? string.Empty,
+                    asset.Size,
+                    asset.ContentType ?? string.Empty),
+                Score = ScoreAssetName(asset.Name ?? string.Empty, latestVersion)
+            })
+            .OrderByDescending(item => item.Score)
+            .ThenBy(item => item.Asset.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(item => item.Asset)
+            .FirstOrDefault();
+    }
+
+    private static bool IsSupportedLightPackageAsset(GitHubReleaseAsset asset)
+    {
+        var name = asset.Name ?? string.Empty;
+        var downloadUrl = asset.BrowserDownloadUrl ?? string.Empty;
+        var contentType = asset.ContentType ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(downloadUrl))
+        {
+            return false;
+        }
+
+        return IsLightAssetName(name) && IsZipLikeAsset(name, downloadUrl, contentType);
+    }
+
+    private static bool IsLightAssetName(string name)
+    {
+        return Regex.IsMatch(
+                name,
+                @"(^|[._\-\s])light([._\-\s]|v?\d|$)",
+                RegexOptions.IgnoreCase) ||
+            name.StartsWith("TaskbarLyrics_light_", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsZipLikeAsset(string name, string downloadUrl, string contentType)
+    {
+        return name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) ||
+            downloadUrl.Contains(".zip", StringComparison.OrdinalIgnoreCase) ||
+            contentType.Contains("zip", StringComparison.OrdinalIgnoreCase) ||
+            Regex.IsMatch(
+                name,
+                @"^TaskbarLyrics[_\-. ]light[_\-. ]v?\d+(?:\.\d+){1,3}$",
+                RegexOptions.IgnoreCase);
+    }
+
+    private static int ScoreAssetName(string name, string latestVersion)
+    {
+        var score = 0;
+        if (Regex.IsMatch(
+                name,
+                @"^TaskbarLyrics[_\-. ]light[_\-. ]v?\d+(?:\.\d+){1,3}(?:\.zip)?$",
+                RegexOptions.IgnoreCase))
+        {
+            score += 180;
+        }
+
+        if (name.Contains("TaskbarLyrics_light", StringComparison.OrdinalIgnoreCase))
+        {
+            score += 140;
+        }
+
+        if (name.Contains("TaskbarLyrics.Light", StringComparison.OrdinalIgnoreCase) ||
+            name.Contains("TaskbarLyrics-Light", StringComparison.OrdinalIgnoreCase))
+        {
+            score += 100;
+        }
+
+        if (!string.IsNullOrWhiteSpace(latestVersion) &&
+            (name.Contains($"v{latestVersion}", StringComparison.OrdinalIgnoreCase) ||
+                name.Contains(latestVersion, StringComparison.OrdinalIgnoreCase)))
+        {
+            score += 40;
+        }
+
+        if (name.Contains("win", StringComparison.OrdinalIgnoreCase))
+        {
+            score += 20;
+        }
+
+        if (name.Contains("x64", StringComparison.OrdinalIgnoreCase))
+        {
+            score += 10;
+        }
+
+        if (name.Contains("portable", StringComparison.OrdinalIgnoreCase))
+        {
+            score += 5;
+        }
+
+        return score;
+    }
+
     private static bool IsRecoverableNetworkException(Exception ex)
     {
         return ex is HttpRequestException or TaskCanceledException or JsonException or NotSupportedException;
@@ -165,6 +279,24 @@ internal static class UpdateChecker
 
         [JsonPropertyName("html_url")]
         public string? HtmlUrl { get; set; }
+
+        [JsonPropertyName("assets")]
+        public List<GitHubReleaseAsset>? Assets { get; set; }
+    }
+
+    private sealed class GitHubReleaseAsset
+    {
+        [JsonPropertyName("name")]
+        public string? Name { get; set; }
+
+        [JsonPropertyName("browser_download_url")]
+        public string? BrowserDownloadUrl { get; set; }
+
+        [JsonPropertyName("size")]
+        public long Size { get; set; }
+
+        [JsonPropertyName("content_type")]
+        public string? ContentType { get; set; }
     }
 }
 
@@ -181,4 +313,11 @@ internal sealed record UpdateCheckResult(
     string CurrentVersion,
     string Url,
     bool HasUpdate,
-    string Message);
+    string Message,
+    UpdateReleaseAsset? Asset = null);
+
+internal sealed record UpdateReleaseAsset(
+    string Name,
+    string DownloadUrl,
+    long Size,
+    string ContentType);

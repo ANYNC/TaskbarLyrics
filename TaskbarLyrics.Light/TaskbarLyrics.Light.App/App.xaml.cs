@@ -121,10 +121,13 @@ public partial class App : System.Windows.Application
             if (result.HasUpdate &&
                 !string.Equals(Settings.LastNotifiedUpdateVersion, result.Version, StringComparison.OrdinalIgnoreCase))
             {
+                var updateAction = result.Asset is not null
+                    ? "可在设置页的关于中下载并安装。"
+                    : "未找到 Light 更新包，可打开发布页手动下载。";
                 Settings.LastNotifiedUpdateVersion = result.Version;
                 _trayService?.ShowNotification(
                     "TaskbarLyrics Light 有新版本",
-                    $"发现 {result.Version}，当前版本 {result.CurrentVersion}。可在设置页的关于中打开发布页。");
+                    $"发现 {result.Version}，当前版本 {result.CurrentVersion}。{updateAction}");
             }
 
             _settingsStore?.Save(Settings);
@@ -167,6 +170,14 @@ public partial class App : System.Windows.Application
     {
         LyricProviderBase.ClearCache();
         GenericSmtcLyricProvider.ClearCache();
+    }
+
+    public void ShutdownForUpdate()
+    {
+        IsExiting = true;
+        _settingsStore?.Save(Settings);
+        _lyricsWindowHost?.Close();
+        Shutdown();
     }
 
     public void CycleSpectrumStyle()

@@ -98,6 +98,8 @@ public sealed class AppSettings
 
     public bool EnableLocalLyrics { get; set; } = true;
 
+    public bool ShowLyricTranslation { get; set; } = false;
+
     public LocalLyricsSearchMode LocalLyricsSearchMode { get; set; } = LocalLyricsSearchMode.PreferLocal;
 
     public LocalCoverSearchMode LocalCoverSearchMode { get; set; } = LocalCoverSearchMode.OnlineFirst;

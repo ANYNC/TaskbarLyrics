@@ -267,6 +267,19 @@
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="显示歌词翻译" FontWeight="SemiBold" />
+                                        <TextBlock Text="歌词源提供翻译时，将译文跟随原文显示。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                    <CheckBox x:Name="ShowLyricTranslationCheck" Grid.Column="1" Style="{StaticResource SettingsToggleSwitchStyle}" />
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource SettingsRowCardStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="180" />
                                     </Grid.ColumnDefinitions>
                                     <StackPanel>
@@ -1128,6 +1141,15 @@
                                             MinWidth="120"
                                             HorizontalAlignment="Left"
                                             Click="CheckUpdateButton_Click" />
+                                    <Button x:Name="InstallUpdateButton"
+                                            Content="下载并安装更新"
+                                            Style="{StaticResource SettingsPrimaryButtonStyle}"
+                                            Height="38"
+                                            MinWidth="150"
+                                            HorizontalAlignment="Left"
+                                            Margin="0,10,0,0"
+                                            Visibility="Collapsed"
+                                            Click="InstallUpdateButton_Click" />
                                     <TextBlock x:Name="UpdateStatusText"
                                                Margin="0,10,0,0"
                                                TextWrapping="Wrap"

@@ -78,7 +78,10 @@ internal sealed class DeferredLyricSyncService : IDisposable
             }
 
             LyricsInfrastructure.EnsureInitialized();
-            _inner = LyricProviderComposer.CreateSyncService(_settings, PublishResolveDiagnostics);
+            _inner = LyricProviderComposer.CreateSyncService(
+                _settings,
+                PublishResolveDiagnostics,
+                _ => _settings.ShowLyricTranslation);
             return _inner;
         }
     }
