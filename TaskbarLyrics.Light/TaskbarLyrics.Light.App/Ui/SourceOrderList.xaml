@@ -1,0 +1,73 @@
+<UserControl x:Class="TaskbarLyrics.Light.App.Ui.SourceOrderList"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Border Background="#8F081122"
+            BorderBrush="#1F78A0FF"
+            BorderThickness="1"
+            CornerRadius="12"
+            ClipToBounds="True">
+        <ListBox x:Name="OrderList"
+                 Background="Transparent"
+                 BorderThickness="0"
+                 AllowDrop="True"
+                 PreviewMouseLeftButtonDown="OrderList_PreviewMouseLeftButtonDown"
+                 PreviewMouseMove="OrderList_PreviewMouseMove"
+                 Drop="OrderList_Drop"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+             VirtualizingPanel.IsVirtualizing="True"
+             VirtualizingPanel.VirtualizationMode="Recycling">
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <Grid Height="40" Margin="18,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="34" />
+                            <ColumnDefinition Width="26" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="⋮⋮"
+                                   Foreground="#57FFFFFF"
+                                   VerticalAlignment="Center" />
+                        <Image Grid.Column="1"
+                               Width="22"
+                               Height="22"
+                               Source="{Binding Icon}"
+                               Stretch="UniformToFill" />
+                        <TextBlock Grid.Column="2"
+                                   Text="{Binding DisplayName}"
+                                   FontWeight="SemiBold"
+                                   Foreground="#F8FAFC"
+                                   VerticalAlignment="Center"
+                                   Margin="10,0,0,0" />
+                    </Grid>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+            <ListBox.ItemContainerStyle>
+                <Style TargetType="ListBoxItem">
+                    <Setter Property="Padding" Value="0" />
+                    <Setter Property="Margin" Value="0" />
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="ListBoxItem">
+                                <Border x:Name="Chrome"
+                                        Background="Transparent"
+                                        BorderBrush="#0EFFFFFF"
+                                        BorderThickness="0,0,0,1">
+                                    <ContentPresenter />
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="Chrome" Property="Background" Value="#144D7AFF" />
+                                    </Trigger>
+                                    <Trigger Property="IsSelected" Value="True">
+                                        <Setter TargetName="Chrome" Property="Background" Value="#1A4D7AFF" />
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+            </ListBox.ItemContainerStyle>
+        </ListBox>
+    </Border>
+</UserControl>

@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TaskbarLyrics 设置</title>
+  <link rel="stylesheet" href="settings.css">
+</head>
+<body>
+  <div class="window">
+    <aside id="sidebar" class="sidebar">
+      <div class="brand">
+        <div class="brand-icon">◎</div>
+        <strong>TaskbarLyrics</strong>
+      </div>
+      <nav class="nav">
+        <button class="nav-item active" data-target="players"><span>▷</span><b>播放器</b></button>
+        <button class="nav-item" data-target="lyrics"><span>Aa</span><b>歌词</b></button>
+        <button class="nav-item" data-target="appearance"><span>◌</span><b>外观</b></button>
+        <button class="nav-item" data-target="layout"><span>▦</span><b>布局</b></button>
+        <button class="nav-item" data-target="debug"><span>♢</span><b>调试</b></button>
+      </nav>
+      <button id="sidebarToggle" class="collapse" title="收缩侧边栏">‹</button>
+    </aside>
+
+    <main class="main">
+      <header class="header">
+        <div>
+          <h1>设置</h1>
+          <p>调整播放器识别、歌词显示、外观和任务栏布局。</p>
+        </div>
+        <button id="resetButton" class="reset"><span>↺</span>恢复默认设置</button>
+      </header>
+
+      <div id="content" class="content">
+        <section id="players" class="card reveal">
+          <h2>播放器集成</h2>
+          <p class="section-desc">选择要监听的音乐播放器，并通过拖拽调整优先识别顺序。</p>
+          <div class="players">
+            <label class="player"><img class="app-icon" src="../../Assets/PlayerIcons/QQ音乐.png" alt=""><strong>QQ音乐</strong><input data-key="enableQQMusic" type="checkbox"></label>
+            <label class="player"><img class="app-icon" src="../../Assets/PlayerIcons/网易云音乐.png" alt=""><strong>网易云音乐</strong><input data-key="enableNetease" type="checkbox"></label>
+            <label class="player"><img class="app-icon" src="../../Assets/PlayerIcons/酷狗音乐.png" alt=""><strong>酷狗音乐</strong><input data-key="enableKugou" type="checkbox"></label>
+            <label class="player"><img class="app-icon" src="../../Assets/PlayerIcons/spotify.png" alt=""><strong>Spotify</strong><input data-key="enableSpotify" type="checkbox"></label>
+          </div>
+          <div id="sourceOrder" class="order" aria-label="播放器识别顺序"></div>
+        </section>
+
+        <section id="lyrics" class="card reveal">
+          <h2>歌词设置</h2>
+          <p class="section-desc">控制歌词窗口启动行为与显示辅助项。</p>
+          <div class="rows">
+            <label class="row"><span><strong>启动时显示歌词</strong><small>应用启动后自动显示歌词悬浮窗口。</small></span><input data-key="showLyricsOnStartup" type="checkbox"></label>
+            <label class="row"><span><strong>纯音乐时显示频谱</strong><small>歌曲识别为纯音乐时，在歌词区域显示实时频谱。</small></span><input data-key="enablePureMusicSpectrum" type="checkbox"></label>
+            <label class="row"><span><strong>显示背景</strong><small>为歌词窗口启用半透明背景。</small></span><input data-key="showBackground" type="checkbox"></label>
+            <label class="row"><span><strong>显示边框</strong><small>为歌词窗口绘制边框，便于深浅背景上分辨。</small></span><input data-key="showBorder" type="checkbox"></label>
+          </div>
+        </section>
+
+        <section id="appearance" class="card reveal">
+          <h2>外观</h2>
+          <p class="section-desc">调整歌词字体、字号和文字颜色。</p>
+          <div class="rows">
+            <label class="form-row"><strong>字号</strong><div class="stepper" data-key="fontSize" data-min="10" data-max="40" data-step="1" data-decimals="0"><button data-step="-1">-</button><input data-key="fontSize" inputmode="decimal"><button data-step="1">+</button></div></label>
+            <label class="form-row"><strong>字体</strong><select data-key="fontFamily"></select></label>
+            <label class="form-row"><strong>字重</strong><select data-key="fontWeight"><option value="Light">细体</option><option value="Normal">常规</option><option value="Medium">中等</option><option value="SemiBold">半粗体</option><option value="Bold">粗体</option></select></label>
+            <div class="form-row"><strong>文字颜色</strong><div class="color-mode-control"><select data-key="foregroundColorMode"><option value="Dark">深色</option><option value="Light">浅色</option><option value="Custom">自定义</option></select><button id="colorPicker" class="color-control" type="button"><span id="colorSwatch" class="swatch"></span><span id="colorValue">#FFFFFFFF</span><i>✎</i></button></div></div>
+            <label class="row"><span><strong>文字阴影</strong><small>为歌词文字增加轻量阴影，提高复杂背景上的可读性。</small></span><input data-key="showTextShadow" type="checkbox"></label>
+          </div>
+        </section>
+
+        <section id="layout" class="card reveal">
+          <h2>窗口设置</h2>
+          <p class="section-desc">调整任务栏歌词窗口的位置、宽度与透明度。</p>
+          <div class="rows">
+            <label class="form-row"><span><strong>背景不透明度</strong><small>范围 0 到 1，数值越大背景越不透明。</small></span><div class="stepper" data-key="backgroundOpacity" data-min="0" data-max="1" data-step="0.05" data-decimals="2"><button data-step="-1">-</button><input data-key="backgroundOpacity" inputmode="decimal"><button data-step="1">+</button></div></label>
+            <label class="form-row"><strong>窗口宽度 (px)</strong><div class="stepper" data-key="windowWidth" data-min="320" data-max="1400" data-step="10" data-decimals="0"><button data-step="-1">-</button><input data-key="windowWidth" inputmode="decimal"><button data-step="1">+</button></div></label>
+            <label class="form-row"><strong>水平锚点</strong><select data-key="horizontalAnchor"><option value="Left">左侧</option><option value="Center">居中</option><option value="Right">右侧</option></select></label>
+            <label class="form-row"><strong>X 偏移 (px)</strong><div class="stepper" data-key="xOffset" data-min="-2000" data-max="2000" data-step="10" data-decimals="0"><button data-step="-1">-</button><input data-key="xOffset" inputmode="decimal"><button data-step="1">+</button></div></label>
+            <label class="form-row"><strong>Y 偏移 (px)</strong><div class="stepper" data-key="yOffset" data-min="-2000" data-max="2000" data-step="10" data-decimals="0"><button data-step="-1">-</button><input data-key="yOffset" inputmode="decimal"><button data-step="1">+</button></div></label>
+          </div>
+        </section>
+
+        <section id="debug" class="card reveal">
+          <h2>数据与调试</h2>
+          <p class="section-desc">清理缓存或打开辅助调试选项。</p>
+          <div class="rows">
+            <label class="row"><span><strong>SMTC 时间轴监视器</strong><small>用于观察播放器时间轴数据，排查同步问题。</small></span><input data-key="enableSmtcTimelineMonitor" type="checkbox"></label>
+            <div class="row"><span><strong>频谱调试</strong><small>打开临时滑块面板，实时调整频谱响应参数。</small></span><button id="spectrumTuningButton" class="primary">打开调试</button></div>
+            <div class="row"><span><strong>歌词缓存</strong><small>清除后首次重新匹配会稍慢。</small></span><button id="clearCacheButton" class="danger">清除缓存</button></div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+  <script src="settings.js"></script>
+</body>
+</html>

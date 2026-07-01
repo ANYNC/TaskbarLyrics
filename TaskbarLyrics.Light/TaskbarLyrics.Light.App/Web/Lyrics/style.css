@@ -1,0 +1,295 @@
+:root {
+  --font-family: "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", "Segoe UI Variable Display", "Segoe UI Variable Text", "Microsoft YaHei UI", sans-serif;
+  --font-size: 13px;
+  --font-weight: 500;
+  --primary: rgba(255, 255, 255, 1);
+  --secondary: rgba(255, 255, 255, 0.68);
+  --row-height: 14px;
+  --row-gap: 1px;
+  --line-pitch: 15px;
+  --current-size: 13px;
+  --next-size: 12px;
+  --primary-offset-y: 1px;
+  --secondary-offset-y: 2px;
+  --surface-color: transparent;
+  --surface-shadow: none;
+  --text-shadow: 0 1px 2px rgba(0, 0, 0, 0.36);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+  font-family: var(--font-family);
+  color: var(--primary);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: geometricPrecision;
+}
+
+.layout {
+  width: 100%;
+  height: 100%;
+  padding: 0 4px;
+  overflow: hidden;
+  background: var(--surface-color);
+  border: 0;
+  border-radius: 8px;
+  box-shadow: var(--surface-shadow);
+}
+
+.shell {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  grid-template-columns: 34px 8px minmax(0, 1fr);
+  align-items: center;
+}
+
+.cover {
+  width: 34px;
+  height: 34px;
+  border-radius: 6px;
+  overflow: hidden;
+  position: relative;
+  background: #1f2937;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08) inset;
+  opacity: 1;
+  filter: saturate(1) brightness(1);
+  transition:
+    opacity 520ms cubic-bezier(0.16, 1, 0.3, 1),
+    filter 520ms cubic-bezier(0.16, 1, 0.3, 1),
+    background-color 420ms ease;
+}
+
+.cover.switching {
+  opacity: 0.92;
+  filter: saturate(0.94) brightness(0.96);
+}
+
+.cover-fallback {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.96);
+  user-select: none;
+  -webkit-user-select: none;
+  opacity: 1;
+  transition: opacity 360ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.cover.switching .cover-fallback {
+  opacity: 0.58;
+}
+
+.cover-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  opacity: 0;
+  transition: opacity 440ms cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity;
+}
+
+.lyrics-pane {
+  min-width: 0;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+  padding: 3px 4px 0 2px;
+}
+
+.lyrics-layer,
+.spectrum-layer {
+  position: absolute;
+  min-width: 0;
+  overflow: hidden;
+  transition:
+    opacity 300ms cubic-bezier(0.2, 0.9, 0.1, 1),
+    transform 300ms cubic-bezier(0.2, 0.9, 0.1, 1);
+  will-change: opacity, transform;
+}
+
+.lyrics-layer {
+  inset: 3px 4px 0 2px;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.spectrum-layer {
+  inset: 0 4px 0 2px;
+  display: flex;
+  align-items: center;
+  opacity: 0;
+  transform: translateY(2px);
+  pointer-events: none;
+}
+
+.layout.spectrum-mode .lyrics-layer {
+  opacity: 0;
+  transform: translateY(-2px);
+}
+
+.layout.spectrum-mode .spectrum-layer {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.layout.spectrum-audio-driven .spectrum span {
+  animation: none;
+  transition: none;
+}
+
+.viewport {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  display: block;
+  transform: translateZ(0);
+}
+
+.track {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--row-gap);
+  transform: translateY(0);
+  will-change: transform;
+}
+
+.track.animating {
+  transition: transform 560ms cubic-bezier(0.22, 0.72, 0.24, 1);
+}
+
+.track.no-anim {
+  transition: none !important;
+}
+
+.track.no-anim .line {
+  transition: none !important;
+}
+
+.line {
+  height: var(--row-height);
+  min-height: var(--row-height);
+  display: flex;
+  align-items: center;
+  line-height: 1.12;
+  letter-spacing: 0;
+  transform-origin: left center;
+  text-shadow: var(--text-shadow);
+  overflow: visible;
+  transition:
+    opacity 560ms cubic-bezier(0.22, 0.72, 0.24, 1),
+    color 280ms ease,
+    transform 560ms cubic-bezier(0.22, 0.72, 0.24, 1);
+}
+
+.line-text {
+  display: block;
+  width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: inherit;
+  padding-bottom: 2px;
+}
+
+.current-line {
+  font-size: var(--current-size);
+  font-weight: var(--font-weight);
+  color: var(--primary);
+  opacity: 0.98;
+  transform: translateY(var(--primary-offset-y));
+}
+
+.next-line {
+  font-size: var(--next-size);
+  font-weight: var(--font-weight);
+  color: var(--secondary);
+  opacity: 0.72;
+  transform: translateY(var(--secondary-offset-y));
+}
+
+.incoming-line {
+  opacity: 0;
+}
+
+.current-line.leaving {
+  opacity: 0.16;
+  transform: translateY(var(--primary-offset-y)) scale(0.972);
+}
+
+.next-line.promoting {
+  color: var(--primary);
+  transform: translateY(var(--primary-offset-y));
+}
+
+.spectrum {
+  width: min(210px, 100%);
+  height: 22px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  opacity: 0.92;
+  transition: opacity 260ms ease;
+}
+
+.spectrum span {
+  width: 3px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--primary);
+  box-shadow: var(--text-shadow);
+  opacity: 0.72;
+  transform-origin: center bottom;
+  transition: opacity 260ms ease;
+  animation: spectrumPulse 1380ms ease-in-out infinite;
+  animation-delay: calc(var(--i) * -83ms);
+}
+
+.spectrum span:nth-child(3n) {
+  animation-duration: 1160ms;
+  opacity: 0.62;
+}
+
+.spectrum span:nth-child(4n) {
+  animation-duration: 1540ms;
+  opacity: 0.82;
+}
+
+.spectrum span:nth-child(5n) {
+  animation-duration: 1280ms;
+}
+
+@keyframes spectrumPulse {
+  0%, 100% {
+    height: 6px;
+    transform: scaleY(0.72);
+  }
+
+  42% {
+    height: 18px;
+    transform: scaleY(1);
+  }
+
+  68% {
+    height: 11px;
+    transform: scaleY(0.86);
+  }
+}

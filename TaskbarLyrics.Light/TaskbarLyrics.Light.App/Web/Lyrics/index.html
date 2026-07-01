@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+{{STYLE_CSS}}
+  </style>
+</head>
+<body>
+  <div id="layout" class="layout">
+    <div class="shell">
+      <div id="cover" class="cover">
+        <div id="coverFallback" class="cover-fallback">N</div>
+        <img id="coverImage" class="cover-image" alt="" />
+        <img id="coverImageNext" class="cover-image" alt="" />
+      </div>
+      <div></div>
+      <div class="lyrics-pane">
+        <div id="lyricsLayer" class="lyrics-layer">
+          <div id="viewport" class="viewport">
+            <div id="track" class="track">
+              <div id="currentLine" class="line current-line"><span id="currentLineText" class="line-text">TaskbarLyrics started</span></div>
+              <div id="nextLine" class="line next-line"><span id="nextLineText" class="line-text">Waiting for lyrics...</span></div>
+              <div id="incomingLine" class="line next-line incoming-line"><span id="incomingLineText" class="line-text"> </span></div>
+            </div>
+          </div>
+        </div>
+        <div id="spectrumLayer" class="spectrum-layer" aria-hidden="true">
+          <div class="spectrum">
+            <span style="--i:0"></span>
+            <span style="--i:1"></span>
+            <span style="--i:2"></span>
+            <span style="--i:3"></span>
+            <span style="--i:4"></span>
+            <span style="--i:5"></span>
+            <span style="--i:6"></span>
+            <span style="--i:7"></span>
+            <span style="--i:8"></span>
+            <span style="--i:9"></span>
+            <span style="--i:10"></span>
+            <span style="--i:11"></span>
+            <span style="--i:12"></span>
+            <span style="--i:13"></span>
+            <span style="--i:14"></span>
+            <span style="--i:15"></span>
+            <span style="--i:16"></span>
+            <span style="--i:17"></span>
+            <span style="--i:18"></span>
+            <span style="--i:19"></span>
+            <span style="--i:20"></span>
+            <span style="--i:21"></span>
+            <span style="--i:22"></span>
+            <span style="--i:23"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+{{APP_JS}}
+  </script>
+</body>
+</html>
