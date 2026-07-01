@@ -11,17 +11,25 @@
             Background="Transparent"
             BorderThickness="0"
             Padding="4,0">
-        <Grid>
+        <Grid x:Name="LayoutGrid">
+            <Grid.RowDefinitions>
+                <RowDefinition x:Name="CoverRow" Height="*" />
+                <RowDefinition x:Name="CoverStackGapRow" Height="0" />
+                <RowDefinition x:Name="ContentRow" Height="0" />
+            </Grid.RowDefinitions>
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="34" />
-                <ColumnDefinition Width="8" />
-                <ColumnDefinition Width="*" />
+                <ColumnDefinition x:Name="CoverColumn" Width="34" />
+                <ColumnDefinition x:Name="CoverGapColumn" Width="8" />
+                <ColumnDefinition x:Name="ContentColumn" Width="*" />
             </Grid.ColumnDefinitions>
 
             <Border x:Name="CoverBorder"
+                    Grid.Row="0"
                     Grid.Column="0"
                     Width="34"
                     Height="34"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
                     CornerRadius="6"
                     Background="#1F2937"
                     ClipToBounds="True"
@@ -40,7 +48,36 @@
                 </Grid>
             </Border>
 
-            <Grid Grid.Column="2" ClipToBounds="False" Margin="2,3,4,0">
+            <StackPanel x:Name="StackedTrackInfoPanel"
+                        Grid.Row="0"
+                        Grid.Column="0"
+                        Grid.ColumnSpan="3"
+                        Orientation="Vertical"
+                        HorizontalAlignment="Left"
+                        VerticalAlignment="Center"
+                        IsHitTestVisible="False"
+                        ClipToBounds="True"
+                        Visibility="Collapsed">
+                <TextBlock x:Name="TrackTitleText"
+                           Text=" "
+                           FontSize="12"
+                           FontWeight="SemiBold"
+                           TextWrapping="NoWrap"
+                           TextTrimming="CharacterEllipsis" />
+                <TextBlock x:Name="TrackArtistText"
+                           Text=" "
+                           FontSize="11"
+                           Opacity="0.74"
+                           Margin="0,2,0,0"
+                           TextWrapping="NoWrap"
+                           TextTrimming="CharacterEllipsis" />
+            </StackPanel>
+
+            <Grid x:Name="ContentGrid"
+                  Grid.Row="0"
+                  Grid.Column="2"
+                  ClipToBounds="False"
+                  Margin="2,3,4,0">
                 <Border x:Name="LyricsViewport"
                         ClipToBounds="True"
                         Margin="0,0,0,-2"

@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 
 namespace TaskbarLyrics.Light.App.Ui;
 
@@ -29,6 +30,9 @@ public partial class NumberStepper : System.Windows.Controls.UserControl
         InitializeComponent();
         DecreaseButton.Click += (_, _) => Adjust(-Step);
         IncreaseButton.Click += (_, _) => Adjust(Step);
+        ValueBox.GotKeyboardFocus += (_, _) => ValueBox.SelectAll();
+        ValueBox.LostKeyboardFocus += (_, _) => CommitText();
+        ValueBox.PreviewKeyDown += OnValueBoxPreviewKeyDown;
         UpdateDisplay();
     }
 
@@ -64,8 +68,74 @@ public partial class NumberStepper : System.Windows.Controls.UserControl
 
     private void Adjust(double delta)
     {
-        Value = Math.Clamp(Value + delta, Minimum, Maximum);
-        ValueChanged?.Invoke(this, EventArgs.Empty);
+        SetValueFromUser(Value + delta);
+    }
+
+    private void OnValueBoxPreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        switch (e.Key)
+        {
+            case Key.Enter:
+                CommitText();
+                ValueBox.SelectAll();
+                e.Handled = true;
+                break;
+            case Key.Escape:
+                UpdateDisplay();
+                ValueBox.SelectAll();
+                e.Handled = true;
+                break;
+            case Key.Up:
+                Adjust(Step);
+                ValueBox.SelectAll();
+                e.Handled = true;
+                break;
+            case Key.Down:
+                Adjust(-Step);
+                ValueBox.SelectAll();
+                e.Handled = true;
+                break;
+        }
+    }
+
+    private void CommitText()
+    {
+        var text = ValueBox.Text.Trim();
+        if (TryParseValue(text, out var parsed))
+        {
+            SetValueFromUser(parsed);
+            return;
+        }
+
+        UpdateDisplay();
+    }
+
+    private static bool TryParseValue(string text, out double value)
+    {
+        return double.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out value) ||
+            double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out value);
+    }
+
+    private void SetValueFromUser(double value)
+    {
+        var rounded = Decimals <= 0
+            ? Math.Round(value)
+            : Math.Round(value, Decimals);
+        var clamped = Math.Clamp(rounded, Minimum, Maximum);
+        var changed = Math.Abs(Value - clamped) > 0.0001;
+        if (changed)
+        {
+            Value = clamped;
+        }
+        else
+        {
+            UpdateDisplay();
+        }
+
+        if (changed)
+        {
+            ValueChanged?.Invoke(this, EventArgs.Empty);
+        }
     }
 
     private static void OnValueChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)

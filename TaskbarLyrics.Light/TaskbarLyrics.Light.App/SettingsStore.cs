@@ -70,5 +70,15 @@ public sealed class SettingsStore
         {
             settings.FontFamily = AppSettings.DefaultFontFamily;
         }
+
+        if (!json.Contains("\"CoverSize\"", StringComparison.Ordinal))
+        {
+            settings.CoverSize = settings.CoverStyle == CoverDisplayStyle.Large ? 42 : 34;
+        }
+
+        if (settings.CoverStyle == CoverDisplayStyle.Large)
+        {
+            settings.CoverStyle = CoverDisplayStyle.RoundedSquare;
+        }
     }
 }

@@ -3,6 +3,7 @@ using System.Net.Http;
 using System.Text.Json;
 using System.Windows;
 using Microsoft.Win32;
+using TaskbarLyrics.Core.Services;
 using TaskbarLyrics.Core.Utilities;
 
 namespace TaskbarLyrics.Light.App;
@@ -20,6 +21,7 @@ public partial class App : System.Windows.Application
     private PlayerPresenceMonitor? _playerPresenceMonitor;
     private CancellationTokenSource? _activationServerCancellation;
     private SpectrumTuningSettings _spectrumTuningSettings = SpectrumTuningSettings.CreateDefault();
+    private bool? _lastAppliedStartWithWindows;
     private bool _userDismissedAutoLyrics;
 
     public AppSettings Settings { get; private set; } = new();
@@ -49,6 +51,7 @@ public partial class App : System.Windows.Application
         Settings = _settingsStore.Load();
         ApplyStartupForegroundColor(Settings);
         StartupRunRegistrar.Apply(Settings.StartWithWindows);
+        _lastAppliedStartWithWindows = Settings.StartWithWindows;
 
         _lyricsWindowHost = new LyricsWindowHost(Settings);
 
@@ -61,7 +64,15 @@ public partial class App : System.Windows.Application
 
         UserWantsLyricsVisible = shouldShowOnStartup;
         _lyricsWindowHost.ApplySpectrumTuning(_spectrumTuningSettings);
-        _trayService = new TrayService(ToggleLyricsWindow, OpenSettingsWindow, ExitApplication);
+        _trayService = new TrayService(
+            ToggleLyricsWindow,
+            OpenSettingsWindow,
+            RematchCurrentLyrics,
+            ClearLyricCaches,
+            CycleSpectrumStyle,
+            ToggleSmtcTimelineMonitor,
+            ExitApplication,
+            () => Settings.Clone());
         StartActivationServer();
         SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
         ConfigurePlayerPresenceMonitor();
@@ -137,9 +148,51 @@ public partial class App : System.Windows.Application
     {
         Settings = settings;
         _settingsStore?.Save(Settings);
-        StartupRunRegistrar.Apply(Settings.StartWithWindows);
+        if (_lastAppliedStartWithWindows != Settings.StartWithWindows)
+        {
+            StartupRunRegistrar.Apply(Settings.StartWithWindows);
+            _lastAppliedStartWithWindows = Settings.StartWithWindows;
+        }
+
         ConfigurePlayerPresenceMonitor();
         _lyricsWindowHost?.ApplySettings(Settings);
+    }
+
+    public void RematchCurrentLyrics()
+    {
+        _lyricsWindowHost?.RematchCurrentLyrics();
+    }
+
+    public void ClearLyricCaches()
+    {
+        LyricProviderBase.ClearCache();
+        GenericSmtcLyricProvider.ClearCache();
+    }
+
+    public void CycleSpectrumStyle()
+    {
+        var next = Settings.SpectrumStyle switch
+        {
+            SpectrumDisplayStyle.Center => SpectrumDisplayStyle.Bottom,
+            SpectrumDisplayStyle.Bottom => SpectrumDisplayStyle.Mirror,
+            SpectrumDisplayStyle.Mirror => SpectrumDisplayStyle.Thin,
+            SpectrumDisplayStyle.Thin => SpectrumDisplayStyle.Dots,
+            SpectrumDisplayStyle.Dots => SpectrumDisplayStyle.Pulse,
+            _ => SpectrumDisplayStyle.Center
+        };
+
+        var snapshot = Settings.Clone();
+        snapshot.SpectrumStyle = next;
+        SaveSettings(snapshot);
+        _settingsWindow?.ApplyExternalSettings(snapshot.Clone());
+    }
+
+    public void ToggleSmtcTimelineMonitor()
+    {
+        var snapshot = Settings.Clone();
+        snapshot.EnableSmtcTimelineMonitor = !snapshot.EnableSmtcTimelineMonitor;
+        SaveSettings(snapshot);
+        _settingsWindow?.ApplyExternalSettings(snapshot.Clone());
     }
 
     internal static void ApplyStartupForegroundColor(AppSettings settings) =>

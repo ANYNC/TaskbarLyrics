@@ -61,6 +61,11 @@ internal sealed class LyricsWindowHost : IDisposable
         InvokeAsync(() => _window?.ApplySpectrumTuning(snapshot));
     }
 
+    public void RematchCurrentLyrics()
+    {
+        InvokeAsync(() => _window?.RematchCurrentLyrics());
+    }
+
     public void Close()
     {
         if (_disposed)

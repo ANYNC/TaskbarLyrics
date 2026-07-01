@@ -19,6 +19,7 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider
 
     private readonly SemaphoreSlim _managerLock = new(1, 1);
     private readonly TimelinePositionStrategyRegistry _timelineStrategyRegistry = TimelinePositionStrategyRegistry.CreateDefault();
+    private readonly SmtcTimelinePositionStabilizer _timelinePositionStabilizer = new();
     private GlobalSystemMediaTransportControlsSessionManager? _manager;
     private SmtcTimelineDiagnostics? _lastTimelineDiagnostics;
     private string? _currentLyricSourceApp;
@@ -216,15 +217,20 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider
             Artist: artist,
             IsFallbackSnapshot: false);
         var selection = _timelineStrategyRegistry.Select(diagnostics);
+        var selectedPosition = _timelinePositionStabilizer.Stabilize(
+            diagnostics,
+            selection.Position,
+            timeline.EndTime,
+            out var stabilized);
         diagnostics = diagnostics with
         {
-            SelectedPosition = selection.Position,
-            StrategyName = selection.StrategyName
+            SelectedPosition = selectedPosition,
+            StrategyName = stabilized ? $"{selection.StrategyName}+Stabilized" : selection.StrategyName
         };
         PublishDiagnostics(diagnostics);
         return new PlaybackSnapshot(
             IsPlaying: isPlaying,
-            Position: selection.Position,
+            Position: selectedPosition,
             Track: track,
             CoverImageBytes: coverImageBytes,
             RawPosition: position,
@@ -515,14 +521,44 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider
                sourceAppUserModelId.Contains("vivaldi", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool IsAnyProcessRunning(params string[] names)
+    private static HashSet<string> CaptureRunningProcessNames()
     {
+        var processNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         Process[] allProcesses;
         try
         {
             allProcesses = Process.GetProcesses();
         }
         catch
+        {
+            return processNames;
+        }
+
+        foreach (var process in allProcesses)
+        {
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(process.ProcessName))
+                {
+                    processNames.Add(process.ProcessName);
+                }
+            }
+            catch
+            {
+                // Ignore query failures.
+            }
+            finally
+            {
+                process.Dispose();
+            }
+        }
+
+        return processNames;
+    }
+
+    private static bool IsAnyProcessRunning(IReadOnlyCollection<string> runningProcessNames, params string[] names)
+    {
+        if (runningProcessNames.Count == 0)
         {
             return false;
         }
@@ -537,22 +573,13 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider
 
             try
             {
-                if (Process.GetProcessesByName(name).Length > 0)
+                if (runningProcessNames.Contains(name))
                 {
                     return true;
                 }
 
-                if (allProcesses.Any(p =>
-                {
-                    try
-                    {
-                        return p.ProcessName.Contains(name, StringComparison.OrdinalIgnoreCase);
-                    }
-                    catch
-                    {
-                        return false;
-                    }
-                }))
+                if (runningProcessNames.Any(processName =>
+                    processName.Contains(name, StringComparison.OrdinalIgnoreCase)))
                 {
                     return true;
                 }
@@ -598,28 +625,29 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider
 
     private string? DetectRunningSource()
     {
+        var runningProcessNames = CaptureRunningProcessNames();
         foreach (var source in _recognitionOrder)
         {
             if (source.Equals("QQMusic", StringComparison.OrdinalIgnoreCase) &&
-                IsAnyProcessRunning("qqmusic", "qqmusicapp", "qqmusicplayer"))
+                IsAnyProcessRunning(runningProcessNames, "qqmusic", "qqmusicapp", "qqmusicplayer"))
             {
                 return "QQMusic";
             }
 
             if (source.Equals("Netease", StringComparison.OrdinalIgnoreCase) &&
-                IsAnyProcessRunning("cloudmusic", "neteasecloudmusic", "neteasemusic", "music.163", "music163"))
+                IsAnyProcessRunning(runningProcessNames, "cloudmusic", "neteasecloudmusic", "neteasemusic", "music.163", "music163"))
             {
                 return "Netease";
             }
 
             if (source.Equals("Spotify", StringComparison.OrdinalIgnoreCase) &&
-                IsAnyProcessRunning("spotify"))
+                IsAnyProcessRunning(runningProcessNames, "spotify"))
             {
                 return "Spotify";
             }
 
             if (source.Equals("Kugou", StringComparison.OrdinalIgnoreCase) &&
-                IsAnyProcessRunning("kugou", "kugoumusic", "kgmusic"))
+                IsAnyProcessRunning(runningProcessNames, "kugou", "kugoumusic", "kgmusic"))
             {
                 return "Kugou";
             }

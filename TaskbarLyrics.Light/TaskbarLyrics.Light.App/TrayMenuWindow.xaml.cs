@@ -22,18 +22,37 @@ public partial class TrayMenuWindow : Window
 
     private readonly Action _toggleLyricsWindow;
     private readonly Action _openSettings;
+    private readonly Action _rematchLyrics;
+    private readonly Action _clearCaches;
+    private readonly Action _cycleSpectrumStyle;
+    private readonly Action _toggleTimelineMonitor;
     private readonly Action _exitApp;
+    private readonly Func<AppSettings> _getSettings;
     private readonly DispatcherTimer _closeTimer;
     private int _graceTicks = 3;
 
-    public TrayMenuWindow(Action toggleLyricsWindow, Action openSettings, Action exitApp)
+    public TrayMenuWindow(
+        Action toggleLyricsWindow,
+        Action openSettings,
+        Action rematchLyrics,
+        Action clearCaches,
+        Action cycleSpectrumStyle,
+        Action toggleTimelineMonitor,
+        Action exitApp,
+        Func<AppSettings> getSettings)
     {
         InitializeComponent();
         AppIconProvider.ApplyWindowIcon(this);
         ApplyTheme();
         _toggleLyricsWindow = toggleLyricsWindow;
         _openSettings = openSettings;
+        _rematchLyrics = rematchLyrics;
+        _clearCaches = clearCaches;
+        _cycleSpectrumStyle = cycleSpectrumStyle;
+        _toggleTimelineMonitor = toggleTimelineMonitor;
         _exitApp = exitApp;
+        _getSettings = getSettings;
+        RefreshStateText();
         SourceInitialized += OnSourceInitialized;
         _closeTimer = new DispatcherTimer
         {
@@ -94,6 +113,15 @@ public partial class TrayMenuWindow : Window
         _closeTimer.Start();
     }
 
+    private void RefreshStateText()
+    {
+        var settings = _getSettings();
+        SpectrumStyleText.Text = $"频谱样式：{GetSpectrumStyleLabel(settings.SpectrumStyle)}";
+        TimelineMonitorText.Text = settings.EnableSmtcTimelineMonitor
+            ? "关闭时间轴监视器"
+            : "打开时间轴监视器";
+    }
+
     private void OnSourceInitialized(object? sender, EventArgs e)
     {
         var hwnd = new WindowInteropHelper(this).Handle;
@@ -152,6 +180,44 @@ public partial class TrayMenuWindow : Window
         _openSettings();
     }
 
+    private void RematchLyricsButton_Click(object sender, RoutedEventArgs e)
+    {
+        Close();
+        DismissTrayOverflow();
+        _rematchLyrics();
+    }
+
+    private void ClearCacheButton_Click(object sender, RoutedEventArgs e)
+    {
+        Close();
+        DismissTrayOverflow();
+        _clearCaches();
+    }
+
+    private void CycleSpectrumStyleButton_Click(object sender, RoutedEventArgs e)
+    {
+        Close();
+        DismissTrayOverflow();
+        _cycleSpectrumStyle();
+    }
+
+    private void ToggleTimelineMonitorButton_Click(object sender, RoutedEventArgs e)
+    {
+        Close();
+        DismissTrayOverflow();
+        _toggleTimelineMonitor();
+    }
+
+    private void SpectrumTuningButton_Click(object sender, RoutedEventArgs e)
+    {
+        Close();
+        DismissTrayOverflow();
+        if (System.Windows.Application.Current is App app)
+        {
+            app.OpenSpectrumTuningWindow();
+        }
+    }
+
     private void ExitButton_Click(object sender, RoutedEventArgs e)
     {
         Close();
@@ -177,6 +243,16 @@ public partial class TrayMenuWindow : Window
             (GetAsyncKeyState(VkRButton) & 0x8000) != 0 ||
             (GetAsyncKeyState(VkMButton) & 0x8000) != 0;
     }
+
+    private static string GetSpectrumStyleLabel(SpectrumDisplayStyle style) => style switch
+    {
+        SpectrumDisplayStyle.Bottom => "底部柱状",
+        SpectrumDisplayStyle.Mirror => "镜像波形",
+        SpectrumDisplayStyle.Thin => "细线",
+        SpectrumDisplayStyle.Dots => "点阵",
+        SpectrumDisplayStyle.Pulse => "呼吸条",
+        _ => "中心扩散"
+    };
 
     private static void DismissTrayOverflow()
     {

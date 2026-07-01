@@ -8,6 +8,7 @@ using System.Windows.Controls;
 using System.Windows.Markup;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Windows.Threading;
 using TaskbarLyrics.Core.Services;
 using Drawing = System.Drawing;
 using Forms = System.Windows.Forms;
@@ -17,24 +18,47 @@ namespace TaskbarLyrics.Light.App;
 
 public partial class SettingsWindow : Window
 {
+    private static readonly HashSet<string> LocalAudioExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".mp3", ".flac", ".m4a", ".aac", ".wav", ".ogg", ".opus", ".wma"
+    };
+
+    private static readonly TimeSpan SaveDebounceInterval = TimeSpan.FromMilliseconds(250);
+
     private readonly AppSettings _settings;
+    private readonly DispatcherTimer _saveTimer;
     private bool _isLoading;
     private bool _sidebarCollapsed;
     private bool _isUpdatingNavFromScroll;
     private bool _fontOptionsPopulated;
     private bool _isCheckingUpdate;
+    private CancellationTokenSource? _localFoldersStatusCancellation;
 
     public SettingsWindow(AppSettings settings)
     {
         InitializeComponent();
         AppIconProvider.ApplyWindowIcon(this);
         _settings = settings;
+        _saveTimer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = SaveDebounceInterval
+        };
+        _saveTimer.Tick += (_, _) =>
+        {
+            _saveTimer.Stop();
+            SaveSettings();
+        };
 
         LoadPlayerIcons();
         WireEvents();
-        EnsureFontOptionsPopulated();
         LoadFromSettings();
-        Closed += (_, _) => SaveSettings();
+        Closed += (_, _) =>
+        {
+            OnSettingChanged();
+            FlushPendingSettings();
+            _localFoldersStatusCancellation?.Cancel();
+            _localFoldersStatusCancellation?.Dispose();
+        };
     }
 
     public void ApplyExternalSettings(AppSettings settings)
@@ -96,9 +120,23 @@ public partial class SettingsWindow : Window
         EnableSpectrumCheck.Unchecked += (_, _) => OnSettingChanged();
         ShowSpectrumWhenLyricsNotFoundCheck.Checked += (_, _) => OnSettingChanged();
         ShowSpectrumWhenLyricsNotFoundCheck.Unchecked += (_, _) => OnSettingChanged();
+        ShowSpectrumWhenLyricsAvailableCheck.Checked += (_, _) => OnSettingChanged();
+        ShowSpectrumWhenLyricsAvailableCheck.Unchecked += (_, _) => OnSettingChanged();
+        SpectrumStyleCombo.SelectionChanged += (_, _) => OnSettingChanged();
+        LyricOffsetStepper.ValueChanged += (_, _) => OnSettingChanged();
+        QqMusicLyricOffsetStepper.ValueChanged += (_, _) => OnSettingChanged();
+        NeteaseLyricOffsetStepper.ValueChanged += (_, _) => OnSettingChanged();
+        KugouLyricOffsetStepper.ValueChanged += (_, _) => OnSettingChanged();
+        SpotifyLyricOffsetStepper.ValueChanged += (_, _) => OnSettingChanged();
         EnableLocalLyricsCheck.Checked += (_, _) => OnSettingChanged();
         EnableLocalLyricsCheck.Unchecked += (_, _) => OnSettingChanged();
+        ShowCoverImageCheck.Checked += (_, _) => OnSettingChanged();
+        ShowCoverImageCheck.Unchecked += (_, _) => OnSettingChanged();
+        LocalLyricsModeCombo.SelectionChanged += (_, _) => OnSettingChanged();
+        LocalCoverModeCombo.SelectionChanged += (_, _) => OnSettingChanged();
         LocalMusicFoldersBox.LostFocus += (_, _) => OnSettingChanged();
+        LocalMusicFoldersBox.TextChanged += (_, _) => RefreshLocalFoldersStatus();
+        AddLocalFolderButton.Click += (_, _) => AddLocalMusicFolderFromExplorer();
         ForceAlwaysOnTopCheck.Checked += (_, _) => OnSettingChanged();
         ForceAlwaysOnTopCheck.Unchecked += (_, _) => OnSettingChanged();
         AutoCheckUpdatesCheck.Checked += (_, _) => OnSettingChanged();
@@ -109,6 +147,8 @@ public partial class SettingsWindow : Window
         ShowBorderCheck.Unchecked += (_, _) => OnSettingChanged();
         ShowTextShadowCheck.Checked += (_, _) => OnSettingChanged();
         ShowTextShadowCheck.Unchecked += (_, _) => OnSettingChanged();
+        UseCoverAccentColorCheck.Checked += (_, _) => OnSettingChanged();
+        UseCoverAccentColorCheck.Unchecked += (_, _) => OnSettingChanged();
         EnableSmtcTimelineMonitorCheck.Checked += (_, _) => OnSettingChanged();
         EnableSmtcTimelineMonitorCheck.Unchecked += (_, _) => OnSettingChanged();
 
@@ -132,6 +172,19 @@ public partial class SettingsWindow : Window
         FontFamilyCombo.SelectionChanged += (_, _) => OnSettingChanged();
         FontWeightCombo.SelectionChanged += (_, _) => OnSettingChanged();
         ForegroundModeCombo.SelectionChanged += (_, _) => OnForegroundModeChanged();
+        CoverStyleCombo.SelectionChanged += (_, _) => OnSettingChanged();
+        CoverSizeStepper.ValueChanged += (_, _) => OnSettingChanged();
+        CoverLayoutCombo.SelectionChanged += (_, _) => OnSettingChanged();
+        ShowStackedTrackInfoCheck.Checked += (_, _) => OnSettingChanged();
+        ShowStackedTrackInfoCheck.Unchecked += (_, _) => OnSettingChanged();
+        StackedTrackInfoGapStepper.ValueChanged += (_, _) => OnSettingChanged();
+        StackedCoverGapStepper.ValueChanged += (_, _) => OnSettingChanged();
+        StackedCoverXOffsetStepper.ValueChanged += (_, _) => OnSettingChanged();
+        StackedCoverYOffsetStepper.ValueChanged += (_, _) => OnSettingChanged();
+        StackedContentXOffsetStepper.ValueChanged += (_, _) => OnSettingChanged();
+        StackedContentYOffsetStepper.ValueChanged += (_, _) => OnSettingChanged();
+        TransitionStyleCombo.SelectionChanged += (_, _) => OnSettingChanged();
+        BackgroundMaterialCombo.SelectionChanged += (_, _) => OnSettingChanged();
         HorizontalAnchorCombo.SelectionChanged += (_, _) => OnSettingChanged();
         SourceOrderList.OrderChanged += (_, _) => OnSettingChanged();
 
@@ -143,6 +196,8 @@ public partial class SettingsWindow : Window
             }
         };
         ClearCacheButton.Click += (_, _) => ClearLyricCache();
+        RefreshLyricDiagnosticsButton.Click += (_, _) => RefreshLyricDiagnostics();
+        RematchLyricsButton.Click += (_, _) => RematchLyrics();
         ResetDefaultsButton.Click += (_, _) => ResetDefaults();
         SidebarToggleButton.Click += (_, _) => ToggleSidebar();
     }
@@ -265,13 +320,22 @@ public partial class SettingsWindow : Window
             return;
         }
 
-        _fontOptionsPopulated = true;
-        PopulateFontOptions();
+        var wasLoading = _isLoading;
+        _isLoading = true;
+        try
+        {
+            _fontOptionsPopulated = true;
+            PopulateFontOptions();
+            SelectFontFamily(_settings.FontFamily);
+        }
+        finally
+        {
+            _isLoading = wasLoading;
+        }
     }
 
     private void LoadFromSettings()
     {
-        EnsureFontOptionsPopulated();
         _isLoading = true;
         try
         {
@@ -286,11 +350,22 @@ public partial class SettingsWindow : Window
         EnablePureMusicSpectrumCheck.IsChecked = _settings.EnablePureMusicSpectrum;
         EnableSpectrumCheck.IsChecked = _settings.EnableSpectrum;
         ShowSpectrumWhenLyricsNotFoundCheck.IsChecked = _settings.ShowSpectrumWhenLyricsNotFound;
+        ShowSpectrumWhenLyricsAvailableCheck.IsChecked = _settings.ShowSpectrumWhenLyricsAvailable;
+        SelectComboByTag(SpectrumStyleCombo, _settings.SpectrumStyle.ToString());
+        LyricOffsetStepper.Value = _settings.LyricOffsetMs;
+        QqMusicLyricOffsetStepper.Value = _settings.QqMusicLyricOffsetMs;
+        NeteaseLyricOffsetStepper.Value = _settings.NeteaseLyricOffsetMs;
+        KugouLyricOffsetStepper.Value = _settings.KugouLyricOffsetMs;
+        SpotifyLyricOffsetStepper.Value = _settings.SpotifyLyricOffsetMs;
         EnableLocalLyricsCheck.IsChecked = _settings.EnableLocalLyrics;
+        SelectComboByTag(LocalLyricsModeCombo, _settings.LocalLyricsSearchMode.ToString());
+        SelectComboByTag(LocalCoverModeCombo, _settings.LocalCoverSearchMode.ToString());
+        ShowCoverImageCheck.IsChecked = _settings.ShowCoverImage;
         LocalMusicFoldersBox.Text = string.Join(Environment.NewLine, _settings.LocalMusicFolders);
             ShowBackgroundCheck.IsChecked = _settings.ShowBackground;
             ShowBorderCheck.IsChecked = _settings.ShowBorder;
             ShowTextShadowCheck.IsChecked = _settings.ShowTextShadow;
+            UseCoverAccentColorCheck.IsChecked = _settings.UseCoverAccentColor;
             EnableSmtcTimelineMonitorCheck.IsChecked = _settings.EnableSmtcTimelineMonitor;
 
             FontSizeStepper.Value = _settings.FontSize;
@@ -312,7 +387,22 @@ public partial class SettingsWindow : Window
 
             SelectComboByTag(FontWeightCombo, NormalizeFontWeight(_settings.FontWeight));
             SelectComboByTag(HorizontalAnchorCombo, _settings.HorizontalAnchor.ToString());
-            SelectFontFamily(_settings.FontFamily);
+            SelectComboByTag(CoverStyleCombo, NormalizeCoverStyle(_settings.CoverStyle).ToString());
+            CoverSizeStepper.Value = _settings.CoverSize;
+            SelectComboByTag(CoverLayoutCombo, _settings.CoverLayoutMode.ToString());
+            ShowStackedTrackInfoCheck.IsChecked = _settings.ShowStackedTrackInfo;
+            StackedTrackInfoGapStepper.Value = _settings.StackedTrackInfoGap;
+            StackedCoverGapStepper.Value = _settings.StackedCoverLyricsGap;
+            StackedCoverXOffsetStepper.Value = _settings.StackedCoverXOffset;
+            StackedCoverYOffsetStepper.Value = _settings.StackedCoverYOffset;
+            StackedContentXOffsetStepper.Value = _settings.StackedContentXOffset;
+            StackedContentYOffsetStepper.Value = _settings.StackedContentYOffset;
+            SelectComboByTag(TransitionStyleCombo, _settings.TransitionStyle.ToString());
+            SelectComboByTag(BackgroundMaterialCombo, _settings.BackgroundMaterial.ToString());
+            if (_fontOptionsPopulated)
+            {
+                SelectFontFamily(_settings.FontFamily);
+            }
             SelectComboByTag(ForegroundModeCombo, _settings.ForegroundColorMode.ToString());
 
             SourceOrderList.SetOrder(NormalizeSourceOrder(_settings.SourceRecognitionOrder));
@@ -320,6 +410,9 @@ public partial class SettingsWindow : Window
             UpdateLineGapControlsState();
             UpdateWindowWidthControlsState();
             UpdateWindowHeightControlsState();
+            UpdateDependentControlsState();
+            RefreshLocalFoldersStatus();
+            RefreshLyricDiagnostics();
             RenderAbout();
         }
         finally
@@ -447,6 +540,80 @@ public partial class SettingsWindow : Window
         WindowHeightOffsetHint.Opacity = autoAdjust ? 1 : 0.45;
     }
 
+    private void UpdateDependentControlsState()
+    {
+        var spectrumEnabled = EnableSpectrumCheck.IsChecked == true;
+        EnablePureMusicSpectrumCheck.IsEnabled = spectrumEnabled;
+        ShowSpectrumWhenLyricsNotFoundCheck.IsEnabled = spectrumEnabled;
+        ShowSpectrumWhenLyricsAvailableCheck.IsEnabled = spectrumEnabled;
+        ShowSpectrumWhenLyricsAvailableLabel.Opacity = spectrumEnabled ? 1 : 0.45;
+        ShowSpectrumWhenLyricsAvailableHint.Opacity = spectrumEnabled ? 1 : 0.45;
+        SpectrumStyleCombo.IsEnabled = spectrumEnabled;
+        SpectrumStyleLabel.Opacity = spectrumEnabled ? 1 : 0.45;
+        SpectrumStyleHint.Opacity = spectrumEnabled ? 1 : 0.45;
+        SpectrumTuningHint.Visibility = spectrumEnabled ? Visibility.Collapsed : Visibility.Visible;
+
+        var localLyricsEnabled = EnableLocalLyricsCheck.IsChecked == true;
+        var coverEnabled = ShowCoverImageCheck.IsChecked == true;
+        LocalMusicFoldersBox.IsEnabled = localLyricsEnabled;
+        AddLocalFolderButton.IsEnabled = localLyricsEnabled;
+        LocalLyricsModeCombo.IsEnabled = localLyricsEnabled;
+        LocalCoverModeCombo.IsEnabled = localLyricsEnabled && coverEnabled;
+        CoverStyleCombo.IsEnabled = coverEnabled;
+        var coverStyleTag = (CoverStyleCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? "RoundedSquare";
+        var coverVisible = coverEnabled && !string.Equals(coverStyleTag, nameof(CoverDisplayStyle.Hidden), StringComparison.OrdinalIgnoreCase);
+        var coverLayoutTag = (CoverLayoutCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? "Inline";
+        var stackedCoverLayout = coverVisible &&
+            string.Equals(coverLayoutTag, nameof(CoverLayoutMode.Stacked), StringComparison.OrdinalIgnoreCase);
+        var stackedTrackInfoEnabled = stackedCoverLayout && ShowStackedTrackInfoCheck.IsChecked == true;
+        CoverSizeStepper.IsEnabled = coverVisible;
+        CoverLayoutCombo.IsEnabled = coverVisible;
+        ShowStackedTrackInfoCheck.IsEnabled = stackedCoverLayout;
+        StackedTrackInfoGapStepper.IsEnabled = stackedTrackInfoEnabled;
+        StackedCoverGapStepper.IsEnabled = stackedCoverLayout;
+        StackedCoverXOffsetStepper.IsEnabled = stackedCoverLayout;
+        StackedCoverYOffsetStepper.IsEnabled = stackedCoverLayout;
+        StackedContentXOffsetStepper.IsEnabled = stackedCoverLayout;
+        StackedContentYOffsetStepper.IsEnabled = stackedCoverLayout;
+        CoverSizeLabel.Opacity = coverVisible ? 1 : 0.45;
+        CoverSizeHint.Opacity = coverVisible ? 1 : 0.45;
+        CoverLayoutLabel.Opacity = coverVisible ? 1 : 0.45;
+        CoverLayoutHint.Opacity = coverVisible ? 1 : 0.45;
+        ShowStackedTrackInfoLabel.Opacity = stackedCoverLayout ? 1 : 0.45;
+        ShowStackedTrackInfoHint.Opacity = stackedCoverLayout ? 1 : 0.45;
+        StackedTrackInfoGapLabel.Opacity = stackedTrackInfoEnabled ? 1 : 0.45;
+        StackedTrackInfoGapHint.Opacity = stackedTrackInfoEnabled ? 1 : 0.45;
+        StackedCoverGapLabel.Opacity = stackedCoverLayout ? 1 : 0.45;
+        StackedCoverGapHint.Opacity = stackedCoverLayout ? 1 : 0.45;
+        StackedCoverXOffsetLabel.Opacity = stackedCoverLayout ? 1 : 0.45;
+        StackedCoverXOffsetHint.Opacity = stackedCoverLayout ? 1 : 0.45;
+        StackedCoverYOffsetLabel.Opacity = stackedCoverLayout ? 1 : 0.45;
+        StackedCoverYOffsetHint.Opacity = stackedCoverLayout ? 1 : 0.45;
+        StackedContentXOffsetLabel.Opacity = stackedCoverLayout ? 1 : 0.45;
+        StackedContentXOffsetHint.Opacity = stackedCoverLayout ? 1 : 0.45;
+        StackedContentYOffsetLabel.Opacity = stackedCoverLayout ? 1 : 0.45;
+        StackedContentYOffsetHint.Opacity = stackedCoverLayout ? 1 : 0.45;
+        LocalLyricsModeLabel.Opacity = localLyricsEnabled ? 1 : 0.45;
+        LocalLyricsModeHint.Opacity = localLyricsEnabled ? 1 : 0.45;
+        LocalCoverModeLabel.Opacity = localLyricsEnabled && coverEnabled ? 1 : 0.45;
+        LocalCoverModeHint.Opacity = localLyricsEnabled && coverEnabled ? 1 : 0.45;
+        LocalFoldersStatusText.Opacity = localLyricsEnabled ? 1 : 0.48;
+
+        var backgroundEnabled = ShowBackgroundCheck.IsChecked == true;
+        BackgroundOpacityStepper.IsEnabled = backgroundEnabled;
+        BackgroundMaterialCombo.IsEnabled = backgroundEnabled;
+        BackgroundMaterialLabel.Opacity = backgroundEnabled ? 1 : 0.45;
+        BackgroundMaterialHint.Opacity = backgroundEnabled ? 1 : 0.45;
+
+        var startupHiddenByAutoHide =
+            ShowLyricsOnStartupCheck.IsChecked == true &&
+            AutoHideLyricsWhenPlayerClosesCheck.IsChecked == true;
+        StartupVisibilityHintRow.Visibility = startupHiddenByAutoHide ? Visibility.Visible : Visibility.Collapsed;
+        StartupVisibilityHint.Text = startupHiddenByAutoHide
+            ? "已同时开启“启动时显示歌词”和“播放器关闭时隐藏”。启动阶段会先保持隐藏，检测到播放器播放后再自动显示。"
+            : string.Empty;
+    }
+
     private void OnSettingChanged()
     {
         if (_isLoading)
@@ -465,13 +632,33 @@ public partial class SettingsWindow : Window
         _settings.EnablePureMusicSpectrum = EnablePureMusicSpectrumCheck.IsChecked == true;
         _settings.EnableSpectrum = EnableSpectrumCheck.IsChecked == true;
         _settings.ShowSpectrumWhenLyricsNotFound = ShowSpectrumWhenLyricsNotFoundCheck.IsChecked == true;
+        _settings.ShowSpectrumWhenLyricsAvailable = ShowSpectrumWhenLyricsAvailableCheck.IsChecked == true;
+        var spectrumStyleTag = (SpectrumStyleCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? "Center";
+        _settings.SpectrumStyle = Enum.TryParse<SpectrumDisplayStyle>(spectrumStyleTag, out var spectrumStyle)
+            ? spectrumStyle
+            : SpectrumDisplayStyle.Center;
+        _settings.LyricOffsetMs = (int)Math.Round(LyricOffsetStepper.Value);
+        _settings.QqMusicLyricOffsetMs = (int)Math.Round(QqMusicLyricOffsetStepper.Value);
+        _settings.NeteaseLyricOffsetMs = (int)Math.Round(NeteaseLyricOffsetStepper.Value);
+        _settings.KugouLyricOffsetMs = (int)Math.Round(KugouLyricOffsetStepper.Value);
+        _settings.SpotifyLyricOffsetMs = (int)Math.Round(SpotifyLyricOffsetStepper.Value);
         _settings.EnableLocalLyrics = EnableLocalLyricsCheck.IsChecked == true;
+        var localLyricsModeTag = (LocalLyricsModeCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? "PreferLocal";
+        _settings.LocalLyricsSearchMode = Enum.TryParse<LocalLyricsSearchMode>(localLyricsModeTag, out var localLyricsMode)
+            ? localLyricsMode
+            : LocalLyricsSearchMode.PreferLocal;
+        var localCoverModeTag = (LocalCoverModeCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? "OnlineFirst";
+        _settings.LocalCoverSearchMode = Enum.TryParse<LocalCoverSearchMode>(localCoverModeTag, out var localCoverMode)
+            ? localCoverMode
+            : LocalCoverSearchMode.OnlineFirst;
+        _settings.ShowCoverImage = ShowCoverImageCheck.IsChecked == true;
         _settings.LocalMusicFolders = NormalizeLocalMusicFolders(LocalMusicFoldersBox.Text);
         _settings.ForceAlwaysOnTop = ForceAlwaysOnTopCheck.IsChecked == true;
         _settings.AutoCheckUpdates = AutoCheckUpdatesCheck.IsChecked == true;
         _settings.ShowBackground = ShowBackgroundCheck.IsChecked == true;
         _settings.ShowBorder = ShowBorderCheck.IsChecked == true;
         _settings.ShowTextShadow = ShowTextShadowCheck.IsChecked == true;
+        _settings.UseCoverAccentColor = UseCoverAccentColorCheck.IsChecked == true;
         _settings.EnableSmtcTimelineMonitor = EnableSmtcTimelineMonitorCheck.IsChecked == true;
 
         _settings.FontSize = FontSizeStepper.Value;
@@ -493,12 +680,38 @@ public partial class SettingsWindow : Window
             : _settings.FontFamily;
         _settings.SourceRecognitionOrder = NormalizeSourceOrder(SourceOrderList.GetOrder());
 
+        var coverStyleTag = (CoverStyleCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? "RoundedSquare";
+        _settings.CoverStyle = Enum.TryParse<CoverDisplayStyle>(coverStyleTag, out var coverStyle)
+            ? NormalizeCoverStyle(coverStyle)
+            : CoverDisplayStyle.RoundedSquare;
+        _settings.CoverSize = CoverSizeStepper.Value;
+        var coverLayoutTag = (CoverLayoutCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? "Inline";
+        _settings.CoverLayoutMode = Enum.TryParse<CoverLayoutMode>(coverLayoutTag, out var coverLayoutMode)
+            ? coverLayoutMode
+            : CoverLayoutMode.Inline;
+        _settings.ShowStackedTrackInfo = ShowStackedTrackInfoCheck.IsChecked == true;
+        _settings.StackedTrackInfoGap = StackedTrackInfoGapStepper.Value;
+        _settings.StackedCoverLyricsGap = StackedCoverGapStepper.Value;
+        _settings.StackedCoverXOffset = StackedCoverXOffsetStepper.Value;
+        _settings.StackedCoverYOffset = StackedCoverYOffsetStepper.Value;
+        _settings.StackedContentXOffset = StackedContentXOffsetStepper.Value;
+        _settings.StackedContentYOffset = StackedContentYOffsetStepper.Value;
+        var transitionStyleTag = (TransitionStyleCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? "Slide";
+        _settings.TransitionStyle = Enum.TryParse<LyricTransitionStyle>(transitionStyleTag, out var transitionStyle)
+            ? transitionStyle
+            : LyricTransitionStyle.Slide;
+        var backgroundMaterialTag = (BackgroundMaterialCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? "Dim";
+        _settings.BackgroundMaterial = Enum.TryParse<LyricsBackgroundMaterial>(backgroundMaterialTag, out var backgroundMaterial)
+            ? backgroundMaterial
+            : LyricsBackgroundMaterial.Dim;
+
         var anchorTag = (HorizontalAnchorCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? "Left";
         _settings.HorizontalAnchor = Enum.TryParse<LyricsHorizontalAnchor>(anchorTag, out var anchor)
             ? anchor
             : LyricsHorizontalAnchor.Left;
 
-        SaveSettings();
+        UpdateDependentControlsState();
+        QueueSaveSettings();
     }
 
     private void SaveSettings()
@@ -507,6 +720,18 @@ public partial class SettingsWindow : Window
         {
             app.SaveSettings(_settings.Clone());
         }
+    }
+
+    private void QueueSaveSettings()
+    {
+        _saveTimer.Stop();
+        _saveTimer.Start();
+    }
+
+    private void FlushPendingSettings()
+    {
+        _saveTimer.Stop();
+        SaveSettings();
     }
 
     private void RenderAbout()
@@ -536,16 +761,23 @@ public partial class SettingsWindow : Window
             _settings.LastUpdateCheckUtc = DateTimeOffset.UtcNow;
             _settings.AutoCheckUpdates = AutoCheckUpdatesCheck.IsChecked == true;
 
-            UpdateStatusText.Text = result.State switch
+            if (result.State == UpdateCheckState.Error && !string.IsNullOrWhiteSpace(result.Message))
+            {
+                UpdateStatusText.Text = result.Message;
+            }
+            else
+            {
+                UpdateStatusText.Text = result.State switch
             {
                 UpdateCheckState.Available =>
                     $"发现新版本 {result.Version}，当前版本 {result.CurrentVersion}。",
                 UpdateCheckState.Latest =>
                     $"已是最新版本（{result.CurrentVersion}）。",
                 _ => "检查更新失败，请稍后重试。"
-            };
+                };
+            }
 
-            SaveSettings();
+            FlushPendingSettings();
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or NotSupportedException)
         {
@@ -590,6 +822,175 @@ public partial class SettingsWindow : Window
             .ToList();
     }
 
+    private void AddLocalMusicFolder()
+    {
+        using var dialog = new Forms.FolderBrowserDialog
+        {
+            Description = "选择本地音乐目录",
+            UseDescriptionForTitle = true,
+            ShowNewFolderButton = false
+        };
+
+        if (dialog.ShowDialog() != Forms.DialogResult.OK ||
+            string.IsNullOrWhiteSpace(dialog.SelectedPath))
+        {
+            return;
+        }
+
+        var folders = NormalizeLocalMusicFolders(LocalMusicFoldersBox.Text);
+        if (!folders.Contains(dialog.SelectedPath, StringComparer.OrdinalIgnoreCase))
+        {
+            folders.Add(dialog.SelectedPath);
+        }
+
+        LocalMusicFoldersBox.Text = string.Join(Environment.NewLine, folders);
+        OnSettingChanged();
+    }
+
+    private void AddLocalMusicFolderFromExplorer()
+    {
+        var folders = NormalizeLocalMusicFolders(LocalMusicFoldersBox.Text);
+        var dialog = new Microsoft.Win32.OpenFolderDialog
+        {
+            Title = "选择本地音乐目录",
+            Multiselect = true
+        };
+
+        var initialDirectory = folders.FirstOrDefault(Directory.Exists);
+        if (!string.IsNullOrWhiteSpace(initialDirectory))
+        {
+            dialog.InitialDirectory = initialDirectory;
+        }
+
+        if (dialog.ShowDialog(this) != true)
+        {
+            return;
+        }
+
+        foreach (var selectedPath in dialog.FolderNames.Where(path => !string.IsNullOrWhiteSpace(path)))
+        {
+            if (!folders.Contains(selectedPath, StringComparer.OrdinalIgnoreCase))
+            {
+                folders.Add(selectedPath);
+            }
+        }
+
+        LocalMusicFoldersBox.Text = string.Join(Environment.NewLine, folders);
+        OnSettingChanged();
+    }
+
+    private void RefreshLocalFoldersStatus()
+    {
+        var folders = NormalizeLocalMusicFolders(LocalMusicFoldersBox.Text);
+        var existingFolders = folders.Where(Directory.Exists).ToArray();
+        var missingCount = folders.Count - existingFolders.Length;
+
+        _localFoldersStatusCancellation?.Cancel();
+        _localFoldersStatusCancellation?.Dispose();
+        _localFoldersStatusCancellation = null;
+
+        if (folders.Count == 0)
+        {
+            LocalFoldersStatusText.Text = "未添加本地音乐目录。";
+            return;
+        }
+
+        var prefix = missingCount == 0
+            ? $"{folders.Count} 个目录均可访问"
+            : $"{existingFolders.Length}/{folders.Count} 个目录可访问，{missingCount} 个不可访问";
+
+        if (existingFolders.Length == 0)
+        {
+            LocalFoldersStatusText.Text = prefix;
+            return;
+        }
+
+        LocalFoldersStatusText.Text = $"{prefix}，正在统计音频文件...";
+        var cts = new CancellationTokenSource();
+        _localFoldersStatusCancellation = cts;
+        _ = CountLocalAudioFilesAsync(existingFolders, cts.Token).ContinueWith(task =>
+        {
+            Dispatcher.BeginInvoke(() =>
+            {
+                if (cts.IsCancellationRequested || !ReferenceEquals(_localFoldersStatusCancellation, cts))
+                {
+                    return;
+                }
+
+                var countText = task.Status == TaskStatus.RanToCompletion
+                    ? $"，约 {task.Result} 首音频"
+                    : string.Empty;
+                LocalFoldersStatusText.Text = prefix + countText;
+            });
+        }, TaskScheduler.Default);
+    }
+
+    private static Task<int> CountLocalAudioFilesAsync(
+        IReadOnlyCollection<string> folders,
+        CancellationToken cancellationToken)
+    {
+        return Task.Run(() =>
+        {
+            var count = 0;
+            foreach (var folder in folders)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                foreach (var file in SafeEnumerateFiles(folder, cancellationToken))
+                {
+                    if (LocalAudioExtensions.Contains(Path.GetExtension(file)))
+                    {
+                        count++;
+                    }
+                }
+            }
+
+            return count;
+        }, cancellationToken);
+    }
+
+    private static IEnumerable<string> SafeEnumerateFiles(string rootFolder, CancellationToken cancellationToken)
+    {
+        var pending = new Stack<string>();
+        pending.Push(rootFolder);
+
+        while (pending.Count > 0)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var folder = pending.Pop();
+
+            IEnumerable<string> files;
+            try
+            {
+                files = Directory.EnumerateFiles(folder);
+            }
+            catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
+            {
+                continue;
+            }
+
+            foreach (var file in files)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                yield return file;
+            }
+
+            IEnumerable<string> directories;
+            try
+            {
+                directories = Directory.EnumerateDirectories(folder);
+            }
+            catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
+            {
+                continue;
+            }
+
+            foreach (var directory in directories)
+            {
+                pending.Push(directory);
+            }
+        }
+    }
+
     private static List<string> NormalizeLocalMusicFolders(IEnumerable<string>? folders)
     {
         return (folders ?? Enumerable.Empty<string>())
@@ -605,13 +1006,59 @@ public partial class SettingsWindow : Window
         App.ApplyStartupForegroundColor(defaults);
         CopySettings(defaults, _settings);
         LoadFromSettings();
-        SaveSettings();
+        FlushPendingSettings();
     }
 
-    private static void ClearLyricCache()
+    private void ClearLyricCache()
     {
-        LyricProviderBase.ClearCache();
-        GenericSmtcLyricProvider.ClearCache();
+        if (System.Windows.Application.Current is App app)
+        {
+            app.ClearLyricCaches();
+        }
+        else
+        {
+            LyricProviderBase.ClearCache();
+            GenericSmtcLyricProvider.ClearCache();
+        }
+
+        ClearCacheStatusText.Text = $"已清除缓存（{DateTime.Now:HH:mm:ss}）。";
+    }
+
+    private void RefreshLyricDiagnostics()
+    {
+        var snapshot = LyricResolveDiagnosticsState.Current;
+        if (snapshot == LyricResolveDiagnosticsSnapshot.Empty ||
+            snapshot.CapturedAtUtc == DateTimeOffset.MinValue)
+        {
+            LyricDiagnosticsText.Text = "暂无歌词匹配信息。";
+            return;
+        }
+
+        var selectedSource = string.IsNullOrWhiteSpace(snapshot.SelectedSource)
+            ? "未命中"
+            : snapshot.SelectedSource;
+        LyricDiagnosticsText.Text =
+            $"歌曲：{snapshot.TrackTitle} - {snapshot.TrackArtist}\n" +
+            $"播放器：{snapshot.TrackSourceApp}，歌词源：{selectedSource}，分数：{snapshot.BestScore}，行数：{snapshot.LineCount}\n" +
+            $"位置：{FormatTimeSpan(snapshot.PlaybackPosition)}，偏移：{snapshot.AppliedOffsetMs} ms，行号：{snapshot.CurrentLineIndex}，进度：{snapshot.LineProgress:P0}\n" +
+            $"候选：{snapshot.Candidates}";
+    }
+
+    private void RematchLyrics()
+    {
+        if (System.Windows.Application.Current is App app)
+        {
+            app.RematchCurrentLyrics();
+        }
+
+        RefreshLyricDiagnostics();
+    }
+
+    private static string FormatTimeSpan(TimeSpan value)
+    {
+        var sign = value < TimeSpan.Zero ? "-" : string.Empty;
+        var abs = value.Duration();
+        return $"{sign}{abs:mm\\:ss\\.fff}";
     }
 
     private void SelectFontFamily(string? fontFamily)
@@ -666,6 +1113,9 @@ public partial class SettingsWindow : Window
         _ => "SemiBold"
     };
 
+    private static CoverDisplayStyle NormalizeCoverStyle(CoverDisplayStyle style) =>
+        style == CoverDisplayStyle.Large ? CoverDisplayStyle.RoundedSquare : style;
+
     private static List<FontOption> GetFontOptions()
     {
         var fonts = Fonts.SystemFontFamilies
@@ -711,7 +1161,20 @@ public partial class SettingsWindow : Window
             return null;
         }
 
-        var fonts = GetFontOptions();
+        var fonts = FontFamilyCombo.Items.OfType<FontOption>().ToList();
+        if (fonts.Count == 0)
+        {
+            fonts =
+            [
+                new FontOption
+                {
+                    Label = AppSettings.BundledFontFamily,
+                    Value = AppSettings.DefaultFontFamily
+                },
+                .. GetFontOptions()
+            ];
+        }
+
         var byValue = fonts.ToDictionary(x => x.Value, x => x.Value, StringComparer.OrdinalIgnoreCase);
         var byLabel = fonts
             .GroupBy(x => x.Label, StringComparer.OrdinalIgnoreCase)
@@ -770,7 +1233,17 @@ public partial class SettingsWindow : Window
         target.EnableSpectrum = source.EnableSpectrum;
         target.EnablePureMusicSpectrum = source.EnablePureMusicSpectrum;
         target.ShowSpectrumWhenLyricsNotFound = source.ShowSpectrumWhenLyricsNotFound;
+        target.ShowSpectrumWhenLyricsAvailable = source.ShowSpectrumWhenLyricsAvailable;
+        target.SpectrumStyle = source.SpectrumStyle;
+        target.LyricOffsetMs = source.LyricOffsetMs;
+        target.QqMusicLyricOffsetMs = source.QqMusicLyricOffsetMs;
+        target.NeteaseLyricOffsetMs = source.NeteaseLyricOffsetMs;
+        target.KugouLyricOffsetMs = source.KugouLyricOffsetMs;
+        target.SpotifyLyricOffsetMs = source.SpotifyLyricOffsetMs;
         target.EnableLocalLyrics = source.EnableLocalLyrics;
+        target.LocalLyricsSearchMode = source.LocalLyricsSearchMode;
+        target.LocalCoverSearchMode = source.LocalCoverSearchMode;
+        target.ShowCoverImage = source.ShowCoverImage;
         target.LocalMusicFolders = NormalizeLocalMusicFolders(source.LocalMusicFolders);
         target.FontSize = source.FontSize;
         target.AutoAdjustLineGap = source.AutoAdjustLineGap;
@@ -780,7 +1253,20 @@ public partial class SettingsWindow : Window
         target.FontWeight = source.FontWeight;
         target.ForegroundColorMode = source.ForegroundColorMode;
         target.ForegroundColor = source.ForegroundColor;
+        target.UseCoverAccentColor = source.UseCoverAccentColor;
+        target.CoverStyle = NormalizeCoverStyle(source.CoverStyle);
+        target.CoverSize = source.CoverSize;
+        target.CoverLayoutMode = source.CoverLayoutMode;
+        target.ShowStackedTrackInfo = source.ShowStackedTrackInfo;
+        target.StackedTrackInfoGap = source.StackedTrackInfoGap;
+        target.StackedCoverLyricsGap = source.StackedCoverLyricsGap;
+        target.StackedCoverXOffset = source.StackedCoverXOffset;
+        target.StackedCoverYOffset = source.StackedCoverYOffset;
+        target.StackedContentXOffset = source.StackedContentXOffset;
+        target.StackedContentYOffset = source.StackedContentYOffset;
+        target.TransitionStyle = source.TransitionStyle;
         target.ShowBackground = source.ShowBackground;
+        target.BackgroundMaterial = source.BackgroundMaterial;
         target.BackgroundOpacity = source.BackgroundOpacity;
         target.ShowBorder = source.ShowBorder;
         target.ShowTextShadow = source.ShowTextShadow;

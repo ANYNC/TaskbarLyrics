@@ -68,22 +68,22 @@
 
                 <StackPanel Margin="14,0,14,0">
                     <RadioButton x:Name="NavPlayers" Style="{StaticResource SettingsNavButtonStyle}" GroupName="Nav" IsChecked="True" Checked="Nav_Checked">
-                        <StackPanel Orientation="Horizontal"><TextBlock Width="28" Text="▷" /><TextBlock Text="播放器" FontWeight="SemiBold" /></StackPanel>
+                        <StackPanel Orientation="Horizontal"><TextBlock Width="28" Text="▷" /><TextBlock Text="播放源" FontWeight="SemiBold" /></StackPanel>
                     </RadioButton>
                     <RadioButton x:Name="NavLyrics" Style="{StaticResource SettingsNavButtonStyle}" GroupName="Nav" Checked="Nav_Checked">
-                        <StackPanel Orientation="Horizontal"><TextBlock Width="28" Text="Aa" /><TextBlock Text="歌词" FontWeight="SemiBold" /></StackPanel>
+                        <StackPanel Orientation="Horizontal"><TextBlock Width="28" Text="Aa" /><TextBlock Text="歌词与本地" FontWeight="SemiBold" /></StackPanel>
                     </RadioButton>
                     <RadioButton x:Name="NavAppearance" Style="{StaticResource SettingsNavButtonStyle}" GroupName="Nav" Checked="Nav_Checked">
-                        <StackPanel Orientation="Horizontal"><TextBlock Width="28" Text="◌" /><TextBlock Text="外观" FontWeight="SemiBold" /></StackPanel>
+                        <StackPanel Orientation="Horizontal"><TextBlock Width="28" Text="◌" /><TextBlock Text="显示与外观" FontWeight="SemiBold" /></StackPanel>
                     </RadioButton>
                     <RadioButton x:Name="NavLayout" Style="{StaticResource SettingsNavButtonStyle}" GroupName="Nav" Checked="Nav_Checked">
-                        <StackPanel Orientation="Horizontal"><TextBlock Width="28" Text="▦" /><TextBlock Text="布局" FontWeight="SemiBold" /></StackPanel>
+                        <StackPanel Orientation="Horizontal"><TextBlock Width="28" Text="▦" /><TextBlock Text="窗口布局" FontWeight="SemiBold" /></StackPanel>
                     </RadioButton>
                     <RadioButton x:Name="NavDebug" Style="{StaticResource SettingsNavButtonStyle}" GroupName="Nav" Checked="Nav_Checked">
-                        <StackPanel Orientation="Horizontal"><TextBlock Width="28" Text="♢" /><TextBlock Text="调试" FontWeight="SemiBold" /></StackPanel>
+                        <StackPanel Orientation="Horizontal"><TextBlock Width="28" Text="♢" /><TextBlock Text="维护调试" FontWeight="SemiBold" /></StackPanel>
                     </RadioButton>
                     <RadioButton x:Name="NavAbout" Style="{StaticResource SettingsNavButtonStyle}" GroupName="Nav" Checked="Nav_Checked">
-                        <StackPanel Orientation="Horizontal"><TextBlock Width="28" Text="i" /><TextBlock Text="关于" FontWeight="SemiBold" /></StackPanel>
+                        <StackPanel Orientation="Horizontal"><TextBlock Width="28" Text="i" /><TextBlock Text="关于更新" FontWeight="SemiBold" /></StackPanel>
                     </RadioButton>
                 </StackPanel>
             </DockPanel>
@@ -99,7 +99,7 @@
             <Grid Margin="40,18,36,0">
                 <StackPanel VerticalAlignment="Top">
                     <TextBlock Text="设置" FontSize="28" FontWeight="SemiBold" />
-                    <TextBlock Text="调整播放器识别、歌词显示、外观和任务栏布局。"
+                    <TextBlock Text="按功能域管理设置：播放源、歌词与本地库、显示与外观、窗口布局、维护调试。"
                                Foreground="{StaticResource SettingsMutedBrush}"
                                FontSize="12"
                                Margin="0,7,0,0" />
@@ -120,14 +120,24 @@
                           CanContentScroll="False"
                           ScrollChanged="ContentScroll_ScrollChanged">
                 <StackPanel>
+                    <!--
+                    设置归类规则：
+                    播放源：播放器启用与识别优先级。
+                    歌词与本地库：窗口自动显示、歌词同步、本地歌词/封面来源。
+                    显示与外观：频谱、字体颜色、封面呈现、背景边框和动效。
+                    窗口布局：自动尺寸、锚点、偏移和置顶层级。
+                    维护调试：诊断、调参、缓存和重新匹配。
+                    关于更新：版本、更新检查和项目入口。
+                    -->
                     <!-- 播放器 -->
                     <Border x:Name="SectionPlayers" Style="{StaticResource SettingsCardStyle}">
                         <StackPanel>
-                            <TextBlock Text="播放器集成" FontSize="18" FontWeight="SemiBold" />
-                            <TextBlock Text="选择要监听的音乐播放器，并通过拖拽调整优先识别顺序。"
+                            <TextBlock Text="播放源" FontSize="18" FontWeight="SemiBold" />
+                            <TextBlock Text="选择要监听的音乐播放器，并设置识别优先级。"
                                        Foreground="{StaticResource SettingsMutedBrush}"
                                        FontSize="12"
                                        Margin="0,5,0,14" />
+                            <TextBlock Text="启用播放器" Style="{StaticResource SettingsFirstGroupTitleStyle}" />
                             <UniformGrid Columns="2" Margin="0,0,0,10">
                                 <Border Style="{StaticResource SettingsRowCardStyle}" Margin="0,0,6,8">
                                     <Grid>
@@ -178,6 +188,7 @@
                                     </Grid>
                                 </Border>
                             </UniformGrid>
+                            <TextBlock Text="识别优先级" Style="{StaticResource SettingsGroupTitleStyle}" />
                             <ui:SourceOrderList x:Name="SourceOrderList" Margin="0,4,0,0" />
                         </StackPanel>
                     </Border>
@@ -185,11 +196,12 @@
                     <!-- 歌词 -->
                     <Border x:Name="SectionLyrics" Style="{StaticResource SettingsCardStyle}">
                         <StackPanel>
-                            <TextBlock Text="歌词设置" FontSize="18" FontWeight="SemiBold" />
-                            <TextBlock Text="控制歌词窗口启动行为与显示辅助项。"
+                            <TextBlock Text="歌词与本地库" FontSize="18" FontWeight="SemiBold" />
+                            <TextBlock Text="管理歌词窗口行为、歌词同步、本地歌词和本地封面来源。"
                                        Foreground="{StaticResource SettingsMutedBrush}"
                                        FontSize="12"
                                        Margin="0,5,0,14" />
+                            <TextBlock Text="启动与自动显示" Style="{StaticResource SettingsFirstGroupTitleStyle}" />
                             <Border Style="{StaticResource SettingsRowCardStyle}">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
@@ -242,6 +254,195 @@
                                     <CheckBox x:Name="AutoHideLyricsWhenPlayerClosesCheck" Grid.Column="1" Style="{StaticResource SettingsToggleSwitchStyle}" />
                                 </Grid>
                             </Border>
+                            <Border x:Name="StartupVisibilityHintRow"
+                                    Style="{StaticResource SettingsRowCardStyle}"
+                                    Visibility="Collapsed">
+                                <TextBlock x:Name="StartupVisibilityHint"
+                                           TextWrapping="Wrap"
+                                           Foreground="{StaticResource SettingsMutedBrush}"
+                                           FontSize="12" />
+                            </Border>
+                            <TextBlock Text="歌词同步" Style="{StaticResource SettingsGroupTitleStyle}" />
+                            <Border Style="{StaticResource SettingsRowCardStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="180" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="全局歌词偏移 (ms)" FontWeight="SemiBold" />
+                                        <TextBlock Text="正数延后歌词，负数提前歌词。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                    <ui:NumberStepper x:Name="LyricOffsetStepper" Grid.Column="1" Minimum="-5000" Maximum="5000" Step="50" Decimals="0" />
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource SettingsRowCardStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="180" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="QQ 音乐偏移 (ms)" FontWeight="SemiBold" />
+                                        <TextBlock Text="会与全局偏移叠加。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                    <ui:NumberStepper x:Name="QqMusicLyricOffsetStepper" Grid.Column="1" Minimum="-5000" Maximum="5000" Step="50" Decimals="0" />
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource SettingsRowCardStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="180" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="网易云偏移 (ms)" FontWeight="SemiBold" />
+                                        <TextBlock Text="会与全局偏移叠加。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                    <ui:NumberStepper x:Name="NeteaseLyricOffsetStepper" Grid.Column="1" Minimum="-5000" Maximum="5000" Step="50" Decimals="0" />
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource SettingsRowCardStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="180" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="酷狗偏移 (ms)" FontWeight="SemiBold" />
+                                        <TextBlock Text="会与全局偏移叠加。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                    <ui:NumberStepper x:Name="KugouLyricOffsetStepper" Grid.Column="1" Minimum="-5000" Maximum="5000" Step="50" Decimals="0" />
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource SettingsRowCardStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="180" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="Spotify 偏移 (ms)" FontWeight="SemiBold" />
+                                        <TextBlock Text="会与全局偏移叠加。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                    <ui:NumberStepper x:Name="SpotifyLyricOffsetStepper" Grid.Column="1" Minimum="-5000" Maximum="5000" Step="50" Decimals="0" />
+                                </Grid>
+                            </Border>
+                            <TextBlock Text="本地歌词与封面来源" Style="{StaticResource SettingsGroupTitleStyle}" />
+                            <Border Style="{StaticResource SettingsRowCardStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="显示歌词封面" FontWeight="SemiBold" />
+                                        <TextBlock Text="在歌词窗口左侧显示当前歌曲封面。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                    <CheckBox x:Name="ShowCoverImageCheck" Grid.Column="1" Style="{StaticResource SettingsToggleSwitchStyle}" />
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource SettingsRowCardStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="优先使用本地歌词" FontWeight="SemiBold" />
+                                        <TextBlock Text="播放本地音乐时，先从下方目录中匹配同名歌词文件。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                    <CheckBox x:Name="EnableLocalLyricsCheck" Grid.Column="1" Style="{StaticResource SettingsToggleSwitchStyle}" />
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource SettingsRowCardStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="180" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock x:Name="LocalLyricsModeLabel" Text="本地歌词策略" FontWeight="SemiBold" />
+                                        <TextBlock x:Name="LocalLyricsModeHint" Text="控制本地歌词参与匹配的时机。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                    <ComboBox x:Name="LocalLyricsModeCombo" Grid.Column="1" Style="{StaticResource SettingsComboBoxStyle}">
+                                        <ComboBoxItem Content="本地优先" Tag="PreferLocal" />
+                                        <ComboBoxItem Content="在线失败后使用" Tag="OnlineFallback" />
+                                    </ComboBox>
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource SettingsRowCardStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="180" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock x:Name="LocalCoverModeLabel" Text="本地封面策略" FontWeight="SemiBold" />
+                                        <TextBlock x:Name="LocalCoverModeHint" Text="控制本地封面和在线封面的优先级。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                    <ComboBox x:Name="LocalCoverModeCombo" Grid.Column="1" Style="{StaticResource SettingsComboBoxStyle}">
+                                        <ComboBoxItem Content="在线优先" Tag="OnlineFirst" />
+                                        <ComboBoxItem Content="本地优先" Tag="LocalFirst" />
+                                        <ComboBoxItem Content="仅在线" Tag="OnlineOnly" />
+                                        <ComboBoxItem Content="仅本地" Tag="LocalOnly" />
+                                    </ComboBox>
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource SettingsRowCardStyle}">
+                                <StackPanel>
+                                    <TextBlock Text="本地音乐目录" FontWeight="SemiBold" />
+                                    <TextBlock Text="一行一个目录，支持同名 .lrc / .qrc / .krc 歌词文件。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,10" />
+                                    <TextBox x:Name="LocalMusicFoldersBox"
+                                             AcceptsReturn="True"
+                                             MinHeight="72"
+                                             VerticalScrollBarVisibility="Auto"
+                                             TextWrapping="Wrap"
+                                             FontFamily="Consolas, Courier New"
+                                             Background="#F2081122"
+                                             Foreground="#F8FAFC"
+                                             CaretBrush="#F8FAFC"
+                                             SelectionBrush="#805B7CFA"
+                                             BorderBrush="#2978A0FF"
+                                             BorderThickness="1"
+                                             Padding="10,8" />
+                                    <DockPanel Margin="0,10,0,0">
+                                        <Button x:Name="AddLocalFolderButton"
+                                                DockPanel.Dock="Right"
+                                                Content="选择目录"
+                                                Style="{StaticResource SettingsPrimaryButtonStyle}"
+                                                Height="34"
+                                                MinWidth="96" />
+                                        <TextBlock x:Name="LocalFoldersStatusText"
+                                                   VerticalAlignment="Center"
+                                                   TextWrapping="Wrap"
+                                                   Foreground="{StaticResource SettingsMutedBrush}"
+                                                   FontSize="12" />
+                                    </DockPanel>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- 外观 -->
+                    <Border x:Name="SectionAppearance" Style="{StaticResource SettingsCardStyle}">
+                        <StackPanel>
+                            <TextBlock Text="显示与外观" FontSize="18" FontWeight="SemiBold" />
+                            <TextBlock Text="控制歌词窗口展示内容、字体颜色、封面样式、背景和动效。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,5,0,14" />
+                            <TextBlock Text="频谱显示" Style="{StaticResource SettingsFirstGroupTitleStyle}" />
+                            <Border Style="{StaticResource SettingsRowCardStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="启用频谱" FontWeight="SemiBold" />
+                                        <TextBlock Text="总开关。关闭后纯音乐、无歌词和强制频谱都不会显示频谱。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                    <CheckBox x:Name="EnableSpectrumCheck" Grid.Column="1" Style="{StaticResource SettingsToggleSwitchStyle}" />
+                                </Grid>
+                            </Border>
                             <Border Style="{StaticResource SettingsRowCardStyle}">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
@@ -262,10 +463,10 @@
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
                                     <StackPanel>
-                                        <TextBlock Text="启用频谱" FontWeight="SemiBold" />
-                                        <TextBlock Text="总开关。关闭后纯音乐与无歌词时都不会显示频谱。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
+                                        <TextBlock x:Name="ShowSpectrumWhenLyricsAvailableLabel" Text="有歌词时也显示频谱" FontWeight="SemiBold" />
+                                        <TextBlock x:Name="ShowSpectrumWhenLyricsAvailableHint" Text="歌曲已有可用歌词时，也用频谱替代歌词显示。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
                                     </StackPanel>
-                                    <CheckBox x:Name="EnableSpectrumCheck" Grid.Column="1" Style="{StaticResource SettingsToggleSwitchStyle}" />
+                                    <CheckBox x:Name="ShowSpectrumWhenLyricsAvailableCheck" Grid.Column="1" Style="{StaticResource SettingsToggleSwitchStyle}" />
                                 </Grid>
                             </Border>
                             <Border Style="{StaticResource SettingsRowCardStyle}">
@@ -285,62 +486,23 @@
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="180" />
                                     </Grid.ColumnDefinitions>
                                     <StackPanel>
-                                        <TextBlock Text="优先使用本地歌词" FontWeight="SemiBold" />
-                                        <TextBlock Text="播放本地音乐时，先从下方目录中匹配同名歌词文件。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
+                                        <TextBlock x:Name="SpectrumStyleLabel" Text="频谱样式" FontWeight="SemiBold" />
+                                        <TextBlock x:Name="SpectrumStyleHint" Text="选择柱形频谱的生长方向。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
                                     </StackPanel>
-                                    <CheckBox x:Name="EnableLocalLyricsCheck" Grid.Column="1" Style="{StaticResource SettingsToggleSwitchStyle}" />
+                                    <ComboBox x:Name="SpectrumStyleCombo" Grid.Column="1" Style="{StaticResource SettingsComboBoxStyle}">
+                                        <ComboBoxItem Content="中心扩散" Tag="Center" />
+                                        <ComboBoxItem Content="底部柱状" Tag="Bottom" />
+                                        <ComboBoxItem Content="镜像波形" Tag="Mirror" />
+                                        <ComboBoxItem Content="细线" Tag="Thin" />
+                                        <ComboBoxItem Content="点阵" Tag="Dots" />
+                                        <ComboBoxItem Content="呼吸条" Tag="Pulse" />
+                                    </ComboBox>
                                 </Grid>
                             </Border>
-                            <Border Style="{StaticResource SettingsRowCardStyle}">
-                                <StackPanel>
-                                    <TextBlock Text="本地音乐目录" FontWeight="SemiBold" />
-                                    <TextBlock Text="一行一个目录，支持同名 .lrc / .qrc / .krc 歌词文件。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,10" />
-                                    <TextBox x:Name="LocalMusicFoldersBox"
-                                             AcceptsReturn="True"
-                                             MinHeight="72"
-                                             VerticalScrollBarVisibility="Auto"
-                                             TextWrapping="Wrap"
-                                             FontFamily="Consolas, Courier New"
-                                             Padding="10,8" />
-                                </StackPanel>
-                            </Border>
-                            <Border Style="{StaticResource SettingsRowCardStyle}">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <StackPanel>
-                                        <TextBlock Text="显示背景" FontWeight="SemiBold" />
-                                        <TextBlock Text="为歌词窗口启用半透明背景。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
-                                    </StackPanel>
-                                    <CheckBox x:Name="ShowBackgroundCheck" Grid.Column="1" Style="{StaticResource SettingsToggleSwitchStyle}" />
-                                </Grid>
-                            </Border>
-                            <Border Style="{StaticResource SettingsRowCardStyle}">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <StackPanel>
-                                        <TextBlock Text="显示边框" FontWeight="SemiBold" />
-                                        <TextBlock Text="为歌词窗口绘制边框，便于深浅背景上分辨。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
-                                    </StackPanel>
-                                    <CheckBox x:Name="ShowBorderCheck" Grid.Column="1" Style="{StaticResource SettingsToggleSwitchStyle}" />
-                                </Grid>
-                            </Border>
-                        </StackPanel>
-                    </Border>
-
-                    <!-- 外观 -->
-                    <Border x:Name="SectionAppearance" Style="{StaticResource SettingsCardStyle}">
-                        <StackPanel>
-                            <TextBlock Text="外观" FontSize="18" FontWeight="SemiBold" />
-                            <TextBlock Text="调整歌词字体、字号、行间距和文字颜色。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,5,0,14" />
+                            <TextBlock Text="字体与颜色" Style="{StaticResource SettingsGroupTitleStyle}" />
                             <Border Style="{StaticResource SettingsRowCardStyle}">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
@@ -478,6 +640,227 @@
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
                                     <StackPanel>
+                                        <TextBlock Text="跟随封面取色" FontWeight="SemiBold" />
+                                        <TextBlock Text="用专辑封面的主色调整歌词与频谱颜色。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                    <CheckBox x:Name="UseCoverAccentColorCheck" Grid.Column="1" Style="{StaticResource SettingsToggleSwitchStyle}" />
+                                </Grid>
+                            </Border>
+                            <TextBlock Text="封面呈现" Style="{StaticResource SettingsGroupTitleStyle}" />
+                            <Border Style="{StaticResource SettingsRowCardStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="180" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="封面样式" FontWeight="SemiBold" />
+                                    <ComboBox x:Name="CoverStyleCombo" Grid.Column="1" Style="{StaticResource SettingsComboBoxStyle}">
+                                        <ComboBoxItem Content="方形" Tag="Square" />
+                                        <ComboBoxItem Content="圆角方形" Tag="RoundedSquare" />
+                                        <ComboBoxItem Content="圆形" Tag="Circle" />
+                                        <ComboBoxItem Content="隐藏封面" Tag="Hidden" />
+                                    </ComboBox>
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource SettingsRowCardStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="180" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock x:Name="CoverSizeLabel" Text="封面大小 (px)" FontWeight="SemiBold" />
+                                        <TextBlock x:Name="CoverSizeHint" Text="横向和上下布局都生效。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                    <ui:NumberStepper x:Name="CoverSizeStepper" Grid.Column="1" Minimum="24" Maximum="96" Step="2" Decimals="0" />
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource SettingsRowCardStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="180" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock x:Name="CoverLayoutLabel" Text="封面布局" FontWeight="SemiBold" />
+                                        <TextBlock x:Name="CoverLayoutHint" Text="上下布局会把封面放在歌词或频谱上方，并保持底部位置不变。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                    <ComboBox x:Name="CoverLayoutCombo" Grid.Column="1" Style="{StaticResource SettingsComboBoxStyle}">
+                                        <ComboBoxItem Content="横向排列" Tag="Inline" />
+                                        <ComboBoxItem Content="上下两行" Tag="Stacked" />
+                                    </ComboBox>
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource SettingsRowCardStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock x:Name="ShowStackedTrackInfoLabel" Text="显示歌名和歌手" FontWeight="SemiBold" />
+                                        <TextBlock x:Name="ShowStackedTrackInfoHint" Text="仅上下两行布局生效，歌名和歌手会分两行显示在封面右侧。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                    <CheckBox x:Name="ShowStackedTrackInfoCheck" Grid.Column="1" Style="{StaticResource SettingsToggleSwitchStyle}" />
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource SettingsRowCardStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="180" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock x:Name="StackedTrackInfoGapLabel" Text="封面到信息间距 (px)" FontWeight="SemiBold" />
+                                        <TextBlock x:Name="StackedTrackInfoGapHint" Text="调节封面右侧到歌名/歌手信息的水平距离。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                    <ui:NumberStepper x:Name="StackedTrackInfoGapStepper" Grid.Column="1" Minimum="0" Maximum="80" Step="1" Decimals="0" />
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource SettingsRowCardStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="180" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock x:Name="StackedCoverGapLabel" Text="封面到内容间距 (px)" FontWeight="SemiBold" />
+                                        <TextBlock x:Name="StackedCoverGapHint" Text="调节封面下沿到歌词/频谱的垂直距离。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                    <ui:NumberStepper x:Name="StackedCoverGapStepper" Grid.Column="1" Minimum="0" Maximum="40" Step="1" Decimals="0" />
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource SettingsRowCardStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="180" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock x:Name="StackedCoverXOffsetLabel" Text="上方封面 X 偏移 (px)" FontWeight="SemiBold" />
+                                        <TextBlock x:Name="StackedCoverXOffsetHint" Text="默认与下方内容左侧对齐，负数向左，正数向右。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                    <ui:NumberStepper x:Name="StackedCoverXOffsetStepper" Grid.Column="1" Minimum="-120" Maximum="120" Step="2" Decimals="0" />
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource SettingsRowCardStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="180" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock x:Name="StackedCoverYOffsetLabel" Text="上方封面 Y 偏移 (px)" FontWeight="SemiBold" />
+                                        <TextBlock x:Name="StackedCoverYOffsetHint" Text="负数向上，正数向下。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                    <ui:NumberStepper x:Name="StackedCoverYOffsetStepper" Grid.Column="1" Minimum="-80" Maximum="80" Step="2" Decimals="0" />
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource SettingsRowCardStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="180" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock x:Name="StackedContentXOffsetLabel" Text="歌词/频谱 X 偏移 (px)" FontWeight="SemiBold" />
+                                        <TextBlock x:Name="StackedContentXOffsetHint" Text="用于让下方内容和封面视觉对齐。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                    <ui:NumberStepper x:Name="StackedContentXOffsetStepper" Grid.Column="1" Minimum="-160" Maximum="160" Step="2" Decimals="0" />
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource SettingsRowCardStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="180" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock x:Name="StackedContentYOffsetLabel" Text="歌词/频谱 Y 偏移 (px)" FontWeight="SemiBold" />
+                                        <TextBlock x:Name="StackedContentYOffsetHint" Text="负数向上，正数向下；底部锚点仍保持不变。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                    <ui:NumberStepper x:Name="StackedContentYOffsetStepper" Grid.Column="1" Minimum="-80" Maximum="80" Step="2" Decimals="0" />
+                                </Grid>
+                            </Border>
+                            <TextBlock Text="背景与动效" Style="{StaticResource SettingsGroupTitleStyle}" />
+                            <Border Style="{StaticResource SettingsRowCardStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="显示背景" FontWeight="SemiBold" />
+                                        <TextBlock Text="为歌词窗口启用半透明背景。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                    <CheckBox x:Name="ShowBackgroundCheck" Grid.Column="1" Style="{StaticResource SettingsToggleSwitchStyle}" />
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource SettingsRowCardStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="180" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="背景不透明度" FontWeight="SemiBold" />
+                                        <TextBlock Text="范围 0 到 1，数值越大背景越不透明。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                    <ui:NumberStepper x:Name="BackgroundOpacityStepper" Grid.Column="1" Minimum="0" Maximum="1" Step="0.05" Decimals="2" />
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource SettingsRowCardStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="180" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="歌词切换动画" FontWeight="SemiBold" />
+                                    <ComboBox x:Name="TransitionStyleCombo" Grid.Column="1" Style="{StaticResource SettingsComboBoxStyle}">
+                                        <ComboBoxItem Content="上滑" Tag="Slide" />
+                                        <ComboBoxItem Content="淡入淡出" Tag="Fade" />
+                                        <ComboBoxItem Content="紧凑滑动" Tag="CompactSlide" />
+                                        <ComboBoxItem Content="无动画" Tag="None" />
+                                    </ComboBox>
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource SettingsRowCardStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="显示边框" FontWeight="SemiBold" />
+                                        <TextBlock Text="为歌词窗口绘制边框，便于深浅背景上分辨。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                    <CheckBox x:Name="ShowBorderCheck" Grid.Column="1" Style="{StaticResource SettingsToggleSwitchStyle}" />
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource SettingsRowCardStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="180" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock x:Name="BackgroundMaterialLabel" Text="背景材质" FontWeight="SemiBold" />
+                                        <TextBlock x:Name="BackgroundMaterialHint" Text="需要开启“显示背景”后生效。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                    <ComboBox x:Name="BackgroundMaterialCombo" Grid.Column="1" Style="{StaticResource SettingsComboBoxStyle}">
+                                        <ComboBoxItem Content="半透明黑" Tag="Dim" />
+                                        <ComboBoxItem Content="封面色" Tag="CoverTint" />
+                                        <ComboBoxItem Content="纯色" Tag="Solid" />
+                                    </ComboBox>
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource SettingsRowCardStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
                                         <TextBlock Text="文字阴影" FontWeight="SemiBold" />
                                         <TextBlock Text="为歌词文字增加轻量阴影，提高复杂背景上的可读性。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
                                     </StackPanel>
@@ -491,20 +874,8 @@
                     <Border x:Name="SectionLayout" Style="{StaticResource SettingsCardStyle}">
                         <StackPanel>
                             <TextBlock Text="窗口设置" FontSize="18" FontWeight="SemiBold" />
-                            <TextBlock Text="调整任务栏歌词窗口的位置、尺寸与透明度。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,5,0,14" />
-                            <Border Style="{StaticResource SettingsRowCardStyle}">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="280" />
-                                    </Grid.ColumnDefinitions>
-                                    <StackPanel>
-                                        <TextBlock Text="背景不透明度" FontWeight="SemiBold" />
-                                        <TextBlock Text="范围 0 到 1，数值越大背景越不透明。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
-                                    </StackPanel>
-                                    <ui:NumberStepper x:Name="BackgroundOpacityStepper" Grid.Column="1" Minimum="0" Maximum="1" Step="0.05" Decimals="2" />
-                                </Grid>
-                            </Border>
+                            <TextBlock Text="调整任务栏歌词窗口的位置、尺寸和层级。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,5,0,14" />
+                            <TextBlock Text="自动尺寸" Style="{StaticResource SettingsFirstGroupTitleStyle}" />
                             <Border Style="{StaticResource SettingsRowCardStyle}">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
@@ -583,6 +954,7 @@
                                     <ui:NumberStepper x:Name="WindowHeightOffsetStepper" Grid.Column="1" Minimum="-40" Maximum="80" Step="2" Decimals="0" />
                                 </Grid>
                             </Border>
+                            <TextBlock Text="位置与层级" Style="{StaticResource SettingsGroupTitleStyle}" />
                             <Border Style="{StaticResource SettingsRowCardStyle}">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
@@ -636,8 +1008,9 @@
                     <!-- 调试 -->
                     <Border x:Name="SectionDebug" Style="{StaticResource SettingsCardStyle}">
                         <StackPanel>
-                            <TextBlock Text="数据与调试" FontSize="18" FontWeight="SemiBold" />
-                            <TextBlock Text="清理缓存或打开辅助调试选项。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,5,0,14" />
+                            <TextBlock Text="维护调试" FontSize="18" FontWeight="SemiBold" />
+                            <TextBlock Text="查看运行诊断、调整频谱参数、清理缓存或重新匹配歌词。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,5,0,14" />
+                            <TextBlock Text="诊断工具" Style="{StaticResource SettingsFirstGroupTitleStyle}" />
                             <Border Style="{StaticResource SettingsRowCardStyle}">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
@@ -660,8 +1033,36 @@
                                     <StackPanel>
                                         <TextBlock Text="频谱调试" FontWeight="SemiBold" />
                                         <TextBlock Text="打开临时滑块面板，实时调整频谱响应参数。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
+                                        <TextBlock x:Name="SpectrumTuningHint"
+                                                   Text="频谱总开关已关闭，调参会保存，但当前不会显示频谱。"
+                                                   Foreground="{StaticResource SettingsMutedBrush}"
+                                                   FontSize="12"
+                                                   Margin="0,6,0,0"
+                                                   Visibility="Collapsed" />
                                     </StackPanel>
                                     <Button x:Name="SpectrumTuningButton" Grid.Column="1" Content="打开调试" Style="{StaticResource SettingsPrimaryButtonStyle}" Height="38" MinWidth="96" />
+                                </Grid>
+                            </Border>
+                            <TextBlock Text="歌词维护" Style="{StaticResource SettingsGroupTitleStyle}" />
+                            <Border Style="{StaticResource SettingsRowCardStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="当前歌词命中详情" FontWeight="SemiBold" />
+                                        <TextBlock x:Name="LyricDiagnosticsText"
+                                                   Text="暂无歌词匹配信息。"
+                                                   TextWrapping="Wrap"
+                                                   Foreground="{StaticResource SettingsMutedBrush}"
+                                                   FontSize="12"
+                                                   Margin="0,6,0,0" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                        <Button x:Name="RefreshLyricDiagnosticsButton" Content="刷新" Style="{StaticResource SettingsPrimaryButtonStyle}" Height="38" MinWidth="72" />
+                                        <Button x:Name="RematchLyricsButton" Content="重新匹配" Style="{StaticResource SettingsPrimaryButtonStyle}" Height="38" MinWidth="92" Margin="8,0,0,0" />
+                                    </StackPanel>
                                 </Grid>
                             </Border>
                             <Border Style="{StaticResource SettingsRowCardStyle}">
@@ -673,6 +1074,10 @@
                                     <StackPanel>
                                         <TextBlock Text="歌词缓存" FontWeight="SemiBold" />
                                         <TextBlock Text="清除后首次重新匹配会稍慢。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
+                                        <TextBlock x:Name="ClearCacheStatusText"
+                                                   Foreground="{StaticResource SettingsMutedBrush}"
+                                                   FontSize="12"
+                                                   Margin="0,6,0,0" />
                                     </StackPanel>
                                     <Button x:Name="ClearCacheButton" Grid.Column="1" Content="清除缓存" Style="{StaticResource SettingsDangerButtonStyle}" Height="38" MinWidth="96" />
                                 </Grid>
@@ -683,8 +1088,9 @@
                     <!-- 关于 -->
                     <Border x:Name="SectionAbout" Style="{StaticResource SettingsCardStyle}">
                         <StackPanel>
-                            <TextBlock Text="关于" FontSize="18" FontWeight="SemiBold" />
-                            <TextBlock Text="版本信息与更新检查。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,5,0,14" />
+                            <TextBlock Text="关于更新" FontSize="18" FontWeight="SemiBold" />
+                            <TextBlock Text="查看版本信息，设置更新检查，并打开项目仓库。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,5,0,14" />
+                            <TextBlock Text="版本信息" Style="{StaticResource SettingsFirstGroupTitleStyle}" />
                             <Border Style="{StaticResource SettingsRowCardStyle}">
                                 <StackPanel>
                                     <TextBlock Text="TaskbarLyrics Light" FontSize="16" FontWeight="SemiBold" />
@@ -699,6 +1105,7 @@
                                                Margin="0,8,0,0" />
                                 </StackPanel>
                             </Border>
+                            <TextBlock Text="更新检查" Style="{StaticResource SettingsGroupTitleStyle}" />
                             <Border Style="{StaticResource SettingsRowCardStyle}">
                                 <Grid>
                                     <Grid.ColumnDefinitions>

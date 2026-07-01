@@ -26,20 +26,30 @@ public partial class MainWindow : Window
     private readonly uint _taskbarCreatedMessage;
     private readonly DeferredLyricSyncService _lyricSyncService = new();
     private LocalMediaCoverProvider? _localMediaCoverProvider;
+    private IReadOnlyList<string> _localMediaCoverFolders = Array.Empty<string>();
+    private AppSettings _settings = new();
 
     private Media.Color _primaryTextColor = Media.Colors.White;
     private Media.Color _secondaryTextColor = Media.Color.FromArgb(190, 255, 255, 255);
+    private Media.Color? _coverAccentColor;
     private string _currentLine = "TaskbarLyrics 已启动";
     private string _nextLine = "等待歌词...";
+    private string? _currentTrackTitle;
+    private string? _currentTrackArtist;
     private string? _lastCoverTrackId;
     private string? _currentCoverVisualTrackId;
     private byte[]? _lastDisplayedCoverBytes;
+    private string? _lastRejectedCoverTrackId;
+    private string _lastRejectedCoverSignature = string.Empty;
     private string? _lastLocalCoverLookupTrackId;
     private DateTimeOffset _nextLocalCoverLookupUtc;
     private bool _enableSmtcTimelineMonitor;
     private bool _enableSpectrum = true;
     private bool _enablePureMusicSpectrum = true;
     private bool _showSpectrumWhenLyricsNotFound;
+    private bool _showSpectrumWhenLyricsAvailable;
+    private LocalCoverSearchMode _localCoverSearchMode = LocalCoverSearchMode.OnlineFirst;
+    private bool _showCoverImage = true;
     private bool _forceAlwaysOnTop = true;
     private SmtcTimelineMonitorWindow? _smtcTimelineMonitorWindow;
     private bool _isTimerTickRunning;
@@ -99,6 +109,7 @@ public partial class MainWindow : Window
 
     public void ApplySettings(AppSettings settings)
     {
+        _settings = settings.Clone();
         Log.SetVerboseEnabled(settings.EnableSmtcTimelineMonitor);
 
         if (_musicSessionProvider is SmtcMusicSessionProvider smtcProvider)
@@ -125,24 +136,23 @@ public partial class MainWindow : Window
             _primaryTextColor.B);
 
         _lyricSyncService.UpdateSettings(settings);
-        var shouldEnableLocalCover = settings.EnableLocalLyrics && settings.LocalMusicFolders.Count > 0;
-        if (shouldEnableLocalCover != (_localMediaCoverProvider is not null))
-        {
-            InvalidateCoverDisplayState();
-            _lastLocalCoverLookupTrackId = null;
-            _nextLocalCoverLookupUtc = default;
-        }
-
-        _localMediaCoverProvider = shouldEnableLocalCover
-            ? new LocalMediaCoverProvider(settings.LocalMusicFolders)
-            : null;
+        ApplyLocalCoverSettings(settings);
         _forceAlwaysOnTop = settings.ForceAlwaysOnTop;
         _enableSpectrum = settings.EnableSpectrum;
         _enablePureMusicSpectrum = settings.EnablePureMusicSpectrum;
         _showSpectrumWhenLyricsNotFound = settings.ShowSpectrumWhenLyricsNotFound;
+        _showSpectrumWhenLyricsAvailable = settings.ShowSpectrumWhenLyricsAvailable;
+        if (_localCoverSearchMode != settings.LocalCoverSearchMode ||
+            _showCoverImage != settings.ShowCoverImage)
+        {
+            InvalidateCoverDisplayState();
+        }
+
+        _localCoverSearchMode = settings.LocalCoverSearchMode;
+        _showCoverImage = settings.ShowCoverImage;
+        ApplyCurrentVisualStyle();
         AnchorToTaskbar();
         AttachToTaskbarHost();
-        LyricsDisplay.ApplyStyle(settings, _primaryTextColor, _secondaryTextColor);
         PushLyricsToDisplay(_currentLine, _nextLine, 0, _lastCurrentLineIndex, _lastTrackId, false, false);
         _enableSmtcTimelineMonitor = settings.EnableSmtcTimelineMonitor;
 
@@ -150,6 +160,77 @@ public partial class MainWindow : Window
         {
             UpdateSmtcTimelineMonitorWindow();
         }
+    }
+
+    private void ApplyCurrentVisualStyle()
+    {
+        var primary = _primaryTextColor;
+        if (_settings.UseCoverAccentColor && _coverAccentColor is { } accent)
+        {
+            primary = CreateReadableAccentColor(accent);
+        }
+
+        var secondary = Media.Color.FromArgb(
+            (byte)Math.Clamp((int)(primary.A * 0.76), 0, 255),
+            primary.R,
+            primary.G,
+            primary.B);
+
+        LyricsDisplay.ApplyStyle(_settings, primary, secondary, _coverAccentColor);
+        LyricsDisplay.SetTrackInfo(_currentTrackTitle, _currentTrackArtist);
+    }
+
+    private static Media.Color CreateReadableAccentColor(Media.Color accent)
+    {
+        var luminance = ((0.2126 * accent.R) + (0.7152 * accent.G) + (0.0722 * accent.B)) / 255.0;
+        if (luminance < 0.38)
+        {
+            return Mix(accent, Media.Colors.White, 0.58);
+        }
+
+        if (luminance > 0.78)
+        {
+            return Mix(accent, Media.Color.FromRgb(20, 24, 32), 0.42);
+        }
+
+        return Mix(accent, Media.Colors.White, 0.18);
+    }
+
+    private static Media.Color Mix(Media.Color a, Media.Color b, double amount)
+    {
+        amount = Math.Clamp(amount, 0, 1);
+        var inverse = 1 - amount;
+        return Media.Color.FromArgb(
+            255,
+            (byte)Math.Clamp(Math.Round((a.R * inverse) + (b.R * amount)), 0, 255),
+            (byte)Math.Clamp(Math.Round((a.G * inverse) + (b.G * amount)), 0, 255),
+            (byte)Math.Clamp(Math.Round((a.B * inverse) + (b.B * amount)), 0, 255));
+    }
+
+    private void ApplyLocalCoverSettings(AppSettings settings)
+    {
+        var canUseLocalCover = settings.ShowCoverImage &&
+            settings.LocalCoverSearchMode != LocalCoverSearchMode.OnlineOnly;
+        var requestedFolders = settings.EnableLocalLyrics && canUseLocalCover
+            ? settings.LocalMusicFolders
+                .Where(path => !string.IsNullOrWhiteSpace(path))
+                .Select(path => path.Trim().Trim('"'))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray()
+            : Array.Empty<string>();
+
+        if (requestedFolders.SequenceEqual(_localMediaCoverFolders, StringComparer.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        _localMediaCoverFolders = requestedFolders;
+        _localMediaCoverProvider = requestedFolders.Length > 0
+            ? new LocalMediaCoverProvider(requestedFolders)
+            : null;
+        InvalidateCoverDisplayState();
+        _lastLocalCoverLookupTrackId = null;
+        _nextLocalCoverLookupUtc = default;
     }
 
     public void ApplySpectrumTuning(SpectrumTuningSettings settings)
@@ -161,6 +242,13 @@ public partial class MainWindow : Window
             Math.Clamp(snapshot.UpdateIntervalMs, 16, 100) / (double)FrameTimerMs,
             MidpointRounding.AwayFromZero));
         LyricsDisplay.SetSpectrumTuning(snapshot);
+    }
+
+    public void RematchCurrentLyrics()
+    {
+        _lyricSyncService.Reset();
+        _lastCurrentLineIndex = -1;
+        _ = OnLyricsTickAsync();
     }
 
     private static IReadOnlyCollection<string> BuildEnabledPlayerSources(AppSettings settings)
@@ -215,6 +303,7 @@ public partial class MainWindow : Window
     {
         _currentCoverVisualTrackId = null;
         _lastDisplayedCoverBytes = null;
+        ClearRejectedCover();
     }
 
     private void OnClosing(object? sender, CancelEventArgs e)
@@ -278,8 +367,11 @@ public partial class MainWindow : Window
             var snapshot = await _musicSessionProvider.GetCurrentAsync();
             UpdateCover(snapshot);
 
-            var frame = await _lyricSyncService.GetDisplayFrameAsync(snapshot);
-            LogTickDiagnostics(snapshot, frame);
+            var lyricSnapshot = ApplyLyricOffset(snapshot, out var appliedOffsetMs);
+            var frame = await _lyricSyncService.GetDisplayFrameAsync(lyricSnapshot);
+            PublishLyricDiagnostics(lyricSnapshot, frame, appliedOffsetMs);
+            LogTickDiagnostics(lyricSnapshot, frame);
+            PushTrackInfoToDisplay(snapshot.Track);
 
             if (_musicSessionProvider is SmtcMusicSessionProvider smtcProvider)
             {
@@ -340,13 +432,85 @@ public partial class MainWindow : Window
         }
 
         return (frame.IsPureMusic && _enablePureMusicSpectrum) ||
+            (_showSpectrumWhenLyricsAvailable && IsLyricsAvailableFrame(frame)) ||
             (_showSpectrumWhenLyricsNotFound && IsLyricsNotFoundFrame(frame));
+    }
+
+    private static bool IsLyricsAvailableFrame(LyricDisplayFrame frame)
+    {
+        return frame.CurrentLineIndex >= 0 &&
+            !frame.IsPureMusic &&
+            !string.IsNullOrWhiteSpace(frame.CurrentLine);
     }
 
     private static bool IsLyricsNotFoundFrame(LyricDisplayFrame frame)
     {
         return frame.CurrentLineIndex < 0 &&
             string.Equals(frame.CurrentLine, LyricSyncService.NoLyricsText, StringComparison.Ordinal);
+    }
+
+    private PlaybackSnapshot ApplyLyricOffset(PlaybackSnapshot snapshot, out int appliedOffsetMs)
+    {
+        appliedOffsetMs = GetLyricOffsetMs(snapshot.Track);
+        if (appliedOffsetMs == 0)
+        {
+            return snapshot;
+        }
+
+        var position = snapshot.Position + TimeSpan.FromMilliseconds(appliedOffsetMs);
+        if (position < TimeSpan.Zero)
+        {
+            position = TimeSpan.Zero;
+        }
+
+        if (snapshot.Track?.Duration is { } duration && duration > TimeSpan.Zero && position > duration)
+        {
+            position = duration;
+        }
+
+        return snapshot with { Position = position };
+    }
+
+    private int GetLyricOffsetMs(TrackInfo? track)
+    {
+        var offset = _settings.LyricOffsetMs;
+        var sourceApp = track?.SourceApp ?? string.Empty;
+        if (sourceApp.Equals("QQMusic", StringComparison.OrdinalIgnoreCase))
+        {
+            offset += _settings.QqMusicLyricOffsetMs;
+        }
+        else if (sourceApp.Equals("Netease", StringComparison.OrdinalIgnoreCase))
+        {
+            offset += _settings.NeteaseLyricOffsetMs;
+        }
+        else if (sourceApp.Equals("Kugou", StringComparison.OrdinalIgnoreCase))
+        {
+            offset += _settings.KugouLyricOffsetMs;
+        }
+        else if (sourceApp.Equals("Spotify", StringComparison.OrdinalIgnoreCase))
+        {
+            offset += _settings.SpotifyLyricOffsetMs;
+        }
+
+        return offset;
+    }
+
+    private static void PublishLyricDiagnostics(
+        PlaybackSnapshot snapshot,
+        LyricDisplayFrame frame,
+        int appliedOffsetMs)
+    {
+        var previous = LyricResolveDiagnosticsState.Current;
+        LyricResolveDiagnosticsState.Update(previous with
+        {
+            AppliedOffsetMs = appliedOffsetMs,
+            PlaybackPosition = snapshot.Position,
+            CurrentLineIndex = frame.CurrentLineIndex,
+            LineProgress = frame.LineProgress,
+            TrackTitle = snapshot.Track?.Title ?? previous.TrackTitle,
+            TrackArtist = snapshot.Track?.Artist ?? previous.TrackArtist,
+            TrackSourceApp = snapshot.Track?.SourceApp ?? previous.TrackSourceApp
+        });
     }
 
     private void PublishSpectrumDiagnostics(IReadOnlyList<float> bars, SpectrumCaptureDiagnostics capture)
@@ -424,6 +588,13 @@ public partial class MainWindow : Window
         LyricsDisplay.SetLyrics(current, next, progress, lineIndex, trackId, isPureMusic, isPlaying);
     }
 
+    private void PushTrackInfoToDisplay(TrackInfo? track)
+    {
+        _currentTrackTitle = track?.Title;
+        _currentTrackArtist = track?.Artist;
+        LyricsDisplay.SetTrackInfo(_currentTrackTitle, _currentTrackArtist);
+    }
+
     private string ResolveDisplayTrackId(TrackInfo? track)
     {
         if (track is null)
@@ -456,6 +627,19 @@ public partial class MainWindow : Window
     private void UpdateCover(PlaybackSnapshot snapshot)
     {
         var trackId = snapshot.Track?.Id;
+        var sourceApp = snapshot.Track?.SourceApp ?? string.Empty;
+        var (fallbackText, fallbackColor) = GetCoverFallback(sourceApp);
+        if (!_showCoverImage)
+        {
+            _lastCoverTrackId = trackId;
+            _lastDisplayedCoverBytes = null;
+            _currentCoverVisualTrackId = trackId;
+            ClearRejectedCover();
+            UpdateCoverAccent(null);
+            LyricsDisplay.SetCover(null, fallbackText, fallbackColor);
+            return;
+        }
+
         var isSameRequestedTrack = string.Equals(trackId, _lastCoverTrackId, StringComparison.Ordinal);
         var isCurrentTrackVisual = string.Equals(trackId, _currentCoverVisualTrackId, StringComparison.Ordinal);
         if (isSameRequestedTrack && isCurrentTrackVisual)
@@ -470,34 +654,105 @@ public partial class MainWindow : Window
 
         _lastCoverTrackId = trackId;
 
-        var sourceApp = snapshot.Track?.SourceApp ?? string.Empty;
-        var (fallbackText, fallbackColor) = GetCoverFallback(sourceApp);
-
-        if (snapshot.CoverImageBytes is { Length: > 0 } bytes)
+        if (_localCoverSearchMode is LocalCoverSearchMode.LocalFirst or LocalCoverSearchMode.LocalOnly)
         {
-            _currentCoverVisualTrackId = trackId;
-            _lastDisplayedCoverBytes = bytes;
-            LyricsDisplay.SetCover(bytes, fallbackText, fallbackColor);
+            var localCoverBytes = TryGetThrottledLocalCover(snapshot.Track, trackId);
+            if (TryDisplayCoverBytes(trackId, localCoverBytes, fallbackText, fallbackColor))
+            {
+                return;
+            }
+        }
+
+        if (_localCoverSearchMode != LocalCoverSearchMode.LocalOnly &&
+            TryDisplayCoverBytes(trackId, snapshot.CoverImageBytes, fallbackText, fallbackColor))
+        {
             return;
         }
 
-        if (snapshot.IsCoverLoading)
+        if (snapshot.IsCoverLoading && _localCoverSearchMode == LocalCoverSearchMode.OnlineFirst)
         {
             return;
         }
 
-        var localCoverBytes = TryGetThrottledLocalCover(snapshot.Track, trackId);
-        if (localCoverBytes is { Length: > 0 })
+        if (_localCoverSearchMode is LocalCoverSearchMode.OnlineFirst &&
+            TryDisplayCoverBytes(trackId, TryGetThrottledLocalCover(snapshot.Track, trackId), fallbackText, fallbackColor))
         {
-            _currentCoverVisualTrackId = trackId;
-            _lastDisplayedCoverBytes = localCoverBytes;
-            LyricsDisplay.SetCover(localCoverBytes, fallbackText, fallbackColor);
             return;
         }
 
         _lastDisplayedCoverBytes = null;
         _currentCoverVisualTrackId = trackId;
+        UpdateCoverAccent(null);
         LyricsDisplay.SetCover(null, fallbackText, fallbackColor);
+    }
+
+    private bool TryDisplayCoverBytes(
+        string? trackId,
+        byte[]? bytes,
+        string fallbackText,
+        Media.Color fallbackColor)
+    {
+        if (bytes is not { Length: > 0 })
+        {
+            return false;
+        }
+
+        if (!IsRejectedCover(trackId, bytes) &&
+            LyricsDisplay.SetCover(bytes, fallbackText, fallbackColor))
+        {
+            _currentCoverVisualTrackId = trackId;
+            _lastDisplayedCoverBytes = bytes;
+            UpdateCoverAccent(bytes);
+            ClearRejectedCover();
+            return true;
+        }
+
+        RememberRejectedCover(trackId, bytes);
+        return false;
+    }
+
+    private void UpdateCoverAccent(byte[]? bytes)
+    {
+        var accent = _settings.UseCoverAccentColor || _settings.BackgroundMaterial == LyricsBackgroundMaterial.CoverTint
+            ? CoverAccentExtractor.TryExtract(bytes)
+            : null;
+
+        if (accent == _coverAccentColor)
+        {
+            return;
+        }
+
+        _coverAccentColor = accent;
+        ApplyCurrentVisualStyle();
+    }
+
+    private bool IsRejectedCover(string? trackId, byte[] bytes)
+    {
+        return string.Equals(trackId, _lastRejectedCoverTrackId, StringComparison.Ordinal) &&
+            string.Equals(BuildCoverSignature(bytes), _lastRejectedCoverSignature, StringComparison.Ordinal);
+    }
+
+    private void RememberRejectedCover(string? trackId, byte[] bytes)
+    {
+        _lastRejectedCoverTrackId = trackId;
+        _lastRejectedCoverSignature = BuildCoverSignature(bytes);
+    }
+
+    private void ClearRejectedCover()
+    {
+        _lastRejectedCoverTrackId = null;
+        _lastRejectedCoverSignature = string.Empty;
+    }
+
+    private static string BuildCoverSignature(byte[] bytes)
+    {
+        if (bytes.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        var middle = bytes[bytes.Length / 2];
+        return $"{bytes.Length}:{bytes[0]:X2}:{middle:X2}:{bytes[^1]:X2}";
     }
 
     private byte[]? TryGetThrottledLocalCover(TrackInfo? track, string? trackId)
@@ -642,6 +897,9 @@ public partial class MainWindow : Window
         var desiredHeight = settings.AutoAdjustWindowHeight
             ? Math.Max(36, LyricsDisplay.PreferredWindowHeight + settings.WindowHeightOffset)
             : Math.Max(36, settings.WindowHeight);
+        var bottomAnchorHeight = settings.AutoAdjustWindowHeight
+            ? Math.Max(36, LyricsDisplay.PreferredWindowBottomAnchorHeight + settings.WindowHeightOffset)
+            : desiredHeight;
         Width = desiredWidth;
         Height = desiredHeight;
 
@@ -652,7 +910,8 @@ public partial class MainWindow : Window
             _ => Math.Max(0, screenWidth - Width - 230 + settings.XOffset)
         };
 
-        Top = screenHeight - taskbarHeight + ((taskbarHeight - Height) / 2.0) + settings.YOffset;
+        var verticalGrowth = Math.Max(0, desiredHeight - bottomAnchorHeight);
+        Top = screenHeight - taskbarHeight + ((taskbarHeight - bottomAnchorHeight) / 2.0) + settings.YOffset - verticalGrowth;
     }
 
     private void AttachToTaskbarHost()

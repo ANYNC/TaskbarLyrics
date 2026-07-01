@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Windows;
@@ -7,8 +8,12 @@ using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using System.Windows.Media.TextFormatting;
 using System.Windows.Threading;
+using SixLabors.ImageSharp.Formats.Png;
 using TaskbarLyrics.Light.App.Ui;
+using Windows.Graphics.Imaging;
+using Windows.Storage.Streams;
 using Media = System.Windows.Media;
+using ImageSharpImage = SixLabors.ImageSharp.Image;
 
 namespace TaskbarLyrics.Light.App;
 
@@ -23,17 +28,19 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
     private const double MinRowHeight = 13;
     private const double RowDescenderPadding = 4;
     private const string RowHeightProbe = "国gyÁ";
-    private const double CoverMinHeight = 34;
+    private const double DefaultCoverSize = 34;
     private const double LyricsGridTopMargin = 3;
     private const double WindowVerticalMargin = 6;
+    private const double StackedTransitionClipBuffer = 8;
     private const double WindowHorizontalMargin = 16;
     private const double SurfaceHorizontalPadding = 8;
-    private const double CoverColumnWidth = 34;
-    private const double CoverLyricsGap = 8;
+    private const double DefaultCoverGap = 8;
     private const double LyricsColumnHorizontalMargin = 6;
     private const double LyricsTextPadding = 24;
+    private const double StackedSideMargin = 4;
     private const double MinLyricsContentWidth = 160;
     private const double SpectrumContentWidth = 230;
+    private const int MaxTextWidthCacheEntries = 512;
 
     private readonly Border[] _spectrumBars = new Border[SpectrumBarCount];
     private readonly double[] _spectrumTargets = new double[SpectrumBarCount];
@@ -42,8 +49,9 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
     private SolidColorBrush _secondaryBrush = CreateFrozenBrush(Media.Color.FromArgb(190, 255, 255, 255));
     private readonly CubicBezierEasing _slideEase = new(0.22, 0.72, 0.24, 1);
     private readonly Dictionary<RowHeightCacheKey, double> _rowHeightCache = new();
+    private readonly Dictionary<TextWidthCacheKey, double> _textWidthCache = new();
 
-    private readonly DispatcherTimer _spectrumRenderTimer;
+    private EventHandler? _spectrumRenderingHandler;
 
     private string _displayedCurrent = string.Empty;
     private string _displayedNext = string.Empty;
@@ -66,6 +74,8 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
     private bool _transitionFinalized;
     private bool _isSpectrumMode;
     private bool _hasAudioDrivenSpectrum;
+    private SpectrumDisplayStyle _spectrumStyle = SpectrumDisplayStyle.Center;
+    private LyricTransitionStyle _transitionStyle = LyricTransitionStyle.Slide;
     private int _transitionGeneration;
     private LyricsFrame? _queuedFrame;
     private DateTime _trackSwitchSearchStartedAt;
@@ -73,11 +83,8 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
     private DispatcherTimer? _transitionFallbackTimer;
 
     private EventHandler? _renderingHandler;
-    private DateTime _transitionStartTime;
+    private long _transitionStartTimestamp;
     private double _transitionBaseNextOpacity;
-    private double _transitionBaseNextFontSize;
-    private double _transitionBaseNextRowHeight;
-    private double _transitionTargetCurrentFontSize;
     private string _transitionPromoted = string.Empty;
     private string _transitionUpcoming = string.Empty;
     private double _transitionProgress;
@@ -89,29 +96,57 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
     private bool _metricsUpdatePending;
     private double _lastNotifiedPreferredHostHeight;
     private double _lastNotifiedPreferredContentWidth;
+    private double _lastNotifiedPreferredWindowWidth;
 
     private SpectrumTuningSettings _spectrumTuning = SpectrumTuningSettings.CreateDefault();
     private Media.FontFamily _fontFamily = new(AppSettings.DefaultFontFamily);
     private System.Windows.FontWeight _fontWeight = FontWeights.Bold;
     private Media.Effects.Effect? _textShadowEffect;
+    private Media.Color? _coverAccentColor;
+    private double _coverSize = DefaultCoverSize;
+    private double _coverCornerRadius = 6;
+    private double _coverGap = DefaultCoverGap;
+    private double _stackedCoverLyricsGap = 6;
+    private double _stackedCoverXOffset;
+    private double _stackedCoverYOffset;
+    private bool _showStackedTrackInfo;
+    private double _stackedTrackInfoGap = 8;
+    private double _stackedContentXOffset;
+    private double _stackedContentYOffset;
+    private CoverLayoutMode _coverLayoutMode = CoverLayoutMode.Inline;
+    private bool _showCover = true;
+    private string _trackTitle = string.Empty;
+    private string _trackArtist = string.Empty;
 
     public double PreferredHostHeight { get; private set; }
 
     public double PreferredContentWidth { get; private set; }
 
+    private bool IsStackedCoverLayout => _showCover && _coverLayoutMode == CoverLayoutMode.Stacked;
+
+    private bool IsStackedTrackInfoVisible =>
+        IsStackedCoverLayout &&
+        _showStackedTrackInfo &&
+        (!string.IsNullOrWhiteSpace(_trackTitle) || !string.IsNullOrWhiteSpace(_trackArtist));
+
     public double PreferredWindowHeight =>
+        IsStackedCoverLayout
+            ? _coverSize + _stackedCoverLyricsGap + PreferredHostHeight + LyricsGridTopMargin + WindowVerticalMargin +
+                (StackedTransitionClipBuffer * 2)
+            : PreferredWindowBottomAnchorHeight;
+
+    public double PreferredWindowBottomAnchorHeight =>
         Math.Max(
-            CoverMinHeight + WindowVerticalMargin,
+            (_showCover ? _coverSize : 0) + WindowVerticalMargin,
             PreferredHostHeight + LyricsGridTopMargin + WindowVerticalMargin);
 
     public double PreferredWindowWidth =>
-        WindowWidthLimits.Clamp(
-            WindowHorizontalMargin + SurfaceHorizontalPadding + CoverColumnWidth + CoverLyricsGap +
-            LyricsColumnHorizontalMargin + PreferredContentWidth);
+        WindowWidthLimits.Clamp(WindowHorizontalMargin + SurfaceHorizontalPadding + GetPreferredLayoutContentWidth());
 
     public void NotifyScreenMetricsChanged()
     {
         _lastNotifiedPreferredContentWidth = -1;
+        _lastNotifiedPreferredWindowWidth = -1;
         UpdatePreferredWidth();
     }
 
@@ -123,8 +158,12 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
     {
         InitializeComponent();
         Loaded += OnLoaded;
+        Unloaded += OnUnloaded;
 
         RenderOptions.SetBitmapScalingMode(TrackPanel, BitmapScalingMode.HighQuality);
+        RenderOptions.SetBitmapScalingMode(CoverImageA, BitmapScalingMode.HighQuality);
+        RenderOptions.SetBitmapScalingMode(CoverImageB, BitmapScalingMode.HighQuality);
+        CoverBorder.SizeChanged += (_, _) => ApplyCoverClip();
 
         for (var i = 0; i < SpectrumBarCount; i++)
         {
@@ -137,18 +176,14 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
                 Opacity = 0.72,
                 Margin = new Thickness(i == 0 ? 0 : 1.5, 0, 1.5, 0),
                 VerticalAlignment = VerticalAlignment.Center,
-                RenderTransformOrigin = new System.Windows.Point(0.5, 1),
+                RenderTransformOrigin = new System.Windows.Point(0.5, 0.5),
                 RenderTransform = new ScaleTransform(1, 1)
             };
             _spectrumBars[i] = bar;
             SpectrumPanel.Children.Add(bar);
         }
 
-        _spectrumRenderTimer = new DispatcherTimer(DispatcherPriority.Render)
-        {
-            Interval = TimeSpan.FromMilliseconds(16)
-        };
-        _spectrumRenderTimer.Tick += OnSpectrumRenderTick;
+        ApplySpectrumBarMetrics();
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
@@ -157,24 +192,39 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         UpdateMetrics();
     }
 
-    public void ApplyStyle(AppSettings settings, Media.Color primary, Media.Color secondary)
+    private void OnUnloaded(object sender, RoutedEventArgs e)
+    {
+        StopSpectrumRenderer();
+        StopTransitionAnimations();
+        _searchDwellTimer?.Stop();
+    }
+
+    public void ApplyStyle(
+        AppSettings settings,
+        Media.Color primary,
+        Media.Color secondary,
+        Media.Color? coverAccentColor = null)
     {
         _primaryBrush = CreateFrozenBrush(primary);
         _secondaryBrush = CreateFrozenBrush(secondary);
+        _coverAccentColor = coverAccentColor;
         _requestedFontSize = Math.Clamp(settings.FontSize, 10, 40);
         _autoAdjustLineGap = settings.AutoAdjustLineGap;
         _manualLineGap = Math.Clamp(settings.LineGap, 0, 24);
         _lineGapOffset = Math.Clamp(settings.LineGapOffset, -12, 24);
         _fontFamily = new Media.FontFamily(BundledFontRegistrar.ResolveFontFamily(settings.FontFamily));
         _fontWeight = ParseFontWeight(settings.FontWeight);
+        _transitionStyle = Enum.IsDefined(settings.TransitionStyle)
+            ? settings.TransitionStyle
+            : LyricTransitionStyle.Slide;
         _rowHeightCache.Clear();
+        _textWidthCache.Clear();
         _autoAdjustWindowWidth = settings.AutoAdjustWindowWidth;
+        ApplySpectrumStyle(settings.SpectrumStyle);
+        ApplyCoverStyle(settings);
         ApplyTextTrimming();
 
-        SurfaceBorder.Background = settings.ShowBackground
-            ? CreateFrozenBrush(Media.Color.FromArgb(
-                (byte)Math.Clamp(settings.BackgroundOpacity * 255, 0, 255), 18, 18, 24))
-            : Media.Brushes.Transparent;
+        SurfaceBorder.Background = CreateSurfaceBrush(settings);
 
         SurfaceBorder.BorderBrush = settings.ShowBorder
             ? CreateFrozenBrush(Media.Color.FromArgb(41, 255, 255, 255))
@@ -196,10 +246,13 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         CurrentLineText.Effect = _textShadowEffect;
         NextLineText.Effect = _textShadowEffect;
         IncomingLineText.Effect = _textShadowEffect;
+        TrackTitleText.Effect = _textShadowEffect;
+        TrackArtistText.Effect = _textShadowEffect;
 
         ApplyLineTypography(CurrentLineText, true);
         ApplyLineTypography(NextLineText, false);
         ApplyLineTypography(IncomingLineText, false);
+        ApplyTrackInfoTypography();
 
         foreach (var bar in _spectrumBars)
         {
@@ -209,6 +262,189 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
 
         UpdateMetrics();
         UpdatePreferredWidth();
+    }
+
+    private Media.Brush CreateSurfaceBrush(AppSettings settings)
+    {
+        if (!settings.ShowBackground)
+        {
+            return Media.Brushes.Transparent;
+        }
+
+        var alpha = (byte)Math.Clamp(settings.BackgroundOpacity * 255, 0, 255);
+        var color = settings.BackgroundMaterial switch
+        {
+            LyricsBackgroundMaterial.CoverTint when _coverAccentColor is { } accent =>
+                Media.Color.FromArgb(alpha, accent.R, accent.G, accent.B),
+            LyricsBackgroundMaterial.Solid =>
+                Media.Color.FromArgb(alpha, _primaryBrush.Color.R, _primaryBrush.Color.G, _primaryBrush.Color.B),
+            _ => Media.Color.FromArgb(alpha, 18, 18, 24)
+        };
+
+        return CreateFrozenBrush(color);
+    }
+
+    private void ApplyCoverStyle(AppSettings settings)
+    {
+        var style = settings.ShowCoverImage
+            ? NormalizeCoverStyle(settings.CoverStyle)
+            : CoverDisplayStyle.Hidden;
+        _coverLayoutMode = Enum.IsDefined(settings.CoverLayoutMode)
+            ? settings.CoverLayoutMode
+            : CoverLayoutMode.Inline;
+        _showCover = style != CoverDisplayStyle.Hidden;
+        _stackedCoverLyricsGap = Math.Clamp(settings.StackedCoverLyricsGap, 0, 40);
+        _stackedCoverXOffset = Math.Clamp(settings.StackedCoverXOffset, -120, 120);
+        _stackedCoverYOffset = Math.Clamp(settings.StackedCoverYOffset, -80, 80);
+        _showStackedTrackInfo = settings.ShowStackedTrackInfo;
+        _stackedTrackInfoGap = Math.Clamp(settings.StackedTrackInfoGap, 0, 80);
+        _stackedContentXOffset = Math.Clamp(settings.StackedContentXOffset, -160, 160);
+        _stackedContentYOffset = Math.Clamp(settings.StackedContentYOffset, -80, 80);
+        _coverSize = Math.Clamp(settings.CoverSize, 24, 96);
+        _coverGap = _showCover && !IsStackedCoverLayout ? DefaultCoverGap : 0;
+
+        CoverBorder.Visibility = _showCover ? Visibility.Visible : Visibility.Collapsed;
+        CoverBorder.Width = _coverSize;
+        CoverBorder.Height = _coverSize;
+        _coverCornerRadius = style switch
+        {
+            CoverDisplayStyle.Circle => _coverSize / 2,
+            CoverDisplayStyle.Square => 0,
+            _ => Math.Clamp(Math.Round(_coverSize * 0.18), 6, 12)
+        };
+        CoverBorder.CornerRadius = new CornerRadius(_coverCornerRadius);
+        ApplyCoverLayout();
+        ApplyCoverClip();
+    }
+
+    private static CoverDisplayStyle NormalizeCoverStyle(CoverDisplayStyle style) =>
+        style == CoverDisplayStyle.Large ? CoverDisplayStyle.RoundedSquare : style;
+
+    private void ApplyCoverLayout()
+    {
+        if (IsStackedCoverLayout)
+        {
+            CoverRow.Height = new GridLength(_coverSize);
+            CoverStackGapRow.Height = new GridLength(_stackedCoverLyricsGap);
+            ContentRow.Height = new GridLength(1, GridUnitType.Star);
+            CoverColumn.Width = new GridLength(0);
+            CoverGapColumn.Width = new GridLength(0);
+            ContentColumn.Width = new GridLength(1, GridUnitType.Star);
+
+            Grid.SetRow(CoverBorder, 0);
+            Grid.SetColumn(CoverBorder, 0);
+            Grid.SetColumnSpan(CoverBorder, 3);
+            Grid.SetRow(ContentGrid, 2);
+            Grid.SetColumn(ContentGrid, 0);
+            Grid.SetColumnSpan(ContentGrid, 3);
+
+            LayoutGrid.Margin = new Thickness(GetStackedLayoutLeftInset(), 0, 0, 0);
+            CoverBorder.HorizontalAlignment = System.Windows.HorizontalAlignment.Left;
+            CoverBorder.VerticalAlignment = System.Windows.VerticalAlignment.Center;
+            CoverBorder.Margin = new Thickness(StackedSideMargin, 0, 0, 0);
+            ContentGrid.HorizontalAlignment = System.Windows.HorizontalAlignment.Stretch;
+            ContentGrid.VerticalAlignment = System.Windows.VerticalAlignment.Stretch;
+            ContentGrid.Margin = new Thickness(StackedSideMargin, LyricsGridTopMargin, StackedSideMargin, 0);
+            LyricsViewport.Margin = new Thickness(0, -StackedTransitionClipBuffer, 0, -2 - StackedTransitionClipBuffer);
+            CoverBorder.RenderTransform = new TranslateTransform(_stackedCoverXOffset, _stackedCoverYOffset);
+            StackedTrackInfoPanel.Visibility = IsStackedTrackInfoVisible ? Visibility.Visible : Visibility.Collapsed;
+            StackedTrackInfoPanel.Margin = new Thickness(StackedSideMargin + _coverSize + _stackedTrackInfoGap, 0, StackedSideMargin, 0);
+            StackedTrackInfoPanel.MaxWidth = MeasureStackedTrackInfoWidth();
+            StackedTrackInfoPanel.RenderTransform = new TranslateTransform(_stackedCoverXOffset, _stackedCoverYOffset);
+            ContentGrid.RenderTransform = new TranslateTransform(_stackedContentXOffset, _stackedContentYOffset);
+            return;
+        }
+
+        CoverRow.Height = new GridLength(1, GridUnitType.Star);
+        CoverStackGapRow.Height = new GridLength(0);
+        ContentRow.Height = new GridLength(0);
+        CoverColumn.Width = new GridLength(_showCover ? _coverSize : 0);
+        CoverGapColumn.Width = new GridLength(_coverGap);
+        ContentColumn.Width = new GridLength(1, GridUnitType.Star);
+
+        Grid.SetRow(CoverBorder, 0);
+        Grid.SetColumn(CoverBorder, 0);
+        Grid.SetColumnSpan(CoverBorder, 1);
+        Grid.SetRow(ContentGrid, 0);
+        Grid.SetColumn(ContentGrid, 2);
+        Grid.SetColumnSpan(ContentGrid, 1);
+
+        LayoutGrid.Margin = new Thickness(0);
+        CoverBorder.HorizontalAlignment = System.Windows.HorizontalAlignment.Center;
+        CoverBorder.VerticalAlignment = System.Windows.VerticalAlignment.Center;
+        CoverBorder.Margin = new Thickness(0);
+        StackedTrackInfoPanel.Visibility = Visibility.Collapsed;
+        StackedTrackInfoPanel.Margin = new Thickness(0);
+        StackedTrackInfoPanel.RenderTransform = null;
+        ContentGrid.HorizontalAlignment = System.Windows.HorizontalAlignment.Stretch;
+        ContentGrid.VerticalAlignment = System.Windows.VerticalAlignment.Stretch;
+        ContentGrid.Margin = new Thickness(2, LyricsGridTopMargin, 4, 0);
+        LyricsViewport.Margin = new Thickness(0, 0, 0, -2);
+        CoverBorder.RenderTransform = null;
+        ContentGrid.RenderTransform = null;
+    }
+
+    private double GetPreferredLayoutContentWidth()
+    {
+        if (!IsStackedCoverLayout)
+        {
+            return (_showCover ? _coverSize + _coverGap : 0) + LyricsColumnHorizontalMargin + PreferredContentWidth;
+        }
+
+        var (left, right) = GetStackedLayoutHorizontalSpan();
+        return Math.Max(MinLyricsContentWidth, right - left);
+    }
+
+    private double GetStackedLayoutLeftInset()
+    {
+        var (left, _) = GetStackedLayoutHorizontalSpan();
+        return Math.Max(0, -left);
+    }
+
+    private (double Left, double Right) GetStackedLayoutHorizontalSpan()
+    {
+        var minLeft = 0d;
+        var maxRight = 0d;
+
+        IncludeSpan(StackedSideMargin + _stackedCoverXOffset, _coverSize);
+        if (IsStackedTrackInfoVisible)
+        {
+            IncludeSpan(
+                StackedSideMargin + _coverSize + _stackedTrackInfoGap + _stackedCoverXOffset,
+                MeasureStackedTrackInfoWidth() + StackedSideMargin);
+        }
+
+        IncludeSpan(
+            StackedSideMargin + _stackedContentXOffset,
+            PreferredContentWidth + StackedSideMargin);
+
+        return (Math.Min(0, minLeft), maxRight);
+
+        void IncludeSpan(double left, double width)
+        {
+            minLeft = Math.Min(minLeft, left);
+            maxRight = Math.Max(maxRight, left + Math.Max(0, width));
+        }
+    }
+
+    private void ApplyCoverClip()
+    {
+        if (!_showCover)
+        {
+            CoverBorder.Clip = null;
+            return;
+        }
+
+        var width = CoverBorder.ActualWidth > 0 ? CoverBorder.ActualWidth : _coverSize;
+        var height = CoverBorder.ActualHeight > 0 ? CoverBorder.ActualHeight : _coverSize;
+        var radius = Math.Min(_coverCornerRadius, Math.Min(width, height) / 2);
+        var clip = new RectangleGeometry(new Rect(0, 0, width, height), radius, radius);
+        if (clip.CanFreeze)
+        {
+            clip.Freeze();
+        }
+
+        CoverBorder.Clip = clip;
     }
 
     public void SetLyrics(
@@ -232,7 +468,11 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
                 _lastTrackId = normalizedTrackId;
             }
 
-            CancelActiveTransition();
+            if (!_isSpectrumMode || _isTransitioning || _queuedFrame is not null)
+            {
+                CancelActiveTransition();
+            }
+
             _trackSwitchSearchStartedAt = DateTime.MinValue;
             SetCurrentLine(safeCurrent);
             SetSecondaryLine(" ");
@@ -250,7 +490,6 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         }
 
         SetDisplayMode(false);
-        ClearSpectrumBars();
 
         if (normalizedTrackId.Length > 0 && normalizedTrackId != _lastTrackId)
         {
@@ -264,6 +503,23 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         }
 
         ApplyFrame(safeCurrent, safeNext, p, currentLineIndex);
+        UpdatePreferredWidth();
+    }
+
+    public void SetTrackInfo(string? title, string? artist)
+    {
+        var safeTitle = NormalizeTrackInfoText(title, "Unknown Title");
+        var safeArtist = NormalizeTrackInfoText(artist, "Unknown Artist");
+        if (safeTitle == _trackTitle && safeArtist == _trackArtist)
+        {
+            return;
+        }
+
+        _trackTitle = safeTitle;
+        _trackArtist = safeArtist;
+        TrackTitleText.Text = string.IsNullOrWhiteSpace(_trackTitle) ? " " : _trackTitle;
+        TrackArtistText.Text = string.IsNullOrWhiteSpace(_trackArtist) ? " " : _trackArtist;
+        ApplyCoverLayout();
         UpdatePreferredWidth();
     }
 
@@ -293,11 +549,48 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
     public void SetSpectrumTuning(SpectrumTuningSettings settings)
     {
         _spectrumTuning = settings.Clone();
+        ApplySpectrumBarMetrics();
         if (_isSpectrumMode)
         {
             StartSpectrumRenderer();
         }
     }
+
+    private void ApplySpectrumStyle(SpectrumDisplayStyle style)
+    {
+        _spectrumStyle = Enum.IsDefined(style) ? style : SpectrumDisplayStyle.Center;
+        ApplySpectrumBarMetrics();
+    }
+
+    private System.Windows.Point GetSpectrumTransformOrigin() => _spectrumStyle switch
+    {
+        SpectrumDisplayStyle.Bottom => new System.Windows.Point(0.5, 1),
+        SpectrumDisplayStyle.Dots => new System.Windows.Point(0.5, 0.5),
+        _ => new System.Windows.Point(0.5, 0.5)
+    };
+
+    private double GetSpectrumMaxHeight() => _spectrumStyle switch
+    {
+        SpectrumDisplayStyle.Dots => 5,
+        SpectrumDisplayStyle.Pulse => Math.Max(5, _spectrumTuning.MinBarHeight + (_spectrumTuning.BarHeightRange * 0.42)),
+        _ => Math.Max(1, _spectrumTuning.MinBarHeight + _spectrumTuning.BarHeightRange)
+    };
+
+    private double GetSpectrumBarWidth() => _spectrumStyle switch
+    {
+        SpectrumDisplayStyle.Thin => 1.5,
+        SpectrumDisplayStyle.Dots => 4,
+        SpectrumDisplayStyle.Pulse => 5,
+        _ => 3
+    };
+
+    private Thickness GetSpectrumBarMargin(int index) => _spectrumStyle switch
+    {
+        SpectrumDisplayStyle.Thin => new Thickness(index == 0 ? 0 : 2, 0, 2, 0),
+        SpectrumDisplayStyle.Dots => new Thickness(index == 0 ? 0 : 2, 0, 2, 0),
+        SpectrumDisplayStyle.Pulse => new Thickness(index == 0 ? 0 : 1, 0, 1, 0),
+        _ => new Thickness(index == 0 ? 0 : 1.5, 0, 1.5, 0)
+    };
 
     public bool SetCover(byte[]? imageBytes, string fallbackText, Media.Color fallbackColor)
     {
@@ -313,13 +606,13 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
 
         try
         {
-            using var stream = new MemoryStream(imageBytes);
-            var bitmap = new BitmapImage();
-            bitmap.BeginInit();
-            bitmap.CacheOption = BitmapCacheOption.OnLoad;
-            bitmap.StreamSource = stream;
-            bitmap.EndInit();
-            bitmap.Freeze();
+            var bitmap = DecodeCoverBitmap(imageBytes);
+            if (bitmap is null)
+            {
+                ShowCoverFallback();
+                return false;
+            }
+
             CrossfadeCover(bitmap, generation);
             return true;
         }
@@ -328,6 +621,97 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
             ShowCoverFallback();
             return false;
         }
+    }
+
+    private static BitmapSource? DecodeCoverBitmap(byte[] imageBytes)
+    {
+        return TryDecodeWpfBitmap(imageBytes) ??
+            TryDecodeWithWindowsBitmapDecoder(imageBytes) ??
+            TryDecodeWithImageSharp(imageBytes);
+    }
+
+    private static BitmapSource? TryDecodeWpfBitmap(byte[] imageBytes)
+    {
+        try
+        {
+            using var stream = new MemoryStream(imageBytes);
+            return DecodeWpfBitmap(stream);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static BitmapSource? TryDecodeWithWindowsBitmapDecoder(byte[] imageBytes)
+    {
+        try
+        {
+            using var stream = new InMemoryRandomAccessStream();
+            using (var writer = new DataWriter(stream))
+            {
+                writer.WriteBytes(imageBytes);
+                writer.StoreAsync().AsTask().GetAwaiter().GetResult();
+                writer.FlushAsync().AsTask().GetAwaiter().GetResult();
+            }
+
+            stream.Seek(0);
+            var decoder = Windows.Graphics.Imaging.BitmapDecoder.CreateAsync(stream).AsTask().GetAwaiter().GetResult();
+            var pixelData = decoder.GetPixelDataAsync(
+                    BitmapPixelFormat.Bgra8,
+                    BitmapAlphaMode.Premultiplied,
+                    new BitmapTransform(),
+                    ExifOrientationMode.RespectExifOrientation,
+                    ColorManagementMode.ColorManageToSRgb)
+                .AsTask()
+                .GetAwaiter()
+                .GetResult();
+            var pixels = pixelData.DetachPixelData();
+            var width = checked((int)decoder.PixelWidth);
+            var height = checked((int)decoder.PixelHeight);
+            var bitmap = BitmapSource.Create(
+                width,
+                height,
+                96,
+                96,
+                PixelFormats.Pbgra32,
+                null,
+                pixels,
+                width * 4);
+            bitmap.Freeze();
+            return bitmap;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static BitmapSource? TryDecodeWithImageSharp(byte[] imageBytes)
+    {
+        try
+        {
+            using var image = ImageSharpImage.Load(imageBytes);
+            using var pngStream = new MemoryStream();
+            image.Save(pngStream, new PngEncoder());
+            pngStream.Position = 0;
+            return DecodeWpfBitmap(pngStream);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static BitmapSource DecodeWpfBitmap(Stream stream)
+    {
+        var bitmap = new BitmapImage();
+        bitmap.BeginInit();
+        bitmap.CacheOption = BitmapCacheOption.OnLoad;
+        bitmap.StreamSource = stream;
+        bitmap.EndInit();
+        bitmap.Freeze();
+        return bitmap;
     }
 
     private void CrossfadeCover(BitmapSource bitmap, int generation)
@@ -519,6 +903,27 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
 
     private void StartTransition(string newCurrent, string newNext, double progress, int currentLineIndex)
     {
+        if (_transitionStyle == LyricTransitionStyle.None)
+        {
+            StopTransitionAnimations();
+            SetNoAnimState();
+            SetCurrentLine(newCurrent);
+            SetSecondaryLine(newNext);
+            IncomingLineText.Text = " ";
+            TrackTransform.Y = 0;
+            CurrentLineText.Opacity = 0.98;
+            NextLineText.Opacity = _secondaryOpacity;
+            _lastLineProgress = Math.Clamp(progress, 0, 1);
+            if (currentLineIndex >= 0)
+            {
+                _lastCurrentLineIndex = currentLineIndex;
+            }
+
+            ClearNoAnimState();
+            UpdateSecondaryOpacity(progress);
+            return;
+        }
+
         if (_isTransitioning)
         {
             _queuedFrame = new LyricsFrame(newCurrent, newNext, progress, currentLineIndex);
@@ -537,24 +942,21 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         _transitionProgress = progress;
         _transitionLineIndex = currentLineIndex;
         _transitionBaseNextOpacity = _secondaryOpacity;
-        _transitionBaseNextFontSize = _nextFontSize;
-        _transitionBaseNextRowHeight = _nextRowHeightPx;
-        _transitionTargetCurrentFontSize = _currentFontSize;
-
         SetNoAnimState();
         NextLineText.Text = promoted;
         SetLineRowHeight(NextLineText, _rowHeightPx);
         NextLineText.Foreground = _primaryBrush;
+        NextLineText.FontSize = _currentFontSize;
         IncomingLineText.Text = upcoming;
         SetLineRowHeight(IncomingLineText, _nextRowHeightPx);
+        IncomingLineText.FontSize = _nextFontSize;
         IncomingLineText.Opacity = _secondaryOpacity;
         CurrentLineText.Opacity = 0.98;
         NextLineText.Opacity = _transitionBaseNextOpacity;
-        NextLineText.FontSize = _transitionBaseNextFontSize;
         ClearNoAnimState();
         UpdatePreferredWidth();
 
-        _transitionStartTime = DateTime.UtcNow;
+        _transitionStartTimestamp = Stopwatch.GetTimestamp();
         StartTransitionRendering(generation);
 
         _transitionFallbackTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(TransitionDurationMs + 120) };
@@ -585,23 +987,22 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
                 return;
             }
 
-            var elapsed = (DateTime.UtcNow - _transitionStartTime).TotalMilliseconds;
+            var elapsed = Stopwatch.GetElapsedTime(_transitionStartTimestamp).TotalMilliseconds;
             var t = Math.Clamp(elapsed / TransitionDurationMs, 0, 1);
             var fadeOutE = GetFadeOutEase(t);
             var fadeInE = GetFadeInEase(t);
-            var sizeE = GetSizeEase(t);
             var slideE = _slideEase.Ease(t);
+            var slideDistance = _transitionStyle switch
+            {
+                LyricTransitionStyle.Fade => 0,
+                LyricTransitionStyle.CompactSlide => _linePitchPx * 0.48,
+                _ => _linePitchPx
+            };
 
-            TrackTransform.Y = -_linePitchPx * slideE;
+            TrackTransform.Y = -slideDistance * slideE;
             CurrentLineText.Opacity = 0.98 + ((0.16 - 0.98) * fadeOutE);
             NextLineText.Opacity = _transitionBaseNextOpacity + ((0.98 - _transitionBaseNextOpacity) * fadeInE);
             IncomingLineText.Opacity = _secondaryOpacity;
-            NextLineText.MinHeight = _transitionBaseNextRowHeight +
-                ((_rowHeightPx - _transitionBaseNextRowHeight) * sizeE);
-            NextLineText.ClearValue(FrameworkElement.HeightProperty);
-            IncomingLineText.MinHeight = _nextRowHeightPx;
-            NextLineText.FontSize = _transitionBaseNextFontSize +
-                ((_transitionTargetCurrentFontSize - _transitionBaseNextFontSize) * sizeE);
 
             if (t >= 1)
             {
@@ -766,23 +1167,40 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         {
             _spectrumTargets[i] = 0;
             _spectrumVisuals[i] = 0;
-            _spectrumBars[i].Height = 8;
+            SetSpectrumBarLevel(_spectrumBars[i], 0);
         }
 
-        _spectrumRenderTimer.Stop();
+        StopSpectrumRenderer();
     }
 
     private void StartSpectrumRenderer()
     {
-        if (!_spectrumRenderTimer.IsEnabled)
+        if (_spectrumRenderingHandler is not null)
         {
-            _spectrumRenderTimer.Start();
+            return;
         }
+
+        _spectrumRenderingHandler = (_, _) => OnSpectrumRenderFrame();
+        CompositionTarget.Rendering += _spectrumRenderingHandler;
     }
 
-    private void OnSpectrumRenderTick(object? sender, EventArgs e)
+    private void StopSpectrumRenderer()
+    {
+        if (_spectrumRenderingHandler is null)
+        {
+            return;
+        }
+
+        CompositionTarget.Rendering -= _spectrumRenderingHandler;
+        _spectrumRenderingHandler = null;
+    }
+
+    private void OnSpectrumRenderFrame()
     {
         var isSettled = true;
+        var averageLevel = _spectrumStyle == SpectrumDisplayStyle.Pulse
+            ? _spectrumVisuals.Average()
+            : 0;
         for (var i = 0; i < SpectrumBarCount; i++)
         {
             var target = _spectrumTargets[i];
@@ -796,14 +1214,52 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
                 isSettled = false;
             }
 
-            var level = _spectrumVisuals[i];
-            _spectrumBars[i].Height = _spectrumTuning.MinBarHeight + (level * _spectrumTuning.BarHeightRange);
+            var level = _spectrumStyle == SpectrumDisplayStyle.Pulse
+                ? averageLevel
+                : _spectrumVisuals[i];
+            SetSpectrumBarLevel(_spectrumBars[i], level);
             _spectrumBars[i].Opacity = _spectrumTuning.BarOpacity;
         }
 
         if (!_hasAudioDrivenSpectrum && isSettled)
         {
-            _spectrumRenderTimer.Stop();
+            StopSpectrumRenderer();
+        }
+    }
+
+    private void ApplySpectrumBarMetrics()
+    {
+        var maxHeight = GetSpectrumMaxHeight();
+        SpectrumPanel.Height = Math.Ceiling(maxHeight);
+        var origin = GetSpectrumTransformOrigin();
+        for (var i = 0; i < _spectrumBars.Length; i++)
+        {
+            var bar = _spectrumBars[i];
+            bar.Width = GetSpectrumBarWidth();
+            bar.Height = maxHeight;
+            bar.Margin = GetSpectrumBarMargin(i);
+            bar.CornerRadius = new CornerRadius(_spectrumStyle == SpectrumDisplayStyle.Thin ? 2 : 999);
+            bar.RenderTransformOrigin = origin;
+            SetSpectrumBarLevel(bar, 0);
+        }
+    }
+
+    private void SetSpectrumBarLevel(Border bar, double level)
+    {
+        var maxHeight = GetSpectrumMaxHeight();
+        var clamped = Math.Clamp(level, 0, 1);
+        var visualHeight = _spectrumStyle switch
+        {
+            SpectrumDisplayStyle.Dots => 3 + (clamped * 2),
+            SpectrumDisplayStyle.Pulse => 2 + (clamped * Math.Max(2, maxHeight - 2)),
+            _ => Math.Clamp(_spectrumTuning.MinBarHeight + (clamped * _spectrumTuning.BarHeightRange), 1, maxHeight)
+        };
+        if (bar.RenderTransform is ScaleTransform scale)
+        {
+            scale.ScaleY = visualHeight / maxHeight;
+            scale.ScaleX = _spectrumStyle == SpectrumDisplayStyle.Dots
+                ? 0.85 + (clamped * 0.35)
+                : 1;
         }
     }
 
@@ -826,7 +1282,12 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
             return;
         }
 
-        var availableHost = Math.Max(MinHostHeight, ActualHeight - DescenderBuffer - LyricsGridTopMargin);
+        var layoutHeight = IsStackedCoverLayout
+            ? ContentGrid.ActualHeight > 0
+                ? ContentGrid.ActualHeight
+                : Math.Max(0, ActualHeight - _coverSize - _stackedCoverLyricsGap)
+            : ActualHeight;
+        var availableHost = Math.Max(MinHostHeight, layoutHeight - DescenderBuffer - LyricsGridTopMargin);
         ApplyMetricsFromFont(_requestedFontSize, availableHost);
         ApplyLineMetrics();
         TrackTransform.Y = 0;
@@ -934,7 +1395,13 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
             ? SpectrumContentWidth
             : Math.Max(MinLyricsContentWidth, MeasurePreferredTextWidth() + LyricsTextPadding);
 
-        NotifyPreferredContentWidthIfChanged(contentWidth);
+        if (Math.Abs(contentWidth - _lastNotifiedPreferredContentWidth) >= 4)
+        {
+            _lastNotifiedPreferredContentWidth = contentWidth;
+            PreferredContentWidth = contentWidth;
+        }
+
+        NotifyPreferredWindowWidthIfChanged();
     }
 
     private double MeasurePreferredTextWidth()
@@ -949,6 +1416,25 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         AddLineIfMeaningful(lines, _transitionUpcoming);
 
         return lines.Count == 0 ? 0 : lines.Max(MeasureLineWidth);
+    }
+
+    private double MeasureStackedTrackInfoWidth()
+    {
+        var lines = new HashSet<string>();
+        AddLineIfMeaningful(lines, _trackTitle);
+        AddLineIfMeaningful(lines, _trackArtist);
+        if (lines.Count == 0)
+        {
+            return 0;
+        }
+
+        var dpi = IsLoaded ? VisualTreeHelper.GetDpi(this).PixelsPerDip : 1.0;
+        var titleSize = GetTrackTitleFontSize();
+        var artistSize = GetTrackArtistFontSize();
+        var width = lines.Max(line => Math.Max(
+            MeasureLineWidthAt(line, titleSize, dpi),
+            MeasureLineWidthAt(line, artistSize, dpi)));
+        return Math.Ceiling(width + 8);
     }
 
     private static void AddLineIfMeaningful(ISet<string> lines, string? text)
@@ -971,6 +1457,12 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
 
     private double MeasureLineWidthAt(string text, double fontSize, double pixelsPerDip)
     {
+        var cacheKey = new TextWidthCacheKey(text, _fontFamily.Source, fontSize, _fontWeight, pixelsPerDip);
+        if (_textWidthCache.TryGetValue(cacheKey, out var cached))
+        {
+            return cached;
+        }
+
         var formatted = new FormattedText(
             text,
             CultureInfo.CurrentUICulture,
@@ -981,7 +1473,14 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
             new NumberSubstitution(),
             TextFormattingMode.Display,
             pixelsPerDip);
-        return Math.Ceiling(formatted.WidthIncludingTrailingWhitespace);
+        var measured = Math.Ceiling(formatted.WidthIncludingTrailingWhitespace);
+        if (_textWidthCache.Count >= MaxTextWidthCacheEntries)
+        {
+            _textWidthCache.Clear();
+        }
+
+        _textWidthCache[cacheKey] = measured;
+        return measured;
     }
 
     private void ApplyTextTrimming()
@@ -990,17 +1489,19 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         CurrentLineText.TextTrimming = trimming;
         NextLineText.TextTrimming = trimming;
         IncomingLineText.TextTrimming = trimming;
+        TrackTitleText.TextTrimming = trimming;
+        TrackArtistText.TextTrimming = trimming;
     }
 
-    private void NotifyPreferredContentWidthIfChanged(double contentWidth)
+    private void NotifyPreferredWindowWidthIfChanged()
     {
-        if (Math.Abs(contentWidth - _lastNotifiedPreferredContentWidth) < 4)
+        var preferredWidth = PreferredWindowWidth;
+        if (Math.Abs(preferredWidth - _lastNotifiedPreferredWindowWidth) < 4)
         {
             return;
         }
 
-        _lastNotifiedPreferredContentWidth = contentWidth;
-        PreferredContentWidth = contentWidth;
+        _lastNotifiedPreferredWindowWidth = preferredWidth;
         PreferredWidthChanged?.Invoke(this, EventArgs.Empty);
     }
 
@@ -1049,10 +1550,40 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         textBlock.Foreground = isPrimary ? _primaryBrush : _secondaryBrush;
     }
 
+    private void ApplyTrackInfoTypography()
+    {
+        TrackTitleText.FontFamily = _fontFamily;
+        TrackTitleText.FontWeight = _fontWeight;
+        TrackTitleText.Foreground = _primaryBrush;
+        TrackTitleText.FontSize = GetTrackTitleFontSize();
+
+        TrackArtistText.FontFamily = _fontFamily;
+        TrackArtistText.FontWeight = FontWeights.SemiBold;
+        TrackArtistText.Foreground = _secondaryBrush;
+        TrackArtistText.FontSize = GetTrackArtistFontSize();
+    }
+
+    private double GetTrackTitleFontSize() =>
+        Math.Clamp(Math.Min(_requestedFontSize * 0.92, _coverSize * 0.36), 10, 16);
+
+    private double GetTrackArtistFontSize() =>
+        Math.Clamp(Math.Min(_requestedFontSize * 0.78, _coverSize * 0.28), 9, 13);
+
     private static string ToDisplayLine(string? line, string fallback)
     {
         var text = (line ?? string.Empty).Trim();
         return text.Length > 0 ? text : fallback;
+    }
+
+    private static string NormalizeTrackInfoText(string? value, string weakValue)
+    {
+        var text = (value ?? string.Empty).Trim();
+        if (text.Length == 0 || text.Equals(weakValue, StringComparison.OrdinalIgnoreCase))
+        {
+            return string.Empty;
+        }
+
+        return text;
     }
 
     private static bool IsSearchingLine(string line) =>
@@ -1087,6 +1618,13 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         "bold" => FontWeights.Bold,
         _ => FontWeights.Medium
     };
+
+    private readonly record struct TextWidthCacheKey(
+        string Text,
+        string FontFamily,
+        double FontSize,
+        FontWeight Weight,
+        double PixelsPerDip);
 
     private sealed record LyricsFrame(string Current, string Next, double Progress, int LineIndex);
 }

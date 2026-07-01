@@ -15,6 +15,16 @@ internal sealed class DeferredLyricSyncService : IDisposable
 
     public string? CurrentLyricSourceApp => _inner?.CurrentLyricSourceApp;
 
+    public void Reset()
+    {
+        lock (_gate)
+        {
+            ThrowIfDisposed();
+            _inner?.Dispose();
+            _inner = null;
+        }
+    }
+
     public void UpdateSettings(AppSettings settings)
     {
         lock (_gate)
@@ -68,9 +78,43 @@ internal sealed class DeferredLyricSyncService : IDisposable
             }
 
             LyricsInfrastructure.EnsureInitialized();
-            _inner = LyricProviderComposer.CreateSyncService(_settings);
+            _inner = LyricProviderComposer.CreateSyncService(_settings, PublishResolveDiagnostics);
             return _inner;
         }
+    }
+
+    private void PublishResolveDiagnostics(
+        TrackInfo track,
+        IReadOnlyList<LyricResolveResult> results,
+        TimeSpan elapsed)
+    {
+        var best = results
+            .Where(result => result.Document is { Lines.Count: > 0 })
+            .OrderByDescending(result => result.Document!.BestScore)
+            .ThenBy(result => result.SourceApp == "QQMusic" || result.SourceApp == "Netease" ? 0 : 1)
+            .FirstOrDefault();
+
+        var candidates = results.Count == 0
+            ? "None"
+            : string.Join(", ", results.Select(result =>
+                result.Document is null
+                    ? $"{result.SourceApp}:none"
+                    : $"{result.SourceApp}:score={result.Document.BestScore},lines={result.Document.Lines.Count}"));
+
+        LyricResolveDiagnosticsState.Update(new LyricResolveDiagnosticsSnapshot(
+            DateTimeOffset.UtcNow,
+            track.Title,
+            track.Artist,
+            track.SourceApp,
+            best?.SourceApp ?? string.Empty,
+            best?.Document?.BestScore ?? 0,
+            best?.Document?.Lines.Count ?? 0,
+            best?.Document?.IsPureMusic ?? false,
+            $"{candidates}; elapsed={elapsed.TotalMilliseconds:F0}ms",
+            LyricResolveDiagnosticsState.Current.AppliedOffsetMs,
+            LyricResolveDiagnosticsState.Current.PlaybackPosition,
+            LyricResolveDiagnosticsState.Current.CurrentLineIndex,
+            LyricResolveDiagnosticsState.Current.LineProgress));
     }
 
     private static bool HasProviderSettingsChanged(AppSettings previous, AppSettings current) =>
@@ -79,6 +123,7 @@ internal sealed class DeferredLyricSyncService : IDisposable
         previous.EnableKugou != current.EnableKugou ||
         previous.EnableSpotify != current.EnableSpotify ||
         previous.EnableLocalLyrics != current.EnableLocalLyrics ||
+        previous.LocalLyricsSearchMode != current.LocalLyricsSearchMode ||
         !previous.LocalMusicFolders.SequenceEqual(current.LocalMusicFolders) ||
         !previous.SourceRecognitionOrder.SequenceEqual(current.SourceRecognitionOrder);
 

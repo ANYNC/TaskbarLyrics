@@ -10,7 +10,7 @@
     <RootNamespace>TaskbarLyrics.Light.App</RootNamespace>
     <AssemblyName>TaskbarLyrics.Light</AssemblyName>
     <ApplicationIcon>Assets\AppIcon\TaskbarLyrics.ico</ApplicationIcon>
-    <Version>1.1.0</Version>
+    <Version>1.2.0</Version>
     <StartupObject>TaskbarLyrics.Light.App.Program</StartupObject>
   </PropertyGroup>
 
@@ -33,6 +33,10 @@
     <Content Include="Assets\Fonts\*.otf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.11" />
   </ItemGroup>
 
 </Project>

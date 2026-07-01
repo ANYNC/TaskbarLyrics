@@ -1,11 +1,45 @@
 using TaskbarLyrics.Core.Abstractions;
+using TaskbarLyrics.Core.Models;
 using TaskbarLyrics.Core.Services;
 
 namespace TaskbarLyrics.Light.App;
 
 internal static class LyricProviderComposer
 {
-    public static LyricSyncService CreateSyncService(AppSettings settings)
+    public static LyricSyncService CreateSyncService(
+        AppSettings settings,
+        Action<TrackInfo, IReadOnlyList<LyricResolveResult>, TimeSpan>? publishDiagnostics = null)
+    {
+        var registry = CreateRegistry(settings);
+        if (publishDiagnostics is not null)
+        {
+            registry = new DiagnosticLyricProviderRegistry(registry, publishDiagnostics);
+        }
+
+        return new LyricSyncService(registry, _ => false);
+    }
+
+    private static ILyricProviderRegistry CreateRegistry(AppSettings settings)
+    {
+        var onlineProviders = CreateOnlineProviders(settings);
+        var localProvider = CreateLocalProvider(settings);
+        if (localProvider is null)
+        {
+            return new LyricProviderRegistry(onlineProviders);
+        }
+
+        if (settings.LocalLyricsSearchMode == LocalLyricsSearchMode.OnlineFallback)
+        {
+            return new FallbackLocalLyricProviderRegistry(
+                new LyricProviderRegistry(onlineProviders),
+                localProvider);
+        }
+
+        onlineProviders.Add(localProvider);
+        return new LyricProviderRegistry(onlineProviders);
+    }
+
+    private static List<ILyricProvider> CreateOnlineProviders(AppSettings settings)
     {
         var providers = new List<ILyricProvider>
         {
@@ -33,15 +67,18 @@ internal static class LyricProviderComposer
                 () => new LyricifyLyricProvider("Kugou", Lyricify.Lyrics.Searchers.Searchers.Kugou)));
         }
 
+        return providers;
+    }
+
+    private static ILyricProvider? CreateLocalProvider(AppSettings settings)
+    {
         if (settings.EnableLocalLyrics && settings.LocalMusicFolders.Count > 0)
         {
-            providers.Add(new LazyLyricProvider(
+            return new LazyLyricProvider(
                 "Local",
-                () => new LocalLyricProvider(settings.LocalMusicFolders)));
+                () => new LocalLyricProvider(settings.LocalMusicFolders));
         }
 
-        return new LyricSyncService(
-            new LyricProviderRegistry(providers),
-            _ => false);
+        return null;
     }
 }
