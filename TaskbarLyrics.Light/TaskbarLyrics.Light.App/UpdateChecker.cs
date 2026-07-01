@@ -7,10 +7,10 @@ namespace TaskbarLyrics.Light.App;
 
 internal static class UpdateChecker
 {
-    public const string RepositoryUrl = "https://github.com/ANYNC/TaskbarLyrics";
-    public const string ReleasesUrl = "https://github.com/ANYNC/TaskbarLyrics/releases/latest";
+    public const string RepositoryUrl = "https://github.com/sorawithcat/TaskbarLyrics";
+    public const string ReleasesUrl = "https://github.com/sorawithcat/TaskbarLyrics/releases/latest";
 
-    private const string LatestReleaseApiUrl = "https://api.github.com/repos/ANYNC/TaskbarLyrics/releases/latest";
+    private const string LatestReleaseApiUrl = "https://api.github.com/repos/sorawithcat/TaskbarLyrics/releases/latest";
     private static readonly HttpClient HttpClient = new();
 
     public static async Task<UpdateCheckResult> CheckLatestAsync(CancellationToken cancellationToken = default)

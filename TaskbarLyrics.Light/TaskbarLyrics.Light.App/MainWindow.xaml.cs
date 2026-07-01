@@ -242,6 +242,7 @@ public partial class MainWindow : Window
     {
         Dispatcher.Invoke(() =>
         {
+            LyricsDisplay.NotifyScreenMetricsChanged();
             AnchorToTaskbar();
             AttachToTaskbarHost();
         });
@@ -636,8 +637,8 @@ public partial class MainWindow : Window
         var taskbarHeight = Math.Max(normalTaskbarHeight, screenHeight - workArea.Height);
         var settings = (System.Windows.Application.Current as App)?.Settings ?? new AppSettings();
         var desiredWidth = settings.AutoAdjustWindowWidth
-            ? Math.Clamp(LyricsDisplay.PreferredWindowWidth + settings.WindowWidthOffset, 320, 1400)
-            : Math.Clamp(settings.WindowWidth, 320, 1400);
+            ? WindowWidthLimits.Clamp(LyricsDisplay.PreferredWindowWidth + settings.WindowWidthOffset)
+            : WindowWidthLimits.Clamp(settings.WindowWidth);
         var desiredHeight = settings.AutoAdjustWindowHeight
             ? Math.Max(36, LyricsDisplay.PreferredWindowHeight + settings.WindowHeightOffset)
             : Math.Max(36, settings.WindowHeight);

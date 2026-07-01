@@ -58,7 +58,7 @@
 - 本地歌词（`.lrc` / `.qrc` / `.krc`）与多源在线歌词检索
 - 纯音乐 24 条实时频谱；频谱总开关；未检索到歌词时可显示频谱
 - 单实例防多开；二次启动激活已有实例并打开设置
-- 系统托盘、原生 WPF 设置页、关于页与更新检查（对接主仓库 Release）
+- 系统托盘、原生 WPF 设置页、关于页与更新检查（对接 [sorawithcat/TaskbarLyrics](https://github.com/sorawithcat/TaskbarLyrics) Release）
 - 运行日志与频谱调试诊断面板
 - 歌词窗口强制置顶开关；从 Alt+Tab 隐藏（`WS_EX_TOOLWINDOW`）
 - SMTC 时间轴调试窗口、频谱调参窗口

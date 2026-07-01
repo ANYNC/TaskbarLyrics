@@ -298,7 +298,8 @@ public partial class SettingsWindow : Window
             LineGapOffsetStepper.Value = _settings.LineGapOffset;
             AutoAdjustLineGapCheck.IsChecked = _settings.AutoAdjustLineGap;
             BackgroundOpacityStepper.Value = _settings.BackgroundOpacity;
-            WindowWidthStepper.Value = _settings.WindowWidth;
+            WindowWidthStepper.Maximum = WindowWidthLimits.GetMaxForScreen();
+            WindowWidthStepper.Value = Math.Min(_settings.WindowWidth, WindowWidthStepper.Maximum);
             WindowWidthOffsetStepper.Value = _settings.WindowWidthOffset;
             AutoAdjustWindowWidthCheck.IsChecked = _settings.AutoAdjustWindowWidth;
             WindowHeightStepper.Value = _settings.WindowHeight;

@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
+using System.Windows.Media.TextFormatting;
 using System.Windows.Threading;
 using TaskbarLyrics.Light.App.Ui;
 using Media = System.Windows.Media;
@@ -30,11 +31,9 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
     private const double CoverColumnWidth = 34;
     private const double CoverLyricsGap = 8;
     private const double LyricsColumnHorizontalMargin = 6;
-    private const double LyricsTextPadding = 10;
+    private const double LyricsTextPadding = 24;
     private const double MinLyricsContentWidth = 160;
     private const double SpectrumContentWidth = 230;
-    private const double MinWindowWidth = 320;
-    private const double MaxWindowWidth = 1400;
 
     private readonly Border[] _spectrumBars = new Border[SpectrumBarCount];
     private readonly double[] _spectrumTargets = new double[SpectrumBarCount];
@@ -86,6 +85,7 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
 
     private bool _useCoverImageA = true;
     private int _coverGeneration;
+    private bool _autoAdjustWindowWidth = true;
     private bool _metricsUpdatePending;
     private double _lastNotifiedPreferredHostHeight;
     private double _lastNotifiedPreferredContentWidth;
@@ -105,11 +105,15 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
             PreferredHostHeight + LyricsGridTopMargin + WindowVerticalMargin);
 
     public double PreferredWindowWidth =>
-        Math.Clamp(
+        WindowWidthLimits.Clamp(
             WindowHorizontalMargin + SurfaceHorizontalPadding + CoverColumnWidth + CoverLyricsGap +
-            LyricsColumnHorizontalMargin + PreferredContentWidth,
-            MinWindowWidth,
-            MaxWindowWidth);
+            LyricsColumnHorizontalMargin + PreferredContentWidth);
+
+    public void NotifyScreenMetricsChanged()
+    {
+        _lastNotifiedPreferredContentWidth = -1;
+        UpdatePreferredWidth();
+    }
 
     public event EventHandler? PreferredHeightChanged;
 
@@ -164,6 +168,8 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         _fontFamily = new Media.FontFamily(BundledFontRegistrar.ResolveFontFamily(settings.FontFamily));
         _fontWeight = ParseFontWeight(settings.FontWeight);
         _rowHeightCache.Clear();
+        _autoAdjustWindowWidth = settings.AutoAdjustWindowWidth;
+        ApplyTextTrimming();
 
         SurfaceBorder.Background = settings.ShowBackground
             ? CreateFrozenBrush(Media.Color.FromArgb(
@@ -972,8 +978,18 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
             new Typeface(_fontFamily, FontStyles.Normal, _fontWeight, FontStretches.Normal),
             fontSize,
             _primaryBrush,
+            new NumberSubstitution(),
+            TextFormattingMode.Display,
             pixelsPerDip);
-        return formatted.WidthIncludingTrailingWhitespace;
+        return Math.Ceiling(formatted.WidthIncludingTrailingWhitespace);
+    }
+
+    private void ApplyTextTrimming()
+    {
+        var trimming = _autoAdjustWindowWidth ? TextTrimming.None : TextTrimming.CharacterEllipsis;
+        CurrentLineText.TextTrimming = trimming;
+        NextLineText.TextTrimming = trimming;
+        IncomingLineText.TextTrimming = trimming;
     }
 
     private void NotifyPreferredContentWidthIfChanged(double contentWidth)
