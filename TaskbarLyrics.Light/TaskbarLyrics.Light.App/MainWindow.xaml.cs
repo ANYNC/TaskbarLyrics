@@ -43,6 +43,8 @@ public partial class MainWindow : Window
     private string _lastRejectedCoverSignature = string.Empty;
     private string? _lastLocalCoverLookupTrackId;
     private DateTimeOffset _nextLocalCoverLookupUtc;
+    private CancellationTokenSource? _coverRefreshCts;
+    private string? _coverRefreshTrackId;
     private bool _enableSmtcTimelineMonitor;
     private bool _enableSpectrum = true;
     private bool _enablePureMusicSpectrum = true;
@@ -301,6 +303,7 @@ public partial class MainWindow : Window
 
     private void InvalidateCoverDisplayState()
     {
+        CancelCoverRefresh();
         _currentCoverVisualTrackId = null;
         _lastDisplayedCoverBytes = null;
         ClearRejectedCover();
@@ -318,6 +321,7 @@ public partial class MainWindow : Window
 
     private void OnClosed(object? sender, EventArgs e)
     {
+        CancelCoverRefresh();
         CloseSmtcTimelineMonitorWindow();
         _frameTimer.Stop();
         _frameTimer.Tick -= OnFrameTimerTick;
@@ -631,6 +635,7 @@ public partial class MainWindow : Window
         var (fallbackText, fallbackColor) = GetCoverFallback(sourceApp);
         if (!_showCoverImage)
         {
+            CancelCoverRefresh();
             _lastCoverTrackId = trackId;
             _lastDisplayedCoverBytes = null;
             _currentCoverVisualTrackId = trackId;
@@ -646,7 +651,7 @@ public partial class MainWindow : Window
         {
             // 与原版一致：同一首歌且已展示过封面时，仅在没有封面但现在有新字节（或可走本地回退）时再刷新。
             if (_lastDisplayedCoverBytes is { Length: > 0 } ||
-                (snapshot.CoverImageBytes == null && _localMediaCoverProvider is null))
+                (snapshot.CoverImageBytes == null && _localMediaCoverProvider is null && !snapshot.IsCoverLoading))
             {
                 return;
             }
@@ -671,6 +676,15 @@ public partial class MainWindow : Window
 
         if (snapshot.IsCoverLoading && _localCoverSearchMode == LocalCoverSearchMode.OnlineFirst)
         {
+            if (!isCurrentTrackVisual)
+            {
+                _lastDisplayedCoverBytes = null;
+                _currentCoverVisualTrackId = trackId;
+                UpdateCoverAccent(null);
+                LyricsDisplay.SetCover(null, fallbackText, fallbackColor);
+            }
+
+            ScheduleCoverRefresh(trackId);
             return;
         }
 
@@ -682,6 +696,7 @@ public partial class MainWindow : Window
 
         _lastDisplayedCoverBytes = null;
         _currentCoverVisualTrackId = trackId;
+        CancelCoverRefresh();
         UpdateCoverAccent(null);
         LyricsDisplay.SetCover(null, fallbackText, fallbackColor);
     }
@@ -702,6 +717,7 @@ public partial class MainWindow : Window
         {
             _currentCoverVisualTrackId = trackId;
             _lastDisplayedCoverBytes = bytes;
+            CancelCoverRefresh();
             UpdateCoverAccent(bytes);
             ClearRejectedCover();
             return true;
@@ -709,6 +725,68 @@ public partial class MainWindow : Window
 
         RememberRejectedCover(trackId, bytes);
         return false;
+    }
+
+    private void ScheduleCoverRefresh(string? trackId)
+    {
+        if (string.Equals(_coverRefreshTrackId, trackId, StringComparison.Ordinal) &&
+            _coverRefreshCts is { IsCancellationRequested: false })
+        {
+            return;
+        }
+
+        _coverRefreshCts?.Cancel();
+        _coverRefreshCts?.Dispose();
+        var cts = new CancellationTokenSource();
+        _coverRefreshCts = cts;
+        _coverRefreshTrackId = trackId;
+        _ = RefreshCoverWhenReadyAsync(trackId, cts.Token);
+    }
+
+    private void CancelCoverRefresh()
+    {
+        _coverRefreshCts?.Cancel();
+        _coverRefreshCts?.Dispose();
+        _coverRefreshCts = null;
+        _coverRefreshTrackId = null;
+    }
+
+    private async Task RefreshCoverWhenReadyAsync(string? expectedTrackId, CancellationToken cancellationToken)
+    {
+        var delays = new[] { 120, 180, 260, 360, 520, 760, 1000 };
+        foreach (var delay in delays)
+        {
+            try
+            {
+                await Task.Delay(delay, cancellationToken);
+                var snapshot = await _musicSessionProvider.GetCurrentAsync(cancellationToken);
+                if (!string.Equals(snapshot.Track?.Id, expectedTrackId, StringComparison.Ordinal))
+                {
+                    return;
+                }
+
+                await Dispatcher.InvokeAsync(() =>
+                {
+                    if (!cancellationToken.IsCancellationRequested)
+                    {
+                        UpdateCover(snapshot);
+                    }
+                });
+
+                if (!snapshot.IsCoverLoading || snapshot.CoverImageBytes is { Length: > 0 })
+                {
+                    return;
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+            catch
+            {
+                return;
+            }
+        }
     }
 
     private void UpdateCoverAccent(byte[]? bytes)
