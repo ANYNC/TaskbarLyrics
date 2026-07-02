@@ -635,7 +635,11 @@ public partial class SettingsWindow : Window
             primary = Colors.White;
         }
 
-        var secondary = Media.Color.FromArgb(210, primary.R, primary.G, primary.B);
+        var secondary = Media.Color.FromArgb(
+            (byte)Math.Clamp((int)(primary.A * 0.76), 0, 255),
+            primary.R,
+            primary.G,
+            primary.B);
         var accent = Media.Color.FromRgb(88, 166, 255);
         PreviewDisplay.ApplyStyle(previewSettings, primary, secondary, accent, Media.Color.FromRgb(8, 17, 34));
         PreviewDisplay.SetTrackInfo("Light 预览", "TaskbarLyrics");
@@ -652,6 +656,17 @@ public partial class SettingsWindow : Window
             0.22f, 0.45f, 0.72f, 0.38f, 0.61f, 0.86f, 0.54f, 0.31f,
             0.66f, 0.92f, 0.58f, 0.37f, 0.74f, 0.49f, 0.83f, 0.41f
         });
+        UpdatePreviewHostHeight();
+    }
+
+    private void UpdatePreviewHostHeight()
+    {
+        PreviewDisplay.UpdateLayout();
+        var preferredHeight = CoercePreviewHostHeight(PreviewDisplay.PreferredWindowHeight);
+        PreviewDisplayHost.Height = preferredHeight;
+
+        static double CoercePreviewHostHeight(double height) =>
+            Math.Clamp(double.IsFinite(height) && height > 0 ? height : 44, 34, 72);
     }
 
     private void ColorPickerButton_Click(object sender, RoutedEventArgs e)

@@ -100,12 +100,11 @@
                                        FontWeight="SemiBold"
                                        Foreground="#C7D2FE"
                                        Margin="2,0,0,8" />
-                            <Border Height="92"
-                                    Background="#80070E1D"
-                                    BorderBrush="#1678A0FF"
-                                    BorderThickness="1"
-                                    CornerRadius="8"
-                                    Padding="10,8"
+                            <Border x:Name="PreviewDisplayHost"
+                                    Height="44"
+                                    Background="Transparent"
+                                    BorderThickness="0"
+                                    Padding="2,0"
                                     ClipToBounds="True">
                                 <local:LyricsDisplayControl x:Name="PreviewDisplay"
                                                             HorizontalAlignment="Stretch"
