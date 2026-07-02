@@ -149,6 +149,19 @@ public partial class App : System.Windows.Application
 
     public void SaveSettings(AppSettings settings)
     {
+        settings.TransitionStyle = AppSettings.NormalizeTransitionStyle(settings.TransitionStyle);
+        settings.SongProgressStyle = AppSettings.NormalizeSongProgressStyle(settings.SongProgressStyle);
+        if (settings.PlayerVisualProfiles is not null)
+        {
+            foreach (var profile in settings.PlayerVisualProfiles.Values)
+            {
+                if (profile is not null)
+                {
+                    profile.SongProgressStyle = AppSettings.NormalizeSongProgressStyle(profile.SongProgressStyle);
+                }
+            }
+        }
+
         Settings = settings;
         _settingsStore?.Save(Settings);
         if (_lastAppliedStartWithWindows != Settings.StartWithWindows)

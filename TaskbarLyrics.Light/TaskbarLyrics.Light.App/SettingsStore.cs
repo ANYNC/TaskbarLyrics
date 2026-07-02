@@ -24,6 +24,7 @@ public sealed class SettingsStore
             var json = File.ReadAllText(_filePath);
             var settings = JsonSerializer.Deserialize<AppSettings>(json) ?? new AppSettings();
             ApplyLegacyDefaults(json, settings);
+            NormalizeCurrentSettings(settings);
             return settings;
         }
         catch
@@ -34,6 +35,7 @@ public sealed class SettingsStore
 
     public void Save(AppSettings settings)
     {
+        NormalizeCurrentSettings(settings);
         var dir = Path.GetDirectoryName(_filePath);
         if (!string.IsNullOrWhiteSpace(dir))
         {
@@ -97,6 +99,24 @@ public sealed class SettingsStore
         EnsurePlayerVisualProfile(settings, "Netease");
         EnsurePlayerVisualProfile(settings, "Kugou");
         EnsurePlayerVisualProfile(settings, "Spotify");
+    }
+
+    private static void NormalizeCurrentSettings(AppSettings settings)
+    {
+        settings.TransitionStyle = AppSettings.NormalizeTransitionStyle(settings.TransitionStyle);
+        settings.SongProgressStyle = AppSettings.NormalizeSongProgressStyle(settings.SongProgressStyle);
+        if (settings.PlayerVisualProfiles is null)
+        {
+            return;
+        }
+
+        foreach (var profile in settings.PlayerVisualProfiles.Values)
+        {
+            if (profile is not null)
+            {
+                profile.SongProgressStyle = AppSettings.NormalizeSongProgressStyle(profile.SongProgressStyle);
+            }
+        }
     }
 
     private static void NormalizeSongProgressColorSettings(AppSettings settings)

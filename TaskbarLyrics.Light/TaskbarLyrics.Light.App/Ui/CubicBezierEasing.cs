@@ -48,9 +48,10 @@ public sealed class CubicBezierEasing : EasingFunctionBase
             }
 
             t -= x / dx;
+            t = Math.Clamp(t, 0, 1);
         }
 
-        return SampleCurveY(t);
+        return Math.Clamp(SampleCurveY(t), 0, 1);
     }
 
     private double SampleCurveX(double t) =>

@@ -4,6 +4,7 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
+using System.Windows.Media.Animation;
 using Media = System.Windows.Media;
 using System.Windows.Threading;
 using Microsoft.Win32;
@@ -25,6 +26,7 @@ public partial class MainWindow : Window
     private readonly IMusicSessionProvider _musicSessionProvider;
     private readonly SystemAudioSpectrumService _audioSpectrumService = new();
     private readonly DispatcherTimer _frameTimer;
+    private readonly DispatcherTimer _anchorTimer;
     private readonly uint _taskbarCreatedMessage;
     private readonly DeferredLyricSyncService _lyricSyncService = new();
     private LocalMediaCoverProvider? _localMediaCoverProvider;
@@ -42,6 +44,7 @@ public partial class MainWindow : Window
     private string _nextLine = "等待歌词...";
     private string? _currentTrackTitle;
     private string? _currentTrackArtist;
+    private string? _currentTrackSourceApp;
     private string? _lastCoverTrackId;
     private string? _currentCoverVisualTrackId;
     private byte[]? _lastDisplayedCoverBytes;
@@ -63,6 +66,7 @@ public partial class MainWindow : Window
     private bool _isTimerTickRunning;
     private bool _isShowingSpectrum;
     private bool _isCurrentPlaybackPlaying;
+    private bool _lastFrameIsPureMusic;
     private SpectrumTuningSettings _spectrumTuningSettings = SpectrumTuningSettings.CreateDefault();
     private int _lastCurrentLineIndex = -1;
     private string _lastTrackId = string.Empty;
@@ -73,6 +77,8 @@ public partial class MainWindow : Window
     private string _lastSpectrumDiagnosticsKey = string.Empty;
     private int _frameTickCounter;
     private int _spectrumTickInterval = 2;
+    private int _visibilityAnimationGeneration;
+    private bool _isSoftHiding;
 
     public MainWindow()
     {
@@ -87,21 +93,30 @@ public partial class MainWindow : Window
         };
         _frameTimer.Tick += OnFrameTimerTick;
 
+        _anchorTimer = new DispatcherTimer(DispatcherPriority.Render)
+        {
+            Interval = LightMotion.AnchorDebounce
+        };
+        _anchorTimer.Tick += (_, _) =>
+        {
+            _anchorTimer.Stop();
+            AnchorToTaskbar(animate: false);
+        };
+
         Loaded += OnLoaded;
         SourceInitialized += OnSourceInitialized;
-        SizeChanged += (_, _) => AnchorToTaskbar();
         LyricsDisplay.PreferredHeightChanged += (_, _) =>
         {
             if (System.Windows.Application.Current is App { Settings.AutoAdjustWindowHeight: true })
             {
-                AnchorToTaskbar();
+                AnchorToTaskbarForPreferredSizeChange();
             }
         };
         LyricsDisplay.PreferredWidthChanged += (_, _) =>
         {
             if (System.Windows.Application.Current is App { Settings.AutoAdjustWindowWidth: true })
             {
-                AnchorToTaskbar();
+                AnchorToTaskbarForPreferredSizeChange();
             }
         };
         IsVisibleChanged += OnIsVisibleChanged;
@@ -114,6 +129,86 @@ public partial class MainWindow : Window
             ApplySettings(app.Settings);
         }
     }
+
+    public void ShowSoft()
+    {
+        _isSoftHiding = false;
+        _visibilityAnimationGeneration++;
+        var from = CoerceOpacity(Opacity);
+        BeginAnimation(OpacityProperty, null);
+        if (!IsVisible)
+        {
+            Opacity = 0;
+            Show();
+        }
+        else
+        {
+            Opacity = from;
+        }
+
+        AnchorToTaskbar(animate: false);
+        AnimateWindowOpacity(1);
+    }
+
+    public void HideSoft()
+    {
+        if (!IsVisible)
+        {
+            return;
+        }
+
+        _isSoftHiding = true;
+        var generation = ++_visibilityAnimationGeneration;
+        var from = CoerceOpacity(Opacity);
+        BeginAnimation(OpacityProperty, null);
+        Opacity = from;
+        var animation = new DoubleAnimation(from, 0, TimeSpan.FromMilliseconds(LightMotion.WindowVisibilityMs(_settings.AnimationIntensity)))
+        {
+            EasingFunction = LightMotion.CreateFadeEase(),
+            FillBehavior = FillBehavior.Stop
+        };
+        animation.Completed += (_, _) =>
+        {
+            if (generation != _visibilityAnimationGeneration || !_isSoftHiding)
+            {
+                return;
+            }
+
+            BeginAnimation(OpacityProperty, null);
+            Opacity = 1;
+            _isSoftHiding = false;
+            Hide();
+        };
+        BeginAnimation(OpacityProperty, animation);
+    }
+
+    private void AnimateWindowOpacity(double target)
+    {
+        target = CoerceOpacity(target);
+        var generation = ++_visibilityAnimationGeneration;
+        var from = CoerceOpacity(Opacity);
+        BeginAnimation(OpacityProperty, null);
+        Opacity = from;
+        var animation = new DoubleAnimation(from, target, TimeSpan.FromMilliseconds(LightMotion.WindowVisibilityMs(_settings.AnimationIntensity)))
+        {
+            EasingFunction = LightMotion.CreateFadeEase(),
+            FillBehavior = FillBehavior.Stop
+        };
+        animation.Completed += (_, _) =>
+        {
+            if (generation != _visibilityAnimationGeneration)
+            {
+                return;
+            }
+
+            BeginAnimation(OpacityProperty, null);
+            Opacity = target;
+        };
+        BeginAnimation(OpacityProperty, animation);
+    }
+
+    private static double CoerceOpacity(double opacity) =>
+        double.IsFinite(opacity) ? Math.Clamp(opacity, 0, 1) : 0;
 
     public void ApplySettings(AppSettings settings)
     {
@@ -160,10 +255,11 @@ public partial class MainWindow : Window
 
         _localCoverSearchMode = settings.LocalCoverSearchMode;
         _showCoverImage = settings.ShowCoverImage;
-        ApplyCurrentVisualStyle();
-        AnchorToTaskbar();
+        ApplyPlayerVisualProfile(_currentTrackSourceApp, force: true);
+        RefreshCoverAccentForCurrentSettings();
+        AnchorToTaskbar(animate: false);
         AttachToTaskbarHost();
-        PushLyricsToDisplay(_currentLine, _nextLine, 0, _lastCurrentLineIndex, _lastTrackId, false, false);
+        PushCurrentDisplayState();
         _enableSmtcTimelineMonitor = settings.EnableSmtcTimelineMonitor;
 
         if (IsLoaded)
@@ -473,9 +569,27 @@ public partial class MainWindow : Window
 
     public void RematchCurrentLyrics()
     {
+        ResetCoverMatchingState();
         _lyricSyncService.Reset();
         _lastCurrentLineIndex = -1;
         _ = OnLyricsTickAsync();
+    }
+
+    private void ResetCoverMatchingState()
+    {
+        if (_musicSessionProvider is SmtcMusicSessionProvider smtcProvider)
+        {
+            smtcProvider.ResetCoverCache();
+        }
+
+        _localMediaCoverProvider?.ClearCache();
+        CancelCoverRefresh();
+        _lastCoverTrackId = null;
+        _currentCoverVisualTrackId = null;
+        _lastDisplayedCoverBytes = null;
+        _lastLocalCoverLookupTrackId = null;
+        _nextLocalCoverLookupUtc = default;
+        ClearRejectedCover();
     }
 
     private static IReadOnlyCollection<string> BuildEnabledPlayerSources(AppSettings settings)
@@ -490,10 +604,10 @@ public partial class MainWindow : Window
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
-        AnchorToTaskbar();
+        AnchorToTaskbar(animate: false);
         AttachToTaskbarHost();
         ApplySpectrumTuning(_spectrumTuningSettings);
-        PushLyricsToDisplay(_currentLine, _nextLine, 0, _lastCurrentLineIndex, _lastTrackId, false, false);
+        PushCurrentDisplayState();
         UpdateSmtcTimelineMonitorWindow();
         _frameTimer.Start();
         _ = OnLyricsTickAsync();
@@ -515,7 +629,7 @@ public partial class MainWindow : Window
         {
             InvalidateCoverDisplayState();
             if (!_frameTimer.IsEnabled) _frameTimer.Start();
-            AnchorToTaskbar();
+            AnchorToTaskbar(animate: false);
             AttachToTaskbarHost();
             _ = OnLyricsTickAsync();
         }
@@ -540,7 +654,7 @@ public partial class MainWindow : Window
         {
             e.Cancel = true;
             app.MarkLyricsHiddenByUser();
-            Hide();
+            HideSoft();
         }
     }
 
@@ -548,6 +662,7 @@ public partial class MainWindow : Window
     {
         CancelCoverRefresh();
         CloseSmtcTimelineMonitorWindow();
+        _anchorTimer.Stop();
         _frameTimer.Stop();
         _frameTimer.Tick -= OnFrameTimerTick;
         SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
@@ -561,7 +676,7 @@ public partial class MainWindow : Window
         Dispatcher.Invoke(() =>
         {
             LyricsDisplay.NotifyScreenMetricsChanged();
-            AnchorToTaskbar();
+            AnchorToTaskbar(animate: false);
             AttachToTaskbarHost();
         });
     }
@@ -622,6 +737,7 @@ public partial class MainWindow : Window
 
             _currentLine = current;
             _nextLine = next;
+            _lastFrameIsPureMusic = frame.IsPureMusic;
             _isShowingSpectrum = ShouldShowSpectrum(frame);
             _isCurrentPlaybackPlaying = snapshot.IsPlaying;
             UpdateSpectrumCaptureState(_isShowingSpectrum);
@@ -640,6 +756,7 @@ public partial class MainWindow : Window
             _nextLine = string.Empty;
             _isShowingSpectrum = false;
             _isCurrentPlaybackPlaying = false;
+            _lastFrameIsPureMusic = false;
             UpdateSpectrumCaptureState(false);
             PushLyricsToDisplay(_currentLine, _nextLine, 0, _lastCurrentLineIndex, _lastTrackId, false, false);
             LyricsDisplay.SetSongProgress(TimeSpan.Zero, TimeSpan.Zero, false);
@@ -679,6 +796,24 @@ public partial class MainWindow : Window
         return (frame.IsPureMusic && _enablePureMusicSpectrum) ||
             (_showSpectrumWhenLyricsAvailable && IsLyricsAvailableFrame(frame)) ||
             (_showSpectrumWhenLyricsNotFound && IsLyricsNotFoundFrame(frame));
+    }
+
+    private bool ShouldShowSpectrumForCurrentDisplay()
+    {
+        if (!_enableSpectrum)
+        {
+            return false;
+        }
+
+        var hasAvailableLyrics = _lastCurrentLineIndex >= 0 &&
+            !_lastFrameIsPureMusic &&
+            !string.IsNullOrWhiteSpace(_currentLine);
+        var lyricsNotFound = _lastCurrentLineIndex < 0 &&
+            string.Equals(_currentLine, LyricSyncService.NoLyricsText, StringComparison.Ordinal);
+
+        return (_lastFrameIsPureMusic && _enablePureMusicSpectrum) ||
+            (_showSpectrumWhenLyricsAvailable && hasAvailableLyrics) ||
+            (_showSpectrumWhenLyricsNotFound && lyricsNotFound);
     }
 
     private static bool IsLyricsAvailableFrame(LyricDisplayFrame frame)
@@ -778,6 +913,20 @@ public partial class MainWindow : Window
         LogSpectrumDiagnostics(snapshot);
     }
 
+    private void PushCurrentDisplayState()
+    {
+        _isShowingSpectrum = ShouldShowSpectrumForCurrentDisplay();
+        UpdateSpectrumCaptureState(_isShowingSpectrum);
+        PushLyricsToDisplay(
+            _currentLine,
+            _nextLine,
+            0,
+            _lastCurrentLineIndex,
+            _lastTrackId,
+            _isShowingSpectrum,
+            _isCurrentPlaybackPlaying);
+    }
+
     private void LogSpectrumDiagnostics(SpectrumDiagnosticsSnapshot snapshot)
     {
         if (!snapshot.IsPureMusicMode && string.IsNullOrWhiteSpace(snapshot.LastError))
@@ -852,13 +1001,14 @@ public partial class MainWindow : Window
     {
         _currentTrackTitle = track?.Title;
         _currentTrackArtist = track?.Artist;
+        _currentTrackSourceApp = track?.SourceApp;
         LyricsDisplay.SetTrackInfo(_currentTrackTitle, _currentTrackArtist);
     }
 
-    private void ApplyPlayerVisualProfile(string? sourceApp)
+    private void ApplyPlayerVisualProfile(string? sourceApp, bool force = false)
     {
         var normalizedSource = sourceApp ?? string.Empty;
-        if (string.Equals(normalizedSource, _activeVisualProfileSource, StringComparison.Ordinal))
+        if (!force && string.Equals(normalizedSource, _activeVisualProfileSource, StringComparison.Ordinal))
         {
             return;
         }
@@ -870,8 +1020,9 @@ public partial class MainWindow : Window
             _settings.PlayerVisualProfiles.TryGetValue(normalizedSource, out var profile) &&
             profile.Enabled)
         {
-            _visualSettings.SongProgressStyle = profile.SongProgressStyle;
+            _visualSettings.SongProgressStyle = AppSettings.NormalizeSongProgressStyle(profile.SongProgressStyle);
             _visualSettings.SpectrumStyle = profile.SpectrumStyle;
+            _visualSettings.ShowLyricTranslation = _settings.ShowLyricTranslation || profile.ShowLyricTranslation;
         }
 
         ApplyCurrentVisualStyle();
@@ -956,10 +1107,13 @@ public partial class MainWindow : Window
         {
             if (!isCurrentTrackVisual)
             {
-                _lastDisplayedCoverBytes = null;
-                _currentCoverVisualTrackId = trackId;
-                UpdateCoverAccent(null);
-                LyricsDisplay.SetCover(null, fallbackText, fallbackColor);
+                var hasPreviousCoverVisual = _lastDisplayedCoverBytes is { Length: > 0 };
+                if (!hasPreviousCoverVisual)
+                {
+                    _lastDisplayedCoverBytes = null;
+                    _currentCoverVisualTrackId = trackId;
+                    LyricsDisplay.SetCover(null, fallbackText, fallbackColor);
+                }
             }
 
             ScheduleCoverRefresh(trackId);
@@ -972,15 +1126,21 @@ public partial class MainWindow : Window
             return;
         }
 
+        var shouldRefreshMissingCover = trackId is not null && _localCoverSearchMode != LocalCoverSearchMode.LocalOnly;
+        if (shouldRefreshMissingCover && HasDisplayedCoverVisual())
+        {
+            ScheduleCoverRefresh(trackId);
+            return;
+        }
+
         _lastDisplayedCoverBytes = null;
         _currentCoverVisualTrackId = trackId;
-        var shouldRefreshMissingCover = trackId is not null && _localCoverSearchMode != LocalCoverSearchMode.LocalOnly;
         if (!shouldRefreshMissingCover)
         {
             CancelCoverRefresh();
+            UpdateCoverAccent(null);
         }
 
-        UpdateCoverAccent(null);
         LyricsDisplay.SetCover(null, fallbackText, fallbackColor);
         if (shouldRefreshMissingCover)
         {
@@ -1014,6 +1174,8 @@ public partial class MainWindow : Window
         return false;
     }
 
+    private bool HasDisplayedCoverVisual() => _lastDisplayedCoverBytes is { Length: > 0 };
+
     private void ScheduleCoverRefresh(string? trackId)
     {
         if (string.Equals(_coverRefreshTrackId, trackId, StringComparison.Ordinal) &&
@@ -1041,6 +1203,7 @@ public partial class MainWindow : Window
     private async Task RefreshCoverWhenReadyAsync(string? expectedTrackId, CancellationTokenSource owner)
     {
         var cancellationToken = owner.Token;
+        PlaybackSnapshot? lastSnapshot = null;
         try
         {
             var delays = new[] { 120, 180, 260, 360, 520, 760, 1000, 1500, 2200, 3200, 4500 };
@@ -1048,6 +1211,7 @@ public partial class MainWindow : Window
             {
                 await Task.Delay(delay, cancellationToken);
                 var snapshot = await _musicSessionProvider.GetCurrentAsync(cancellationToken);
+                lastSnapshot = snapshot;
                 if (!string.Equals(snapshot.Track?.Id, expectedTrackId, StringComparison.Ordinal))
                 {
                     return;
@@ -1056,14 +1220,18 @@ public partial class MainWindow : Window
                 if (snapshot.CoverImageBytes is { Length: > 0 })
                 {
                     var (fallbackText, fallbackColor) = GetCoverFallback(snapshot.Track?.SourceApp ?? string.Empty);
+                    var displayed = false;
                     await Dispatcher.InvokeAsync(() =>
                     {
                         if (!cancellationToken.IsCancellationRequested)
                         {
-                            TryDisplayCoverBytes(expectedTrackId, snapshot.CoverImageBytes, fallbackText, fallbackColor);
+                            displayed = TryDisplayCoverBytes(expectedTrackId, snapshot.CoverImageBytes, fallbackText, fallbackColor);
                         }
                     });
-                    return;
+                    if (displayed)
+                    {
+                        return;
+                    }
                 }
 
                 await Dispatcher.InvokeAsync(() =>
@@ -1074,6 +1242,20 @@ public partial class MainWindow : Window
                     }
                 });
             }
+
+            await Dispatcher.InvokeAsync(() =>
+            {
+                if (!cancellationToken.IsCancellationRequested &&
+                    string.Equals(_lastCoverTrackId, expectedTrackId, StringComparison.Ordinal))
+                {
+                    var sourceApp = lastSnapshot?.Track?.SourceApp ?? string.Empty;
+                    var (fallbackText, fallbackColor) = GetCoverFallback(sourceApp);
+                    _lastDisplayedCoverBytes = null;
+                    _currentCoverVisualTrackId = expectedTrackId;
+                    UpdateCoverAccent(null);
+                    LyricsDisplay.SetCover(null, fallbackText, fallbackColor);
+                }
+            });
         }
         catch (OperationCanceledException)
         {
@@ -1106,7 +1288,7 @@ public partial class MainWindow : Window
 
     private void UpdateCoverAccent(byte[]? bytes)
     {
-        var accent = _visualSettings.UseCoverAccentColor || _visualSettings.BackgroundMaterial == LyricsBackgroundMaterial.CoverTint
+        var accent = NeedsCoverAccent(_visualSettings)
             ? CoverAccentExtractor.TryExtract(bytes)
             : null;
 
@@ -1118,6 +1300,30 @@ public partial class MainWindow : Window
         _coverAccentColor = accent;
         ApplyCurrentVisualStyle();
     }
+
+    private void RefreshCoverAccentForCurrentSettings()
+    {
+        if (NeedsCoverAccent(_visualSettings))
+        {
+            if (_lastDisplayedCoverBytes is { Length: > 0 })
+            {
+                UpdateCoverAccent(_lastDisplayedCoverBytes);
+                return;
+            }
+
+            UpdateCoverAccent(null);
+            return;
+        }
+
+        UpdateCoverAccent(null);
+    }
+
+    private static bool NeedsCoverAccent(AppSettings settings) =>
+        settings.UseCoverAccentColor ||
+        settings.BackgroundMaterial == LyricsBackgroundMaterial.CoverTint ||
+        settings.ShowCoverGlow ||
+        settings.SongProgressColorMode == SongProgressColorMode.CoverAccent ||
+        settings.SpectrumColorMode is SpectrumColorMode.CoverAccent or SpectrumColorMode.Gradient;
 
     private bool IsRejectedCover(string? trackId, byte[] bytes)
     {
@@ -1276,8 +1482,14 @@ public partial class MainWindow : Window
         _smtcTimelineMonitorWindow = null;
     }
 
-    private void AnchorToTaskbar()
+    private void AnchorToTaskbarForPreferredSizeChange()
     {
+        AnchorToTaskbar(animate: false);
+    }
+
+    private void AnchorToTaskbar(bool animate = true)
+    {
+        _anchorTimer.Stop();
         var metrics = GetTargetScreenMetrics();
         var workArea = metrics.WorkArea;
         var screenWidth = metrics.Bounds.Width;
@@ -1299,18 +1511,38 @@ public partial class MainWindow : Window
         var bottomAnchorHeight = settings.AutoAdjustWindowHeight
             ? Math.Max(36, LyricsDisplay.PreferredWindowBottomAnchorHeight + settings.WindowHeightOffset)
             : desiredHeight;
-        Width = desiredWidth;
-        Height = desiredHeight;
 
-        Left = settings.HorizontalAnchor switch
+        var desiredLeft = settings.HorizontalAnchor switch
         {
             LyricsHorizontalAnchor.Left => metrics.Bounds.Left + Math.Max(0, settings.XOffset),
-            LyricsHorizontalAnchor.Center => metrics.Bounds.Left + ((screenWidth - Width) / 2.0) + settings.XOffset,
-            _ => Math.Max(metrics.Bounds.Left, metrics.Bounds.Right - Width - 230 + settings.XOffset)
+            LyricsHorizontalAnchor.Center => metrics.Bounds.Left + ((screenWidth - desiredWidth) / 2.0) + settings.XOffset,
+            _ => Math.Max(metrics.Bounds.Left, metrics.Bounds.Right - desiredWidth - 230 + settings.XOffset)
         };
 
         var verticalGrowth = Math.Max(0, desiredHeight - bottomAnchorHeight);
-        Top = metrics.Bounds.Top + screenHeight - taskbarHeight + ((taskbarHeight - bottomAnchorHeight) / 2.0) + settings.YOffset - verticalGrowth;
+        var desiredTop = metrics.Bounds.Top + screenHeight - taskbarHeight + ((taskbarHeight - bottomAnchorHeight) / 2.0) + settings.YOffset - verticalGrowth;
+        ApplyAnchorBounds(desiredLeft, desiredTop, desiredWidth, desiredHeight);
+    }
+
+    private void ApplyAnchorBounds(
+        double left,
+        double top,
+        double width,
+        double height)
+    {
+        StopAnchorAnimations();
+        Left = left;
+        Top = top;
+        Width = width;
+        Height = height;
+    }
+
+    private void StopAnchorAnimations()
+    {
+        BeginAnimation(LeftProperty, null);
+        BeginAnimation(TopProperty, null);
+        BeginAnimation(WidthProperty, null);
+        BeginAnimation(HeightProperty, null);
     }
 
     private (Rect Bounds, Rect WorkArea) GetTargetScreenMetrics()
@@ -1392,7 +1624,7 @@ public partial class MainWindow : Window
             Dispatcher.BeginInvoke(() =>
             {
                 EnsureVisibleIfExpected();
-                AnchorToTaskbar();
+                AnchorToTaskbar(animate: false);
                 AttachToTaskbarHost();
             });
         }
@@ -1409,10 +1641,13 @@ public partial class MainWindow : Window
 
         if (!IsVisible)
         {
-            Show();
+            ShowSoft();
+        }
+        else
+        {
+            AnchorToTaskbar(animate: false);
         }
 
-        AnchorToTaskbar();
         AttachToTaskbarHost();
     }
 }

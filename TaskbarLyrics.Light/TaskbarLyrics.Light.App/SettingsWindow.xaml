@@ -270,10 +270,8 @@
                                         <ComboBox x:Name="PlayerProfileProgressStyleCombo" Style="{StaticResource SettingsComboBoxStyle}">
                                             <ComboBoxItem Content="关闭" Tag="Off" />
                                             <ComboBoxItem Content="底部细线" Tag="BottomLine" />
-                                            <ComboBoxItem Content="歌词下划线" Tag="LyricUnderline" />
                                             <ComboBoxItem Content="封面进度环" Tag="CoverRing" />
                                             <ComboBoxItem Content="封面底边" Tag="CoverBottomBar" />
-                                            <ComboBoxItem Content="频谱底线" Tag="SpectrumBaseline" />
                                             <ComboBoxItem Content="时间胶囊" Tag="TimePill" />
                                             <ComboBoxItem Content="呼吸进度点" Tag="Dots" />
                                             <ComboBoxItem Content="边框进度环" Tag="BorderRing" />
@@ -295,6 +293,19 @@
                                     </StackPanel>
                                 </Border>
                             </UniformGrid>
+                            <Border Style="{StaticResource SettingsRowCardStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="该播放器强制显示翻译" FontWeight="SemiBold" />
+                                        <TextBlock Text="全局未开启翻译时，也可让当前播放器方案单独显示翻译。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                    <CheckBox x:Name="PlayerProfileTranslationCheck" Grid.Column="1" Style="{StaticResource SettingsToggleSwitchStyle}" />
+                                </Grid>
+                            </Border>
                         </StackPanel>
                     </Border>
 
@@ -394,6 +405,23 @@
                                     <ComboBox x:Name="TranslationLayoutCombo" Grid.Column="1" Style="{StaticResource SettingsComboBoxStyle}">
                                         <ComboBoxItem Content="同行显示" Tag="Inline" />
                                         <ComboBoxItem Content="译文换行" Tag="NewLine" />
+                                    </ComboBox>
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource SettingsRowCardStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="180" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="封面切换动效" FontWeight="SemiBold" />
+                                        <TextBlock Text="切歌时控制新旧封面的替换节奏。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                    <ComboBox x:Name="CoverTransitionStyleCombo" Grid.Column="1" Style="{StaticResource SettingsComboBoxStyle}">
+                                        <ComboBoxItem Content="右至左滑动" Tag="SlideLeft" />
+                                        <ComboBoxItem Content="淡入淡出" Tag="Fade" />
+                                        <ComboBoxItem Content="无动效" Tag="None" />
                                     </ComboBox>
                                 </Grid>
                             </Border>
@@ -952,10 +980,8 @@
                                     <ComboBox x:Name="SongProgressStyleCombo" Grid.Column="1" Style="{StaticResource SettingsComboBoxStyle}">
                                         <ComboBoxItem Content="关闭" Tag="Off" />
                                         <ComboBoxItem Content="底部细线" Tag="BottomLine" />
-                                        <ComboBoxItem Content="歌词下划线" Tag="LyricUnderline" />
                                         <ComboBoxItem Content="封面进度环" Tag="CoverRing" />
                                         <ComboBoxItem Content="封面底边" Tag="CoverBottomBar" />
-                                        <ComboBoxItem Content="频谱底线" Tag="SpectrumBaseline" />
                                         <ComboBoxItem Content="时间胶囊" Tag="TimePill" />
                                         <ComboBoxItem Content="呼吸进度点" Tag="Dots" />
                                         <ComboBoxItem Content="边框进度环" Tag="BorderRing" />
@@ -1027,7 +1053,7 @@
                                     </Grid.ColumnDefinitions>
                                     <StackPanel>
                                         <TextBlock Text="进度粗细 (px)" FontWeight="SemiBold" />
-                                        <TextBlock Text="影响细线、下划线、封面环和频谱底线。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
+                                        <TextBlock Text="影响底部细线、封面进度、时间胶囊和边框进度。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
                                     </StackPanel>
                                     <ui:NumberStepper x:Name="SongProgressThicknessStepper" Grid.Column="1" Minimum="1" Maximum="8" Step="0.5" Decimals="1" />
                                 </Grid>
@@ -1215,8 +1241,6 @@
                                     <TextBlock Text="歌词切换动画" FontWeight="SemiBold" />
                                     <ComboBox x:Name="TransitionStyleCombo" Grid.Column="1" Style="{StaticResource SettingsComboBoxStyle}">
                                         <ComboBoxItem Content="上滑" Tag="Slide" />
-                                        <ComboBoxItem Content="淡入淡出" Tag="Fade" />
-                                        <ComboBoxItem Content="紧凑滑动" Tag="CompactSlide" />
                                         <ComboBoxItem Content="无动画" Tag="None" />
                                     </ComboBox>
                                 </Grid>
@@ -1453,7 +1477,7 @@
                     <Border x:Name="SectionDebug" Style="{StaticResource SettingsCardStyle}">
                         <StackPanel>
                             <TextBlock Text="维护调试" FontSize="18" FontWeight="SemiBold" />
-                            <TextBlock Text="查看运行诊断、调整频谱参数、清理缓存或重新匹配歌词。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,5,0,14" />
+                            <TextBlock Text="查看运行诊断、调整频谱参数、清理缓存或重新匹配歌词与封面。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,5,0,14" />
                             <TextBlock Text="诊断工具" Style="{StaticResource SettingsFirstGroupTitleStyle}" />
                             <Border Style="{StaticResource SettingsRowCardStyle}">
                                 <Grid>

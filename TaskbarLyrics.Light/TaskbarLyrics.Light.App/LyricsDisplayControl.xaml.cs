@@ -15,6 +15,7 @@ using Windows.Graphics.Imaging;
 using Windows.Storage.Streams;
 using Media = System.Windows.Media;
 using ImageSharpImage = SixLabors.ImageSharp.Image;
+using WpfImage = System.Windows.Controls.Image;
 
 namespace TaskbarLyrics.Light.App;
 
@@ -22,7 +23,6 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
 {
     private const string SearchingText = "正在检索歌词...";
     private const int SpectrumBarCount = 24;
-    private const int TransitionDurationMs = 560;
     private const double TrackSwitchSearchMinVisibleMs = 900;
     private const double DescenderBuffer = 2;
     private const double MinHostHeight = 26;
@@ -33,6 +33,7 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
     private const double LyricsGridTopMargin = 3;
     private const double WindowVerticalMargin = 6;
     private const double StackedTransitionClipBuffer = 8;
+    private const double SingleBlockTransitionClipBuffer = 8;
     private const double WindowHorizontalMargin = 16;
     private const double SurfaceHorizontalPadding = 8;
     private const double DefaultCoverGap = 8;
@@ -40,6 +41,11 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
     private const double LyricsTextPadding = 24;
     private const double StackedSideMargin = 4;
     private const double MinLyricsContentWidth = 160;
+    private const double PrimaryLineYOffset = 1;
+    private const double SecondaryLineYOffset = 1;
+    private const double IncomingLineFadeStart = 0.08;
+    private const double IncomingLineFadeDuration = 0.48;
+    private const double TransitionSettlePixelThreshold = 0.75;
     private const int ProgressDotCount = 28;
     private const double TimePillWidthReserve = 92;
     private const int MaxTextWidthCacheEntries = 512;
@@ -48,15 +54,22 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
     private readonly double[] _spectrumTargets = new double[SpectrumBarCount];
     private readonly double[] _spectrumVisuals = new double[SpectrumBarCount];
     private readonly Border[] _progressDots = new Border[ProgressDotCount];
-    private SolidColorBrush _primaryBrush = CreateFrozenBrush(Media.Colors.White);
-    private SolidColorBrush _secondaryBrush = CreateFrozenBrush(Media.Color.FromArgb(190, 255, 255, 255));
-    private SolidColorBrush _progressFillBrush = CreateFrozenBrush(Media.Colors.White);
-    private SolidColorBrush _progressTrackBrush = CreateFrozenBrush(Media.Color.FromArgb(36, 255, 255, 255));
-    private readonly CubicBezierEasing _slideEase = new(0.22, 0.72, 0.24, 1);
+    private readonly SolidColorBrush _primaryBrush = CreateMutableBrush(Media.Colors.White);
+    private readonly SolidColorBrush _secondaryBrush = CreateMutableBrush(Media.Color.FromArgb(190, 255, 255, 255));
+    private readonly SolidColorBrush _primaryTranslationBrush = CreateMutableBrush(Media.Colors.White);
+    private readonly SolidColorBrush _secondaryTranslationBrush = CreateMutableBrush(Media.Color.FromArgb(190, 255, 255, 255));
+    private readonly SolidColorBrush _progressFillBrush = CreateMutableBrush(Media.Colors.White);
+    private readonly SolidColorBrush _progressTrackBrush = CreateMutableBrush(Media.Color.FromArgb(36, 255, 255, 255));
+    private readonly SolidColorBrush _backgroundProgressBrush = CreateMutableBrush(Media.Color.FromArgb(46, 255, 255, 255));
+    private readonly SolidColorBrush _surfaceBrush = CreateMutableBrush(Media.Colors.Transparent);
+    private readonly SolidColorBrush _surfaceBorderBrush = CreateMutableBrush(Media.Color.FromArgb(41, 255, 255, 255));
+    private readonly SolidColorBrush _coverGlowBrush = CreateMutableBrush(Media.Colors.Transparent);
     private readonly Dictionary<RowHeightCacheKey, double> _rowHeightCache = new();
     private readonly Dictionary<TextWidthCacheKey, double> _textWidthCache = new();
+    private readonly Dictionary<UIElement, bool> _progressVisibilityTargets = new();
 
     private EventHandler? _spectrumRenderingHandler;
+    private EventHandler? _progressRenderingHandler;
 
     private string _displayedCurrent = string.Empty;
     private string _displayedNext = string.Empty;
@@ -70,8 +83,11 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
     private double _lineGapOffset;
     private double _rowHeightPx = 14;
     private double _nextRowHeightPx = 14;
+    private double _currentRowBoxHeight = 14;
+    private double _nextRowBoxHeight = 14;
     private double _rowGapPx = 1;
     private double _linePitchPx = 15;
+    private double _lyricsTrackTopInset;
     private double _currentFontSize = 13;
     private double _nextFontSize = 12;
 
@@ -85,10 +101,16 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
     private SongProgressColorMode _songProgressColorMode = SongProgressColorMode.Text;
     private string _songProgressColor = "#FFFFFFFF";
     private SongProgressAnchor _songProgressAnchor = SongProgressAnchor.Left;
+    private bool _hasSongProgressVisual;
+    private double _songProgressVisual;
+    private long _progressLastTimestamp;
     private LyricTranslationLayout _translationLayout = LyricTranslationLayout.Inline;
     private TextEffectStyle _textEffectStyle = TextEffectStyle.Shadow;
     private SpectrumColorMode _spectrumColorMode = SpectrumColorMode.Text;
     private AnimationIntensity _animationIntensity = AnimationIntensity.Smooth;
+    private CoverTransitionStyle _coverTransitionStyle = CoverTransitionStyle.SlideLeft;
+    private bool _showLyricTranslation;
+    private bool _useSingleLyricBlock;
     private double _translationFontScale = 0.86;
     private double _translationOpacity = 1;
     private double _songProgressThickness = 2;
@@ -107,10 +129,13 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
     private string _transitionPromoted = string.Empty;
     private string _transitionUpcoming = string.Empty;
     private double _transitionProgress;
+    private double _transitionTargetSecondaryOpacity = 0.72;
     private int _transitionLineIndex = -1;
+    private bool _transitionUsesTranslationPair;
 
     private bool _useCoverImageA = true;
     private int _coverGeneration;
+    private int _trackInfoGeneration;
     private bool _autoAdjustWindowWidth = true;
     private bool _metricsUpdatePending;
     private double _lastNotifiedPreferredHostHeight;
@@ -121,6 +146,8 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
     private Media.FontFamily _fontFamily = new(AppSettings.DefaultFontFamily);
     private System.Windows.FontWeight _fontWeight = FontWeights.Bold;
     private Media.Effects.Effect? _textShadowEffect;
+    private Media.Color _resolvedPrimaryColor = Media.Colors.White;
+    private Media.Color _resolvedSecondaryColor = Media.Color.FromArgb(190, 255, 255, 255);
     private Media.Color? _coverAccentColor;
     private double _coverSize = DefaultCoverSize;
     private double _coverCornerRadius = 6;
@@ -139,6 +166,7 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
     private bool _showCover = true;
     private bool _hasSongProgress;
     private bool _isSongProgressPlaying;
+    private SongProgressDisplayStyle _lastActiveSongProgressStyle = SongProgressDisplayStyle.Off;
     private double _songProgress;
     private TimeSpan _songProgressPosition;
     private TimeSpan _songProgressDuration;
@@ -156,16 +184,18 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         _showStackedTrackInfo &&
         (!string.IsNullOrWhiteSpace(_trackTitle) || !string.IsNullOrWhiteSpace(_trackArtist));
 
+    private double GetLyricsGridTopInset() => IsStackedCoverLayout ? LyricsGridTopMargin : 0;
+
     public double PreferredWindowHeight =>
         IsStackedCoverLayout
-            ? _coverSize + _stackedCoverLyricsGap + PreferredHostHeight + LyricsGridTopMargin + WindowVerticalMargin +
+            ? GetCoverSlotSize() + _stackedCoverLyricsGap + PreferredHostHeight + LyricsGridTopMargin + WindowVerticalMargin +
                 (StackedTransitionClipBuffer * 2)
             : PreferredWindowBottomAnchorHeight;
 
     public double PreferredWindowBottomAnchorHeight =>
         Math.Max(
-            (_showCover ? _coverSize : 0) + WindowVerticalMargin,
-            PreferredHostHeight + LyricsGridTopMargin + WindowVerticalMargin);
+            (_showCover ? GetCoverSlotSize() : 0) + WindowVerticalMargin,
+            PreferredHostHeight + GetLyricsGridTopInset() + WindowVerticalMargin + (GetSingleBlockTransitionClipBuffer() * 2));
 
     public double PreferredWindowWidth =>
         WindowWidthLimits.Clamp(
@@ -194,6 +224,8 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         RenderOptions.SetBitmapScalingMode(TrackPanel, BitmapScalingMode.HighQuality);
         RenderOptions.SetBitmapScalingMode(CoverImageA, BitmapScalingMode.HighQuality);
         RenderOptions.SetBitmapScalingMode(CoverImageB, BitmapScalingMode.HighQuality);
+        CoverImageA.RenderTransform = new TranslateTransform();
+        CoverImageB.RenderTransform = new TranslateTransform();
         CoverBorder.SizeChanged += (_, _) =>
         {
             ApplyCoverClip();
@@ -248,6 +280,7 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
         StopSpectrumRenderer();
+        StopProgressRenderer();
         StopTransitionAnimations();
         _searchDwellTimer?.Stop();
     }
@@ -259,8 +292,22 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         Media.Color? coverAccentColor = null,
         Media.Color? surfaceColorSeed = null)
     {
-        _primaryBrush = CreateFrozenBrush(primary);
-        _secondaryBrush = CreateFrozenBrush(secondary);
+        var wasSingleLyricBlock = UsesSingleLyricBlock;
+        var previousRequestedFontSize = _requestedFontSize;
+        var previousAutoAdjustLineGap = _autoAdjustLineGap;
+        var previousManualLineGap = _manualLineGap;
+        var previousLineGapOffset = _lineGapOffset;
+        var previousFontFamily = _fontFamily.Source;
+        var previousFontWeight = _fontWeight;
+        var previousTransitionStyle = _transitionStyle;
+        var previousTranslationLayout = _translationLayout;
+        var previousShowLyricTranslation = _showLyricTranslation;
+        var previousTranslationFontScale = _translationFontScale;
+        _animationIntensity = Enum.IsDefined(settings.AnimationIntensity)
+            ? settings.AnimationIntensity
+            : AnimationIntensity.Smooth;
+        _resolvedPrimaryColor = primary;
+        _resolvedSecondaryColor = secondary;
         _coverAccentColor = coverAccentColor;
         _requestedFontSize = Math.Clamp(settings.FontSize, 10, 40);
         _autoAdjustLineGap = settings.AutoAdjustLineGap;
@@ -269,13 +316,15 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         _fontFamily = new Media.FontFamily(BundledFontRegistrar.ResolveFontFamily(settings.FontFamily));
         _fontWeight = ParseFontWeight(settings.FontWeight);
         _transitionStyle = Enum.IsDefined(settings.TransitionStyle)
-            ? settings.TransitionStyle
+            ? AppSettings.NormalizeTransitionStyle(settings.TransitionStyle)
             : LyricTransitionStyle.Slide;
         _translationLayout = Enum.IsDefined(settings.TranslationLayout)
             ? settings.TranslationLayout
             : LyricTranslationLayout.Inline;
+        _showLyricTranslation = settings.ShowLyricTranslation;
         _translationFontScale = Math.Clamp(settings.TranslationFontScale, 0.62, 1);
         _translationOpacity = Math.Clamp(settings.TranslationOpacity, 0.18, 1);
+        ApplyTextBrushColors(primary, secondary);
         _textEffectStyle = Enum.IsDefined(settings.TextEffectStyle)
             ? settings.TextEffectStyle
             : (settings.ShowTextShadow ? TextEffectStyle.Shadow : TextEffectStyle.None);
@@ -286,9 +335,6 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         _spectrumColorMode = Enum.IsDefined(settings.SpectrumColorMode)
             ? settings.SpectrumColorMode
             : SpectrumColorMode.Text;
-        _animationIntensity = Enum.IsDefined(settings.AnimationIntensity)
-            ? settings.AnimationIntensity
-            : AnimationIntensity.Smooth;
         _songProgressThickness = Math.Clamp(settings.SongProgressThickness, 1, 8);
         _songProgressOpacity = Math.Clamp(settings.SongProgressOpacity, 0.15, 1);
         _songProgressColorMode = Enum.IsDefined(settings.SongProgressColorMode)
@@ -305,38 +351,104 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         _rowHeightCache.Clear();
         _textWidthCache.Clear();
         _autoAdjustWindowWidth = settings.AutoAdjustWindowWidth;
-        _songProgressStyle = Enum.IsDefined(settings.SongProgressStyle)
-            ? settings.SongProgressStyle
-            : SongProgressDisplayStyle.Off;
+        _songProgressStyle = AppSettings.NormalizeSongProgressStyle(settings.SongProgressStyle);
+        _coverTransitionStyle = Enum.IsDefined(settings.CoverTransitionStyle)
+            ? settings.CoverTransitionStyle
+            : CoverTransitionStyle.SlideLeft;
         ApplySpectrumStyle(settings.SpectrumStyle);
         ApplyProgressVisualStyle();
         ApplyCoverStyle(settings);
         ApplyTextTrimming();
 
-        SurfaceBorder.Background = CreateSurfaceBrush(settings, surfaceColorSeed ?? primary);
+        ApplySurfaceBrush(settings, surfaceColorSeed ?? primary);
 
-        SurfaceBorder.BorderBrush = settings.ShowBorder
-            ? CreateFrozenBrush(Media.Color.FromArgb(41, 255, 255, 255))
-            : Media.Brushes.Transparent;
+        SurfaceBorder.BorderBrush = _surfaceBorderBrush;
+        AnimateBrushColor(
+            _surfaceBorderBrush,
+            settings.ShowBorder ? Media.Color.FromArgb(41, 255, 255, 255) : Media.Colors.Transparent);
         SurfaceBorder.BorderThickness = settings.ShowBorder ? new Thickness(1) : new Thickness(0);
 
         _textShadowEffect = CreateTextEffect();
 
+        var shouldUseSingleLyricBlock = ShouldUseSingleLyricBlockForLine(GetActivePrimaryLineForBlockMode());
+        var singleLyricBlockChanged = wasSingleLyricBlock != shouldUseSingleLyricBlock;
+        _useSingleLyricBlock = shouldUseSingleLyricBlock;
+        var transitionLayoutChanged =
+            _isTransitioning &&
+            (Math.Abs(previousRequestedFontSize - _requestedFontSize) > 0.1 ||
+             previousAutoAdjustLineGap != _autoAdjustLineGap ||
+             Math.Abs(previousManualLineGap - _manualLineGap) > 0.1 ||
+             Math.Abs(previousLineGapOffset - _lineGapOffset) > 0.1 ||
+             !string.Equals(previousFontFamily, _fontFamily.Source, StringComparison.Ordinal) ||
+             previousFontWeight != _fontWeight ||
+             previousTransitionStyle != _transitionStyle ||
+             previousTranslationLayout != _translationLayout ||
+             previousShowLyricTranslation != _showLyricTranslation ||
+             Math.Abs(previousTranslationFontScale - _translationFontScale) > 0.01);
+        if (singleLyricBlockChanged || transitionLayoutChanged)
+        {
+            CancelActiveTransition();
+        }
+
+        if (singleLyricBlockChanged)
+        {
+            _transitionUpcoming = " ";
+            _displayedNext = " ";
+            ApplyDisplayLine(NextLineText, " ", false, 0);
+            ApplyDisplayLine(OutgoingLineText, " ", false, 0);
+            ApplyDisplayLine(OutgoingTranslationText, " ", false, 0);
+            ApplyDisplayLine(IncomingLineText, " ", false, 0);
+            ApplyDisplayLine(IncomingTranslationText, " ", false, 0);
+            NextLineText.Opacity = UsesSingleLyricBlock ? 1 : _secondaryOpacity;
+            OutgoingLineText.Opacity = 0;
+            OutgoingTranslationText.Opacity = 0;
+            IncomingLineText.Opacity = 0;
+            IncomingTranslationText.Opacity = 0;
+        }
+
         CurrentLineText.Effect = _textShadowEffect;
         NextLineText.Effect = _textShadowEffect;
+        OutgoingLineText.Effect = _textShadowEffect;
+        OutgoingTranslationText.Effect = _textShadowEffect;
         IncomingLineText.Effect = _textShadowEffect;
+        IncomingTranslationText.Effect = _textShadowEffect;
         TrackTitleText.Effect = _textShadowEffect;
         TrackArtistText.Effect = _textShadowEffect;
 
         ApplyLineTypography(CurrentLineText, true);
         ApplyLineTypography(NextLineText, false);
+        ApplyLineTypography(OutgoingLineText, true);
+        ApplyLineTypography(OutgoingTranslationText, false);
         ApplyLineTypography(IncomingLineText, false);
+        ApplyLineTypography(IncomingTranslationText, false);
         ApplyTrackInfoTypography();
-        ApplyDisplayLine(CurrentLineText, _displayedCurrent, true, _lastLineProgress);
-        ApplyDisplayLine(NextLineText, _displayedNext, false, 0);
+        ApplyCurrentDisplayLine(_displayedCurrent, _lastLineProgress);
+        if (!UsesSingleLyricBlock)
+        {
+            ApplyDisplayLine(NextLineText, _displayedNext, false, 0);
+        }
         if (_isTransitioning && !string.IsNullOrWhiteSpace(_transitionUpcoming))
         {
-            ApplyDisplayLine(IncomingLineText, _transitionUpcoming, false, 0);
+            if (_transitionUsesTranslationPair)
+            {
+                var incomingUsesTranslationPair = ShouldUseSingleLyricBlockForLine(_transitionPromoted);
+                var incomingRows = GetTwoRowTransitionRows(
+                    _transitionPromoted,
+                    _transitionUpcoming,
+                    incomingUsesTranslationPair);
+                ApplyTwoRowTransitionPrimary(
+                    IncomingLineText,
+                    incomingRows.Primary,
+                    incomingRows.SecondaryIsTranslation);
+                ApplyTwoRowTransitionSecondary(
+                    IncomingTranslationText,
+                    incomingRows.Secondary,
+                    incomingRows.SecondaryIsTranslation);
+            }
+            else
+            {
+                ApplyDisplayLine(IncomingLineText, _transitionUpcoming, false, 0);
+            }
         }
 
         for (var i = 0; i < _spectrumBars.Length; i++)
@@ -351,11 +463,25 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         UpdateSongProgressVisuals();
     }
 
-    private Media.Brush CreateSurfaceBrush(AppSettings settings, Media.Color surfaceColorSeed)
+    private void ApplyTextBrushColors(Media.Color primary, Media.Color secondary)
+    {
+        AnimateBrushColor(_primaryBrush, primary);
+        AnimateBrushColor(_secondaryBrush, secondary);
+        AnimateBrushColor(_primaryTranslationBrush, WithAlpha(primary, GetTranslationAlpha()));
+        AnimateBrushColor(_secondaryTranslationBrush, WithAlpha(secondary, GetTranslationAlpha()));
+    }
+
+    private void ApplySurfaceBrush(AppSettings settings, Media.Color surfaceColorSeed)
+    {
+        SurfaceBorder.Background = _surfaceBrush;
+        AnimateBrushColor(_surfaceBrush, ResolveSurfaceColor(settings, surfaceColorSeed));
+    }
+
+    private Media.Color ResolveSurfaceColor(AppSettings settings, Media.Color surfaceColorSeed)
     {
         if (!settings.ShowBackground)
         {
-            return Media.Brushes.Transparent;
+            return Media.Colors.Transparent;
         }
 
         var alpha = (byte)Math.Clamp(settings.BackgroundOpacity * 255, 0, 255);
@@ -368,11 +494,16 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
             _ => Media.Color.FromArgb(alpha, 18, 18, 24)
         };
 
-        return CreateFrozenBrush(color);
+        return color;
     }
 
     private void ApplyCoverStyle(AppSettings settings)
     {
+        var previousStyle = _coverDisplayStyle;
+        var previousLayoutMode = _coverLayoutMode;
+        var previousShowCover = _showCover;
+        var previousSize = _coverSize;
+
         var style = settings.ShowCoverImage
             ? NormalizeCoverStyle(settings.CoverStyle)
             : CoverDisplayStyle.Hidden;
@@ -393,10 +524,20 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         _coverSize = Math.Clamp(settings.CoverSize, 24, 96);
         _coverGap = _showCover && !IsStackedCoverLayout ? DefaultCoverGap : 0;
 
+        var coverSurfaceChanged =
+            previousStyle != style ||
+            previousLayoutMode != _coverLayoutMode ||
+            previousShowCover != _showCover ||
+            Math.Abs(previousSize - _coverSize) > 0.5;
+        if (coverSurfaceChanged)
+        {
+            SettleCoverAnimationState();
+        }
+
         CoverBorder.Visibility = _showCover ? Visibility.Visible : Visibility.Collapsed;
         CoverBorder.Width = _coverSize;
         CoverBorder.Height = _coverSize;
-        CoverGlowBorder.Visibility = _showCoverGlow ? Visibility.Visible : Visibility.Collapsed;
+        CoverGlowBorder.Visibility = _showCover ? Visibility.Visible : Visibility.Collapsed;
         CoverGlowBorder.Width = _coverSize;
         CoverGlowBorder.Height = _coverSize;
         _coverCornerRadius = style switch
@@ -420,7 +561,7 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
     {
         if (IsStackedCoverLayout)
         {
-            CoverRow.Height = new GridLength(_coverSize);
+            CoverRow.Height = new GridLength(GetCoverSlotSize());
             CoverStackGapRow.Height = new GridLength(_stackedCoverLyricsGap);
             ContentRow.Height = new GridLength(1, GridUnitType.Star);
             CoverColumn.Width = new GridLength(0);
@@ -451,11 +592,13 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
                 LyricsGridTopMargin,
                 StackedSideMargin + GetTimePillContentInset(),
                 0);
-            LyricsViewport.Margin = new Thickness(0, -StackedTransitionClipBuffer, 0, -2 - StackedTransitionClipBuffer);
+            var transitionClipBuffer = GetLyricsTransitionClipBuffer();
+            LyricsViewport.Margin = new Thickness(0, -transitionClipBuffer, 0, -transitionClipBuffer);
+            LyricsViewport.Padding = new Thickness(0, transitionClipBuffer, 0, transitionClipBuffer);
             CoverBorder.RenderTransform = new TranslateTransform(_stackedCoverXOffset, _stackedCoverYOffset);
             CoverGlowBorder.RenderTransform = new TranslateTransform(_stackedCoverXOffset, _stackedCoverYOffset);
             StackedTrackInfoPanel.Visibility = IsStackedTrackInfoVisible ? Visibility.Visible : Visibility.Collapsed;
-            StackedTrackInfoPanel.Margin = new Thickness(StackedSideMargin + _coverSize + _stackedTrackInfoGap, 0, StackedSideMargin, 0);
+            StackedTrackInfoPanel.Margin = new Thickness(StackedSideMargin + GetCoverSlotSize() + _stackedTrackInfoGap, 0, StackedSideMargin, 0);
             StackedTrackInfoPanel.MaxWidth = MeasureStackedTrackInfoWidth();
             StackedTrackInfoPanel.RenderTransform = new TranslateTransform(_stackedCoverXOffset, _stackedCoverYOffset);
             ContentGrid.RenderTransform = new TranslateTransform(_stackedContentXOffset, _stackedContentYOffset);
@@ -466,7 +609,7 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         CoverRow.Height = new GridLength(1, GridUnitType.Star);
         CoverStackGapRow.Height = new GridLength(0);
         ContentRow.Height = new GridLength(0);
-        CoverColumn.Width = new GridLength(_showCover ? _coverSize : 0);
+        CoverColumn.Width = new GridLength(_showCover ? GetCoverSlotSize() : 0);
         CoverGapColumn.Width = new GridLength(_coverGap);
         ContentColumn.Width = new GridLength(1, GridUnitType.Star);
 
@@ -492,8 +635,10 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         StackedTrackInfoPanel.RenderTransform = null;
         ContentGrid.HorizontalAlignment = System.Windows.HorizontalAlignment.Stretch;
         ContentGrid.VerticalAlignment = System.Windows.VerticalAlignment.Stretch;
-        ContentGrid.Margin = new Thickness(2, LyricsGridTopMargin, 4 + GetTimePillContentInset(), 0);
-        LyricsViewport.Margin = new Thickness(0, 0, 0, -2);
+        ContentGrid.Margin = new Thickness(2, 0, 4 + GetTimePillContentInset(), 0);
+        var singleBlockClipBuffer = GetLyricsTransitionClipBuffer();
+        LyricsViewport.Margin = new Thickness(0, -singleBlockClipBuffer, 0, -singleBlockClipBuffer);
+        LyricsViewport.Padding = new Thickness(0, singleBlockClipBuffer, 0, singleBlockClipBuffer);
         CoverBorder.RenderTransform = null;
         CoverGlowBorder.RenderTransform = null;
         ContentGrid.RenderTransform = null;
@@ -504,7 +649,7 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
     {
         if (!IsStackedCoverLayout)
         {
-            return (_showCover ? _coverSize + _coverGap : 0) + LyricsColumnHorizontalMargin + PreferredContentWidth;
+            return (_showCover ? GetCoverSlotSize() + _coverGap : 0) + LyricsColumnHorizontalMargin + PreferredContentWidth;
         }
 
         var (left, right) = GetStackedLayoutHorizontalSpan();
@@ -522,11 +667,12 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         var minLeft = 0d;
         var maxRight = 0d;
 
-        IncludeSpan(StackedSideMargin + _stackedCoverXOffset, _coverSize);
+        var coverPadding = GetCoverProgressOuterPadding();
+        IncludeSpan(StackedSideMargin + _stackedCoverXOffset - coverPadding, GetCoverSlotSize());
         if (IsStackedTrackInfoVisible)
         {
             IncludeSpan(
-                StackedSideMargin + _coverSize + _stackedTrackInfoGap + _stackedCoverXOffset,
+                StackedSideMargin + GetCoverSlotSize() + _stackedTrackInfoGap + _stackedCoverXOffset,
                 MeasureStackedTrackInfoWidth() + StackedSideMargin);
         }
 
@@ -565,16 +711,17 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
 
     private void ApplyCoverGlow()
     {
+        CoverGlowBorder.Background = _coverGlowBrush;
         if (!_showCoverGlow)
         {
-            CoverGlowBorder.Opacity = 0;
-            CoverGlowBorder.Background = Media.Brushes.Transparent;
+            AnimateElementOpacity(CoverGlowBorder, 0, LightMotion.ColorTransitionMs(_animationIntensity));
+            AnimateBrushColor(_coverGlowBrush, Media.Colors.Transparent);
             return;
         }
 
-        var color = _coverAccentColor ?? _primaryBrush.Color;
-        CoverGlowBorder.Background = CreateFrozenBrush(WithAlpha(color, 220));
-        CoverGlowBorder.Opacity = _coverGlowOpacity;
+        var color = _coverAccentColor ?? _resolvedPrimaryColor;
+        AnimateBrushColor(_coverGlowBrush, WithAlpha(color, 220));
+        AnimateElementOpacity(CoverGlowBorder, _coverGlowOpacity, LightMotion.ColorTransitionMs(_animationIntensity));
     }
 
     public void SetLyrics(
@@ -590,6 +737,8 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         var safeNext = ToDisplayLine(next, " ");
         var p = Math.Clamp(progress, 0, 1);
         var normalizedTrackId = trackId ?? string.Empty;
+        ApplySingleLyricBlockModeForLine(safeCurrent);
+        var displayNext = GetSecondaryDisplayLine(safeNext);
 
         if (showSpectrum)
         {
@@ -607,6 +756,8 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
             SetCurrentLine(safeCurrent, p);
             SetSecondaryLine(" ");
             ApplyDisplayLine(IncomingLineText, " ", false, 0);
+            ApplyDisplayLine(IncomingTranslationText, " ", false, 0);
+            IncomingTranslationText.Opacity = 0;
             _lastCurrentLineIndex = currentLineIndex >= 0 ? currentLineIndex : -1;
             _lastLineProgress = p;
             SetDisplayMode(true);
@@ -623,7 +774,7 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
 
         if (normalizedTrackId.Length > 0 && normalizedTrackId != _lastTrackId)
         {
-            ResetForTrackSwitch(safeCurrent, safeNext, p, currentLineIndex, normalizedTrackId);
+            ResetForTrackSwitch(safeCurrent, displayNext, p, currentLineIndex, normalizedTrackId);
             return;
         }
 
@@ -632,13 +783,14 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
             _lastTrackId = normalizedTrackId;
         }
 
-        ApplyFrame(safeCurrent, safeNext, p, currentLineIndex);
+        ApplyFrame(safeCurrent, displayNext, p, currentLineIndex);
         UpdatePreferredWidth();
     }
 
     public void SetSongProgress(TimeSpan position, TimeSpan duration, bool isPlaying)
     {
         _isSongProgressPlaying = isPlaying;
+        var hadSongProgress = _hasSongProgress;
         if (duration <= TimeSpan.Zero || duration.TotalMilliseconds < 1000)
         {
             _hasSongProgress = false;
@@ -646,6 +798,7 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
             _songProgressPosition = TimeSpan.Zero;
             _songProgressDuration = TimeSpan.Zero;
             UpdateSongProgressVisuals();
+            StartProgressRenderer();
             return;
         }
 
@@ -662,7 +815,14 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         _songProgressPosition = position;
         _songProgressDuration = duration;
         _songProgress = Math.Clamp(position.TotalMilliseconds / duration.TotalMilliseconds, 0, 1);
+        if (!_hasSongProgressVisual || !hadSongProgress)
+        {
+            _songProgressVisual = _songProgress;
+            _hasSongProgressVisual = true;
+        }
+
         UpdateSongProgressVisuals();
+        StartProgressRenderer();
     }
 
     public void SetTrackInfo(string? title, string? artist)
@@ -676,10 +836,48 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
 
         _trackTitle = safeTitle;
         _trackArtist = safeArtist;
-        TrackTitleText.Text = string.IsNullOrWhiteSpace(_trackTitle) ? " " : _trackTitle;
-        TrackArtistText.Text = string.IsNullOrWhiteSpace(_trackArtist) ? " " : _trackArtist;
+        if (IsLoaded && IsStackedTrackInfoVisible && _animationIntensity != AnimationIntensity.Reduced)
+        {
+            AnimateTrackInfoChange(safeTitle, safeArtist);
+            return;
+        }
+
+        ApplyTrackInfoText(safeTitle, safeArtist);
         ApplyCoverLayout();
         UpdatePreferredWidth();
+    }
+
+    private void AnimateTrackInfoChange(string title, string artist)
+    {
+        var generation = ++_trackInfoGeneration;
+        var duration = Math.Max(120, LightMotion.LayerFadeMs(_animationIntensity) / 2);
+        AnimateElementOpacity(TrackTitleText, 0, duration, () =>
+        {
+            if (generation != _trackInfoGeneration)
+            {
+                return;
+            }
+
+            ApplyTrackInfoText(title, artist);
+            ApplyCoverLayout();
+            UpdatePreferredWidth();
+            AnimateElementOpacity(TrackTitleText, 1, duration);
+        });
+        AnimateElementOpacity(TrackArtistText, 0, duration, () =>
+        {
+            if (generation != _trackInfoGeneration)
+            {
+                return;
+            }
+
+            AnimateElementOpacity(TrackArtistText, 0.74, duration);
+        });
+    }
+
+    private void ApplyTrackInfoText(string title, string artist)
+    {
+        TrackTitleText.Text = string.IsNullOrWhiteSpace(title) ? " " : title;
+        TrackArtistText.Text = string.IsNullOrWhiteSpace(artist) ? " " : artist;
     }
 
     public void SetSpectrum(IReadOnlyList<float> values)
@@ -768,11 +966,10 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
     public bool SetCover(byte[]? imageBytes, string fallbackText, Media.Color fallbackColor)
     {
         var generation = ++_coverGeneration;
-        CoverBorder.Background = CreateFrozenBrush(fallbackColor);
-        CoverFallbackText.Text = string.IsNullOrWhiteSpace(fallbackText) ? "N" : fallbackText[..1].ToUpperInvariant();
 
         if (imageBytes is not { Length: > 0 })
         {
+            ApplyCoverFallbackVisual(fallbackText, fallbackColor);
             ShowCoverFallback();
             return false;
         }
@@ -782,6 +979,7 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
             var bitmap = DecodeCoverBitmap(imageBytes);
             if (bitmap is null)
             {
+                ApplyCoverFallbackVisual(fallbackText, fallbackColor);
                 ShowCoverFallback();
                 return false;
             }
@@ -791,9 +989,18 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         }
         catch
         {
+            ApplyCoverFallbackVisual(fallbackText, fallbackColor);
             ShowCoverFallback();
             return false;
         }
+    }
+
+    private void ApplyCoverFallbackVisual(string fallbackText, Media.Color fallbackColor)
+    {
+        CoverBorder.Background = CreateFrozenBrush(fallbackColor);
+        CoverFallbackText.Text = string.IsNullOrWhiteSpace(fallbackText)
+            ? "N"
+            : fallbackText[..1].ToUpperInvariant();
     }
 
     private static BitmapSource? DecodeCoverBitmap(byte[] imageBytes)
@@ -891,17 +1098,36 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
     {
         var incoming = _useCoverImageA ? CoverImageA : CoverImageB;
         var outgoing = _useCoverImageA ? CoverImageB : CoverImageA;
+        switch (_coverTransitionStyle)
+        {
+            case CoverTransitionStyle.None:
+                ShowCoverImmediately(incoming, outgoing, bitmap, generation);
+                return;
+            case CoverTransitionStyle.Fade:
+                FadeCover(incoming, outgoing, bitmap, generation);
+                return;
+            default:
+                SlideCoverLeft(incoming, outgoing, bitmap, generation);
+                return;
+        }
+    }
 
+    private void FadeCover(WpfImage incoming, WpfImage outgoing, BitmapSource bitmap, int generation)
+    {
+        var outgoingOpacity = CoerceOpacity(outgoing.Opacity);
         incoming.BeginAnimation(OpacityProperty, null);
         outgoing.BeginAnimation(OpacityProperty, null);
+        ResetCoverTranslate(incoming);
+        ResetCoverTranslate(outgoing);
         incoming.Source = bitmap;
         incoming.Opacity = 0;
-        CoverFallbackText.Opacity = 0;
+        outgoing.Opacity = outgoingOpacity;
+        AnimateCoverOpacity(CoverFallbackText, 0, generation);
 
         var fadeIn = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(GetCoverFadeDurationMs()))
         {
-            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
-            FillBehavior = FillBehavior.HoldEnd
+            EasingFunction = LightMotion.CreateFadeEase(),
+            FillBehavior = FillBehavior.Stop
         };
         fadeIn.Completed += (_, _) =>
         {
@@ -914,10 +1140,10 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
             incoming.Opacity = 1;
         };
 
-        var fadeOut = new DoubleAnimation(outgoing.Opacity, 0, TimeSpan.FromMilliseconds(GetCoverFadeDurationMs()))
+        var fadeOut = new DoubleAnimation(outgoingOpacity, 0, TimeSpan.FromMilliseconds(GetCoverFadeDurationMs()))
         {
-            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
-            FillBehavior = FillBehavior.HoldEnd
+            EasingFunction = LightMotion.CreateFadeEase(),
+            FillBehavior = FillBehavior.Stop
         };
         fadeOut.Completed += (_, _) =>
         {
@@ -929,6 +1155,7 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
             outgoing.BeginAnimation(OpacityProperty, null);
             outgoing.Source = null;
             outgoing.Opacity = 0;
+            ResetCoverTranslate(outgoing);
             _useCoverImageA = !_useCoverImageA;
         };
 
@@ -936,15 +1163,239 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         outgoing.BeginAnimation(OpacityProperty, fadeOut);
     }
 
+    private void SlideCoverLeft(WpfImage incoming, WpfImage outgoing, BitmapSource bitmap, int generation)
+    {
+        var distance = GetCoverSlideDistance();
+        var incomingTranslate = EnsureCoverTranslate(incoming);
+        var outgoingTranslate = EnsureCoverTranslate(outgoing);
+        var outgoingOpacity = CoerceOpacity(outgoing.Opacity);
+        var hasOutgoingVisual = outgoing.Source is not null && outgoingOpacity > 0.01;
+
+        incoming.BeginAnimation(OpacityProperty, null);
+        outgoing.BeginAnimation(OpacityProperty, null);
+        incomingTranslate.BeginAnimation(TranslateTransform.XProperty, null);
+        outgoingTranslate.BeginAnimation(TranslateTransform.XProperty, null);
+
+        incoming.Source = bitmap;
+        incoming.Opacity = 1;
+        outgoing.Opacity = outgoingOpacity;
+        incomingTranslate.X = distance;
+        outgoingTranslate.X = 0;
+        if (hasOutgoingVisual)
+        {
+            AnimateCoverOpacity(CoverFallbackText, 0, generation);
+        }
+
+        AnimateCoverTranslateX(incoming, distance, 0, generation);
+        AnimateCoverTranslateX(outgoing, outgoingTranslate.X, -distance, generation, () =>
+        {
+            outgoing.Source = null;
+            outgoing.Opacity = 0;
+            ResetCoverTranslate(outgoing);
+            incoming.Opacity = 1;
+            ResetCoverTranslate(incoming);
+            CoverFallbackText.BeginAnimation(OpacityProperty, null);
+            CoverFallbackText.Opacity = 0;
+            _useCoverImageA = !_useCoverImageA;
+        });
+    }
+
+    private void ShowCoverImmediately(WpfImage incoming, WpfImage outgoing, BitmapSource bitmap, int generation)
+    {
+        incoming.BeginAnimation(OpacityProperty, null);
+        outgoing.BeginAnimation(OpacityProperty, null);
+        CoverFallbackText.BeginAnimation(OpacityProperty, null);
+        ResetCoverTranslate(incoming);
+        ResetCoverTranslate(outgoing);
+
+        incoming.Source = bitmap;
+        incoming.Opacity = 1;
+        outgoing.Source = null;
+        outgoing.Opacity = 0;
+        CoverFallbackText.Opacity = 0;
+        if (generation == _coverGeneration)
+        {
+            _useCoverImageA = !_useCoverImageA;
+        }
+    }
+
+    private void SettleCoverAnimationState()
+    {
+        var visible = ResolveVisibleCoverImage();
+        foreach (var image in new[] { CoverImageA, CoverImageB })
+        {
+            image.BeginAnimation(OpacityProperty, null);
+            ResetCoverTranslate(image);
+        }
+
+        CoverFallbackText.BeginAnimation(OpacityProperty, null);
+        if (visible is null)
+        {
+            CoverImageA.Source = null;
+            CoverImageB.Source = null;
+            CoverImageA.Opacity = 0;
+            CoverImageB.Opacity = 0;
+            CoverFallbackText.Opacity = 1;
+            _useCoverImageA = true;
+            return;
+        }
+
+        var hidden = ReferenceEquals(visible, CoverImageA) ? CoverImageB : CoverImageA;
+        visible.Opacity = 1;
+        hidden.Source = null;
+        hidden.Opacity = 0;
+        CoverFallbackText.Opacity = 0;
+        _useCoverImageA = ReferenceEquals(visible, CoverImageB);
+    }
+
+    private WpfImage? ResolveVisibleCoverImage()
+    {
+        var hasA = CoverImageA.Source is not null && CoverImageA.Opacity > 0.01;
+        var hasB = CoverImageB.Source is not null && CoverImageB.Opacity > 0.01;
+        if (hasA && hasB)
+        {
+            return CoverImageA.Opacity >= CoverImageB.Opacity ? CoverImageA : CoverImageB;
+        }
+
+        if (hasA)
+        {
+            return CoverImageA;
+        }
+
+        return hasB ? CoverImageB : null;
+    }
+
     private void ShowCoverFallback()
     {
-        CoverImageA.BeginAnimation(OpacityProperty, null);
-        CoverImageB.BeginAnimation(OpacityProperty, null);
-        CoverImageA.Source = null;
-        CoverImageB.Source = null;
-        CoverImageA.Opacity = 0;
-        CoverImageB.Opacity = 0;
-        CoverFallbackText.Opacity = 1;
+        var generation = _coverGeneration;
+        if (_coverTransitionStyle == CoverTransitionStyle.None)
+        {
+            CoverImageA.BeginAnimation(OpacityProperty, null);
+            CoverImageB.BeginAnimation(OpacityProperty, null);
+            CoverFallbackText.BeginAnimation(OpacityProperty, null);
+            CoverImageA.Source = null;
+            CoverImageB.Source = null;
+            CoverImageA.Opacity = 0;
+            CoverImageB.Opacity = 0;
+            CoverFallbackText.Opacity = 1;
+            ResetCoverTranslate(CoverImageA);
+            ResetCoverTranslate(CoverImageB);
+            _useCoverImageA = true;
+            return;
+        }
+
+        if (_coverTransitionStyle == CoverTransitionStyle.SlideLeft)
+        {
+            var distance = GetCoverSlideDistance();
+            _useCoverImageA = true;
+            SlideCoverImageOut(CoverImageA, distance, generation);
+            SlideCoverImageOut(CoverImageB, distance, generation);
+        }
+        else
+        {
+            AnimateCoverOpacity(CoverImageA, 0, generation, () => CoverImageA.Source = null);
+            AnimateCoverOpacity(CoverImageB, 0, generation, () => CoverImageB.Source = null);
+        }
+
+        AnimateCoverOpacity(CoverFallbackText, 1, generation);
+    }
+
+    private void SlideCoverImageOut(WpfImage image, double distance, int generation)
+    {
+        if (image.Source is null && image.Opacity <= 0.01)
+        {
+            image.Source = null;
+            image.Opacity = 0;
+            ResetCoverTranslate(image);
+            return;
+        }
+
+        var translate = EnsureCoverTranslate(image);
+        var from = translate.X;
+        AnimateCoverOpacity(image, 0, generation);
+        AnimateCoverTranslateX(image, from, -distance, generation, () =>
+        {
+            image.Source = null;
+            image.Opacity = 0;
+            ResetCoverTranslate(image);
+            _useCoverImageA = true;
+        });
+    }
+
+    private void AnimateCoverOpacity(UIElement element, double target, int generation, Action? completed = null)
+    {
+        target = CoerceOpacity(target);
+        var from = CoerceOpacity(element.Opacity);
+        element.BeginAnimation(OpacityProperty, null);
+        element.Opacity = from;
+        var animation = new DoubleAnimation(from, target, TimeSpan.FromMilliseconds(GetCoverFadeDurationMs()))
+        {
+            EasingFunction = LightMotion.CreateFadeEase(),
+            FillBehavior = FillBehavior.Stop
+        };
+        animation.Completed += (_, _) =>
+        {
+            if (generation != _coverGeneration)
+            {
+                return;
+            }
+
+            element.BeginAnimation(OpacityProperty, null);
+            element.Opacity = target;
+            completed?.Invoke();
+        };
+        element.BeginAnimation(OpacityProperty, animation);
+    }
+
+    private void AnimateCoverTranslateX(
+        UIElement element,
+        double from,
+        double target,
+        int generation,
+        Action? completed = null)
+    {
+        var transform = EnsureCoverTranslate(element);
+        transform.BeginAnimation(TranslateTransform.XProperty, null);
+        transform.X = from;
+        var animation = new DoubleAnimation(from, target, TimeSpan.FromMilliseconds(GetCoverFadeDurationMs()))
+        {
+            EasingFunction = LightMotion.CreateMoveEase(),
+            FillBehavior = FillBehavior.Stop
+        };
+        animation.Completed += (_, _) =>
+        {
+            if (generation != _coverGeneration)
+            {
+                return;
+            }
+
+            transform.BeginAnimation(TranslateTransform.XProperty, null);
+            transform.X = target;
+            completed?.Invoke();
+        };
+        transform.BeginAnimation(TranslateTransform.XProperty, animation);
+    }
+
+    private double GetCoverSlideDistance() =>
+        Math.Max(1, Math.Max(_coverSize, CoverBorder.ActualWidth));
+
+    private static TranslateTransform EnsureCoverTranslate(UIElement element)
+    {
+        if (element.RenderTransform is TranslateTransform translate)
+        {
+            return translate;
+        }
+
+        translate = new TranslateTransform();
+        element.RenderTransform = translate;
+        return translate;
+    }
+
+    private static void ResetCoverTranslate(UIElement element)
+    {
+        var translate = EnsureCoverTranslate(element);
+        translate.BeginAnimation(TranslateTransform.XProperty, null);
+        translate.X = 0;
     }
 
     private void ApplyFrame(
@@ -953,6 +1404,8 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         double progress,
         int currentLineIndex)
     {
+        ApplySingleLyricBlockModeForLine(safeCurrent);
+
         if (_isTransitioning && UpdateTransitionFrame(safeCurrent, safeNext, progress, currentLineIndex))
         {
             return;
@@ -998,7 +1451,7 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
                 }
                 else
                 {
-                    ApplyDisplayLine(CurrentLineText, safeCurrent, true, progress);
+                    ApplyCurrentDisplayLine(safeCurrent, progress);
                 }
 
                 SetSecondaryLine(safeNext);
@@ -1025,7 +1478,7 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         else
         {
             SetSecondaryLine(safeNext);
-            ApplyDisplayLine(CurrentLineText, safeCurrent, true, progress);
+            ApplyCurrentDisplayLine(safeCurrent, progress);
             UpdateSecondaryOpacity(progress);
         }
 
@@ -1059,12 +1512,32 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         _transitionPromoted = safeCurrent;
         _transitionUpcoming = safeNext;
         _transitionProgress = progress;
+        _transitionTargetSecondaryOpacity = ResolveSecondaryOpacity(progress);
         _lastLineProgress = progress;
 
-        ApplyDisplayLine(NextLineText, _transitionPromoted, true, progress);
-        if (upcomingChanged)
+        if (_transitionUsesTranslationPair)
         {
-            ApplyDisplayLine(IncomingLineText, _transitionUpcoming, false, 0);
+            var incomingUsesTranslationPair = ShouldUseSingleLyricBlockForLine(_transitionPromoted);
+            var incomingRows = GetTwoRowTransitionRows(
+                _transitionPromoted,
+                _transitionUpcoming,
+                incomingUsesTranslationPair);
+            ApplyTwoRowTransitionPrimary(
+                IncomingLineText,
+                incomingRows.Primary,
+                incomingRows.SecondaryIsTranslation);
+            ApplyTwoRowTransitionSecondary(
+                IncomingTranslationText,
+                incomingRows.Secondary,
+                incomingRows.SecondaryIsTranslation);
+        }
+        else
+        {
+            ApplyDisplayLine(NextLineText, _transitionPromoted, true, progress);
+            if (upcomingChanged)
+            {
+                ApplyDisplayLine(IncomingLineText, _transitionUpcoming, false, 0);
+            }
         }
 
         if (promotedChanged || upcomingChanged)
@@ -1142,16 +1615,43 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         double progress,
         int currentLineIndex)
     {
+        var outgoingCurrent = _displayedCurrent;
+        var outgoingNext = _displayedNext;
+        var outgoingUsesTranslationPair = UsesSingleLyricBlock;
+        var incomingUsesTranslationPair = ShouldUseSingleLyricBlockForLine(newCurrent);
+        var shouldUseTwoRowOverlayTransition = outgoingUsesTranslationPair || incomingUsesTranslationPair;
+
+        if (_useSingleLyricBlock != incomingUsesTranslationPair)
+        {
+            _useSingleLyricBlock = incomingUsesTranslationPair;
+            _textWidthCache.Clear();
+            if (!shouldUseTwoRowOverlayTransition)
+            {
+                UpdateMetrics();
+            }
+        }
+        else if (!shouldUseTwoRowOverlayTransition)
+        {
+            ApplySingleLyricBlockModeForLine(newCurrent);
+        }
+
         if (_transitionStyle == LyricTransitionStyle.None)
         {
             StopTransitionAnimations();
             SetNoAnimState();
             SetCurrentLine(newCurrent, progress);
             SetSecondaryLine(newNext);
+            ApplyDisplayLine(OutgoingLineText, " ", false, 0);
+            ApplyDisplayLine(OutgoingTranslationText, " ", false, 0);
             ApplyDisplayLine(IncomingLineText, " ", false, 0);
+            ApplyDisplayLine(IncomingTranslationText, " ", false, 0);
             TrackTransform.Y = 0;
             CurrentLineText.Opacity = 0.98;
-            NextLineText.Opacity = _secondaryOpacity;
+            NextLineText.Opacity = UsesSingleLyricBlock ? 1 : _secondaryOpacity;
+            OutgoingLineText.Opacity = 0;
+            OutgoingTranslationText.Opacity = 0;
+            IncomingLineText.Opacity = 0;
+            IncomingTranslationText.Opacity = 0;
             _lastLineProgress = Math.Clamp(progress, 0, 1);
             if (currentLineIndex >= 0)
             {
@@ -1169,18 +1669,33 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
             return;
         }
 
+        if (shouldUseTwoRowOverlayTransition)
+        {
+            StartTranslationPairTransition(
+                newCurrent,
+                newNext,
+                progress,
+                currentLineIndex,
+                outgoingCurrent,
+                outgoingNext,
+                outgoingUsesTranslationPair,
+                incomingUsesTranslationPair);
+            return;
+        }
+
         StopTransitionAnimations();
         _isTransitioning = true;
         _transitionFinalized = false;
         var generation = ++_transitionGeneration;
 
         var promoted = ToDisplayLine(newCurrent, SearchingText);
-        var upcoming = ToDisplayLine(newNext, " ");
+        var upcoming = GetSecondaryDisplayLine(newNext);
         _transitionPromoted = promoted;
         _transitionUpcoming = upcoming;
         _transitionProgress = progress;
         _transitionLineIndex = currentLineIndex;
-        _transitionBaseNextOpacity = _secondaryOpacity;
+        _transitionBaseNextOpacity = UsesSingleLyricBlock ? 0 : _secondaryOpacity;
+        _transitionTargetSecondaryOpacity = ResolveSecondaryOpacity(progress);
         SetNoAnimState();
         SetLineRowHeight(NextLineText, _rowHeightPx);
         NextLineText.Foreground = _primaryBrush;
@@ -1189,13 +1704,136 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         SetLineRowHeight(IncomingLineText, _nextRowHeightPx);
         IncomingLineText.FontSize = _nextFontSize;
         ApplyDisplayLine(IncomingLineText, upcoming, false, 0);
-        IncomingLineText.Opacity = _secondaryOpacity;
+        ApplyDisplayLine(IncomingTranslationText, " ", false, 0);
+        IncomingLineText.Opacity = 0;
+        IncomingTranslationText.Opacity = 0;
         CurrentLineText.Opacity = 0.98;
         NextLineText.Opacity = _transitionBaseNextOpacity;
         ClearNoAnimState();
+        PositionPromotedLineForTransition();
+        UpdateIncomingLineTransitionOffset(0);
         UpdatePreferredWidth();
 
         _transitionStartTimestamp = Stopwatch.GetTimestamp();
+        SetMotionTextFormatting(true);
+        StartTransitionRendering(generation);
+
+        var durationMs = GetTransitionDurationMs();
+        _transitionFallbackTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(durationMs + 120) };
+        _transitionFallbackTimer.Tick += (_, _) =>
+        {
+            _transitionFallbackTimer?.Stop();
+            if (generation != _transitionGeneration)
+            {
+                return;
+            }
+
+            FinalizeTransition();
+        };
+        _transitionFallbackTimer.Start();
+    }
+
+    private (string Primary, string Secondary, bool SecondaryIsTranslation) GetTwoRowTransitionRows(
+        string current,
+        string next,
+        bool currentUsesTranslationPair)
+    {
+        var primary = ToDisplayLine(current, SearchingText);
+        if (currentUsesTranslationPair)
+        {
+            var (main, translation) = SplitTranslation(primary);
+            return (main, translation ?? " ", true);
+        }
+
+        return (primary, ToDisplayLine(next, " "), false);
+    }
+
+    private void ApplyTwoRowTransitionPrimary(
+        TextBlock textBlock,
+        string text,
+        bool pairHasTranslation)
+    {
+        if (pairHasTranslation)
+        {
+            ApplyPlainDisplayLine(textBlock, text, true, false);
+            return;
+        }
+
+        ApplyDisplayLine(textBlock, text, true, _transitionProgress);
+    }
+
+    private void ApplyTwoRowTransitionSecondary(
+        TextBlock textBlock,
+        string text,
+        bool isTranslation)
+    {
+        if (isTranslation)
+        {
+            ApplyPlainDisplayLine(textBlock, text, false, true);
+            return;
+        }
+
+        ApplyDisplayLine(textBlock, text, false, 0);
+    }
+
+    private void StartTranslationPairTransition(
+        string newCurrent,
+        string newNext,
+        double progress,
+        int currentLineIndex,
+        string outgoingCurrent,
+        string outgoingNext,
+        bool outgoingUsesTranslationPair,
+        bool incomingUsesTranslationPair)
+    {
+        StopTransitionAnimations();
+        _transitionUsesTranslationPair = true;
+        UpdateMetrics();
+        _isTransitioning = true;
+        _transitionFinalized = false;
+        var generation = ++_transitionGeneration;
+
+        var promoted = ToDisplayLine(newCurrent, SearchingText);
+        _transitionPromoted = promoted;
+        _transitionUpcoming = GetSecondaryDisplayLine(newNext);
+        _transitionProgress = progress;
+        _transitionLineIndex = currentLineIndex;
+        _transitionBaseNextOpacity = outgoingUsesTranslationPair ? 1 : _secondaryOpacity;
+        _transitionTargetSecondaryOpacity = incomingUsesTranslationPair ? 1 : ResolveSecondaryOpacity(progress);
+
+        SetNoAnimState();
+        TrackTransform.Y = 0;
+        CurrentLineText.Opacity = 0;
+        NextLineText.Opacity = 0;
+        var outgoingRows = GetTwoRowTransitionRows(outgoingCurrent, outgoingNext, outgoingUsesTranslationPair);
+        var incomingRows = GetTwoRowTransitionRows(promoted, newNext, incomingUsesTranslationPair);
+        SetLineRowHeight(OutgoingLineText, _rowHeightPx);
+        OutgoingLineText.FontSize = _currentFontSize;
+        OutgoingLineText.Foreground = _primaryBrush;
+        ApplyTwoRowTransitionPrimary(OutgoingLineText, outgoingRows.Primary, outgoingRows.SecondaryIsTranslation);
+        SetLineRowHeight(OutgoingTranslationText, _nextRowHeightPx);
+        OutgoingTranslationText.FontSize = _nextFontSize;
+        OutgoingTranslationText.Foreground = outgoingRows.SecondaryIsTranslation ? _secondaryTranslationBrush : _secondaryBrush;
+        ApplyTwoRowTransitionSecondary(OutgoingTranslationText, outgoingRows.Secondary, outgoingRows.SecondaryIsTranslation);
+        SetLineRowHeight(IncomingLineText, _rowHeightPx);
+        IncomingLineText.FontSize = _currentFontSize;
+        IncomingLineText.Foreground = _primaryBrush;
+        ApplyTwoRowTransitionPrimary(IncomingLineText, incomingRows.Primary, incomingRows.SecondaryIsTranslation);
+        SetLineRowHeight(IncomingTranslationText, _nextRowHeightPx);
+        IncomingTranslationText.FontSize = _nextFontSize;
+        IncomingTranslationText.Foreground = incomingRows.SecondaryIsTranslation ? _secondaryTranslationBrush : _secondaryBrush;
+        ApplyTwoRowTransitionSecondary(IncomingTranslationText, incomingRows.Secondary, incomingRows.SecondaryIsTranslation);
+        OutgoingLineText.Opacity = 0.98;
+        OutgoingTranslationText.Opacity = 0.98;
+        IncomingLineText.Opacity = 0;
+        IncomingTranslationText.Opacity = 0;
+        ClearNoAnimState();
+        UpdateTranslationPairOutgoingOffsets(0);
+        UpdateTranslationPairIncomingOffsets(0);
+        UpdatePreferredWidth();
+
+        _transitionStartTimestamp = Stopwatch.GetTimestamp();
+        SetMotionTextFormatting(true);
         StartTransitionRendering(generation);
 
         var durationMs = GetTransitionDurationMs();
@@ -1229,20 +1867,37 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
 
             var elapsed = Stopwatch.GetElapsedTime(_transitionStartTimestamp).TotalMilliseconds;
             var t = Math.Clamp(elapsed / GetTransitionDurationMs(), 0, 1);
-            var fadeOutE = GetFadeOutEase(t);
-            var fadeInE = GetFadeInEase(t);
-            var slideE = _slideEase.Ease(t);
-            var slideDistance = _transitionStyle switch
-            {
-                LyricTransitionStyle.Fade => 0,
-                LyricTransitionStyle.CompactSlide => _linePitchPx * 0.48,
-                _ => _linePitchPx
-            };
+            var opacityE = LightMotion.FadeEase(t);
+            var slideE = LightMotion.MoveEase(t);
+            var slideDistance = GetTransitionSlideDistance();
 
-            TrackTransform.Y = -slideDistance * slideE;
-            CurrentLineText.Opacity = 0.98 + ((0.16 - 0.98) * fadeOutE);
-            NextLineText.Opacity = _transitionBaseNextOpacity + ((0.98 - _transitionBaseNextOpacity) * fadeInE);
-            IncomingLineText.Opacity = _secondaryOpacity;
+            var slideOffset = ResolveTransitionSlideOffset(slideDistance, slideDistance * slideE);
+            if (_transitionUsesTranslationPair)
+            {
+                TrackTransform.Y = 0;
+                UpdateTranslationPairOutgoingOffsets(slideOffset);
+                UpdateTranslationPairIncomingOffsets(slideOffset);
+                var outgoingT = Math.Clamp(t / 0.72, 0, 1);
+                var fadeOut = 0.98 * (1 - LightMotion.FadeEase(outgoingT));
+                OutgoingLineText.Opacity = fadeOut;
+                OutgoingTranslationText.Opacity = fadeOut;
+                CurrentLineText.Opacity = 0;
+                NextLineText.Opacity = 0;
+                var incomingT = Math.Clamp((t - IncomingLineFadeStart) / IncomingLineFadeDuration, 0, 1);
+                var incomingOpacity = LightMotion.FadeEase(incomingT);
+                IncomingLineText.Opacity = 0.98 * incomingOpacity;
+                IncomingTranslationText.Opacity = _transitionTargetSecondaryOpacity * incomingOpacity;
+            }
+            else
+            {
+                TrackTransform.Y = -slideOffset;
+                UpdateIncomingLineTransitionOffset(slideOffset);
+                CurrentLineText.Opacity = 0.98 + ((0.16 - 0.98) * opacityE);
+                NextLineText.Opacity = _transitionBaseNextOpacity + ((0.98 - _transitionBaseNextOpacity) * opacityE);
+                var incomingT = Math.Clamp((t - IncomingLineFadeStart) / IncomingLineFadeDuration, 0, 1);
+                IncomingLineText.Opacity = _transitionTargetSecondaryOpacity * LightMotion.FadeEase(incomingT);
+                IncomingTranslationText.Opacity = 0;
+            }
 
             if (t >= 1)
             {
@@ -1272,30 +1927,35 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
 
         _transitionFinalized = true;
         StopTransitionAnimations();
+        SetMotionTextFormatting(false);
 
         SetNoAnimState();
         TrackTransform.Y = 0;
-        CurrentLineText.ClearValue(OpacityProperty);
-        NextLineText.ClearValue(OpacityProperty);
-        NextLineText.ClearValue(FontSizeProperty);
-        IncomingLineText.ClearValue(OpacityProperty);
         NextLineText.Foreground = _secondaryBrush;
         CurrentLineText.Opacity = 0.98;
+        var finalSecondaryOpacity = UsesSingleLyricBlock
+            ? 1
+            : double.IsNaN(_transitionTargetSecondaryOpacity) || _transitionTargetSecondaryOpacity <= 0.01
+                ? 0.72
+                : _transitionTargetSecondaryOpacity;
         ApplyLineMetrics();
         SetCurrentLine(_transitionPromoted, _transitionProgress);
         SetSecondaryLine(_transitionUpcoming);
+        ApplyDisplayLine(OutgoingLineText, " ", false, 0);
+        ApplyDisplayLine(OutgoingTranslationText, " ", false, 0);
         ApplyDisplayLine(IncomingLineText, " ", false, 0);
-
-        _secondaryOpacity = IncomingLineText.Opacity;
-        if (double.IsNaN(_secondaryOpacity) || _secondaryOpacity <= 0.01)
-        {
-            _secondaryOpacity = 0.72;
-        }
+        ApplyDisplayLine(IncomingTranslationText, " ", false, 0);
+        OutgoingLineText.Opacity = 0;
+        OutgoingTranslationText.Opacity = 0;
+        IncomingLineText.Opacity = 0;
+        IncomingTranslationText.Opacity = 0;
+        _secondaryOpacity = finalSecondaryOpacity;
+        NextLineText.Opacity = finalSecondaryOpacity;
 
         ClearNoAnimState();
 
-        UpdateSecondaryOpacity(_transitionProgress);
         _isTransitioning = false;
+        _transitionUsesTranslationPair = false;
         _lastLineProgress = Math.Clamp(_transitionProgress, 0, 1);
 
         if (_transitionLineIndex >= 0)
@@ -1324,6 +1984,7 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
     {
         TrackTransform.BeginAnimation(TranslateTransform.YProperty, null);
         TrackTransform.Y = 0;
+        ResetLineOffsets();
     }
 
     private void StopTransitionAnimations()
@@ -1335,6 +1996,17 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         CurrentLineText.BeginAnimation(OpacityProperty, null);
         NextLineText.BeginAnimation(OpacityProperty, null);
         NextLineText.BeginAnimation(FontSizeProperty, null);
+        OutgoingLineText.BeginAnimation(OpacityProperty, null);
+        OutgoingTranslationText.BeginAnimation(OpacityProperty, null);
+        IncomingLineText.BeginAnimation(OpacityProperty, null);
+        IncomingTranslationText.BeginAnimation(OpacityProperty, null);
+    }
+
+    private void SetMotionTextFormatting(bool isMoving)
+    {
+        TextOptions.SetTextFormattingMode(
+            LyricsLayer,
+            TextFormattingMode.Display);
     }
 
     private void CancelActiveTransition()
@@ -1342,15 +2014,117 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         _transitionGeneration++;
         _searchDwellTimer?.Stop();
         StopTransitionAnimations();
+        SetMotionTextFormatting(false);
         _isTransitioning = false;
         _transitionFinalized = false;
+        _transitionUsesTranslationPair = false;
         _queuedFrame = null;
         TrackTransform.Y = 0;
         CurrentLineText.Opacity = 0.98;
-        NextLineText.Opacity = _secondaryOpacity;
+        NextLineText.Opacity = UsesSingleLyricBlock ? 1 : _secondaryOpacity;
         NextLineText.Foreground = _secondaryBrush;
         ApplyLineMetrics();
+        OutgoingLineText.Opacity = 0;
+        OutgoingTranslationText.Opacity = 0;
         IncomingLineText.Opacity = 0;
+        IncomingTranslationText.Opacity = 0;
+        ResetLineOffsets();
+    }
+
+    private void UpdateIncomingLineTransitionOffset(double slideOffset)
+    {
+        var secondaryLineTop = _lyricsTrackTopInset + _currentRowBoxHeight + _rowGapPx;
+        SetTextBlockYOffset(IncomingLineText, secondaryLineTop + SecondaryLineYOffset);
+    }
+
+    private void PositionPromotedLineForTransition()
+    {
+        var y = _lyricsTrackTopInset + (_transitionStyle == LyricTransitionStyle.Fade
+            ? PrimaryLineYOffset - _linePitchPx
+            : PrimaryLineYOffset);
+        SetTextBlockYOffset(NextLineText, y);
+    }
+
+    private double GetTransitionSlideDistance() =>
+        _transitionStyle == LyricTransitionStyle.Fade
+            ? 0
+            : _transitionUsesTranslationPair
+                ? GetTranslationPairSlideDistance()
+                : _linePitchPx;
+
+    private double GetTranslationPairSlideDistance() =>
+        _currentRowBoxHeight + _rowGapPx + _nextRowBoxHeight;
+
+    private void UpdateTranslationPairOutgoingOffsets(double slideOffset)
+    {
+        var outgoingTop = _lyricsTrackTopInset - slideOffset;
+        SetTextBlockYOffset(OutgoingLineText, outgoingTop + PrimaryLineYOffset);
+        SetTextBlockYOffset(
+            OutgoingTranslationText,
+            outgoingTop + _currentRowBoxHeight + _rowGapPx + SecondaryLineYOffset);
+    }
+
+    private void UpdateTranslationPairIncomingOffsets(double slideOffset)
+    {
+        var incomingTop = _lyricsTrackTopInset + GetTranslationPairSlideDistance() - slideOffset;
+        SetTextBlockYOffset(IncomingLineText, incomingTop + PrimaryLineYOffset);
+        SetTextBlockYOffset(
+            IncomingTranslationText,
+            incomingTop + _currentRowBoxHeight + _rowGapPx + SecondaryLineYOffset);
+    }
+
+    private double ResolveTransitionSlideOffset(double targetOffset, double easedOffset)
+    {
+        if (targetOffset <= 0)
+        {
+            return 0;
+        }
+
+        var remaining = Math.Abs(targetOffset - easedOffset);
+        var pixelStep = GetDevicePixelStepY();
+        if (remaining <= Math.Max(TransitionSettlePixelThreshold, pixelStep))
+        {
+            return targetOffset;
+        }
+
+        return SnapToDevicePixelY(easedOffset);
+    }
+
+    private double SnapToDevicePixelY(double value)
+    {
+        var pixelStep = GetDevicePixelStepY();
+        return Math.Round(value / pixelStep) * pixelStep;
+    }
+
+    private double GetDevicePixelStepY()
+    {
+        var dpiScale = IsLoaded ? VisualTreeHelper.GetDpi(this).DpiScaleY : 1;
+        return 1.0 / Math.Max(0.1, dpiScale);
+    }
+
+    private void ResetLineOffsets()
+    {
+        SetTextBlockYOffset(CurrentLineText, _lyricsTrackTopInset + PrimaryLineYOffset);
+        SetTextBlockYOffset(NextLineText, _lyricsTrackTopInset + SecondaryLineYOffset);
+        SetTextBlockYOffset(OutgoingLineText, _lyricsTrackTopInset + PrimaryLineYOffset);
+        SetTextBlockYOffset(
+            OutgoingTranslationText,
+            _lyricsTrackTopInset + _currentRowBoxHeight + _rowGapPx + SecondaryLineYOffset);
+        SetTextBlockYOffset(IncomingLineText, _lyricsTrackTopInset + SecondaryLineYOffset);
+        SetTextBlockYOffset(
+            IncomingTranslationText,
+            _lyricsTrackTopInset + _currentRowBoxHeight + _rowGapPx + SecondaryLineYOffset);
+    }
+
+    private static void SetTextBlockYOffset(TextBlock textBlock, double y)
+    {
+        if (textBlock.RenderTransform is TranslateTransform transform)
+        {
+            transform.Y = y;
+            return;
+        }
+
+        textBlock.RenderTransform = new TranslateTransform(0, y);
     }
 
     private void SetDisplayMode(bool showSpectrum)
@@ -1370,7 +2144,8 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         }
         else
         {
-            ClearSpectrumBars();
+            _hasAudioDrivenSpectrum = false;
+            SetSpectrumTargetValues(null);
         }
 
         UpdatePreferredWidth();
@@ -1379,13 +2154,34 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
 
     private void AnimateLayerOpacity(UIElement layer, double target)
     {
-        layer.BeginAnimation(UIElement.OpacityProperty, null);
-        var animation = new DoubleAnimation(layer.Opacity, target, TimeSpan.FromMilliseconds(GetLayerFadeDurationMs()))
+        AnimateElementOpacity(layer, target, GetLayerFadeDurationMs());
+    }
+
+    private void AnimateElementOpacity(UIElement element, double target, int durationMs, Action? completed = null)
+    {
+        target = CoerceOpacity(target);
+        var from = CoerceOpacity(element.Opacity);
+        element.BeginAnimation(OpacityProperty, null);
+        element.Opacity = from;
+        if (!IsLoaded || Math.Abs(from - target) < 0.001 || durationMs <= 0)
         {
-            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
-            FillBehavior = FillBehavior.HoldEnd
+            element.Opacity = target;
+            completed?.Invoke();
+            return;
+        }
+
+        var animation = new DoubleAnimation(from, target, TimeSpan.FromMilliseconds(durationMs))
+        {
+            EasingFunction = LightMotion.CreateFadeEase(),
+            FillBehavior = FillBehavior.Stop
         };
-        layer.BeginAnimation(UIElement.OpacityProperty, animation);
+        animation.Completed += (_, _) =>
+        {
+            element.BeginAnimation(OpacityProperty, null);
+            element.Opacity = target;
+            completed?.Invoke();
+        };
+        element.BeginAnimation(OpacityProperty, animation, HandoffBehavior.SnapshotAndReplace);
     }
 
     private void SetSpectrumTargetValues(IReadOnlyList<float>? values)
@@ -1403,14 +2199,7 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
     private void ClearSpectrumBars()
     {
         _hasAudioDrivenSpectrum = false;
-        for (var i = 0; i < SpectrumBarCount; i++)
-        {
-            _spectrumTargets[i] = 0;
-            _spectrumVisuals[i] = 0;
-            SetSpectrumBarLevel(_spectrumBars[i], 0);
-        }
-
-        StopSpectrumRenderer();
+        SetSpectrumTargetValues(null);
     }
 
     private void StartSpectrumRenderer()
@@ -1482,7 +2271,7 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
             },
             TextEffectStyle.Glow => new Media.Effects.DropShadowEffect
             {
-                Color = _primaryBrush.Color,
+                Color = _resolvedPrimaryColor,
                 Opacity = 0.42,
                 BlurRadius = 8,
                 ShadowDepth = 0,
@@ -1502,13 +2291,18 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
 
     private Media.Brush GetSpectrumBrush(int index)
     {
+        if (_spectrumColorMode == SpectrumColorMode.Text)
+        {
+            return _primaryBrush;
+        }
+
         var color = _spectrumColorMode switch
         {
             SpectrumColorMode.CoverAccent when _coverAccentColor is { } accent =>
                 CreateReadableSpectrumColor(accent),
             SpectrumColorMode.Gradient =>
                 CreateGradientSpectrumColor(index),
-            _ => _primaryBrush.Color
+            _ => _resolvedPrimaryColor
         };
 
         return CreateFrozenBrush(color);
@@ -1522,7 +2316,7 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         var left = _coverAccentColor.HasValue
             ? CreateReadableSpectrumColor(_coverAccentColor.Value)
             : Media.Color.FromRgb(56, 189, 248);
-        var right = MixColors(_primaryBrush.Color, Media.Color.FromRgb(251, 146, 60), 0.36);
+        var right = MixColors(_resolvedPrimaryColor, Media.Color.FromRgb(251, 146, 60), 0.36);
         return MixColors(left, right, amount);
     }
 
@@ -1537,8 +2331,9 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
     private void ApplyProgressVisualStyle()
     {
         var primary = ResolveSongProgressColor();
-        _progressFillBrush = CreateFrozenBrush(WithAlpha(primary, (byte)Math.Clamp(Math.Round(255 * _songProgressOpacity), 0, 255)));
-        _progressTrackBrush = CreateFrozenBrush(WithAlpha(primary, (byte)Math.Clamp(Math.Round(54 * _songProgressOpacity), 8, 120)));
+        AnimateBrushColor(_progressFillBrush, WithAlpha(primary, (byte)Math.Clamp(Math.Round(255 * _songProgressOpacity), 0, 255)));
+        AnimateBrushColor(_progressTrackBrush, WithAlpha(primary, (byte)Math.Clamp(Math.Round(54 * _songProgressOpacity), 8, 120)));
+        AnimateBrushColor(_backgroundProgressBrush, WithAlpha(primary, (byte)Math.Clamp(Math.Round(46 * _songProgressOpacity), 10, 92)));
 
         BottomProgressTrack.Height = _songProgressThickness;
         BottomProgressTrack.Background = _progressTrackBrush;
@@ -1549,13 +2344,16 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         SpectrumProgressTrack.Height = Math.Max(1, _songProgressThickness * 0.75);
         SpectrumProgressTrack.Background = _progressTrackBrush;
         SpectrumProgressFill.Background = _progressFillBrush;
-        BackgroundProgressFill.Background = CreateFrozenBrush(WithAlpha(primary, (byte)Math.Clamp(Math.Round(46 * _songProgressOpacity), 10, 92)));
+        BackgroundProgressFill.Background = _backgroundProgressBrush;
         BackgroundProgressTrack.CornerRadius = SurfaceBorder.CornerRadius;
         BackgroundProgressFill.CornerRadius = SurfaceBorder.CornerRadius;
         ApplyProgressSurfaceInsets();
         ApplyBackgroundProgressClip();
         CoverBottomProgressTrack.Height = Math.Max(2, _songProgressThickness + 1);
+        CoverBottomProgressTrack.Background = _progressTrackBrush;
+        CoverBottomProgressTrack.CornerRadius = new CornerRadius(CoverBottomProgressTrack.Height / 2);
         CoverBottomProgressFill.Background = _progressFillBrush;
+        CoverBottomProgressFill.CornerRadius = CoverBottomProgressTrack.CornerRadius;
         CoverProgressRingTrack.StrokeThickness = Math.Max(1, _songProgressThickness);
         CoverProgressRingValue.StrokeThickness = Math.Max(1, _songProgressThickness + 0.2);
         CoverProgressRingTrack.Stroke = _progressTrackBrush;
@@ -1588,7 +2386,7 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
             return custom;
         }
 
-        return _primaryBrush.Color;
+        return _resolvedPrimaryColor;
     }
 
     private void ApplySongProgressWidth()
@@ -1677,6 +2475,13 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
     private void UpdateSongProgressVisuals()
     {
         var activeStyle = ResolveActiveSongProgressStyle();
+        if (activeStyle != _lastActiveSongProgressStyle)
+        {
+            _lastActiveSongProgressStyle = activeStyle;
+            ApplyCoverLayout();
+            UpdatePreferredWidth();
+        }
+
         ApplySongProgressWidth();
         ApplyProgressSurfaceInsets();
         UpdateSongProgressVisibility(activeStyle);
@@ -1686,14 +2491,14 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
             return;
         }
 
-        var progress = Math.Clamp(_songProgress, 0, 1);
+        var progress = Math.Clamp(_hasSongProgressVisual ? _songProgressVisual : _songProgress, 0, 1);
         switch (activeStyle)
         {
             case SongProgressDisplayStyle.BottomLine:
                 SetProgressFill(BottomProgressTrack, BottomProgressFill, BottomProgressScale, progress);
                 break;
             case SongProgressDisplayStyle.LyricUnderline:
-                LyricUnderlineOffset.Y = Math.Max(2, _rowHeightPx - 2);
+                LyricUnderlineOffset.Y = _lyricsTrackTopInset + Math.Max(2, _currentRowBoxHeight - 2);
                 SetProgressFill(LyricUnderlineTrack, LyricUnderlineFill, LyricUnderlineScale, progress);
                 break;
             case SongProgressDisplayStyle.CoverRing:
@@ -1722,26 +2527,81 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
 
     private void UpdateSongProgressVisibility(SongProgressDisplayStyle activeStyle)
     {
-        SetVisibility(BottomProgressTrack, activeStyle == SongProgressDisplayStyle.BottomLine);
-        SetVisibility(LyricUnderlineTrack, activeStyle == SongProgressDisplayStyle.LyricUnderline);
-        SetVisibility(CoverProgressRingTrack, activeStyle == SongProgressDisplayStyle.CoverRing);
-        SetVisibility(CoverProgressRingValue, activeStyle == SongProgressDisplayStyle.CoverRing);
-        SetVisibility(CoverBottomProgressTrack, activeStyle == SongProgressDisplayStyle.CoverBottomBar);
-        SetVisibility(SpectrumProgressTrack, activeStyle == SongProgressDisplayStyle.SpectrumBaseline);
-        SetVisibility(TimePillBorder, activeStyle == SongProgressDisplayStyle.TimePill);
-        SetVisibility(ProgressDotsPanel, activeStyle == SongProgressDisplayStyle.Dots);
-        SetVisibility(BorderProgressRingTrack, activeStyle == SongProgressDisplayStyle.BorderRing);
-        SetVisibility(BorderProgressRingValue, activeStyle == SongProgressDisplayStyle.BorderRing);
-        SetVisibility(BackgroundProgressTrack, activeStyle == SongProgressDisplayStyle.BackgroundFill);
+        SetProgressVisibility(BottomProgressTrack, activeStyle == SongProgressDisplayStyle.BottomLine);
+        SetProgressVisibility(LyricUnderlineTrack, activeStyle == SongProgressDisplayStyle.LyricUnderline);
+        SetProgressVisibility(CoverProgressRingTrack, activeStyle == SongProgressDisplayStyle.CoverRing);
+        SetProgressVisibility(CoverProgressRingValue, activeStyle == SongProgressDisplayStyle.CoverRing);
+        SetProgressVisibility(CoverBottomProgressTrack, activeStyle == SongProgressDisplayStyle.CoverBottomBar);
+        SetProgressVisibility(SpectrumProgressTrack, activeStyle == SongProgressDisplayStyle.SpectrumBaseline);
+        SetProgressVisibility(TimePillBorder, activeStyle == SongProgressDisplayStyle.TimePill);
+        SetProgressVisibility(ProgressDotsPanel, activeStyle == SongProgressDisplayStyle.Dots);
+        SetProgressVisibility(BorderProgressRingTrack, activeStyle == SongProgressDisplayStyle.BorderRing);
+        SetProgressVisibility(BorderProgressRingValue, activeStyle == SongProgressDisplayStyle.BorderRing);
+        SetProgressVisibility(BackgroundProgressTrack, activeStyle == SongProgressDisplayStyle.BackgroundFill);
     }
 
-    private static void SetVisibility(UIElement element, bool visible)
+    private void SetProgressVisibility(UIElement element, bool visible)
     {
-        var next = visible ? Visibility.Visible : Visibility.Collapsed;
-        if (element.Visibility != next)
+        if (_progressVisibilityTargets.TryGetValue(element, out var currentTarget) &&
+            currentTarget == visible)
         {
-            element.Visibility = next;
+            return;
         }
+
+        _progressVisibilityTargets[element] = visible;
+        var wasVisible = element.Visibility == Visibility.Visible;
+        var from = CoerceOpacity(element.Opacity);
+        element.BeginAnimation(OpacityProperty, null);
+
+        if (visible)
+        {
+            element.Visibility = Visibility.Visible;
+            element.Opacity = wasVisible && from > 0 ? from : 0;
+            AnimateProgressOpacity(element, element.Opacity, 1, visible);
+            return;
+        }
+
+        if (element.Visibility != Visibility.Visible)
+        {
+            element.Opacity = 1;
+            return;
+        }
+
+        element.Opacity = from;
+        AnimateProgressOpacity(element, from, 0, visible);
+    }
+
+    private void AnimateProgressOpacity(UIElement element, double from, double target, bool visibleTarget)
+    {
+        from = CoerceOpacity(from);
+        target = CoerceOpacity(target);
+        var duration = LightMotion.ProgressVisibilityMs(_animationIntensity);
+        var animation = new DoubleAnimation(from, target, TimeSpan.FromMilliseconds(duration))
+        {
+            EasingFunction = LightMotion.CreateFadeEase(),
+            FillBehavior = FillBehavior.Stop
+        };
+        animation.Completed += (_, _) =>
+        {
+            if (!_progressVisibilityTargets.TryGetValue(element, out var currentTarget) ||
+                currentTarget != visibleTarget)
+            {
+                return;
+            }
+
+            element.BeginAnimation(OpacityProperty, null);
+            if (visibleTarget)
+            {
+                element.Visibility = Visibility.Visible;
+                element.Opacity = 1;
+            }
+            else
+            {
+                element.Visibility = Visibility.Collapsed;
+                element.Opacity = 1;
+            }
+        };
+        element.BeginAnimation(OpacityProperty, animation);
     }
 
     private SongProgressDisplayStyle ResolveActiveSongProgressStyle()
@@ -1762,6 +2622,70 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         }
 
         return _songProgressStyle;
+    }
+
+    private void StartProgressRenderer()
+    {
+        if (_progressRenderingHandler is not null)
+        {
+            return;
+        }
+
+        _progressLastTimestamp = Stopwatch.GetTimestamp();
+        _progressRenderingHandler = (_, _) => OnProgressRenderFrame();
+        CompositionTarget.Rendering += _progressRenderingHandler;
+    }
+
+    private void StopProgressRenderer()
+    {
+        if (_progressRenderingHandler is null)
+        {
+            return;
+        }
+
+        CompositionTarget.Rendering -= _progressRenderingHandler;
+        _progressRenderingHandler = null;
+    }
+
+    private void OnProgressRenderFrame()
+    {
+        var now = Stopwatch.GetTimestamp();
+        var elapsedSeconds = Math.Clamp(
+            (now - _progressLastTimestamp) / (double)Stopwatch.Frequency,
+            0,
+            0.08);
+        _progressLastTimestamp = now;
+
+        if (!_hasSongProgressVisual)
+        {
+            _songProgressVisual = _songProgress;
+            _hasSongProgressVisual = true;
+        }
+
+        var activeStyle = ResolveActiveSongProgressStyle();
+        var target = activeStyle == SongProgressDisplayStyle.Off ? 0 : Math.Clamp(_songProgress, 0, 1);
+        var rate = LightMotion.ProgressFollowRate(_animationIntensity);
+        if (target < _songProgressVisual)
+        {
+            rate *= 1.35;
+        }
+
+        var follow = 1 - Math.Exp(-rate * elapsedSeconds);
+        _songProgressVisual += (target - _songProgressVisual) * follow;
+        if (Math.Abs(_songProgressVisual - target) < 0.0005)
+        {
+            _songProgressVisual = target;
+        }
+
+        UpdateSongProgressVisuals();
+
+        var keepRendering =
+            Math.Abs(_songProgressVisual - target) >= 0.0005 ||
+            (activeStyle == SongProgressDisplayStyle.Dots && _isSongProgressPlaying);
+        if (!keepRendering)
+        {
+            StopProgressRenderer();
+        }
     }
 
     private static void SetProgressFill(Border track, Border fill, ScaleTransform scale, double progress, double fallbackWidth = 0)
@@ -1808,28 +2732,50 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
     private void ApplyCoverProgressLayout()
     {
         var columnSpan = IsStackedCoverLayout ? 3 : 1;
+        Grid.SetRow(CoverProgressOverlay, 0);
+        Grid.SetColumn(CoverProgressOverlay, 0);
+        Grid.SetColumnSpan(CoverProgressOverlay, columnSpan);
+        CoverProgressOverlay.Width = _coverSize;
+        CoverProgressOverlay.Height = _coverSize;
+        CoverProgressOverlay.HorizontalAlignment = CoverBorder.HorizontalAlignment;
+        CoverProgressOverlay.VerticalAlignment = CoverBorder.VerticalAlignment;
+        CoverProgressOverlay.Margin = CoverBorder.Margin;
+        CoverProgressOverlay.RenderTransform = IsStackedCoverLayout
+            ? new TranslateTransform(_stackedCoverXOffset, _stackedCoverYOffset)
+            : null;
+
+        var ringPadding = GetCoverProgressRingPadding();
+        var ringSize = GetCoverProgressRingSize();
         foreach (var path in new[] { CoverProgressRingTrack, CoverProgressRingValue })
         {
             Grid.SetRow(path, 0);
             Grid.SetColumn(path, 0);
             Grid.SetColumnSpan(path, columnSpan);
-            path.Width = _coverSize + 4;
-            path.Height = _coverSize + 4;
+            path.Width = ringSize;
+            path.Height = ringSize;
             path.HorizontalAlignment = CoverBorder.HorizontalAlignment;
             path.VerticalAlignment = CoverBorder.VerticalAlignment;
             path.Margin = CoverBorder.Margin;
             path.RenderTransform = IsStackedCoverLayout
-                ? new TranslateTransform(_stackedCoverXOffset - 2, _stackedCoverYOffset)
+                ? new TranslateTransform(_stackedCoverXOffset - ringPadding, _stackedCoverYOffset)
                 : null;
         }
 
         UpdateCoverProgressGeometry();
     }
 
+    private double GetCoverProgressOuterPadding() =>
+        _showCover && _songProgressStyle == SongProgressDisplayStyle.CoverRing
+            ? GetCoverProgressRingPadding()
+            : 0;
+
+    private double GetCoverSlotSize() => _coverSize + (GetCoverProgressOuterPadding() * 2);
+
     private void UpdateCoverProgressGeometry()
     {
+        var progress = Math.Clamp(_hasSongProgressVisual ? _songProgressVisual : _songProgress, 0, 1);
         var trackGeometry = CreateCoverProgressGeometry(1);
-        var valueGeometry = CreateCoverProgressGeometry(_songProgress);
+        var valueGeometry = CreateCoverProgressGeometry(progress);
         CoverProgressRingTrack.Data = trackGeometry;
         CoverProgressRingValue.Data = valueGeometry;
     }
@@ -1847,8 +2793,9 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
 
         var inset = Math.Max(1, _songProgressThickness / 2);
         var radius = GetMaxCornerRadius(SurfaceBorder.CornerRadius);
+        var progress = Math.Clamp(_hasSongProgressVisual ? _songProgressVisual : _songProgress, 0, 1);
         BorderProgressRingTrack.Data = CreateRectangularProgressGeometry(width, height, 1, inset, radius);
-        BorderProgressRingValue.Data = CreateRectangularProgressGeometry(width, height, _songProgress, inset, radius);
+        BorderProgressRingValue.Data = CreateRectangularProgressGeometry(width, height, progress, inset, radius);
     }
 
     private void ApplyBackgroundProgressClip()
@@ -1923,15 +2870,26 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
             return Media.Geometry.Empty;
         }
 
-        var size = Math.Max(8, _coverSize + 4);
+        var inset = GetCoverProgressRingPadding();
+        var size = GetCoverProgressRingSize();
         return _coverDisplayStyle == CoverDisplayStyle.Circle
-            ? CreateCircularProgressGeometry(size, progress)
-            : CreateRectangularProgressGeometry(size, size, progress, 1.4, _coverCornerRadius);
+            ? CreateCircularProgressGeometry(size, progress, inset)
+            : CreateRectangularProgressGeometry(size, size, progress, inset, _coverCornerRadius);
     }
 
-    private static Media.Geometry CreateCircularProgressGeometry(double size, double progress)
+    private double GetCoverProgressRingPadding()
     {
-        var radius = Math.Max(1, (size / 2) - 1.4);
+        var configuredStroke = Math.Max(1, _songProgressThickness + 0.2);
+        var actualStroke = Math.Max(CoverProgressRingTrack.StrokeThickness, CoverProgressRingValue.StrokeThickness);
+        var stroke = Math.Max(configuredStroke, actualStroke);
+        return Math.Ceiling(Math.Max(3, (stroke / 2) + 2));
+    }
+
+    private double GetCoverProgressRingSize() => Math.Max(8, _coverSize + (GetCoverProgressRingPadding() * 2));
+
+    private static Media.Geometry CreateCircularProgressGeometry(double size, double progress, double inset)
+    {
+        var radius = Math.Max(1, (size / 2) - Math.Max(1, inset));
         var center = new System.Windows.Point(size / 2, size / 2);
         if (progress >= 0.999)
         {
@@ -2116,10 +3074,10 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
     }
 
     private double GetSongProgressWidthReserve() =>
-        _songProgressStyle == SongProgressDisplayStyle.TimePill ? TimePillWidthReserve : 0;
+        ResolveActiveSongProgressStyle() == SongProgressDisplayStyle.TimePill ? TimePillWidthReserve : 0;
 
     private double GetTimePillContentInset() =>
-        _songProgressStyle == SongProgressDisplayStyle.TimePill ? TimePillWidthReserve : 0;
+        ResolveActiveSongProgressStyle() == SongProgressDisplayStyle.TimePill ? TimePillWidthReserve : 0;
 
     private static string FormatProgressTime(TimeSpan value)
     {
@@ -2203,7 +3161,7 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
             bar.CornerRadius = new CornerRadius(_spectrumStyle == SpectrumDisplayStyle.Thin ? 2 : 999);
             bar.RenderTransformOrigin = origin;
             bar.Background = GetSpectrumBrush(i);
-            SetSpectrumBarLevel(bar, 0);
+            SetSpectrumBarLevel(bar, _spectrumVisuals[i]);
         }
     }
 
@@ -2250,7 +3208,7 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
                 ? ContentGrid.ActualHeight
                 : Math.Max(0, ActualHeight - _coverSize - _stackedCoverLyricsGap)
             : ActualHeight;
-        var availableHost = Math.Max(MinHostHeight, layoutHeight - DescenderBuffer - LyricsGridTopMargin);
+        var availableHost = Math.Max(MinHostHeight, layoutHeight - DescenderBuffer - GetLyricsGridTopInset());
         ApplyMetricsFromFont(_requestedFontSize, availableHost);
         ApplyLineMetrics();
         TrackTransform.Y = 0;
@@ -2291,6 +3249,40 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         return brush;
     }
 
+    private static SolidColorBrush CreateMutableBrush(Media.Color color) => new(color);
+
+    private static double CoerceOpacity(double opacity) =>
+        double.IsFinite(opacity) ? Math.Clamp(opacity, 0, 1) : 0;
+
+    private void AnimateBrushColor(SolidColorBrush brush, Media.Color target)
+    {
+        var current = brush.Color;
+        brush.BeginAnimation(SolidColorBrush.ColorProperty, null);
+        brush.Color = target;
+
+        if (!IsLoaded ||
+            current == target)
+        {
+            return;
+        }
+
+        var durationMs = LightMotion.ColorTransitionMs(_animationIntensity);
+        if (durationMs <= 0)
+        {
+            return;
+        }
+
+        var animation = new ColorAnimation(current, target, TimeSpan.FromMilliseconds(durationMs))
+        {
+            EasingFunction = LightMotion.CreateFadeEase(),
+            FillBehavior = FillBehavior.Stop
+        };
+        brush.BeginAnimation(SolidColorBrush.ColorProperty, animation, HandoffBehavior.SnapshotAndReplace);
+    }
+
+    private byte GetTranslationAlpha() =>
+        (byte)Math.Clamp(Math.Round(255 * _translationOpacity), 0, 255);
+
     private readonly record struct RowHeightCacheKey(string FontFamily, double FontSize, FontWeight Weight);
 
     private (double HostHeight, double PrimaryRow, double NextRow, double Gap) ComputeMetricsFromFont(double fontSize)
@@ -2299,8 +3291,54 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         var primaryRow = MeasureFontRowHeight(fontSize);
         var nextRow = MeasureFontRowHeight(nextSize);
         var gap = ResolveLineGap(fontSize);
-        return (primaryRow + gap + nextRow, primaryRow, nextRow, gap);
+        var hostHeight = primaryRow + gap + nextRow;
+        return (hostHeight, primaryRow, nextRow, gap);
     }
+
+    private bool AllowsNewLineTranslation =>
+        _showLyricTranslation &&
+        _translationLayout == LyricTranslationLayout.NewLine;
+
+    private bool ShouldReserveTranslationLine => UsesSingleLyricBlock;
+
+    private bool UsesSingleLyricBlock => _useSingleLyricBlock;
+
+    private bool ShouldUseSingleLyricBlockForLine(string line) =>
+        AllowsNewLineTranslation && HasTranslation(line);
+
+    private string GetActivePrimaryLineForBlockMode() =>
+        _isTransitioning ? _transitionPromoted : _displayedCurrent;
+
+    private bool ApplySingleLyricBlockModeForLine(string line)
+    {
+        var shouldUseSingleBlock = ShouldUseSingleLyricBlockForLine(line);
+        if (_useSingleLyricBlock == shouldUseSingleBlock)
+        {
+            return false;
+        }
+
+        _useSingleLyricBlock = shouldUseSingleBlock;
+        _textWidthCache.Clear();
+
+        if (_isTransitioning)
+        {
+            CancelActiveTransition();
+            return true;
+        }
+
+        UpdateMetrics();
+        return true;
+    }
+
+    private double GetSingleBlockTransitionClipBuffer() =>
+        AllowsNewLineTranslation || _transitionUsesTranslationPair
+            ? SingleBlockTransitionClipBuffer
+            : 0;
+
+    private double GetLyricsTransitionClipBuffer() =>
+        IsStackedCoverLayout
+            ? Math.Max(StackedTransitionClipBuffer, GetSingleBlockTransitionClipBuffer())
+            : GetSingleBlockTransitionClipBuffer();
 
     private void ApplyMetricsFromFont(double requestedFont, double? maxHost = null)
     {
@@ -2318,14 +3356,20 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         _nextFontSize = Math.Max(9, fontSize * 0.92);
         _rowHeightPx = metrics.PrimaryRow;
         _nextRowHeightPx = metrics.NextRow;
+        _currentRowBoxHeight = GetLineRowBoxHeight(_rowHeightPx);
+        _nextRowBoxHeight = GetLineRowBoxHeight(_nextRowHeightPx);
         _rowGapPx = metrics.Gap;
-        _linePitchPx = metrics.PrimaryRow + metrics.Gap;
+        _linePitchPx = _currentRowBoxHeight + _rowGapPx;
     }
+
+    private static double GetLineRowBoxHeight(double minHeight) =>
+        Math.Max(MinRowHeight, Math.Ceiling(minHeight));
 
     private static void SetLineRowHeight(TextBlock textBlock, double minHeight)
     {
-        textBlock.MinHeight = minHeight;
-        textBlock.ClearValue(FrameworkElement.HeightProperty);
+        var height = GetLineRowBoxHeight(minHeight);
+        textBlock.MinHeight = height;
+        textBlock.Height = height;
     }
 
     private void ApplyLineMetrics()
@@ -2335,10 +3379,40 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         NextLineText.Margin = new Thickness(0, _rowGapPx, 0, 0);
         SetLineRowHeight(NextLineText, _nextRowHeightPx);
         NextLineText.FontSize = _nextFontSize;
-        IncomingLineText.Margin = new Thickness(0, _rowGapPx, 0, 0);
+        OutgoingLineText.Margin = new Thickness(0);
+        SetLineRowHeight(OutgoingLineText, _rowHeightPx);
+        OutgoingLineText.FontSize = _currentFontSize;
+        OutgoingTranslationText.Margin = new Thickness(0);
+        SetLineRowHeight(OutgoingTranslationText, _nextRowHeightPx);
+        OutgoingTranslationText.FontSize = _nextFontSize;
+        IncomingLineText.Margin = new Thickness(0);
         SetLineRowHeight(IncomingLineText, _nextRowHeightPx);
         IncomingLineText.FontSize = _nextFontSize;
+        IncomingTranslationText.Margin = new Thickness(0);
+        SetLineRowHeight(IncomingTranslationText, _nextRowHeightPx);
+        IncomingTranslationText.FontSize = _nextFontSize;
+        ApplyLyricsStageMetrics();
     }
+
+    private void ApplyLyricsStageMetrics()
+    {
+        var clipBuffer = GetLyricsTransitionClipBuffer();
+        var stableHostHeight = GetLyricsStableHostHeight();
+        var transitionHostHeight = GetLyricsTransitionHostHeight();
+        var stageHeight = Math.Max(MinHostHeight, Math.Ceiling(transitionHostHeight + (clipBuffer * 2)));
+        _lyricsTrackTopInset = clipBuffer + Math.Max(0, (transitionHostHeight - stableHostHeight) / 2);
+        LyricsStage.Height = stageHeight;
+        LyricsLayer.Height = stageHeight;
+        SpectrumLayer.Height = stageHeight;
+        TrackPanel.Margin = new Thickness(0);
+        ResetLineOffsets();
+    }
+
+    private double GetLyricsStableHostHeight() =>
+        _currentRowBoxHeight + _rowGapPx + _nextRowBoxHeight;
+
+    private double GetLyricsTransitionHostHeight() =>
+        _currentRowBoxHeight + _rowGapPx + Math.Max(_currentRowBoxHeight, _nextRowBoxHeight);
 
     private void NotifyPreferredHeightIfChanged(double hostHeight)
     {
@@ -2375,6 +3449,7 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         AddLineIfMeaningful(lines, CurrentLineText.Text);
         AddLineIfMeaningful(lines, NextLineText.Text);
         AddLineIfMeaningful(lines, IncomingLineText.Text);
+        AddLineIfMeaningful(lines, IncomingTranslationText.Text);
         AddLineIfMeaningful(lines, _transitionPromoted);
         AddLineIfMeaningful(lines, _transitionUpcoming);
 
@@ -2413,6 +3488,15 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
     private double MeasureLineWidth(string text)
     {
         var dpi = IsLoaded ? VisualTreeHelper.GetDpi(this).PixelsPerDip : 1.0;
+        var (main, translation) = SplitTranslation(text);
+        if (UsesSingleLyricBlock && !string.IsNullOrWhiteSpace(translation))
+        {
+            var translationSize = Math.Max(8, _currentFontSize * _translationFontScale);
+            return Math.Max(
+                MeasureLineWidthAt(main, _currentFontSize, dpi),
+                MeasureLineWidthAt(translation, translationSize, dpi));
+        }
+
         return Math.Max(
             MeasureLineWidthAt(text, _currentFontSize, dpi),
             MeasureLineWidthAt(text, _nextFontSize, dpi));
@@ -2434,7 +3518,7 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
             fontSize,
             _primaryBrush,
             new NumberSubstitution(),
-            TextFormattingMode.Display,
+            TextFormattingMode.Ideal,
             pixelsPerDip);
         var measured = Math.Ceiling(formatted.WidthIncludingTrailingWhitespace);
         if (_textWidthCache.Count >= MaxTextWidthCacheEntries)
@@ -2451,7 +3535,10 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         var trimming = _autoAdjustWindowWidth ? TextTrimming.None : TextTrimming.CharacterEllipsis;
         CurrentLineText.TextTrimming = trimming;
         NextLineText.TextTrimming = trimming;
+        OutgoingLineText.TextTrimming = trimming;
+        OutgoingTranslationText.TextTrimming = trimming;
         IncomingLineText.TextTrimming = trimming;
+        IncomingTranslationText.TextTrimming = trimming;
         TrackTitleText.TextTrimming = trimming;
         TrackArtistText.TextTrimming = trimming;
     }
@@ -2476,18 +3563,23 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         var effectiveProgress = progress >= 0 ? progress : _lastLineProgress;
         if (safe == _displayedCurrent)
         {
-            ApplyDisplayLine(CurrentLineText, safe, true, effectiveProgress);
+            ApplyCurrentDisplayLine(safe, effectiveProgress);
             return;
         }
 
-        ApplyDisplayLine(CurrentLineText, safe, true, effectiveProgress);
+        ApplyCurrentDisplayLine(safe, effectiveProgress);
         _displayedCurrent = safe;
         UpdatePreferredWidth();
     }
 
     private void SetSecondaryLine(string line)
     {
-        var safe = ToDisplayLine(line, " ");
+        if (UsesSingleLyricBlock)
+        {
+            return;
+        }
+
+        var safe = GetSecondaryDisplayLine(line);
         if (safe == _displayedNext)
         {
             ApplyDisplayLine(NextLineText, safe, false, 0);
@@ -2499,6 +3591,46 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         UpdatePreferredWidth();
     }
 
+    private void ApplyCurrentDisplayLine(string text, double progress)
+    {
+        if (UsesSingleLyricBlock)
+        {
+            var (main, translation) = SplitTranslation(text);
+            ApplyPlainDisplayLine(CurrentLineText, main, true, false);
+            ApplyPlainDisplayLine(NextLineText, translation ?? " ", false, true);
+            _displayedNext = translation ?? " ";
+            NextLineText.Opacity = 1;
+            return;
+        }
+
+        ApplyDisplayLine(CurrentLineText, text, true, progress);
+    }
+
+    private void ApplyPlainDisplayLine(
+        TextBlock textBlock,
+        string text,
+        bool isPrimary,
+        bool isTranslation)
+    {
+        textBlock.Inlines.Clear();
+        var brush = isTranslation
+            ? (isPrimary ? _primaryTranslationBrush : _secondaryTranslationBrush)
+            : (isPrimary ? _primaryBrush : _secondaryBrush);
+        var run = new Run(text)
+        {
+            Foreground = brush,
+            FontFamily = _fontFamily,
+            FontWeight = _fontWeight
+        };
+        if (isTranslation)
+        {
+            var baseFontSize = isPrimary ? _currentFontSize : _nextFontSize;
+            run.FontSize = Math.Max(8, baseFontSize * _translationFontScale);
+        }
+
+        textBlock.Inlines.Add(run);
+    }
+
     private void ApplyDisplayLine(
         TextBlock textBlock,
         string text,
@@ -2508,6 +3640,7 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         textBlock.Inlines.Clear();
         var (main, translation) = SplitTranslation(text);
         var brush = isPrimary ? _primaryBrush : _secondaryBrush;
+        var translationBrush = isPrimary ? _primaryTranslationBrush : _secondaryTranslationBrush;
         var lineFontSize = isPrimary ? _currentFontSize : _nextFontSize;
         textBlock.Inlines.Add(new Run(main)
         {
@@ -2518,7 +3651,7 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
 
         if (!string.IsNullOrWhiteSpace(translation))
         {
-            if (_translationLayout == LyricTranslationLayout.NewLine)
+            if (ShouldRenderTranslationAsNewLine(isPrimary))
             {
                 textBlock.Inlines.Add(new LineBreak());
             }
@@ -2529,7 +3662,7 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
 
             textBlock.Inlines.Add(new Run(translation)
             {
-                Foreground = CreateFrozenBrush(WithAlpha(brush.Color, (byte)Math.Clamp(Math.Round(255 * _translationOpacity), 0, 255))),
+                Foreground = translationBrush,
                 FontFamily = _fontFamily,
                 FontSize = Math.Max(8, lineFontSize * _translationFontScale),
                 FontWeight = _fontWeight
@@ -2537,27 +3670,67 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         }
     }
 
+    private bool ShouldRenderTranslationAsNewLine(bool isPrimary) =>
+        false;
+
     private static (string Main, string? Translation) SplitTranslation(string text)
     {
         var trimmed = text.Trim();
-        if (!trimmed.EndsWith(")", StringComparison.Ordinal))
+        if (trimmed.Length < 3)
         {
             return (text, null);
         }
 
-        var start = trimmed.LastIndexOf(" (", StringComparison.Ordinal);
+        var close = trimmed[^1];
+        var open = close switch
+        {
+            ')' => '(',
+            '）' => '（',
+            ']' => '[',
+            '】' => '【',
+            _ => '\0'
+        };
+        if (open == '\0')
+        {
+            return (text, null);
+        }
+
+        var start = trimmed.LastIndexOf(open);
         if (start <= 0 || start >= trimmed.Length - 2)
         {
             return (text, null);
         }
 
-        var translation = trimmed[(start + 2)..^1].Trim();
+        var translation = trimmed[(start + 1)..^1].Trim();
         if (translation.Length == 0)
         {
             return (text, null);
         }
 
-        return (trimmed[..start].TrimEnd(), translation);
+        var main = trimmed[..start].TrimEnd();
+        main = RemoveTrailingDuplicateTranslation(main, translation);
+        return (main, translation);
+    }
+
+    private static bool HasTranslation(string text) =>
+        !string.IsNullOrWhiteSpace(SplitTranslation(text).Translation);
+
+    private static string RemoveTrailingDuplicateTranslation(string main, string translation)
+    {
+        var normalizedMain = main.TrimEnd();
+        if (translation.Length == 0 ||
+            !normalizedMain.EndsWith(translation, StringComparison.Ordinal))
+        {
+            return main;
+        }
+
+        var next = normalizedMain[..^translation.Length].TrimEnd();
+        if (next.Length == 0)
+        {
+            return main;
+        }
+
+        return next;
     }
 
     private void UpdateSecondaryOpacity(double progress)
@@ -2567,16 +3740,35 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
             return;
         }
 
-        var target = 0.58 + ((1 - Math.Clamp(progress, 0, 1)) * 0.16);
+        if (UsesSingleLyricBlock)
+        {
+            _secondaryOpacity = 1;
+            NextLineText.Opacity = 1;
+            OutgoingLineText.Opacity = 0;
+            OutgoingTranslationText.Opacity = 0;
+            IncomingLineText.Opacity = 0;
+            IncomingTranslationText.Opacity = 0;
+            return;
+        }
+
+        var target = ResolveSecondaryOpacity(progress);
         _secondaryOpacity += (target - _secondaryOpacity) * 0.28;
         NextLineText.Opacity = _secondaryOpacity;
+        OutgoingLineText.Opacity = 0;
+        OutgoingTranslationText.Opacity = 0;
     }
+
+    private double ResolveSecondaryOpacity(double progress) =>
+        UsesSingleLyricBlock
+            ? 1
+            : 0.58 + ((1 - Math.Clamp(progress, 0, 1)) * 0.16);
 
     private void ApplyLineTypography(TextBlock textBlock, bool isPrimary)
     {
         textBlock.FontFamily = _fontFamily;
         textBlock.FontWeight = _fontWeight;
         textBlock.Foreground = isPrimary ? _primaryBrush : _secondaryBrush;
+        textBlock.LineStackingStrategy = LineStackingStrategy.MaxHeight;
     }
 
     private void ApplyTrackInfoTypography()
@@ -2603,6 +3795,9 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         var text = (line ?? string.Empty).Trim();
         return text.Length > 0 ? text : fallback;
     }
+
+    private string GetSecondaryDisplayLine(string line) =>
+        UsesSingleLyricBlock ? " " : ToDisplayLine(line, " ");
 
     private static string NormalizeTrackInfoText(string? value, string weakValue)
     {
@@ -2638,26 +3833,11 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         return normalized >= 0.96 ? 1 : EaseOutCubic(normalized);
     }
 
-    private int GetTransitionDurationMs() => _animationIntensity switch
-    {
-        AnimationIntensity.Reduced => 260,
-        AnimationIntensity.Smooth => 720,
-        _ => TransitionDurationMs
-    };
+    private int GetTransitionDurationMs() => LightMotion.LyricsTransitionMs(_animationIntensity);
 
-    private int GetLayerFadeDurationMs() => _animationIntensity switch
-    {
-        AnimationIntensity.Reduced => 160,
-        AnimationIntensity.Smooth => 420,
-        _ => 300
-    };
+    private int GetLayerFadeDurationMs() => LightMotion.LayerFadeMs(_animationIntensity);
 
-    private int GetCoverFadeDurationMs() => _animationIntensity switch
-    {
-        AnimationIntensity.Reduced => 220,
-        AnimationIntensity.Smooth => 620,
-        _ => 440
-    };
+    private int GetCoverFadeDurationMs() => LightMotion.CoverFadeMs(_animationIntensity);
 
     private static System.Windows.FontWeight ParseFontWeight(string? weight) => (weight ?? string.Empty).Trim().ToLowerInvariant() switch
     {

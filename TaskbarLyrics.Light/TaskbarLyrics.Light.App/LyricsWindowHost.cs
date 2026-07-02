@@ -34,7 +34,7 @@ internal sealed class LyricsWindowHost : IDisposable
             return;
         }
 
-        _window.Show();
+        _window.ShowSoft();
         _isVisible = true;
     });
 
@@ -45,7 +45,7 @@ internal sealed class LyricsWindowHost : IDisposable
             return;
         }
 
-        _window.Hide();
+        _window.HideSoft();
         _isVisible = false;
     });
 

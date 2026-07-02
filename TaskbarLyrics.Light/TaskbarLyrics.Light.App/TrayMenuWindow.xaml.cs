@@ -1,8 +1,10 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Interop;
-using System.Windows.Threading;
 using System.Runtime.InteropServices;
+using System.Windows.Media.Animation;
+using System.Windows.Threading;
 using Media = System.Windows.Media;
 using Forms = System.Windows.Forms;
 
@@ -29,9 +31,10 @@ public partial class TrayMenuWindow : Window
     private readonly Action _exitApp;
     private readonly Func<bool> _isLyricsWindowVisible;
     private readonly Func<AppSettings> _getSettings;
-    private readonly DispatcherTimer _closeTimer;
+    private readonly DispatcherTimer _outsideClickTimer;
     private TraySubmenuKind? _activeSubmenuKind;
-    private int _graceTicks = 3;
+    private bool _wasMouseButtonPressed;
+    private DateTime _ignoreOutsideClicksUntilUtc;
 
     public TrayMenuWindow(
         Action toggleLyricsWindow,
@@ -54,14 +57,15 @@ public partial class TrayMenuWindow : Window
         _exitApp = exitApp;
         _isLyricsWindowVisible = isLyricsWindowVisible;
         _getSettings = getSettings;
+        _outsideClickTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(40)
+        };
+        _outsideClickTimer.Tick += OnOutsideClickTimerTick;
         RefreshStateText();
         SourceInitialized += OnSourceInitialized;
-        _closeTimer = new DispatcherTimer
-        {
-            Interval = TimeSpan.FromMilliseconds(80)
-        };
-        _closeTimer.Tick += OnCloseTimerTick;
-        Closed += (_, _) => _closeTimer.Stop();
+        Closed += OnClosed;
+        SubmenuPopup.CustomPopupPlacementCallback = PlaceSubmenu;
     }
 
     private void ApplyTheme()
@@ -84,7 +88,7 @@ public partial class TrayMenuWindow : Window
             : Media.Color.FromRgb(74, 74, 74));
     }
 
-    public void ShowAtCursor()
+    public void ShowAtCursor(bool animate = true)
     {
         var cursorPhysical = Forms.Cursor.Position;
         var dpi = GetDpiScaleForPoint(cursorPhysical);
@@ -115,8 +119,47 @@ public partial class TrayMenuWindow : Window
         var maxTop = Math.Max(minTop, screenBottom - Height - gap);
         Left = Math.Clamp(left, minLeft, maxLeft);
         Top = Math.Clamp(top, minTop, maxTop);
-        Show();
-        _closeTimer.Start();
+        Opacity = 1;
+        RefreshStateText();
+        if (animate)
+        {
+            PrepareMenuOpenAnimation();
+        }
+
+        if (!IsVisible)
+        {
+            Show();
+        }
+
+        if (animate)
+        {
+            AnimateMenuOpen();
+        }
+        else
+        {
+            MenuChrome.BeginAnimation(OpacityProperty, null);
+            MenuTransform.BeginAnimation(Media.TranslateTransform.YProperty, null);
+            MenuChrome.Opacity = 1;
+            MenuTransform.Y = 0;
+        }
+
+        StartOutsideClickDetection();
+    }
+
+    public void IgnoreOutsideClicksFor(TimeSpan duration)
+    {
+        var until = DateTime.UtcNow + duration;
+        if (until > _ignoreOutsideClicksUntilUtc)
+        {
+            _ignoreOutsideClicksUntilUtc = until;
+        }
+    }
+
+    private void StartOutsideClickDetection()
+    {
+        _wasMouseButtonPressed = IsMouseButtonPressed();
+        _outsideClickTimer.Stop();
+        _outsideClickTimer.Start();
     }
 
     private void RefreshStateText()
@@ -125,11 +168,15 @@ public partial class TrayMenuWindow : Window
         LyricsWindowText.Text = _isLyricsWindowVisible()
             ? "隐藏歌词"
             : "显示歌词";
-        SpectrumStyleText.Text = "频谱设置";
-        SongProgressStyleText.Text = "进度设置";
-        CoverStyleText.Text = "封面设置";
-        TextEffectStyleText.Text = "文字效果设置";
-        TransitionStyleText.Text = "切换动画设置";
+        SpectrumStyleText.Text = settings.EnableSpectrum
+            ? $"频谱：{GetSpectrumStyleLabel(settings.SpectrumStyle)}"
+            : "频谱：关闭";
+        SongProgressStyleText.Text = $"进度：{GetSongProgressStyleLabel(AppSettings.NormalizeSongProgressStyle(settings.SongProgressStyle))}";
+        CoverStyleText.Text = settings.ShowCoverImage
+            ? $"封面：{GetCoverStyleLabel(settings.CoverStyle)}"
+            : "封面：关闭";
+        TextEffectStyleText.Text = $"文字：{GetTextEffectStyleLabel(settings.TextEffectStyle)}";
+        TransitionStyleText.Text = $"动画：{GetTransitionStyleLabel(AppSettings.NormalizeTransitionStyle(settings.TransitionStyle))}";
         TranslationText.Text = settings.ShowLyricTranslation
             ? "隐藏翻译"
             : "显示翻译";
@@ -147,38 +194,41 @@ public partial class TrayMenuWindow : Window
         _ = SetWindowLong(hwnd, GwlExStyle, style | WsExNoActivate | WsExToolWindow);
     }
 
-    private void OnCloseTimerTick(object? sender, EventArgs e)
+    private void OnClosed(object? sender, EventArgs e)
     {
-        if (_graceTicks > 0)
-        {
-            _graceTicks--;
-            return;
-        }
-
-        if (IsCursorInsideWindow() || IsCursorInsideSubmenu())
-        {
-            return;
-        }
-
-        if (IsMouseButtonPressed())
-        {
-            Close();
-        }
+        _outsideClickTimer.Stop();
+        SubmenuPopup.IsOpen = false;
     }
 
-    private bool IsCursorInsideSubmenu() => SubmenuPopup.IsOpen && SubmenuPopup.IsMouseOver;
-
-    private bool IsCursorInsideWindow()
+    private void OnOutsideClickTimerTick(object? sender, EventArgs e)
     {
+        if (!IsVisible)
+        {
+            _outsideClickTimer.Stop();
+            return;
+        }
+
+        var isMouseButtonPressed = IsMouseButtonPressed();
+        var isNewClick = isMouseButtonPressed && !_wasMouseButtonPressed;
+        _wasMouseButtonPressed = isMouseButtonPressed;
+        if (DateTime.UtcNow < _ignoreOutsideClicksUntilUtc)
+        {
+            return;
+        }
+
+        if (!isNewClick)
+        {
+            return;
+        }
+
         var cursor = Forms.Cursor.Position;
-        var topLeft = PointToScreen(new System.Windows.Point(0, 0));
-        var dpi = PresentationSource.FromVisual(this)?.CompositionTarget?.TransformToDevice ?? System.Windows.Media.Matrix.Identity;
-        var width = ActualWidth * dpi.M11;
-        var height = ActualHeight * dpi.M22;
-        return cursor.X >= topLeft.X &&
-            cursor.X <= topLeft.X + width &&
-            cursor.Y >= topLeft.Y &&
-            cursor.Y <= topLeft.Y + height;
+        if (IsPointInsideElement(this, cursor) ||
+            (SubmenuPopup.IsOpen && IsPointInsideElement(SubmenuChrome, cursor)))
+        {
+            return;
+        }
+
+        Close();
     }
 
     private void ToggleLyricsButton_Click(object sender, RoutedEventArgs e)
@@ -283,15 +333,32 @@ public partial class TrayMenuWindow : Window
         }
 
         _activeSubmenuKind = kind;
+        SubmenuPopup.IsOpen = false;
         BuildSubmenu(kind);
+        SubmenuItemsPanel.UpdateLayout();
         SubmenuPopup.PlacementTarget = placementTarget;
+        SubmenuPopup.HorizontalOffset = 0;
+        SubmenuPopup.VerticalOffset = 0;
         SubmenuPopup.IsOpen = true;
+        AnimateSubmenuOpen();
     }
 
     private void CloseSubmenu()
     {
         _activeSubmenuKind = null;
         SubmenuPopup.IsOpen = false;
+    }
+
+    private CustomPopupPlacement[] PlaceSubmenu(System.Windows.Size popupSize, System.Windows.Size targetSize, System.Windows.Point offset)
+    {
+        const double gap = 6;
+        return
+        [
+            new CustomPopupPlacement(new System.Windows.Point(targetSize.Width + gap, 0), PopupPrimaryAxis.Horizontal),
+            new CustomPopupPlacement(new System.Windows.Point(-popupSize.Width - gap, 0), PopupPrimaryAxis.Horizontal),
+            new CustomPopupPlacement(new System.Windows.Point(targetSize.Width + gap, targetSize.Height - popupSize.Height), PopupPrimaryAxis.Horizontal),
+            new CustomPopupPlacement(new System.Windows.Point(-popupSize.Width - gap, targetSize.Height - popupSize.Height), PopupPrimaryAxis.Horizontal)
+        ];
     }
 
     private void BuildSubmenu(TraySubmenuKind kind)
@@ -310,16 +377,15 @@ public partial class TrayMenuWindow : Window
                 AddSubmenuOption("呼吸条", settings.EnableSpectrum && settings.SpectrumStyle == SpectrumDisplayStyle.Pulse, s => { s.EnableSpectrum = true; s.SpectrumStyle = SpectrumDisplayStyle.Pulse; });
                 break;
             case TraySubmenuKind.SongProgress:
-                AddSubmenuOption("关闭", settings.SongProgressStyle == SongProgressDisplayStyle.Off, s => s.SongProgressStyle = SongProgressDisplayStyle.Off);
-                AddSubmenuOption("底部细线", settings.SongProgressStyle == SongProgressDisplayStyle.BottomLine, s => s.SongProgressStyle = SongProgressDisplayStyle.BottomLine);
-                AddSubmenuOption("歌词下划线", settings.SongProgressStyle == SongProgressDisplayStyle.LyricUnderline, s => s.SongProgressStyle = SongProgressDisplayStyle.LyricUnderline);
-                AddSubmenuOption("封面进度环", settings.SongProgressStyle == SongProgressDisplayStyle.CoverRing, s => s.SongProgressStyle = SongProgressDisplayStyle.CoverRing);
-                AddSubmenuOption("封面底边", settings.SongProgressStyle == SongProgressDisplayStyle.CoverBottomBar, s => s.SongProgressStyle = SongProgressDisplayStyle.CoverBottomBar);
-                AddSubmenuOption("频谱底线", settings.SongProgressStyle == SongProgressDisplayStyle.SpectrumBaseline, s => s.SongProgressStyle = SongProgressDisplayStyle.SpectrumBaseline);
-                AddSubmenuOption("时间胶囊", settings.SongProgressStyle == SongProgressDisplayStyle.TimePill, s => s.SongProgressStyle = SongProgressDisplayStyle.TimePill);
-                AddSubmenuOption("呼吸进度点", settings.SongProgressStyle == SongProgressDisplayStyle.Dots, s => s.SongProgressStyle = SongProgressDisplayStyle.Dots);
-                AddSubmenuOption("边框进度环", settings.SongProgressStyle == SongProgressDisplayStyle.BorderRing, s => s.SongProgressStyle = SongProgressDisplayStyle.BorderRing);
-                AddSubmenuOption("背景进度", settings.SongProgressStyle == SongProgressDisplayStyle.BackgroundFill, s => s.SongProgressStyle = SongProgressDisplayStyle.BackgroundFill);
+                var songProgressStyle = AppSettings.NormalizeSongProgressStyle(settings.SongProgressStyle);
+                AddSubmenuOption("关闭", songProgressStyle == SongProgressDisplayStyle.Off, s => s.SongProgressStyle = SongProgressDisplayStyle.Off);
+                AddSubmenuOption("底部细线", songProgressStyle == SongProgressDisplayStyle.BottomLine, s => s.SongProgressStyle = SongProgressDisplayStyle.BottomLine);
+                AddSubmenuOption("封面进度环", songProgressStyle == SongProgressDisplayStyle.CoverRing, s => s.SongProgressStyle = SongProgressDisplayStyle.CoverRing);
+                AddSubmenuOption("封面底边", songProgressStyle == SongProgressDisplayStyle.CoverBottomBar, s => s.SongProgressStyle = SongProgressDisplayStyle.CoverBottomBar);
+                AddSubmenuOption("时间胶囊", songProgressStyle == SongProgressDisplayStyle.TimePill, s => s.SongProgressStyle = SongProgressDisplayStyle.TimePill);
+                AddSubmenuOption("呼吸进度点", songProgressStyle == SongProgressDisplayStyle.Dots, s => s.SongProgressStyle = SongProgressDisplayStyle.Dots);
+                AddSubmenuOption("边框进度环", songProgressStyle == SongProgressDisplayStyle.BorderRing, s => s.SongProgressStyle = SongProgressDisplayStyle.BorderRing);
+                AddSubmenuOption("背景进度", songProgressStyle == SongProgressDisplayStyle.BackgroundFill, s => s.SongProgressStyle = SongProgressDisplayStyle.BackgroundFill);
                 break;
             case TraySubmenuKind.Cover:
                 AddSubmenuOption("关闭", !settings.ShowCoverImage || settings.CoverStyle == CoverDisplayStyle.Hidden, s => { s.ShowCoverImage = false; s.CoverStyle = CoverDisplayStyle.Hidden; });
@@ -334,10 +400,9 @@ public partial class TrayMenuWindow : Window
                 AddSubmenuOption("柔光", settings.TextEffectStyle == TextEffectStyle.Glow, s => s.TextEffectStyle = TextEffectStyle.Glow);
                 break;
             case TraySubmenuKind.Transition:
-                AddSubmenuOption("关闭", settings.TransitionStyle == LyricTransitionStyle.None, s => s.TransitionStyle = LyricTransitionStyle.None);
-                AddSubmenuOption("上滑", settings.TransitionStyle == LyricTransitionStyle.Slide, s => s.TransitionStyle = LyricTransitionStyle.Slide);
-                AddSubmenuOption("淡入淡出", settings.TransitionStyle == LyricTransitionStyle.Fade, s => s.TransitionStyle = LyricTransitionStyle.Fade);
-                AddSubmenuOption("紧凑滑动", settings.TransitionStyle == LyricTransitionStyle.CompactSlide, s => s.TransitionStyle = LyricTransitionStyle.CompactSlide);
+                var transitionStyle = AppSettings.NormalizeTransitionStyle(settings.TransitionStyle);
+                AddSubmenuOption("关闭", transitionStyle == LyricTransitionStyle.None, s => s.TransitionStyle = LyricTransitionStyle.None);
+                AddSubmenuOption("上滑", transitionStyle == LyricTransitionStyle.Slide, s => s.TransitionStyle = LyricTransitionStyle.Slide);
                 break;
         }
     }
@@ -393,6 +458,75 @@ public partial class TrayMenuWindow : Window
         return grid;
     }
 
+    private void AnimateMenuOpen()
+    {
+        PrepareMenuOpenAnimation();
+        var settings = _getSettings();
+        var duration = LightMotion.MenuOpenMs(settings.AnimationIntensity);
+        var opacityAnimation = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(duration))
+        {
+            EasingFunction = LightMotion.CreateFadeEase(),
+            FillBehavior = FillBehavior.Stop
+        };
+        opacityAnimation.Completed += (_, _) =>
+        {
+            MenuChrome.BeginAnimation(OpacityProperty, null);
+            MenuChrome.Opacity = 1;
+        };
+        MenuChrome.BeginAnimation(OpacityProperty, opacityAnimation);
+
+        var moveAnimation = new DoubleAnimation(6, 0, TimeSpan.FromMilliseconds(duration))
+        {
+            EasingFunction = LightMotion.CreateSoftEase(),
+            FillBehavior = FillBehavior.Stop
+        };
+        moveAnimation.Completed += (_, _) =>
+        {
+            MenuTransform.BeginAnimation(Media.TranslateTransform.YProperty, null);
+            MenuTransform.Y = 0;
+        };
+        MenuTransform.BeginAnimation(Media.TranslateTransform.YProperty, moveAnimation);
+    }
+
+    private void PrepareMenuOpenAnimation()
+    {
+        MenuChrome.BeginAnimation(OpacityProperty, null);
+        MenuTransform.BeginAnimation(Media.TranslateTransform.YProperty, null);
+        MenuChrome.Opacity = 0;
+        MenuTransform.Y = 6;
+    }
+
+    private void AnimateSubmenuOpen()
+    {
+        var settings = _getSettings();
+        var duration = LightMotion.SubmenuOpenMs(settings.AnimationIntensity);
+        SubmenuChrome.Opacity = 0;
+        SubmenuTransform.X = -5;
+        var opacityAnimation = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(duration))
+        {
+            EasingFunction = LightMotion.CreateFadeEase(),
+            FillBehavior = FillBehavior.Stop
+        };
+        opacityAnimation.Completed += (_, _) =>
+        {
+            SubmenuChrome.BeginAnimation(OpacityProperty, null);
+            SubmenuChrome.Opacity = 1;
+        };
+        SubmenuChrome.BeginAnimation(OpacityProperty, opacityAnimation);
+
+        var moveAnimation = new DoubleAnimation(-5, 0, TimeSpan.FromMilliseconds(duration))
+        {
+            EasingFunction = LightMotion.CreateSoftEase(),
+            FillBehavior = FillBehavior.Stop
+        };
+        moveAnimation.Completed += (_, _) =>
+        {
+            SubmenuTransform.BeginAnimation(Media.TranslateTransform.XProperty, null);
+            SubmenuTransform.X = 0;
+        };
+        SubmenuTransform.BeginAnimation(Media.TranslateTransform.XProperty, moveAnimation);
+    }
+
     [DllImport("user32.dll", SetLastError = true)]
     private static extern int GetWindowLong(IntPtr hwnd, int index);
 
@@ -412,6 +546,38 @@ public partial class TrayMenuWindow : Window
             (GetAsyncKeyState(VkMButton) & 0x8000) != 0;
     }
 
+    private static bool IsPointInsideElement(UIElement element, System.Drawing.Point physicalPoint)
+    {
+        if (!element.IsVisible)
+        {
+            return false;
+        }
+
+        var size = element.RenderSize;
+        if (size.Width <= 0 || size.Height <= 0)
+        {
+            return false;
+        }
+
+        try
+        {
+            var topLeft = element.PointToScreen(new System.Windows.Point(0, 0));
+            var bottomRight = element.PointToScreen(new System.Windows.Point(size.Width, size.Height));
+            var left = Math.Min(topLeft.X, bottomRight.X);
+            var right = Math.Max(topLeft.X, bottomRight.X);
+            var top = Math.Min(topLeft.Y, bottomRight.Y);
+            var bottom = Math.Max(topLeft.Y, bottomRight.Y);
+            return physicalPoint.X >= left &&
+                physicalPoint.X <= right &&
+                physicalPoint.Y >= top &&
+                physicalPoint.Y <= bottom;
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
+    }
+
     private static string GetSpectrumStyleLabel(SpectrumDisplayStyle style) => style switch
     {
         SpectrumDisplayStyle.Bottom => "底部柱状",
@@ -425,10 +591,8 @@ public partial class TrayMenuWindow : Window
     private static string GetSongProgressStyleLabel(SongProgressDisplayStyle style) => style switch
     {
         SongProgressDisplayStyle.BottomLine => "底部细线",
-        SongProgressDisplayStyle.LyricUnderline => "歌词下划线",
         SongProgressDisplayStyle.CoverRing => "封面进度环",
         SongProgressDisplayStyle.CoverBottomBar => "封面底边",
-        SongProgressDisplayStyle.SpectrumBaseline => "频谱底线",
         SongProgressDisplayStyle.TimePill => "时间胶囊",
         SongProgressDisplayStyle.Dots => "呼吸进度点",
         SongProgressDisplayStyle.BorderRing => "边框进度环",
@@ -454,8 +618,6 @@ public partial class TrayMenuWindow : Window
 
     private static string GetTransitionStyleLabel(LyricTransitionStyle style) => style switch
     {
-        LyricTransitionStyle.Fade => "淡入淡出",
-        LyricTransitionStyle.CompactSlide => "紧凑滑动",
         LyricTransitionStyle.None => "关闭",
         _ => "上滑"
     };

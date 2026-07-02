@@ -84,6 +84,14 @@ internal sealed class LocalMediaCoverProvider
         return cover;
     }
 
+    public void ClearCache()
+    {
+        lock (_coverCache)
+        {
+            _coverCache.Clear();
+        }
+    }
+
     private IReadOnlyList<LocalMediaEntry> SnapshotIndex()
     {
         lock (_indexLock)

@@ -32,6 +32,7 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider
     private readonly object _coverLock = new();
     private Task? _coverReadTask;
     private string _coverReadMetadataKey = string.Empty;
+    private int _coverReadGeneration;
 
     public void SetRecognitionOrder(
         IReadOnlyList<string>? order,
@@ -57,6 +58,19 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider
     public string GetCurrentLyricSource()
     {
         return _currentLyricSourceApp ?? string.Empty;
+    }
+
+    public void ResetCoverCache()
+    {
+        lock (_coverLock)
+        {
+            _coverReadGeneration++;
+            _lastCoverMetadataKey = string.Empty;
+            _lastCoverImageBytes = null;
+            _nextMissingCoverRetryUtc = DateTimeOffset.MinValue;
+            _coverReadMetadataKey = string.Empty;
+            _coverReadTask = null;
+        }
     }
 
     /// <summary>
@@ -866,7 +880,8 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider
             if (thumbnail is not null && shouldRetryMissingCover && !isReadingCurrentCover)
             {
                 _coverReadMetadataKey = metadataKey;
-                _coverReadTask = ReadCoverBytesInBackgroundAsync(metadataKey, thumbnail);
+                var coverReadGeneration = _coverReadGeneration;
+                _coverReadTask = ReadCoverBytesInBackgroundAsync(metadataKey, thumbnail, coverReadGeneration);
                 _nextMissingCoverRetryUtc = DateTimeOffset.MaxValue;
                 isLoading = true;
             }
@@ -881,14 +896,16 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider
 
     private async Task ReadCoverBytesInBackgroundAsync(
         string metadataKey,
-        IRandomAccessStreamReference thumbnail)
+        IRandomAccessStreamReference thumbnail,
+        int coverReadGeneration)
     {
         var coverBytes = await ReadCoverBytesAsync(thumbnail, CancellationToken.None);
         var nowUtc = DateTimeOffset.UtcNow;
 
         lock (_coverLock)
         {
-            if (!string.Equals(metadataKey, _lastCoverMetadataKey, StringComparison.Ordinal))
+            if (coverReadGeneration != _coverReadGeneration ||
+                !string.Equals(metadataKey, _lastCoverMetadataKey, StringComparison.Ordinal))
             {
                 return;
             }

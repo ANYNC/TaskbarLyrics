@@ -113,31 +113,36 @@
                         <Trigger Property="IsChecked" Value="True">
                             <Setter TargetName="Track" Property="Background" Value="{StaticResource SettingsAccentBrush}" />
                             <Setter TargetName="Track" Property="BorderBrush" Value="#6B91FF" />
+                            <Setter TargetName="Thumb" Property="Margin" Value="23,0,0,0" />
                             <Trigger.EnterActions>
                                 <BeginStoryboard>
                                     <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="ThumbTransform"
-                                                         Storyboard.TargetProperty="X"
-                                                         To="20"
-                                                         Duration="0:0:0.14">
-                                            <DoubleAnimation.EasingFunction>
+                                        <ThicknessAnimation Storyboard.TargetName="Thumb"
+                                                            Storyboard.TargetProperty="Margin"
+                                                            From="3,0,0,0"
+                                                            To="23,0,0,0"
+                                                            Duration="0:0:0.14"
+                                                            FillBehavior="Stop">
+                                            <ThicknessAnimation.EasingFunction>
                                                 <CubicEase EasingMode="EaseOut" />
-                                            </DoubleAnimation.EasingFunction>
-                                        </DoubleAnimation>
+                                            </ThicknessAnimation.EasingFunction>
+                                        </ThicknessAnimation>
                                     </Storyboard>
                                 </BeginStoryboard>
                             </Trigger.EnterActions>
                             <Trigger.ExitActions>
                                 <BeginStoryboard>
                                     <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="ThumbTransform"
-                                                         Storyboard.TargetProperty="X"
-                                                         To="0"
-                                                         Duration="0:0:0.14">
-                                            <DoubleAnimation.EasingFunction>
+                                        <ThicknessAnimation Storyboard.TargetName="Thumb"
+                                                            Storyboard.TargetProperty="Margin"
+                                                            From="23,0,0,0"
+                                                            To="3,0,0,0"
+                                                            Duration="0:0:0.14"
+                                                            FillBehavior="Stop">
+                                            <ThicknessAnimation.EasingFunction>
                                                 <CubicEase EasingMode="EaseOut" />
-                                            </DoubleAnimation.EasingFunction>
-                                        </DoubleAnimation>
+                                            </ThicknessAnimation.EasingFunction>
+                                        </ThicknessAnimation>
                                     </Storyboard>
                                 </BeginStoryboard>
                             </Trigger.ExitActions>

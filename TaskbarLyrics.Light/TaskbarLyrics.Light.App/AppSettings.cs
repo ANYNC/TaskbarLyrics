@@ -53,6 +53,13 @@ public enum CoverLayoutMode
     Stacked
 }
 
+public enum CoverTransitionStyle
+{
+    SlideLeft,
+    Fade,
+    None
+}
+
 public enum LyricTransitionStyle
 {
     Slide,
@@ -267,6 +274,8 @@ public sealed class AppSettings
 
     public CoverLayoutMode CoverLayoutMode { get; set; } = CoverLayoutMode.Inline;
 
+    public CoverTransitionStyle CoverTransitionStyle { get; set; } = CoverTransitionStyle.SlideLeft;
+
     public double StackedCoverLyricsGap { get; set; } = 4;
 
     public double StackedCoverXOffset { get; set; }
@@ -359,6 +368,16 @@ public sealed class AppSettings
             StringComparer.OrdinalIgnoreCase);
         return cloned;
     }
+
+    public static LyricTransitionStyle NormalizeTransitionStyle(LyricTransitionStyle style) =>
+        style == LyricTransitionStyle.None ? LyricTransitionStyle.None : LyricTransitionStyle.Slide;
+
+    public static SongProgressDisplayStyle NormalizeSongProgressStyle(SongProgressDisplayStyle style) =>
+        style is SongProgressDisplayStyle.LyricUnderline or SongProgressDisplayStyle.SpectrumBaseline
+            ? SongProgressDisplayStyle.BottomLine
+            : Enum.IsDefined(style)
+                ? style
+                : SongProgressDisplayStyle.Off;
 
     private static Dictionary<string, PlayerVisualProfile> CreateDefaultPlayerVisualProfiles() => new(StringComparer.OrdinalIgnoreCase)
     {

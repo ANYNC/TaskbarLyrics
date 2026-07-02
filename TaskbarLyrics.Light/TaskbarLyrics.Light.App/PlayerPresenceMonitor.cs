@@ -4,16 +4,21 @@ namespace TaskbarLyrics.Light.App;
 
 internal sealed class PlayerPresenceMonitor : IDisposable
 {
+    private const int RequiredStableReadings = 2;
+
     private readonly SmtcMusicSessionProvider _provider = new();
     private readonly DispatcherTimer _timer;
     private bool _isPlayerActive;
+    private bool? _pendingPlayerActive;
+    private int _pendingStableReadings;
+    private bool _isRefreshing;
     private bool _isDisposed;
 
     public PlayerPresenceMonitor()
     {
         _timer = new DispatcherTimer(DispatcherPriority.Background)
         {
-            Interval = TimeSpan.FromSeconds(1)
+            Interval = TimeSpan.FromMilliseconds(700)
         };
         _timer.Tick += OnTimerTick;
     }
@@ -64,25 +69,47 @@ internal sealed class PlayerPresenceMonitor : IDisposable
 
     private async Task RefreshAsync()
     {
-        if (_isDisposed)
+        if (_isDisposed || _isRefreshing)
         {
             return;
         }
 
+        _isRefreshing = true;
         try
         {
             var active = await _provider.IsEnabledPlaybackActiveAsync();
             if (active == _isPlayerActive)
             {
+                _pendingPlayerActive = null;
+                _pendingStableReadings = 0;
                 return;
             }
 
+            if (_pendingPlayerActive != active)
+            {
+                _pendingPlayerActive = active;
+                _pendingStableReadings = 1;
+                return;
+            }
+
+            _pendingStableReadings++;
+            if (_pendingStableReadings < RequiredStableReadings)
+            {
+                return;
+            }
+
+            _pendingPlayerActive = null;
+            _pendingStableReadings = 0;
             _isPlayerActive = active;
             PresenceChanged?.Invoke(this, active);
         }
         catch
         {
             // 忽略 SMTC 瞬时异常，下一轮继续检测。
+        }
+        finally
+        {
+            _isRefreshing = false;
         }
     }
 

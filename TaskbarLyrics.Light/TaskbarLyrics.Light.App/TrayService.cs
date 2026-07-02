@@ -46,6 +46,13 @@ public sealed class TrayService : IDisposable
         };
 
         _notifyIcon.DoubleClick += (_, _) => _toggleLyricsWindow();
+        _notifyIcon.MouseDown += (_, e) =>
+        {
+            if (e.Button == Forms.MouseButtons.Right)
+            {
+                _menuWindow?.IgnoreOutsideClicksFor(TimeSpan.FromMilliseconds(260));
+            }
+        };
         _notifyIcon.MouseUp += (_, e) =>
         {
             if (e.Button == Forms.MouseButtons.Right)
@@ -79,6 +86,13 @@ public sealed class TrayService : IDisposable
 
     private void ShowMenu()
     {
+        if (_menuWindow is { IsVisible: true })
+        {
+            _menuWindow.IgnoreOutsideClicksFor(TimeSpan.FromMilliseconds(180));
+            _menuWindow.ShowAtCursor(animate: false);
+            return;
+        }
+
         _menuWindow?.Close();
         _menuWindow = new TrayMenuWindow(
             _toggleLyricsWindow,
@@ -90,6 +104,6 @@ public sealed class TrayService : IDisposable
             _isLyricsWindowVisible,
             _getSettings);
         _menuWindow.Closed += (_, _) => _menuWindow = null;
-        _menuWindow.ShowAtCursor();
+        _menuWindow.ShowAtCursor(animate: true);
     }
 }
