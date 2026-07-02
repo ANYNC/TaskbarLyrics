@@ -110,6 +110,15 @@ html, body {
   opacity: 0.58;
 }
 
+body.hide-cover .shell {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+body.hide-cover .cover,
+body.hide-cover .cover + div {
+  display: none;
+}
+
 .cover-image {
   position: absolute;
   inset: 0;

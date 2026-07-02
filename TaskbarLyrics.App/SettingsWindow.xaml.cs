@@ -210,6 +210,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             FontWeight = NormalizeFontWeight(_settings.FontWeight),
             ForegroundColorMode = _settings.ForegroundColorMode,
             ForegroundColor = _settings.ForegroundColor,
+            ShowCover = _settings.ShowCover,
             ShowBackground = _settings.ShowBackground,
             BackgroundOpacity = _settings.BackgroundOpacity,
             ShowBorder = _settings.ShowBorder,
@@ -387,6 +388,9 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 break;
             case "showSpectrumWhenLyricsNotFound":
                 _settings.ShowSpectrumWhenLyricsNotFound = ReadBool(element, _settings.ShowSpectrumWhenLyricsNotFound);
+                break;
+            case "showCover":
+                _settings.ShowCover = ReadBool(element, _settings.ShowCover);
                 break;
             case "showBackground":
                 _settings.ShowBackground = ReadBool(element, _settings.ShowBackground);
@@ -705,6 +709,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         target.FontWeight = source.FontWeight;
         target.ForegroundColorMode = source.ForegroundColorMode;
         target.ForegroundColor = source.ForegroundColor;
+        target.ShowCover = source.ShowCover;
         target.ShowBackground = source.ShowBackground;
         target.BackgroundOpacity = source.BackgroundOpacity;
         target.ShowBorder = source.ShowBorder;
@@ -904,6 +909,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         public string FontWeight { get; set; } = "";
         public ForegroundColorMode ForegroundColorMode { get; set; }
         public string ForegroundColor { get; set; } = "";
+        public bool ShowCover { get; set; }
         public bool ShowBackground { get; set; }
         public double BackgroundOpacity { get; set; }
         public bool ShowBorder { get; set; }

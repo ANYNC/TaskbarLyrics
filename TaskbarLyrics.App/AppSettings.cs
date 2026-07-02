@@ -74,6 +74,8 @@ public sealed class AppSettings
 
     public string ForegroundColor { get; set; } = LightForegroundColor;
 
+    public bool ShowCover { get; set; } = true;
+
     public bool ShowBackground { get; set; } = false;
 
     public double BackgroundOpacity { get; set; } = 0.55;

@@ -887,7 +887,8 @@ public partial class MainWindow : Window
                 : "none",
             textShadow = settings.ShowTextShadow
                 ? "0 1px 2px rgba(0, 0, 0, 0.36)"
-                : "none"
+                : "none",
+            showCover = settings.ShowCover
         };
 
         var payloadJson = JsonSerializer.Serialize(stylePayload);

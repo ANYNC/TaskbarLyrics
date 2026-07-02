@@ -861,5 +861,11 @@ window.taskbarLyrics = {
     if (payload.textShadow && CSS.supports("text-shadow", payload.textShadow)) {
       root.style.setProperty("--text-shadow", payload.textShadow);
     }
+
+    if (payload.showCover === false) {
+      document.body.classList.add("hide-cover");
+    } else {
+      document.body.classList.remove("hide-cover");
+    }
   }
 };
