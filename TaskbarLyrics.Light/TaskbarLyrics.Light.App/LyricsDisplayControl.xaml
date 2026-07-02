@@ -11,126 +11,258 @@
             Background="Transparent"
             BorderThickness="0"
             Padding="4,0">
-        <Grid x:Name="LayoutGrid">
-            <Grid.RowDefinitions>
-                <RowDefinition x:Name="CoverRow" Height="*" />
-                <RowDefinition x:Name="CoverStackGapRow" Height="0" />
-                <RowDefinition x:Name="ContentRow" Height="0" />
-            </Grid.RowDefinitions>
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition x:Name="CoverColumn" Width="34" />
-                <ColumnDefinition x:Name="CoverGapColumn" Width="8" />
-                <ColumnDefinition x:Name="ContentColumn" Width="*" />
-            </Grid.ColumnDefinitions>
+        <Grid x:Name="SurfaceRoot" ClipToBounds="False">
+            <Grid x:Name="LayoutGrid">
+                <Grid.RowDefinitions>
+                    <RowDefinition x:Name="CoverRow" Height="*" />
+                    <RowDefinition x:Name="CoverStackGapRow" Height="0" />
+                    <RowDefinition x:Name="ContentRow" Height="0" />
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition x:Name="CoverColumn" Width="34" />
+                    <ColumnDefinition x:Name="CoverGapColumn" Width="8" />
+                    <ColumnDefinition x:Name="ContentColumn" Width="*" />
+                </Grid.ColumnDefinitions>
 
-            <Border x:Name="CoverBorder"
-                    Grid.Row="0"
-                    Grid.Column="0"
-                    Width="34"
-                    Height="34"
-                    HorizontalAlignment="Center"
-                    VerticalAlignment="Center"
-                    CornerRadius="6"
-                    Background="#1F2937"
-                    ClipToBounds="True"
-                    BorderBrush="#14FFFFFF"
-                    BorderThickness="1">
-                <Grid>
-                    <TextBlock x:Name="CoverFallbackText"
-                               HorizontalAlignment="Center"
-                               VerticalAlignment="Center"
-                               FontSize="13"
-                               FontWeight="Bold"
-                               Foreground="#F5FFFFFF"
-                               Text="N" />
-                    <Image x:Name="CoverImageA" Stretch="UniformToFill" Opacity="0" />
-                    <Image x:Name="CoverImageB" Stretch="UniformToFill" Opacity="0" />
-                </Grid>
-            </Border>
-
-            <StackPanel x:Name="StackedTrackInfoPanel"
+                <Border x:Name="CoverGlowBorder"
                         Grid.Row="0"
                         Grid.Column="0"
-                        Grid.ColumnSpan="3"
-                        Orientation="Vertical"
-                        HorizontalAlignment="Left"
+                        Width="34"
+                        Height="34"
+                        HorizontalAlignment="Center"
                         VerticalAlignment="Center"
-                        IsHitTestVisible="False"
+                        CornerRadius="8"
+                        Background="#00000000"
+                        Opacity="0"
+                        IsHitTestVisible="False">
+                    <Border.Effect>
+                        <BlurEffect Radius="12" RenderingBias="Performance" />
+                    </Border.Effect>
+                </Border>
+
+                <Border x:Name="CoverBorder"
+                        Grid.Row="0"
+                        Grid.Column="0"
+                        Width="34"
+                        Height="34"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        CornerRadius="6"
+                        Background="#1F2937"
                         ClipToBounds="True"
-                        Visibility="Collapsed">
-                <TextBlock x:Name="TrackTitleText"
-                           Text=" "
-                           FontSize="12"
-                           FontWeight="SemiBold"
-                           TextWrapping="NoWrap"
-                           TextTrimming="CharacterEllipsis" />
-                <TextBlock x:Name="TrackArtistText"
-                           Text=" "
-                           FontSize="11"
-                           Opacity="0.74"
-                           Margin="0,2,0,0"
-                           TextWrapping="NoWrap"
-                           TextTrimming="CharacterEllipsis" />
-            </StackPanel>
-
-            <Grid x:Name="ContentGrid"
-                  Grid.Row="0"
-                  Grid.Column="2"
-                  ClipToBounds="False"
-                  Margin="2,3,4,0">
-                <Border x:Name="LyricsViewport"
-                        ClipToBounds="True"
-                        Margin="0,0,0,-2"
-                        VerticalAlignment="Stretch">
-                    <Grid x:Name="LyricsLayer" ClipToBounds="True">
-                        <StackPanel x:Name="TrackPanel"
-                                    RenderTransformOrigin="0,0">
-                            <StackPanel.RenderTransform>
-                                <TranslateTransform x:Name="TrackTransform" />
-                            </StackPanel.RenderTransform>
-
-                            <TextBlock x:Name="CurrentLineText"
-                                       VerticalAlignment="Center"
-                                       Text="TaskbarLyrics 已启动"
-                                       RenderTransformOrigin="0,0.5">
-                                <TextBlock.RenderTransform>
-                                    <TranslateTransform Y="1" />
-                                </TextBlock.RenderTransform>
-                            </TextBlock>
-
-                            <TextBlock x:Name="NextLineText"
-                                       VerticalAlignment="Center"
-                                       Opacity="0.72"
-                                       Text="等待歌词..."
-                                       RenderTransformOrigin="0,0.5">
-                                <TextBlock.RenderTransform>
-                                    <TranslateTransform Y="2" />
-                                </TextBlock.RenderTransform>
-                            </TextBlock>
-
-                            <TextBlock x:Name="IncomingLineText"
-                                       VerticalAlignment="Center"
-                                       Opacity="0"
-                                       Text=" "
-                                       RenderTransformOrigin="0,0.5">
-                                <TextBlock.RenderTransform>
-                                    <TranslateTransform Y="2" />
-                                </TextBlock.RenderTransform>
-                            </TextBlock>
-                        </StackPanel>
+                        BorderBrush="#14FFFFFF"
+                        BorderThickness="1">
+                    <Grid>
+                        <TextBlock x:Name="CoverFallbackText"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   FontSize="13"
+                                   FontWeight="Bold"
+                                   Foreground="#F5FFFFFF"
+                                   Text="N" />
+                        <Image x:Name="CoverImageA" Stretch="UniformToFill" Opacity="0" />
+                        <Image x:Name="CoverImageB" Stretch="UniformToFill" Opacity="0" />
+                        <Border x:Name="CoverBottomProgressTrack"
+                                Height="3"
+                                VerticalAlignment="Bottom"
+                                Background="#33000000"
+                                Visibility="Collapsed"
+                                IsHitTestVisible="False">
+                            <Border x:Name="CoverBottomProgressFill"
+                                    HorizontalAlignment="Left"
+                                    Background="#FFFFFFFF"
+                                    RenderTransformOrigin="0,0.5">
+                                <Border.RenderTransform>
+                                    <ScaleTransform x:Name="CoverBottomProgressScale" ScaleX="0" />
+                                </Border.RenderTransform>
+                            </Border>
+                        </Border>
                     </Grid>
                 </Border>
 
-                <Grid x:Name="SpectrumLayer"
-                      Opacity="0"
-                      IsHitTestVisible="False"
-                      VerticalAlignment="Center">
-                    <StackPanel x:Name="SpectrumPanel"
-                                Orientation="Horizontal"
-                                VerticalAlignment="Center"
-                                Height="22" />
+                <Path x:Name="CoverProgressRingTrack"
+                      Grid.Row="0"
+                      Grid.Column="0"
+                      StrokeThickness="2"
+                      StrokeStartLineCap="Round"
+                      StrokeEndLineCap="Round"
+                      StrokeLineJoin="Round"
+                      Opacity="0.24"
+                      Visibility="Collapsed"
+                      IsHitTestVisible="False" />
+                <Path x:Name="CoverProgressRingValue"
+                      Grid.Row="0"
+                      Grid.Column="0"
+                      StrokeThickness="2.2"
+                      StrokeStartLineCap="Round"
+                      StrokeEndLineCap="Round"
+                      StrokeLineJoin="Round"
+                      Visibility="Collapsed"
+                      IsHitTestVisible="False" />
+
+                <StackPanel x:Name="StackedTrackInfoPanel"
+                            Grid.Row="0"
+                            Grid.Column="0"
+                            Grid.ColumnSpan="3"
+                            Orientation="Vertical"
+                            HorizontalAlignment="Left"
+                            VerticalAlignment="Center"
+                            IsHitTestVisible="False"
+                            ClipToBounds="True"
+                            Visibility="Collapsed">
+                    <TextBlock x:Name="TrackTitleText"
+                               Text=" "
+                               FontSize="12"
+                               FontWeight="SemiBold"
+                               TextWrapping="NoWrap"
+                               TextTrimming="CharacterEllipsis" />
+                    <TextBlock x:Name="TrackArtistText"
+                               Text=" "
+                               FontSize="11"
+                               Opacity="0.74"
+                               Margin="0,2,0,0"
+                               TextWrapping="NoWrap"
+                               TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+
+                <Grid x:Name="ContentGrid"
+                      Grid.Row="0"
+                      Grid.Column="2"
+                      ClipToBounds="False"
+                      Margin="2,3,4,0">
+                    <Border x:Name="LyricsViewport"
+                            ClipToBounds="True"
+                            Margin="0,0,0,-2"
+                            VerticalAlignment="Stretch">
+                        <Grid x:Name="LyricsLayer" ClipToBounds="True">
+                            <StackPanel x:Name="TrackPanel"
+                                        RenderTransformOrigin="0,0">
+                                <StackPanel.RenderTransform>
+                                    <TranslateTransform x:Name="TrackTransform" />
+                                </StackPanel.RenderTransform>
+
+                                <TextBlock x:Name="CurrentLineText"
+                                           VerticalAlignment="Center"
+                                           Text="TaskbarLyrics 已启动"
+                                           RenderTransformOrigin="0,0.5">
+                                    <TextBlock.RenderTransform>
+                                        <TranslateTransform Y="1" />
+                                    </TextBlock.RenderTransform>
+                                </TextBlock>
+
+                                <TextBlock x:Name="NextLineText"
+                                           VerticalAlignment="Center"
+                                           Opacity="0.72"
+                                           Text="等待歌词..."
+                                           RenderTransformOrigin="0,0.5">
+                                    <TextBlock.RenderTransform>
+                                        <TranslateTransform Y="2" />
+                                    </TextBlock.RenderTransform>
+                                </TextBlock>
+
+                                <TextBlock x:Name="IncomingLineText"
+                                           VerticalAlignment="Center"
+                                           Opacity="0"
+                                           Text=" "
+                                           RenderTransformOrigin="0,0.5">
+                                    <TextBlock.RenderTransform>
+                                        <TranslateTransform Y="2" />
+                                    </TextBlock.RenderTransform>
+                                </TextBlock>
+                            </StackPanel>
+                            <Border x:Name="LyricUnderlineTrack"
+                                    Height="2"
+                                    HorizontalAlignment="Stretch"
+                                    VerticalAlignment="Top"
+                                    Background="#18FFFFFF"
+                                    Visibility="Collapsed"
+                                    IsHitTestVisible="False">
+                                <Border.RenderTransform>
+                                    <TranslateTransform x:Name="LyricUnderlineOffset" />
+                                </Border.RenderTransform>
+                                <Border x:Name="LyricUnderlineFill"
+                                        HorizontalAlignment="Left"
+                                        Background="#FFFFFFFF"
+                                        RenderTransformOrigin="0,0.5">
+                                    <Border.RenderTransform>
+                                        <ScaleTransform x:Name="LyricUnderlineScale" ScaleX="0" />
+                                    </Border.RenderTransform>
+                                </Border>
+                            </Border>
+                        </Grid>
+                    </Border>
+
+                    <Grid x:Name="SpectrumLayer"
+                          Opacity="0"
+                          IsHitTestVisible="False"
+                          VerticalAlignment="Center">
+                        <StackPanel x:Name="SpectrumPanel"
+                                    Orientation="Horizontal"
+                                    VerticalAlignment="Center"
+                                    Height="22" />
+                        <Border x:Name="SpectrumProgressTrack"
+                                Height="1.5"
+                                VerticalAlignment="Bottom"
+                                Background="#18FFFFFF"
+                                Visibility="Collapsed"
+                                IsHitTestVisible="False">
+                            <Border x:Name="SpectrumProgressFill"
+                                    HorizontalAlignment="Left"
+                                    Background="#FFFFFFFF"
+                                    RenderTransformOrigin="0,0.5">
+                                <Border.RenderTransform>
+                                    <ScaleTransform x:Name="SpectrumProgressScale" ScaleX="0" />
+                                </Border.RenderTransform>
+                            </Border>
+                        </Border>
+                    </Grid>
                 </Grid>
             </Grid>
+
+            <Border x:Name="BottomProgressTrack"
+                    Height="2"
+                    HorizontalAlignment="Stretch"
+                    VerticalAlignment="Bottom"
+                    Background="#18FFFFFF"
+                    Visibility="Collapsed"
+                    IsHitTestVisible="False">
+                <Border x:Name="BottomProgressFill"
+                        HorizontalAlignment="Left"
+                        Background="#FFFFFFFF"
+                        RenderTransformOrigin="0,0.5">
+                    <Border.RenderTransform>
+                        <ScaleTransform x:Name="BottomProgressScale" ScaleX="0" />
+                    </Border.RenderTransform>
+                </Border>
+            </Border>
+
+            <StackPanel x:Name="ProgressDotsPanel"
+                        Orientation="Horizontal"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Bottom"
+                        Height="8"
+                        Visibility="Collapsed"
+                        IsHitTestVisible="False" />
+
+            <Border x:Name="TimePillBorder"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Center"
+                    MinWidth="82"
+                    Height="24"
+                    CornerRadius="7"
+                    Padding="8,0"
+                    Background="#B80B1220"
+                    BorderBrush="#33FFFFFF"
+                    BorderThickness="1"
+                    Visibility="Collapsed"
+                    IsHitTestVisible="False">
+                <TextBlock x:Name="TimePillText"
+                           Text="0:00 / 0:00"
+                           FontSize="11"
+                           FontWeight="SemiBold"
+                           VerticalAlignment="Center"
+                           TextAlignment="Center" />
+            </Border>
         </Grid>
     </Border>
 </UserControl>

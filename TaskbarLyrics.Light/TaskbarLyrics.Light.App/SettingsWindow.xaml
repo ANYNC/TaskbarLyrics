@@ -1,6 +1,7 @@
 <Window x:Class="TaskbarLyrics.Light.App.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:TaskbarLyrics.Light.App"
         xmlns:ui="clr-namespace:TaskbarLyrics.Light.App.Ui"
         Title="TaskbarLyrics Light - 设置"
         Width="1280"
@@ -92,17 +93,41 @@
         <!-- 主区域 -->
         <Grid Grid.Column="1">
             <Grid.RowDefinitions>
-                <RowDefinition Height="98" />
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
 
-            <Grid Margin="40,18,36,0">
+            <Grid Margin="40,18,36,14">
                 <StackPanel VerticalAlignment="Top">
                     <TextBlock Text="设置" FontSize="28" FontWeight="SemiBold" />
                     <TextBlock Text="按功能域管理设置：播放源、歌词与本地库、显示与外观、窗口布局、维护调试。"
                                Foreground="{StaticResource SettingsMutedBrush}"
                                FontSize="12"
                                Margin="0,7,0,0" />
+                    <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                        <TextBox x:Name="SettingsSearchBox"
+                                 Width="320"
+                                 Height="34"
+                                 Padding="12,0"
+                                 VerticalContentAlignment="Center"
+                                 Background="{StaticResource SettingsInputBrush}"
+                                 Foreground="{StaticResource SettingsTextBrush}"
+                                 BorderBrush="#2978A0FF"
+                                 BorderThickness="1"
+                                 TextChanged="SettingsSearchBox_TextChanged" />
+                        <Button x:Name="ExpandAllSectionsButton"
+                                Content="展开全部"
+                                Style="{StaticResource SettingsPrimaryButtonStyle}"
+                                Height="34"
+                                MinWidth="86"
+                                Margin="10,0,0,0" />
+                        <Button x:Name="CollapseAllSectionsButton"
+                                Content="折叠全部"
+                                Style="{StaticResource SettingsPrimaryButtonStyle}"
+                                Height="34"
+                                MinWidth="86"
+                                Margin="8,0,0,0" />
+                    </StackPanel>
                 </StackPanel>
                 <Button x:Name="ResetDefaultsButton"
                         HorizontalAlignment="Right"
@@ -190,6 +215,95 @@
                             </UniformGrid>
                             <TextBlock Text="识别优先级" Style="{StaticResource SettingsGroupTitleStyle}" />
                             <ui:SourceOrderList x:Name="SourceOrderList" Margin="0,4,0,0" />
+                            <TextBlock Text="播放器视觉配置" Style="{StaticResource SettingsGroupTitleStyle}" />
+                            <Border Style="{StaticResource SettingsRowCardStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="按播放器使用不同视觉" FontWeight="SemiBold" />
+                                        <TextBlock Text="可为不同播放器单独指定进度、频谱和逐字效果，默认关闭。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                    <CheckBox x:Name="EnablePlayerVisualProfilesCheck" Grid.Column="1" Style="{StaticResource SettingsToggleSwitchStyle}" />
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource SettingsRowCardStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="220" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="配置播放器" FontWeight="SemiBold" />
+                                        <TextBlock Text="选择要编辑的播放器视觉方案。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                    <ComboBox x:Name="PlayerProfileSourceCombo" Grid.Column="1" Style="{StaticResource SettingsComboBoxStyle}">
+                                        <ComboBoxItem Content="QQ 音乐" Tag="QQMusic" />
+                                        <ComboBoxItem Content="网易云音乐" Tag="Netease" />
+                                        <ComboBoxItem Content="酷狗音乐" Tag="Kugou" />
+                                        <ComboBoxItem Content="Spotify" Tag="Spotify" />
+                                    </ComboBox>
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource SettingsRowCardStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="启用该播放器方案" FontWeight="SemiBold" />
+                                        <TextBlock Text="关闭时该播放器沿用全局外观设置。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                    <CheckBox x:Name="PlayerProfileEnabledCheck" Grid.Column="1" Style="{StaticResource SettingsToggleSwitchStyle}" />
+                                </Grid>
+                            </Border>
+                            <UniformGrid Columns="3" Margin="0,0,0,0">
+                                <Border Style="{StaticResource SettingsRowCardStyle}" Margin="0,0,6,0">
+                                    <StackPanel>
+                                        <TextBlock Text="进度样式" FontWeight="SemiBold" Margin="0,0,0,8" />
+                                        <ComboBox x:Name="PlayerProfileProgressStyleCombo" Style="{StaticResource SettingsComboBoxStyle}">
+                                            <ComboBoxItem Content="关闭" Tag="Off" />
+                                            <ComboBoxItem Content="底部细线" Tag="BottomLine" />
+                                            <ComboBoxItem Content="歌词下划线" Tag="LyricUnderline" />
+                                            <ComboBoxItem Content="封面进度环" Tag="CoverRing" />
+                                            <ComboBoxItem Content="封面底边" Tag="CoverBottomBar" />
+                                            <ComboBoxItem Content="频谱底线" Tag="SpectrumBaseline" />
+                                            <ComboBoxItem Content="时间胶囊" Tag="TimePill" />
+                                            <ComboBoxItem Content="呼吸进度点" Tag="Dots" />
+                                        </ComboBox>
+                                    </StackPanel>
+                                </Border>
+                                <Border Style="{StaticResource SettingsRowCardStyle}" Margin="6,0,6,0">
+                                    <StackPanel>
+                                        <TextBlock Text="频谱样式" FontWeight="SemiBold" Margin="0,0,0,8" />
+                                        <ComboBox x:Name="PlayerProfileSpectrumStyleCombo" Style="{StaticResource SettingsComboBoxStyle}">
+                                            <ComboBoxItem Content="中心扩散" Tag="Center" />
+                                            <ComboBoxItem Content="底部柱状" Tag="Bottom" />
+                                            <ComboBoxItem Content="镜像波形" Tag="Mirror" />
+                                            <ComboBoxItem Content="细线" Tag="Thin" />
+                                            <ComboBoxItem Content="点阵" Tag="Dots" />
+                                            <ComboBoxItem Content="呼吸条" Tag="Pulse" />
+                                        </ComboBox>
+                                    </StackPanel>
+                                </Border>
+                                <Border Style="{StaticResource SettingsRowCardStyle}" Margin="6,0,0,0">
+                                    <StackPanel>
+                                        <TextBlock Text="逐字效果" FontWeight="SemiBold" Margin="0,0,0,8" />
+                                        <ComboBox x:Name="PlayerProfileKaraokeEffectCombo" Style="{StaticResource SettingsComboBoxStyle}">
+                                            <ComboBoxItem Content="关闭" Tag="Off" />
+                                            <ComboBoxItem Content="逐字扫光" Tag="Sweep" />
+                                            <ComboBoxItem Content="已唱淡出" Tag="FadePassed" />
+                                            <ComboBoxItem Content="逐字消隐" Tag="DisappearPassed" />
+                                            <ComboBoxItem Content="当前字脉冲" Tag="PulseCurrent" />
+                                            <ComboBoxItem Content="余辉拖尾" Tag="GhostTrail" />
+                                            <ComboBoxItem Content="粒子淡出" Tag="ParticleFade" />
+                                        </ComboBox>
+                                    </StackPanel>
+                                </Border>
+                            </UniformGrid>
                         </StackPanel>
                     </Border>
 
@@ -274,6 +388,48 @@
                                         <TextBlock Text="歌词源提供翻译时，将译文跟随原文显示。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
                                     </StackPanel>
                                     <CheckBox x:Name="ShowLyricTranslationCheck" Grid.Column="1" Style="{StaticResource SettingsToggleSwitchStyle}" />
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource SettingsRowCardStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="180" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="翻译排版" FontWeight="SemiBold" />
+                                        <TextBlock Text="控制译文是跟随原文同一行，还是换到下一行显示。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                    <ComboBox x:Name="TranslationLayoutCombo" Grid.Column="1" Style="{StaticResource SettingsComboBoxStyle}">
+                                        <ComboBoxItem Content="同行弱化" Tag="Inline" />
+                                        <ComboBoxItem Content="译文换行" Tag="NewLine" />
+                                    </ComboBox>
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource SettingsRowCardStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="180" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="译文字号比例" FontWeight="SemiBold" />
+                                        <TextBlock Text="相对原文字号，范围 0.62 到 1。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                    <ui:NumberStepper x:Name="TranslationFontScaleStepper" Grid.Column="1" Minimum="0.62" Maximum="1" Step="0.02" Decimals="2" />
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource SettingsRowCardStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="180" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="译文透明度" FontWeight="SemiBold" />
+                                        <TextBlock Text="数值越小，译文越弱。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                    <ui:NumberStepper x:Name="TranslationOpacityStepper" Grid.Column="1" Minimum="0.18" Maximum="1" Step="0.02" Decimals="2" />
                                 </Grid>
                             </Border>
                             <Border Style="{StaticResource SettingsRowCardStyle}">
@@ -442,6 +598,40 @@
                         <StackPanel>
                             <TextBlock Text="显示与外观" FontSize="18" FontWeight="SemiBold" />
                             <TextBlock Text="控制歌词窗口展示内容、字体颜色、封面样式、背景和动效。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,5,0,14" />
+                            <TextBlock Text="预览与预设" Style="{StaticResource SettingsFirstGroupTitleStyle}" />
+                            <Border Style="{StaticResource SettingsRowCardStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="220" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border Height="92"
+                                            Background="#66081122"
+                                            BorderBrush="#2478A0FF"
+                                            BorderThickness="1"
+                                            Padding="18,14"
+                                            ClipToBounds="False">
+                                        <local:LyricsDisplayControl x:Name="PreviewDisplay"
+                                                                    HorizontalAlignment="Stretch"
+                                                                    VerticalAlignment="Center"
+                                                                    IsHitTestVisible="False" />
+                                    </Border>
+                                    <StackPanel Grid.Column="1" Margin="16,0,0,0">
+                                        <ComboBox x:Name="LayoutPresetCombo" Style="{StaticResource SettingsComboBoxStyle}">
+                                            <ComboBoxItem Content="极简歌词" Tag="MinimalLyrics" />
+                                            <ComboBoxItem Content="封面歌词" Tag="CoverLyrics" />
+                                            <ComboBoxItem Content="上下封面" Tag="StackedCover" />
+                                            <ComboBoxItem Content="频谱模式" Tag="SpectrumFocus" />
+                                            <ComboBoxItem Content="时间胶囊" Tag="TimePill" />
+                                        </ComboBox>
+                                        <Button x:Name="ApplyLayoutPresetButton"
+                                                Content="应用预设"
+                                                Style="{StaticResource SettingsPrimaryButtonStyle}"
+                                                Height="36"
+                                                Margin="0,10,0,0" />
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
                             <TextBlock Text="频谱显示" Style="{StaticResource SettingsFirstGroupTitleStyle}" />
                             <Border Style="{StaticResource SettingsRowCardStyle}">
                                 <Grid>
@@ -512,6 +702,23 @@
                                         <ComboBoxItem Content="细线" Tag="Thin" />
                                         <ComboBoxItem Content="点阵" Tag="Dots" />
                                         <ComboBoxItem Content="呼吸条" Tag="Pulse" />
+                                    </ComboBox>
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource SettingsRowCardStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="180" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="频谱配色" FontWeight="SemiBold" />
+                                        <TextBlock Text="可跟随文字色、封面色或使用轻量渐变。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                    <ComboBox x:Name="SpectrumColorModeCombo" Grid.Column="1" Style="{StaticResource SettingsComboBoxStyle}">
+                                        <ComboBoxItem Content="跟随文字" Tag="Text" />
+                                        <ComboBoxItem Content="跟随封面" Tag="CoverAccent" />
+                                        <ComboBoxItem Content="渐变色" Tag="Gradient" />
                                     </ComboBox>
                                 </Grid>
                             </Border>
@@ -653,10 +860,62 @@
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
                                     <StackPanel>
+                                        <TextBlock Text="检测背景自动变色" FontWeight="SemiBold" />
+                                        <TextBlock Text="开启背景时按自身背景材质判断；透明时按窗口所在屏幕区域判断。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                    <CheckBox x:Name="AutoForegroundColorByBackgroundCheck" Grid.Column="1" Style="{StaticResource SettingsToggleSwitchStyle}" />
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource SettingsRowCardStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
                                         <TextBlock Text="跟随封面取色" FontWeight="SemiBold" />
                                         <TextBlock Text="用专辑封面的主色调整歌词与频谱颜色。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
                                     </StackPanel>
                                     <CheckBox x:Name="UseCoverAccentColorCheck" Grid.Column="1" Style="{StaticResource SettingsToggleSwitchStyle}" />
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource SettingsRowCardStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="180" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="逐字效果" FontWeight="SemiBold" />
+                                        <TextBlock Text="使用歌词行进度做轻量逐字视觉，默认关闭。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                    <ComboBox x:Name="KaraokeEffectCombo" Grid.Column="1" Style="{StaticResource SettingsComboBoxStyle}">
+                                        <ComboBoxItem Content="关闭" Tag="Off" />
+                                        <ComboBoxItem Content="逐字扫光" Tag="Sweep" />
+                                        <ComboBoxItem Content="已唱淡出" Tag="FadePassed" />
+                                        <ComboBoxItem Content="逐字消隐" Tag="DisappearPassed" />
+                                        <ComboBoxItem Content="当前字脉冲" Tag="PulseCurrent" />
+                                        <ComboBoxItem Content="余辉拖尾" Tag="GhostTrail" />
+                                        <ComboBoxItem Content="粒子淡出" Tag="ParticleFade" />
+                                    </ComboBox>
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource SettingsRowCardStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="180" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="文字效果" FontWeight="SemiBold" />
+                                        <TextBlock Text="普通阴影、描边感或发光，复杂背景上更易读。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                    <ComboBox x:Name="TextEffectStyleCombo" Grid.Column="1" Style="{StaticResource SettingsComboBoxStyle}">
+                                        <ComboBoxItem Content="无" Tag="None" />
+                                        <ComboBoxItem Content="阴影" Tag="Shadow" />
+                                        <ComboBoxItem Content="描边" Tag="Outline" />
+                                        <ComboBoxItem Content="柔光" Tag="Glow" />
+                                    </ComboBox>
                                 </Grid>
                             </Border>
                             <TextBlock Text="封面呈现" Style="{StaticResource SettingsGroupTitleStyle}" />
@@ -692,6 +951,32 @@
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock x:Name="ShowCoverGlowLabel" Text="封面柔光" FontWeight="SemiBold" />
+                                        <TextBlock x:Name="ShowCoverGlowHint" Text="使用封面主色在封面后方增加轻量光晕，默认关闭。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                    <CheckBox x:Name="ShowCoverGlowCheck" Grid.Column="1" Style="{StaticResource SettingsToggleSwitchStyle}" />
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource SettingsRowCardStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="180" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock x:Name="CoverGlowOpacityLabel" Text="封面柔光强度" FontWeight="SemiBold" />
+                                        <TextBlock x:Name="CoverGlowOpacityHint" Text="仅开启封面柔光后生效。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                    <ui:NumberStepper x:Name="CoverGlowOpacityStepper" Grid.Column="1" Minimum="0" Maximum="0.8" Step="0.02" Decimals="2" />
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource SettingsRowCardStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="180" />
                                     </Grid.ColumnDefinitions>
                                     <StackPanel>
@@ -702,6 +987,54 @@
                                         <ComboBoxItem Content="横向排列" Tag="Inline" />
                                         <ComboBoxItem Content="上下两行" Tag="Stacked" />
                                     </ComboBox>
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource SettingsRowCardStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="180" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="显示歌曲进度" FontWeight="SemiBold" />
+                                        <TextBlock Text="默认关闭；封面/频谱相关样式不可用时会自动回退到细线。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                    <ComboBox x:Name="SongProgressStyleCombo" Grid.Column="1" Style="{StaticResource SettingsComboBoxStyle}">
+                                        <ComboBoxItem Content="关闭" Tag="Off" />
+                                        <ComboBoxItem Content="底部细线" Tag="BottomLine" />
+                                        <ComboBoxItem Content="歌词下划线" Tag="LyricUnderline" />
+                                        <ComboBoxItem Content="封面进度环" Tag="CoverRing" />
+                                        <ComboBoxItem Content="封面底边" Tag="CoverBottomBar" />
+                                        <ComboBoxItem Content="频谱底线" Tag="SpectrumBaseline" />
+                                        <ComboBoxItem Content="时间胶囊" Tag="TimePill" />
+                                        <ComboBoxItem Content="呼吸进度点" Tag="Dots" />
+                                    </ComboBox>
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource SettingsRowCardStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="180" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="进度粗细 (px)" FontWeight="SemiBold" />
+                                        <TextBlock Text="影响细线、下划线、封面环和频谱底线。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                    <ui:NumberStepper x:Name="SongProgressThicknessStepper" Grid.Column="1" Minimum="1" Maximum="8" Step="0.5" Decimals="1" />
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource SettingsRowCardStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="180" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="进度透明度" FontWeight="SemiBold" />
+                                        <TextBlock Text="范围 0.15 到 1。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                    <ui:NumberStepper x:Name="SongProgressOpacityStepper" Grid.Column="1" Minimum="0.15" Maximum="1" Step="0.05" Decimals="2" />
                                 </Grid>
                             </Border>
                             <Border Style="{StaticResource SettingsRowCardStyle}">
@@ -834,6 +1167,23 @@
                                         <ComboBoxItem Content="淡入淡出" Tag="Fade" />
                                         <ComboBoxItem Content="紧凑滑动" Tag="CompactSlide" />
                                         <ComboBoxItem Content="无动画" Tag="None" />
+                                    </ComboBox>
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource SettingsRowCardStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="180" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="动画强度" FontWeight="SemiBold" />
+                                        <TextBlock Text="调节歌词切换和封面淡入的节奏，丝滑档更柔和。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                    <ComboBox x:Name="AnimationIntensityCombo" Grid.Column="1" Style="{StaticResource SettingsComboBoxStyle}">
+                                        <ComboBoxItem Content="减少动画" Tag="Reduced" />
+                                        <ComboBoxItem Content="标准" Tag="Standard" />
+                                        <ComboBoxItem Content="丝滑" Tag="Smooth" />
                                     </ComboBox>
                                 </Grid>
                             </Border>
@@ -1001,6 +1351,36 @@
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="280" />
                                     </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="目标屏幕" FontWeight="SemiBold" />
+                                        <TextBlock Text="多屏时决定歌词窗口贴在哪块屏幕的任务栏区域。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                    <ComboBox x:Name="TargetScreenModeCombo" Grid.Column="1" Style="{StaticResource SettingsComboBoxStyle}">
+                                        <ComboBoxItem Content="主屏幕" Tag="Primary" />
+                                        <ComboBoxItem Content="鼠标所在屏幕" Tag="Cursor" />
+                                        <ComboBoxItem Content="指定序号" Tag="ScreenIndex" />
+                                    </ComboBox>
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource SettingsRowCardStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="280" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock x:Name="TargetScreenIndexLabel" Text="屏幕序号" FontWeight="SemiBold" />
+                                        <TextBlock x:Name="TargetScreenIndexHint" Text="仅目标屏幕选择“指定序号”时生效，从 0 开始。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                    <ui:NumberStepper x:Name="TargetScreenIndexStepper" Grid.Column="1" Minimum="0" Maximum="8" Step="1" Decimals="0" />
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource SettingsRowCardStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="280" />
+                                    </Grid.ColumnDefinitions>
                                     <TextBlock Text="X 偏移 (px)" FontWeight="SemiBold" VerticalAlignment="Center" />
                                     <ui:NumberStepper x:Name="XOffsetStepper" Grid.Column="1" Minimum="-2000" Maximum="2000" Step="10" Decimals="0" />
                                 </Grid>
@@ -1117,6 +1497,23 @@
                                                FontSize="12"
                                                Margin="0,8,0,0" />
                                 </StackPanel>
+                            </Border>
+                            <TextBlock Text="配置文件" Style="{StaticResource SettingsGroupTitleStyle}" />
+                            <Border Style="{StaticResource SettingsRowCardStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="导入/导出设置" FontWeight="SemiBold" />
+                                        <TextBlock Text="导出当前 Light 版设置用于备份；导入后会立即应用并保存。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                        <Button x:Name="ExportSettingsButton" Content="导出" Style="{StaticResource SettingsPrimaryButtonStyle}" Height="38" MinWidth="76" />
+                                        <Button x:Name="ImportSettingsButton" Content="导入" Style="{StaticResource SettingsPrimaryButtonStyle}" Height="38" MinWidth="76" Margin="8,0,0,0" />
+                                    </StackPanel>
+                                </Grid>
                             </Border>
                             <TextBlock Text="更新检查" Style="{StaticResource SettingsGroupTitleStyle}" />
                             <Border Style="{StaticResource SettingsRowCardStyle}">

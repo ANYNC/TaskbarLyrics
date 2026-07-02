@@ -80,5 +80,19 @@ public sealed class SettingsStore
         {
             settings.CoverStyle = CoverDisplayStyle.RoundedSquare;
         }
+
+        EnsurePlayerVisualProfile(settings, "QQMusic");
+        EnsurePlayerVisualProfile(settings, "Netease");
+        EnsurePlayerVisualProfile(settings, "Kugou");
+        EnsurePlayerVisualProfile(settings, "Spotify");
+    }
+
+    private static void EnsurePlayerVisualProfile(AppSettings settings, string sourceApp)
+    {
+        settings.PlayerVisualProfiles ??= new Dictionary<string, PlayerVisualProfile>(StringComparer.OrdinalIgnoreCase);
+        if (!settings.PlayerVisualProfiles.ContainsKey(sourceApp))
+        {
+            settings.PlayerVisualProfiles[sourceApp] = new PlayerVisualProfile();
+        }
     }
 }

@@ -61,11 +61,94 @@ public enum LyricTransitionStyle
     None
 }
 
+public enum SongProgressDisplayStyle
+{
+    Off,
+    BottomLine,
+    LyricUnderline,
+    CoverRing,
+    CoverBottomBar,
+    SpectrumBaseline,
+    TimePill,
+    Dots
+}
+
+public enum LayoutPreset
+{
+    Custom,
+    MinimalLyrics,
+    CoverLyrics,
+    StackedCover,
+    SpectrumFocus,
+    TimePill
+}
+
+public enum LyricTranslationLayout
+{
+    Inline,
+    NewLine
+}
+
+public enum LyricKaraokeEffect
+{
+    Off,
+    Sweep,
+    FadePassed,
+    DisappearPassed,
+    PulseCurrent,
+    GhostTrail,
+    ParticleFade
+}
+
+public enum TextEffectStyle
+{
+    None,
+    Shadow,
+    Outline,
+    Glow
+}
+
+public enum SpectrumColorMode
+{
+    Text,
+    CoverAccent,
+    Gradient
+}
+
+public enum AnimationIntensity
+{
+    Reduced,
+    Standard,
+    Smooth
+}
+
+public enum TargetScreenMode
+{
+    Primary,
+    Cursor,
+    ScreenIndex
+}
+
 public enum LyricsBackgroundMaterial
 {
     Dim,
     CoverTint,
     Solid
+}
+
+public sealed class PlayerVisualProfile
+{
+    public bool Enabled { get; set; }
+
+    public SongProgressDisplayStyle SongProgressStyle { get; set; } = SongProgressDisplayStyle.Off;
+
+    public SpectrumDisplayStyle SpectrumStyle { get; set; } = SpectrumDisplayStyle.Center;
+
+    public LyricKaraokeEffect KaraokeEffect { get; set; } = LyricKaraokeEffect.Off;
+
+    public bool ShowLyricTranslation { get; set; }
+
+    public PlayerVisualProfile Clone() => (PlayerVisualProfile)MemberwiseClone();
 }
 
 public sealed class AppSettings
@@ -99,6 +182,12 @@ public sealed class AppSettings
     public bool EnableLocalLyrics { get; set; } = true;
 
     public bool ShowLyricTranslation { get; set; } = false;
+
+    public LyricTranslationLayout TranslationLayout { get; set; } = LyricTranslationLayout.Inline;
+
+    public double TranslationFontScale { get; set; } = 0.86;
+
+    public double TranslationOpacity { get; set; } = 0.72;
 
     public LocalLyricsSearchMode LocalLyricsSearchMode { get; set; } = LocalLyricsSearchMode.PreferLocal;
 
@@ -158,11 +247,19 @@ public sealed class AppSettings
 
     public string ForegroundColor { get; set; } = "#FFFF8000";
 
+    public bool AutoForegroundColorByBackground { get; set; } = false;
+
     public bool UseCoverAccentColor { get; set; } = true;
+
+    public LyricKaraokeEffect KaraokeEffect { get; set; } = LyricKaraokeEffect.Off;
 
     public CoverDisplayStyle CoverStyle { get; set; } = CoverDisplayStyle.RoundedSquare;
 
     public double CoverSize { get; set; } = 34;
+
+    public bool ShowCoverGlow { get; set; } = false;
+
+    public double CoverGlowOpacity { get; set; } = 0.22;
 
     public CoverLayoutMode CoverLayoutMode { get; set; } = CoverLayoutMode.Inline;
 
@@ -181,6 +278,18 @@ public sealed class AppSettings
     public double StackedContentYOffset { get; set; }
 
     public LyricTransitionStyle TransitionStyle { get; set; } = LyricTransitionStyle.Slide;
+
+    public SongProgressDisplayStyle SongProgressStyle { get; set; } = SongProgressDisplayStyle.Off;
+
+    public double SongProgressThickness { get; set; } = 2;
+
+    public double SongProgressOpacity { get; set; } = 0.9;
+
+    public SpectrumColorMode SpectrumColorMode { get; set; } = SpectrumColorMode.Text;
+
+    public AnimationIntensity AnimationIntensity { get; set; } = AnimationIntensity.Standard;
+
+    public TextEffectStyle TextEffectStyle { get; set; } = TextEffectStyle.Shadow;
 
     public bool ShowBackground { get; set; } = false;
 
@@ -206,11 +315,19 @@ public sealed class AppSettings
 
     public LyricsHorizontalAnchor HorizontalAnchor { get; set; } = LyricsHorizontalAnchor.Left;
 
+    public TargetScreenMode TargetScreenMode { get; set; } = TargetScreenMode.Primary;
+
+    public int TargetScreenIndex { get; set; }
+
     public double XOffset { get; set; }
 
     public double YOffset { get; set; } = -40;
 
     public bool ForceAlwaysOnTop { get; set; } = true;
+
+    public bool EnablePlayerVisualProfiles { get; set; } = false;
+
+    public Dictionary<string, PlayerVisualProfile> PlayerVisualProfiles { get; set; } = CreateDefaultPlayerVisualProfiles();
 
     // Debug only: show real-time SMTC timeline diagnostics window.
     public bool EnableSmtcTimelineMonitor { get; set; } = false;
@@ -218,8 +335,20 @@ public sealed class AppSettings
     public AppSettings Clone()
     {
         var cloned = (AppSettings)MemberwiseClone();
-        cloned.SourceRecognitionOrder = SourceRecognitionOrder.ToList();
-        cloned.LocalMusicFolders = LocalMusicFolders.ToList();
+        cloned.SourceRecognitionOrder = SourceRecognitionOrder?.ToList() ?? new List<string>();
+        cloned.LocalMusicFolders = LocalMusicFolders?.ToList() ?? new List<string>();
+        cloned.PlayerVisualProfiles = (PlayerVisualProfiles ?? CreateDefaultPlayerVisualProfiles()).ToDictionary(
+            entry => entry.Key,
+            entry => entry.Value?.Clone() ?? new PlayerVisualProfile(),
+            StringComparer.OrdinalIgnoreCase);
         return cloned;
     }
+
+    private static Dictionary<string, PlayerVisualProfile> CreateDefaultPlayerVisualProfiles() => new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["QQMusic"] = new(),
+        ["Netease"] = new(),
+        ["Kugou"] = new(),
+        ["Spotify"] = new()
+    };
 }

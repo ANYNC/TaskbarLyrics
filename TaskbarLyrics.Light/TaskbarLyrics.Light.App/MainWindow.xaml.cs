@@ -11,6 +11,7 @@ using TaskbarLyrics.Core.Abstractions;
 using TaskbarLyrics.Core.Models;
 using TaskbarLyrics.Core.Services;
 using TaskbarLyrics.Core.Utilities;
+using Forms = System.Windows.Forms;
 
 namespace TaskbarLyrics.Light.App;
 
@@ -19,6 +20,7 @@ public partial class MainWindow : Window
     private const int WmShowWindow = 0x0018;
     private const int FrameTimerMs = 16;
     private const int LyricsTickInterval = 4;
+    private const int AutoForegroundSampleInterval = 30;
 
     private readonly IMusicSessionProvider _musicSessionProvider;
     private readonly SystemAudioSpectrumService _audioSpectrumService = new();
@@ -28,10 +30,14 @@ public partial class MainWindow : Window
     private LocalMediaCoverProvider? _localMediaCoverProvider;
     private IReadOnlyList<string> _localMediaCoverFolders = Array.Empty<string>();
     private AppSettings _settings = new();
+    private AppSettings _visualSettings = new();
+    private string _activeVisualProfileSource = string.Empty;
 
     private Media.Color _primaryTextColor = Media.Colors.White;
     private Media.Color _secondaryTextColor = Media.Color.FromArgb(190, 255, 255, 255);
     private Media.Color? _coverAccentColor;
+    private Media.Color? _lastAppliedPrimaryTextColor;
+    private bool? _autoForegroundUsesDarkText;
     private string _currentLine = "TaskbarLyrics 已启动";
     private string _nextLine = "等待歌词...";
     private string? _currentTrackTitle;
@@ -112,6 +118,8 @@ public partial class MainWindow : Window
     public void ApplySettings(AppSettings settings)
     {
         _settings = settings.Clone();
+        _visualSettings = _settings.Clone();
+        _activeVisualProfileSource = string.Empty;
         Log.SetVerboseEnabled(settings.EnableSmtcTimelineMonitor);
 
         if (_musicSessionProvider is SmtcMusicSessionProvider smtcProvider)
@@ -166,20 +174,237 @@ public partial class MainWindow : Window
 
     private void ApplyCurrentVisualStyle()
     {
-        var primary = _primaryTextColor;
-        if (_settings.UseCoverAccentColor && _coverAccentColor is { } accent)
+        var surfaceColorSeed = ResolveConfiguredPrimaryTextColor();
+        var primary = _visualSettings.AutoForegroundColorByBackground
+            ? ResolveAutoForegroundTextColor(surfaceColorSeed)
+            : surfaceColorSeed;
+
+        if (!_visualSettings.AutoForegroundColorByBackground)
         {
-            primary = CreateReadableAccentColor(accent);
+            _autoForegroundUsesDarkText = null;
         }
 
+        ApplyResolvedVisualStyle(primary, surfaceColorSeed);
+    }
+
+    private void ApplyResolvedVisualStyle(Media.Color primary, Media.Color surfaceColorSeed)
+    {
         var secondary = Media.Color.FromArgb(
             (byte)Math.Clamp((int)(primary.A * 0.76), 0, 255),
             primary.R,
             primary.G,
             primary.B);
 
-        LyricsDisplay.ApplyStyle(_settings, primary, secondary, _coverAccentColor);
+        _lastAppliedPrimaryTextColor = primary;
+        LyricsDisplay.ApplyStyle(_visualSettings, primary, secondary, _coverAccentColor, surfaceColorSeed);
         LyricsDisplay.SetTrackInfo(_currentTrackTitle, _currentTrackArtist);
+    }
+
+    private Media.Color ResolveConfiguredPrimaryTextColor()
+    {
+        var primary = _primaryTextColor;
+        if (!_visualSettings.AutoForegroundColorByBackground &&
+            _visualSettings.UseCoverAccentColor &&
+            _coverAccentColor is { } accent)
+        {
+            primary = CreateReadableAccentColor(accent);
+        }
+
+        return primary;
+    }
+
+    private Media.Color ResolveAutoForegroundTextColor(Media.Color surfaceColorSeed)
+    {
+        if (!TryGetEffectiveBackgroundLuminance(surfaceColorSeed, out var luminance))
+        {
+            return _primaryTextColor;
+        }
+
+        var useDarkText = _autoForegroundUsesDarkText switch
+        {
+            true => luminance >= 0.46,
+            false => luminance >= 0.62,
+            _ => luminance >= 0.56
+        };
+        _autoForegroundUsesDarkText = useDarkText;
+
+        return useDarkText
+            ? Media.Color.FromRgb(17, 24, 39)
+            : Media.Colors.White;
+    }
+
+    private void RefreshAutoForegroundColorIfNeeded()
+    {
+        if (!_visualSettings.AutoForegroundColorByBackground)
+        {
+            return;
+        }
+
+        var surfaceColorSeed = ResolveConfiguredPrimaryTextColor();
+        var primary = ResolveAutoForegroundTextColor(surfaceColorSeed);
+        if (_lastAppliedPrimaryTextColor is { } current && current == primary)
+        {
+            return;
+        }
+
+        ApplyResolvedVisualStyle(primary, surfaceColorSeed);
+    }
+
+    private bool TryGetEffectiveBackgroundLuminance(Media.Color surfaceColorSeed, out double luminance)
+    {
+        var hasScreenSample = TrySampleScreenBackgroundColor(out var screenColor);
+        if (_visualSettings.ShowBackground && TryCreateSurfaceColor(surfaceColorSeed, out var surfaceColor))
+        {
+            var baseColor = hasScreenSample ? screenColor : Media.Color.FromRgb(18, 18, 24);
+            luminance = GetRelativeLuminance(Blend(surfaceColor, baseColor));
+            return true;
+        }
+
+        if (hasScreenSample)
+        {
+            luminance = GetRelativeLuminance(screenColor);
+            return true;
+        }
+
+        luminance = 0;
+        return false;
+    }
+
+    private bool TryCreateSurfaceColor(Media.Color surfaceColorSeed, out Media.Color color)
+    {
+        color = Media.Colors.Transparent;
+        if (!_visualSettings.ShowBackground)
+        {
+            return false;
+        }
+
+        var alpha = (byte)Math.Clamp(_visualSettings.BackgroundOpacity * 255, 0, 255);
+        color = _visualSettings.BackgroundMaterial switch
+        {
+            LyricsBackgroundMaterial.CoverTint when _coverAccentColor is { } accent =>
+                Media.Color.FromArgb(alpha, accent.R, accent.G, accent.B),
+            LyricsBackgroundMaterial.Solid =>
+                Media.Color.FromArgb(alpha, surfaceColorSeed.R, surfaceColorSeed.G, surfaceColorSeed.B),
+            _ => Media.Color.FromArgb(alpha, 18, 18, 24)
+        };
+        return true;
+    }
+
+    private bool TrySampleScreenBackgroundColor(out Media.Color color)
+    {
+        color = Media.Colors.Transparent;
+        var samples = SampleScreenColors(BuildBackgroundSamplePoints(includeInsideFallback: false));
+        if (samples.Count == 0)
+        {
+            samples = SampleScreenColors(BuildBackgroundSamplePoints(includeInsideFallback: true));
+        }
+
+        if (samples.Count == 0)
+        {
+            return false;
+        }
+
+        samples.Sort((a, b) => GetRelativeLuminance(a).CompareTo(GetRelativeLuminance(b)));
+        color = samples[samples.Count / 2];
+        return true;
+    }
+
+    private List<Media.Color> SampleScreenColors(IEnumerable<System.Windows.Point> points)
+    {
+        var samples = new List<Media.Color>();
+        var screenWidth = NativeMethods.GetSystemMetrics(NativeMethods.SM_CXSCREEN);
+        var screenHeight = NativeMethods.GetSystemMetrics(NativeMethods.SM_CYSCREEN);
+        var hdc = NativeMethods.GetDC(IntPtr.Zero);
+        if (hdc == IntPtr.Zero)
+        {
+            return samples;
+        }
+
+        try
+        {
+            foreach (var point in points)
+            {
+                var x = (int)Math.Round(point.X);
+                var y = (int)Math.Round(point.Y);
+                if (x < 0 || y < 0 || x >= screenWidth || y >= screenHeight)
+                {
+                    continue;
+                }
+
+                var pixel = NativeMethods.GetPixel(hdc, x, y);
+                if (pixel == NativeMethods.CLR_INVALID)
+                {
+                    continue;
+                }
+
+                samples.Add(Media.Color.FromRgb(
+                    (byte)(pixel & 0xFF),
+                    (byte)((pixel >> 8) & 0xFF),
+                    (byte)((pixel >> 16) & 0xFF)));
+            }
+        }
+        finally
+        {
+            _ = NativeMethods.ReleaseDC(IntPtr.Zero, hdc);
+        }
+
+        return samples;
+    }
+
+    private IEnumerable<System.Windows.Point> BuildBackgroundSamplePoints(bool includeInsideFallback)
+    {
+        var width = Math.Max(ActualWidth > 0 ? ActualWidth : Width, 1);
+        var height = Math.Max(ActualHeight > 0 ? ActualHeight : Height, 1);
+        const double outside = 10;
+        const double inside = 8;
+        var relativePoints = includeInsideFallback
+            ? new[]
+            {
+                new System.Windows.Point(width * 0.88, inside),
+                new System.Windows.Point(width * 0.88, height - inside),
+                new System.Windows.Point(width * 0.50, inside),
+                new System.Windows.Point(width * 0.50, height - inside),
+                new System.Windows.Point(width - inside, height * 0.50)
+            }
+            : new[]
+            {
+                new System.Windows.Point(width * 0.50, -outside),
+                new System.Windows.Point(width * 0.75, -outside),
+                new System.Windows.Point(width * 0.50, height + outside),
+                new System.Windows.Point(width * 0.75, height + outside),
+                new System.Windows.Point(-outside, height * 0.50),
+                new System.Windows.Point(width + outside, height * 0.50)
+            };
+
+        foreach (var point in relativePoints)
+        {
+            yield return PointToScreen(point);
+        }
+    }
+
+    private static Media.Color Blend(Media.Color foreground, Media.Color background)
+    {
+        var amount = foreground.A / 255.0;
+        var inverse = 1 - amount;
+        return Media.Color.FromRgb(
+            (byte)Math.Clamp(Math.Round((foreground.R * amount) + (background.R * inverse)), 0, 255),
+            (byte)Math.Clamp(Math.Round((foreground.G * amount) + (background.G * inverse)), 0, 255),
+            (byte)Math.Clamp(Math.Round((foreground.B * amount) + (background.B * inverse)), 0, 255));
+    }
+
+    private static double GetRelativeLuminance(Media.Color color)
+    {
+        static double ConvertChannel(byte channel)
+        {
+            var value = channel / 255.0;
+            return value <= 0.03928
+                ? value / 12.92
+                : Math.Pow((value + 0.055) / 1.055, 2.4);
+        }
+
+        return (0.2126 * ConvertChannel(color.R)) +
+            (0.7152 * ConvertChannel(color.G)) +
+            (0.0722 * ConvertChannel(color.B));
     }
 
     private static Media.Color CreateReadableAccentColor(Media.Color accent)
@@ -349,6 +574,12 @@ public partial class MainWindow : Window
             _ = OnLyricsTickAsync();
         }
 
+        if (_visualSettings.AutoForegroundColorByBackground &&
+            _frameTickCounter % AutoForegroundSampleInterval == 0)
+        {
+            RefreshAutoForegroundColorIfNeeded();
+        }
+
         if (_isShowingSpectrum &&
             _frameTickCounter % _spectrumTickInterval == 0)
         {
@@ -376,6 +607,8 @@ public partial class MainWindow : Window
             PublishLyricDiagnostics(lyricSnapshot, frame, appliedOffsetMs);
             LogTickDiagnostics(lyricSnapshot, frame);
             PushTrackInfoToDisplay(snapshot.Track);
+            ApplyPlayerVisualProfile(snapshot.Track?.SourceApp);
+            PushSongProgressToDisplay(snapshot);
 
             if (_musicSessionProvider is SmtcMusicSessionProvider smtcProvider)
             {
@@ -402,6 +635,7 @@ public partial class MainWindow : Window
             _isCurrentPlaybackPlaying = false;
             UpdateSpectrumCaptureState(false);
             PushLyricsToDisplay(_currentLine, _nextLine, 0, _lastCurrentLineIndex, _lastTrackId, false, false);
+            LyricsDisplay.SetSongProgress(TimeSpan.Zero, TimeSpan.Zero, false);
             Log.Error($"歌词 tick 异常: {ex}");
             Debug.WriteLine(ex);
         }
@@ -592,11 +826,42 @@ public partial class MainWindow : Window
         LyricsDisplay.SetLyrics(current, next, progress, lineIndex, trackId, isPureMusic, isPlaying);
     }
 
+    private void PushSongProgressToDisplay(PlaybackSnapshot snapshot)
+    {
+        LyricsDisplay.SetSongProgress(
+            snapshot.Position,
+            snapshot.Track?.Duration ?? TimeSpan.Zero,
+            snapshot.IsPlaying);
+    }
+
     private void PushTrackInfoToDisplay(TrackInfo? track)
     {
         _currentTrackTitle = track?.Title;
         _currentTrackArtist = track?.Artist;
         LyricsDisplay.SetTrackInfo(_currentTrackTitle, _currentTrackArtist);
+    }
+
+    private void ApplyPlayerVisualProfile(string? sourceApp)
+    {
+        var normalizedSource = sourceApp ?? string.Empty;
+        if (string.Equals(normalizedSource, _activeVisualProfileSource, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _activeVisualProfileSource = normalizedSource;
+        _visualSettings = _settings.Clone();
+        if (_settings.EnablePlayerVisualProfiles &&
+            !string.IsNullOrWhiteSpace(normalizedSource) &&
+            _settings.PlayerVisualProfiles.TryGetValue(normalizedSource, out var profile) &&
+            profile.Enabled)
+        {
+            _visualSettings.SongProgressStyle = profile.SongProgressStyle;
+            _visualSettings.SpectrumStyle = profile.SpectrumStyle;
+            _visualSettings.KaraokeEffect = profile.KaraokeEffect;
+        }
+
+        ApplyCurrentVisualStyle();
     }
 
     private string ResolveDisplayTrackId(TrackInfo? track)
@@ -828,7 +1093,7 @@ public partial class MainWindow : Window
 
     private void UpdateCoverAccent(byte[]? bytes)
     {
-        var accent = _settings.UseCoverAccentColor || _settings.BackgroundMaterial == LyricsBackgroundMaterial.CoverTint
+        var accent = _visualSettings.UseCoverAccentColor || _visualSettings.BackgroundMaterial == LyricsBackgroundMaterial.CoverTint
             ? CoverAccentExtractor.TryExtract(bytes)
             : null;
 
@@ -1000,11 +1265,17 @@ public partial class MainWindow : Window
 
     private void AnchorToTaskbar()
     {
-        var workArea = SystemParameters.WorkArea;
-        var screenWidth = SystemParameters.PrimaryScreenWidth;
-        var screenHeight = SystemParameters.PrimaryScreenHeight;
+        var metrics = GetTargetScreenMetrics();
+        var workArea = metrics.WorkArea;
+        var screenWidth = metrics.Bounds.Width;
+        var screenHeight = metrics.Bounds.Height;
         const double normalTaskbarHeight = 48;
-        var taskbarHeight = Math.Max(normalTaskbarHeight, screenHeight - workArea.Height);
+        var taskbarHeight = Math.Max(normalTaskbarHeight, metrics.Bounds.Bottom - workArea.Bottom);
+        if (taskbarHeight <= normalTaskbarHeight && metrics.Bounds.Height > workArea.Height)
+        {
+            taskbarHeight = Math.Max(normalTaskbarHeight, metrics.Bounds.Height - workArea.Height);
+        }
+
         var settings = (System.Windows.Application.Current as App)?.Settings ?? new AppSettings();
         var desiredWidth = settings.AutoAdjustWindowWidth
             ? WindowWidthLimits.Clamp(LyricsDisplay.PreferredWindowWidth + settings.WindowWidthOffset)
@@ -1020,13 +1291,48 @@ public partial class MainWindow : Window
 
         Left = settings.HorizontalAnchor switch
         {
-            LyricsHorizontalAnchor.Left => Math.Max(0, settings.XOffset),
-            LyricsHorizontalAnchor.Center => ((screenWidth - Width) / 2.0) + settings.XOffset,
-            _ => Math.Max(0, screenWidth - Width - 230 + settings.XOffset)
+            LyricsHorizontalAnchor.Left => metrics.Bounds.Left + Math.Max(0, settings.XOffset),
+            LyricsHorizontalAnchor.Center => metrics.Bounds.Left + ((screenWidth - Width) / 2.0) + settings.XOffset,
+            _ => Math.Max(metrics.Bounds.Left, metrics.Bounds.Right - Width - 230 + settings.XOffset)
         };
 
         var verticalGrowth = Math.Max(0, desiredHeight - bottomAnchorHeight);
-        Top = screenHeight - taskbarHeight + ((taskbarHeight - bottomAnchorHeight) / 2.0) + settings.YOffset - verticalGrowth;
+        Top = metrics.Bounds.Top + screenHeight - taskbarHeight + ((taskbarHeight - bottomAnchorHeight) / 2.0) + settings.YOffset - verticalGrowth;
+    }
+
+    private (Rect Bounds, Rect WorkArea) GetTargetScreenMetrics()
+    {
+        var settings = (System.Windows.Application.Current as App)?.Settings ?? new AppSettings();
+        var screens = Forms.Screen.AllScreens;
+        var screen = settings.TargetScreenMode switch
+        {
+            TargetScreenMode.Cursor => Forms.Screen.FromPoint(Forms.Cursor.Position),
+            TargetScreenMode.ScreenIndex when screens.Length > 0 =>
+                screens[Math.Clamp(settings.TargetScreenIndex, 0, screens.Length - 1)],
+            _ => Forms.Screen.PrimaryScreen ?? screens.FirstOrDefault()
+        };
+
+        if (screen is null)
+        {
+            return (
+                new Rect(0, 0, SystemParameters.PrimaryScreenWidth, SystemParameters.PrimaryScreenHeight),
+                SystemParameters.WorkArea);
+        }
+
+        var dpi = Media.VisualTreeHelper.GetDpi(this);
+        var scaleX = dpi.DpiScaleX <= 0 ? 1 : dpi.DpiScaleX;
+        var scaleY = dpi.DpiScaleY <= 0 ? 1 : dpi.DpiScaleY;
+        var bounds = new Rect(
+            screen.Bounds.Left / scaleX,
+            screen.Bounds.Top / scaleY,
+            screen.Bounds.Width / scaleX,
+            screen.Bounds.Height / scaleY);
+        var workArea = new Rect(
+            screen.WorkingArea.Left / scaleX,
+            screen.WorkingArea.Top / scaleY,
+            screen.WorkingArea.Width / scaleX,
+            screen.WorkingArea.Height / scaleY);
+        return (bounds, workArea);
     }
 
     private void AttachToTaskbarHost()
@@ -1110,6 +1416,9 @@ internal static class NativeMethods
     internal const int SW_SHOWNOACTIVATE = 4;
     internal const int GWL_EXSTYLE = -20;
     internal const int WS_EX_TOOLWINDOW = 0x00000080;
+    internal const int SM_CXSCREEN = 0;
+    internal const int SM_CYSCREEN = 1;
+    internal const uint CLR_INVALID = 0xFFFFFFFF;
 
     [DllImport("user32.dll", SetLastError = true)]
     internal static extern IntPtr GetWindowLongPtr(IntPtr hWnd, int nIndex);
@@ -1125,4 +1434,16 @@ internal static class NativeMethods
 
     [DllImport("user32.dll", SetLastError = true)]
     internal static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    internal static extern IntPtr GetDC(IntPtr hWnd);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    internal static extern int ReleaseDC(IntPtr hWnd, IntPtr hDC);
+
+    [DllImport("gdi32.dll")]
+    internal static extern uint GetPixel(IntPtr hdc, int x, int y);
+
+    [DllImport("user32.dll")]
+    internal static extern int GetSystemMetrics(int nIndex);
 }
