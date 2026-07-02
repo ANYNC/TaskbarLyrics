@@ -1,16 +1,16 @@
 # TaskbarLyrics
 Windows 任务栏歌词工具。它通过 SMTC 识别当前播放歌曲，并从多个在线歌词源并发检索高置信结果。
 
+## 效果
+演示字体为Source Han Sans SC（已内置，无需安装）
+
+![效果图](doc/images/preview.gif)
+
 ## Light 版
 TaskbarLyrics Light 是由 [sorawithcat](https://github.com/sorawithcat) 维护的原生 WPF 轻量版本，目标是不依赖 WebView2 / Chromium，减少进程数、内存占用和发布体积。
 
 - [Light 版 README](https://github.com/sorawithcat/TaskbarLyrics/blob/main/TaskbarLyrics.Light/README.md)
 - 维护者：[sorawithcat](https://github.com/sorawithcat)
-
-## 效果
-演示字体为Source Han Sans SC（已内置，无需安装）
-
-![效果图](doc/images/preview.gif)
 
 ## 功能
 - 跟随系统进行黑白主题切换
