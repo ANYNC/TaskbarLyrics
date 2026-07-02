@@ -12,6 +12,24 @@
             BorderThickness="0"
             Padding="4,0">
         <Grid x:Name="SurfaceRoot" ClipToBounds="False">
+            <Border x:Name="BackgroundProgressTrack"
+                    HorizontalAlignment="Stretch"
+                    VerticalAlignment="Stretch"
+                    CornerRadius="8"
+                    ClipToBounds="True"
+                    Visibility="Collapsed"
+                    IsHitTestVisible="False">
+                <Border x:Name="BackgroundProgressFill"
+                        HorizontalAlignment="Left"
+                        VerticalAlignment="Stretch"
+                        Background="#22FFFFFF"
+                        RenderTransformOrigin="0,0.5">
+                    <Border.RenderTransform>
+                        <ScaleTransform x:Name="BackgroundProgressScale" ScaleX="0" />
+                    </Border.RenderTransform>
+                </Border>
+            </Border>
+
             <Grid x:Name="LayoutGrid">
                 <Grid.RowDefinitions>
                     <RowDefinition x:Name="CoverRow" Height="*" />
@@ -218,6 +236,22 @@
                     </Grid>
                 </Grid>
             </Grid>
+
+            <Path x:Name="BorderProgressRingTrack"
+                  StrokeThickness="2"
+                  StrokeStartLineCap="Round"
+                  StrokeEndLineCap="Round"
+                  StrokeLineJoin="Round"
+                  Opacity="0.28"
+                  Visibility="Collapsed"
+                  IsHitTestVisible="False" />
+            <Path x:Name="BorderProgressRingValue"
+                  StrokeThickness="2.2"
+                  StrokeStartLineCap="Round"
+                  StrokeEndLineCap="Round"
+                  StrokeLineJoin="Round"
+                  Visibility="Collapsed"
+                  IsHitTestVisible="False" />
 
             <Border x:Name="BottomProgressTrack"
                     Height="2"

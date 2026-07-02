@@ -2,7 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Width="230"
-        Height="284"
+        Height="412"
         WindowStyle="None"
         ResizeMode="NoResize"
         ShowInTaskbar="False"
@@ -63,6 +63,11 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <Style x:Key="TraySubmenuButtonStyle" TargetType="Button" BasedOn="{StaticResource TrayMenuButtonStyle}">
+            <Setter Property="Height" Value="30" />
+            <Setter Property="Padding" Value="10,0" />
+        </Style>
     </Window.Resources>
 
     <Grid Margin="10">
@@ -77,48 +82,121 @@
                     <RowDefinition Height="32" />
                     <RowDefinition Height="32" />
                     <RowDefinition Height="32" />
+                    <RowDefinition Height="32" />
+                    <RowDefinition Height="32" />
+                    <RowDefinition Height="32" />
+                    <RowDefinition Height="32" />
                     <RowDefinition Height="1" />
                     <RowDefinition Height="32" />
                     <RowDefinition Height="1" />
                     <RowDefinition Height="32" />
                 </Grid.RowDefinitions>
 
-                <Button Grid.Row="0" Style="{StaticResource TrayMenuButtonStyle}" Tag="Top" Click="ToggleLyricsButton_Click">
-                    <TextBlock Text="显示/隐藏歌词" VerticalAlignment="Center" Foreground="{DynamicResource TrayMenuTextBrush}" FontFamily="Microsoft YaHei UI" FontSize="12.5" />
+                <Button Grid.Row="0" Style="{StaticResource TrayMenuButtonStyle}" Tag="Top" Click="ToggleLyricsButton_Click" MouseEnter="CloseSubmenuOnMouseEnter">
+                    <TextBlock x:Name="LyricsWindowText" Text="显示歌词" VerticalAlignment="Center" Foreground="{DynamicResource TrayMenuTextBrush}" FontFamily="Microsoft YaHei UI" FontSize="12.5" />
                 </Button>
 
-                <Button Grid.Row="1" Style="{StaticResource TrayMenuButtonStyle}" Click="RematchLyricsButton_Click">
+                <Button Grid.Row="1" Style="{StaticResource TrayMenuButtonStyle}" Click="ToggleTranslationButton_Click" MouseEnter="CloseSubmenuOnMouseEnter">
+                    <TextBlock x:Name="TranslationText" Text="显示翻译" VerticalAlignment="Center" Foreground="{DynamicResource TrayMenuTextBrush}" FontFamily="Microsoft YaHei UI" FontSize="12.5" />
+                </Button>
+
+                <Button Grid.Row="2" Style="{StaticResource TrayMenuButtonStyle}" Click="RematchLyricsButton_Click" MouseEnter="CloseSubmenuOnMouseEnter">
                     <TextBlock Text="重新匹配当前歌词" VerticalAlignment="Center" Foreground="{DynamicResource TrayMenuTextBrush}" FontFamily="Microsoft YaHei UI" FontSize="12.5" />
                 </Button>
 
-                <Button Grid.Row="2" Style="{StaticResource TrayMenuButtonStyle}" Click="CycleSpectrumStyleButton_Click">
-                    <TextBlock x:Name="SpectrumStyleText" Text="切换频谱样式" VerticalAlignment="Center" Foreground="{DynamicResource TrayMenuTextBrush}" FontFamily="Microsoft YaHei UI" FontSize="12.5" />
+                <Button x:Name="SpectrumStyleButton" Grid.Row="3" Style="{StaticResource TrayMenuButtonStyle}" MouseEnter="SpectrumStyleButton_MouseEnter" Click="SpectrumStyleButton_Click">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock x:Name="SpectrumStyleText" Text="频谱设置" VerticalAlignment="Center" Foreground="{DynamicResource TrayMenuTextBrush}" FontFamily="Microsoft YaHei UI" FontSize="12.5" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Grid.Column="1" Text="›" VerticalAlignment="Center" Foreground="{DynamicResource TrayMenuTextBrush}" FontFamily="Microsoft YaHei UI" FontSize="16" Margin="8,0,0,0" />
+                    </Grid>
                 </Button>
 
-                <Button Grid.Row="3" Style="{StaticResource TrayMenuButtonStyle}" Click="ToggleTimelineMonitorButton_Click">
-                    <TextBlock x:Name="TimelineMonitorText" Text="切换时间轴监视器" VerticalAlignment="Center" Foreground="{DynamicResource TrayMenuTextBrush}" FontFamily="Microsoft YaHei UI" FontSize="12.5" />
+                <Button x:Name="SongProgressStyleButton" Grid.Row="4" Style="{StaticResource TrayMenuButtonStyle}" MouseEnter="SongProgressStyleButton_MouseEnter" Click="SongProgressStyleButton_Click">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock x:Name="SongProgressStyleText" Text="进度设置" VerticalAlignment="Center" Foreground="{DynamicResource TrayMenuTextBrush}" FontFamily="Microsoft YaHei UI" FontSize="12.5" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Grid.Column="1" Text="›" VerticalAlignment="Center" Foreground="{DynamicResource TrayMenuTextBrush}" FontFamily="Microsoft YaHei UI" FontSize="16" Margin="8,0,0,0" />
+                    </Grid>
                 </Button>
 
-                <Button Grid.Row="4" Style="{StaticResource TrayMenuButtonStyle}" Click="ClearCacheButton_Click">
+                <Button x:Name="CoverStyleButton" Grid.Row="5" Style="{StaticResource TrayMenuButtonStyle}" MouseEnter="CoverStyleButton_MouseEnter" Click="CoverStyleButton_Click">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock x:Name="CoverStyleText" Text="封面设置" VerticalAlignment="Center" Foreground="{DynamicResource TrayMenuTextBrush}" FontFamily="Microsoft YaHei UI" FontSize="12.5" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Grid.Column="1" Text="›" VerticalAlignment="Center" Foreground="{DynamicResource TrayMenuTextBrush}" FontFamily="Microsoft YaHei UI" FontSize="16" Margin="8,0,0,0" />
+                    </Grid>
+                </Button>
+
+                <Button x:Name="TextEffectStyleButton" Grid.Row="6" Style="{StaticResource TrayMenuButtonStyle}" MouseEnter="TextEffectStyleButton_MouseEnter" Click="TextEffectStyleButton_Click">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock x:Name="TextEffectStyleText" Text="文字效果设置" VerticalAlignment="Center" Foreground="{DynamicResource TrayMenuTextBrush}" FontFamily="Microsoft YaHei UI" FontSize="12.5" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Grid.Column="1" Text="›" VerticalAlignment="Center" Foreground="{DynamicResource TrayMenuTextBrush}" FontFamily="Microsoft YaHei UI" FontSize="16" Margin="8,0,0,0" />
+                    </Grid>
+                </Button>
+
+                <Button x:Name="TransitionStyleButton" Grid.Row="7" Style="{StaticResource TrayMenuButtonStyle}" MouseEnter="TransitionStyleButton_MouseEnter" Click="TransitionStyleButton_Click">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock x:Name="TransitionStyleText" Text="切换动画设置" VerticalAlignment="Center" Foreground="{DynamicResource TrayMenuTextBrush}" FontFamily="Microsoft YaHei UI" FontSize="12.5" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Grid.Column="1" Text="›" VerticalAlignment="Center" Foreground="{DynamicResource TrayMenuTextBrush}" FontFamily="Microsoft YaHei UI" FontSize="16" Margin="8,0,0,0" />
+                    </Grid>
+                </Button>
+
+                <Button Grid.Row="8" Style="{StaticResource TrayMenuButtonStyle}" Click="ClearCacheButton_Click" MouseEnter="CloseSubmenuOnMouseEnter">
                     <TextBlock Text="清除歌词缓存" VerticalAlignment="Center" Foreground="{DynamicResource TrayMenuTextBrush}" FontFamily="Microsoft YaHei UI" FontSize="12.5" />
                 </Button>
 
-                <Button Grid.Row="5" Style="{StaticResource TrayMenuButtonStyle}" Click="SettingsButton_Click">
+                <Button Grid.Row="9" Style="{StaticResource TrayMenuButtonStyle}" Click="SettingsButton_Click" MouseEnter="CloseSubmenuOnMouseEnter">
                     <TextBlock Text="设置" VerticalAlignment="Center" Foreground="{DynamicResource TrayMenuTextBrush}" FontFamily="Microsoft YaHei UI" FontSize="12.5" />
                 </Button>
 
-                <Border Grid.Row="6" Height="1" VerticalAlignment="Center" Background="{DynamicResource TrayMenuSeparatorBrush}" />
+                <Border Grid.Row="10" Height="1" VerticalAlignment="Center" Background="{DynamicResource TrayMenuSeparatorBrush}" />
 
-                <Button Grid.Row="7" Style="{StaticResource TrayMenuButtonStyle}" Click="SpectrumTuningButton_Click">
+                <Button Grid.Row="11" Style="{StaticResource TrayMenuButtonStyle}" Click="SpectrumTuningButton_Click" MouseEnter="CloseSubmenuOnMouseEnter">
                     <TextBlock Text="频谱调试" VerticalAlignment="Center" Foreground="{DynamicResource TrayMenuTextBrush}" FontFamily="Microsoft YaHei UI" FontSize="12.5" />
                 </Button>
 
-                <Border Grid.Row="8" Height="1" VerticalAlignment="Center" Background="{DynamicResource TrayMenuSeparatorBrush}" />
+                <Border Grid.Row="12" Height="1" VerticalAlignment="Center" Background="{DynamicResource TrayMenuSeparatorBrush}" />
 
-                <Button Grid.Row="9" Style="{StaticResource TrayMenuButtonStyle}" Tag="Bottom" Click="ExitButton_Click">
+                <Button Grid.Row="13" Style="{StaticResource TrayMenuButtonStyle}" Tag="Bottom" Click="ExitButton_Click" MouseEnter="CloseSubmenuOnMouseEnter">
                     <TextBlock Text="退出" VerticalAlignment="Center" Foreground="{DynamicResource TrayMenuTextBrush}" FontFamily="Microsoft YaHei UI" FontSize="12.5" />
                 </Button>
             </Grid>
         </Border>
+
+        <Popup x:Name="SubmenuPopup"
+               Placement="Right"
+               AllowsTransparency="True"
+               PopupAnimation="Fade"
+               StaysOpen="True"
+               MouseEnter="SubmenuPopup_MouseEnter"
+               MouseLeave="SubmenuPopup_MouseLeave">
+            <Border MinWidth="178"
+                    Margin="6,0,0,0"
+                    CornerRadius="8"
+                    Background="{DynamicResource TrayMenuBackgroundBrush}"
+                    BorderBrush="{DynamicResource TrayMenuSeparatorBrush}"
+                    BorderThickness="1"
+                    ClipToBounds="True">
+                <StackPanel x:Name="SubmenuItemsPanel" />
+            </Border>
+        </Popup>
     </Grid>
 </Window>

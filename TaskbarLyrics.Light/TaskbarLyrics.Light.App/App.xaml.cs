@@ -69,9 +69,9 @@ public partial class App : System.Windows.Application
             OpenSettingsWindow,
             RematchCurrentLyrics,
             ClearLyricCaches,
-            CycleSpectrumStyle,
-            ToggleSmtcTimelineMonitor,
+            ApplyTrayMenuSettings,
             ExitApplication,
+            () => _lyricsWindowHost?.IsVisible == true,
             () => Settings.Clone());
         StartActivationServer();
         SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
@@ -194,6 +194,12 @@ public partial class App : System.Windows.Application
 
         var snapshot = Settings.Clone();
         snapshot.SpectrumStyle = next;
+        SaveSettings(snapshot);
+        _settingsWindow?.ApplyExternalSettings(snapshot.Clone());
+    }
+
+    private void ApplyTrayMenuSettings(AppSettings snapshot)
+    {
         SaveSettings(snapshot);
         _settingsWindow?.ApplyExternalSettings(snapshot.Clone());
     }

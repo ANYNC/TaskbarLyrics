@@ -70,34 +70,36 @@ public enum SongProgressDisplayStyle
     CoverBottomBar,
     SpectrumBaseline,
     TimePill,
-    Dots
+    Dots,
+    BorderRing,
+    BackgroundFill
 }
 
-public enum LayoutPreset
+public enum SongProgressColorMode
 {
-    Custom,
-    MinimalLyrics,
-    CoverLyrics,
-    StackedCover,
-    SpectrumFocus,
-    TimePill
+    Text = 0,
+    CoverAccent = 1,
+    White = 2,
+    Blue = 3,
+    Cyan = 4,
+    Green = 5,
+    Orange = 6,
+    Pink = 7,
+    Purple = 8,
+    Custom = 9
+}
+
+public enum SongProgressAnchor
+{
+    Left,
+    Center,
+    Right
 }
 
 public enum LyricTranslationLayout
 {
     Inline,
     NewLine
-}
-
-public enum LyricKaraokeEffect
-{
-    Off,
-    Sweep,
-    FadePassed,
-    DisappearPassed,
-    PulseCurrent,
-    GhostTrail,
-    ParticleFade
 }
 
 public enum TextEffectStyle
@@ -129,6 +131,12 @@ public enum TargetScreenMode
     ScreenIndex
 }
 
+public enum DisabledSettingDisplayMode
+{
+    Hide,
+    Disable
+}
+
 public enum LyricsBackgroundMaterial
 {
     Dim,
@@ -143,8 +151,6 @@ public sealed class PlayerVisualProfile
     public SongProgressDisplayStyle SongProgressStyle { get; set; } = SongProgressDisplayStyle.Off;
 
     public SpectrumDisplayStyle SpectrumStyle { get; set; } = SpectrumDisplayStyle.Center;
-
-    public LyricKaraokeEffect KaraokeEffect { get; set; } = LyricKaraokeEffect.Off;
 
     public bool ShowLyricTranslation { get; set; }
 
@@ -187,7 +193,7 @@ public sealed class AppSettings
 
     public double TranslationFontScale { get; set; } = 0.86;
 
-    public double TranslationOpacity { get; set; } = 0.72;
+    public double TranslationOpacity { get; set; } = 1;
 
     public LocalLyricsSearchMode LocalLyricsSearchMode { get; set; } = LocalLyricsSearchMode.PreferLocal;
 
@@ -251,8 +257,6 @@ public sealed class AppSettings
 
     public bool UseCoverAccentColor { get; set; } = true;
 
-    public LyricKaraokeEffect KaraokeEffect { get; set; } = LyricKaraokeEffect.Off;
-
     public CoverDisplayStyle CoverStyle { get; set; } = CoverDisplayStyle.RoundedSquare;
 
     public double CoverSize { get; set; } = 34;
@@ -285,11 +289,23 @@ public sealed class AppSettings
 
     public double SongProgressOpacity { get; set; } = 0.9;
 
+    public SongProgressColorMode SongProgressColorMode { get; set; } = SongProgressColorMode.Text;
+
+    public string SongProgressColor { get; set; } = "#FFFFFFFF";
+
     public SpectrumColorMode SpectrumColorMode { get; set; } = SpectrumColorMode.Text;
 
-    public AnimationIntensity AnimationIntensity { get; set; } = AnimationIntensity.Standard;
+    public AnimationIntensity AnimationIntensity { get; set; } = AnimationIntensity.Smooth;
 
     public TextEffectStyle TextEffectStyle { get; set; } = TextEffectStyle.Shadow;
+
+    public bool UseFixedSongProgressWidth { get; set; } = false;
+
+    public double SongProgressWidth { get; set; } = 180;
+
+    public SongProgressAnchor SongProgressAnchor { get; set; } = SongProgressAnchor.Left;
+
+    public DisabledSettingDisplayMode DisabledSettingDisplayMode { get; set; } = DisabledSettingDisplayMode.Hide;
 
     public bool ShowBackground { get; set; } = false;
 

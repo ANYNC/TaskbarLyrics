@@ -625,7 +625,14 @@ public partial class MainWindow : Window
             _isShowingSpectrum = ShouldShowSpectrum(frame);
             _isCurrentPlaybackPlaying = snapshot.IsPlaying;
             UpdateSpectrumCaptureState(_isShowingSpectrum);
-            PushLyricsToDisplay(current, next, frame.LineProgress, frame.CurrentLineIndex, _lastTrackId, _isShowingSpectrum, snapshot.IsPlaying);
+            PushLyricsToDisplay(
+                current,
+                next,
+                frame.LineProgress,
+                frame.CurrentLineIndex,
+                _lastTrackId,
+                _isShowingSpectrum,
+                snapshot.IsPlaying);
         }
         catch (Exception ex)
         {
@@ -821,7 +828,14 @@ public partial class MainWindow : Window
         }
     }
 
-    private void PushLyricsToDisplay(string current, string next, double progress, int lineIndex, string trackId, bool isPureMusic, bool isPlaying)
+    private void PushLyricsToDisplay(
+        string current,
+        string next,
+        double progress,
+        int lineIndex,
+        string trackId,
+        bool isPureMusic,
+        bool isPlaying)
     {
         LyricsDisplay.SetLyrics(current, next, progress, lineIndex, trackId, isPureMusic, isPlaying);
     }
@@ -858,7 +872,6 @@ public partial class MainWindow : Window
         {
             _visualSettings.SongProgressStyle = profile.SongProgressStyle;
             _visualSettings.SpectrumStyle = profile.SpectrumStyle;
-            _visualSettings.KaraokeEffect = profile.KaraokeEffect;
         }
 
         ApplyCurrentVisualStyle();

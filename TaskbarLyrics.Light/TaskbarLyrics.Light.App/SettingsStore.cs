@@ -76,15 +76,74 @@ public sealed class SettingsStore
             settings.CoverSize = settings.CoverStyle == CoverDisplayStyle.Large ? 42 : 34;
         }
 
+        if (!json.Contains("\"AnimationIntensity\"", StringComparison.Ordinal))
+        {
+            settings.AnimationIntensity = AnimationIntensity.Smooth;
+        }
+
+        if (!json.Contains("\"TranslationOpacity\"", StringComparison.Ordinal))
+        {
+            settings.TranslationOpacity = 1;
+        }
+
         if (settings.CoverStyle == CoverDisplayStyle.Large)
         {
             settings.CoverStyle = CoverDisplayStyle.RoundedSquare;
         }
 
+        NormalizeSongProgressColorSettings(settings);
+
         EnsurePlayerVisualProfile(settings, "QQMusic");
         EnsurePlayerVisualProfile(settings, "Netease");
         EnsurePlayerVisualProfile(settings, "Kugou");
         EnsurePlayerVisualProfile(settings, "Spotify");
+    }
+
+    private static void NormalizeSongProgressColorSettings(AppSettings settings)
+    {
+        switch (settings.SongProgressColorMode)
+        {
+            case SongProgressColorMode.White:
+                settings.SongProgressColor = "#FFFFFFFF";
+                settings.SongProgressColorMode = SongProgressColorMode.Custom;
+                break;
+            case SongProgressColorMode.Blue:
+                settings.SongProgressColor = "#FF60A5FA";
+                settings.SongProgressColorMode = SongProgressColorMode.Custom;
+                break;
+            case SongProgressColorMode.Cyan:
+                settings.SongProgressColor = "#FF22D3EE";
+                settings.SongProgressColorMode = SongProgressColorMode.Custom;
+                break;
+            case SongProgressColorMode.Green:
+                settings.SongProgressColor = "#FF34D399";
+                settings.SongProgressColorMode = SongProgressColorMode.Custom;
+                break;
+            case SongProgressColorMode.Orange:
+                settings.SongProgressColor = "#FFFB923C";
+                settings.SongProgressColorMode = SongProgressColorMode.Custom;
+                break;
+            case SongProgressColorMode.Pink:
+                settings.SongProgressColor = "#FFF472B6";
+                settings.SongProgressColorMode = SongProgressColorMode.Custom;
+                break;
+            case SongProgressColorMode.Purple:
+                settings.SongProgressColor = "#FFA78BFA";
+                settings.SongProgressColorMode = SongProgressColorMode.Custom;
+                break;
+        }
+
+        if (settings.SongProgressColorMode != SongProgressColorMode.Text &&
+            settings.SongProgressColorMode != SongProgressColorMode.CoverAccent &&
+            settings.SongProgressColorMode != SongProgressColorMode.Custom)
+        {
+            settings.SongProgressColorMode = SongProgressColorMode.Text;
+        }
+
+        if (string.IsNullOrWhiteSpace(settings.SongProgressColor))
+        {
+            settings.SongProgressColor = "#FFFFFFFF";
+        }
     }
 
     private static void EnsurePlayerVisualProfile(AppSettings settings, string sourceApp)

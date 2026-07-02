@@ -37,7 +37,6 @@ public partial class SettingsWindow : Window
     private bool _isCheckingUpdate;
     private bool _isInstallingUpdate;
     private bool _isLoadingPlayerProfile;
-    private bool _sectionsCollapsed;
     private UpdateCheckResult? _latestUpdateResult;
     private CancellationTokenSource? _localFoldersStatusCancellation;
 
@@ -187,7 +186,6 @@ public partial class SettingsWindow : Window
         FontFamilyCombo.SelectionChanged += (_, _) => OnSettingChanged();
         FontWeightCombo.SelectionChanged += (_, _) => OnSettingChanged();
         ForegroundModeCombo.SelectionChanged += (_, _) => OnForegroundModeChanged();
-        KaraokeEffectCombo.SelectionChanged += (_, _) => OnSettingChanged();
         TextEffectStyleCombo.SelectionChanged += (_, _) => OnSettingChanged();
         CoverStyleCombo.SelectionChanged += (_, _) => OnSettingChanged();
         CoverSizeStepper.ValueChanged += (_, _) => OnSettingChanged();
@@ -206,6 +204,7 @@ public partial class SettingsWindow : Window
         TransitionStyleCombo.SelectionChanged += (_, _) => OnSettingChanged();
         AnimationIntensityCombo.SelectionChanged += (_, _) => OnSettingChanged();
         SongProgressStyleCombo.SelectionChanged += (_, _) => OnSettingChanged();
+        SongProgressColorModeCombo.SelectionChanged += (_, _) => OnSongProgressColorModeChanged();
         SongProgressThicknessStepper.ValueChanged += (_, _) => OnSettingChanged();
         SongProgressOpacityStepper.ValueChanged += (_, _) => OnSettingChanged();
         BackgroundMaterialCombo.SelectionChanged += (_, _) => OnSettingChanged();
@@ -220,18 +219,12 @@ public partial class SettingsWindow : Window
         PlayerProfileEnabledCheck.Unchecked += (_, _) => OnPlayerProfileSettingChanged();
         PlayerProfileProgressStyleCombo.SelectionChanged += (_, _) => OnPlayerProfileSettingChanged();
         PlayerProfileSpectrumStyleCombo.SelectionChanged += (_, _) => OnPlayerProfileSettingChanged();
-        PlayerProfileKaraokeEffectCombo.SelectionChanged += (_, _) => OnPlayerProfileSettingChanged();
-        ApplyLayoutPresetButton.Click += (_, _) => ApplySelectedLayoutPreset();
-        ExpandAllSectionsButton.Click += (_, _) =>
-        {
-            _sectionsCollapsed = false;
-            ApplySettingsSearch();
-        };
-        CollapseAllSectionsButton.Click += (_, _) =>
-        {
-            _sectionsCollapsed = true;
-            ApplySettingsSearch();
-        };
+        HideUnavailableSettingsCheck.Checked += (_, _) => OnSettingChanged();
+        HideUnavailableSettingsCheck.Unchecked += (_, _) => OnSettingChanged();
+        UseFixedSongProgressWidthCheck.Checked += (_, _) => OnSettingChanged();
+        UseFixedSongProgressWidthCheck.Unchecked += (_, _) => OnSettingChanged();
+        SongProgressWidthStepper.ValueChanged += (_, _) => OnSettingChanged();
+        SongProgressAnchorCombo.SelectionChanged += (_, _) => OnSettingChanged();
 
         SpectrumTuningButton.Click += (_, _) =>
         {
@@ -254,41 +247,13 @@ public partial class SettingsWindow : Window
         _sidebarCollapsed = !_sidebarCollapsed;
         SidebarColumn.Width = new GridLength(_sidebarCollapsed ? 72 : 248);
         BrandTitle.Visibility = _sidebarCollapsed ? Visibility.Collapsed : Visibility.Visible;
+        SidebarPreviewPanel.Visibility = _sidebarCollapsed ? Visibility.Collapsed : Visibility.Visible;
         SidebarToggleButton.RenderTransform = new RotateTransform(_sidebarCollapsed ? 180 : 0);
         SidebarToggleButton.RenderTransformOrigin = new System.Windows.Point(0.5, 0.5);
-    }
-
-    private void SettingsSearchBox_TextChanged(object sender, TextChangedEventArgs e)
-    {
-        ApplySettingsSearch();
-    }
-
-    private void ApplySettingsSearch()
-    {
-        if (!IsInitialized)
+        if (!_sidebarCollapsed)
         {
-            return;
+            UpdatePreview();
         }
-
-        var query = SettingsSearchBox.Text?.Trim() ?? string.Empty;
-        var hasQuery = query.Length > 0;
-        foreach (var (element, text) in GetSearchableSections())
-        {
-            var matches = !hasQuery || text.Contains(query, StringComparison.CurrentCultureIgnoreCase);
-            element.Visibility = matches && (!_sectionsCollapsed || hasQuery)
-                ? Visibility.Visible
-                : Visibility.Collapsed;
-        }
-    }
-
-    private IEnumerable<(FrameworkElement Element, string SearchText)> GetSearchableSections()
-    {
-        yield return (SectionPlayers, "播放源 播放器 QQ 网易 酷狗 Spotify 识别优先级 视觉配置 进度 频谱 逐字");
-        yield return (SectionLyrics, "歌词 本地库 翻译 同步 偏移 本地音乐目录 封面来源 歌词封面");
-        yield return (SectionAppearance, "显示 外观 预览 预设 频谱 字体 颜色 逐字效果 封面 柔光 歌曲进度 背景 动效");
-        yield return (SectionLayout, "窗口 布局 尺寸 位置 目标屏幕 多屏 锚点 偏移 置顶");
-        yield return (SectionDebug, "维护 调试 诊断 频谱调试 歌词缓存 重新匹配 SMTC");
-        yield return (SectionAbout, "关于 更新 版本 配置文件 导入 导出 GitHub");
     }
 
     private void Nav_Checked(object sender, RoutedEventArgs e)
@@ -324,8 +289,17 @@ public partial class SettingsWindow : Window
             EnsureFontOptionsPopulated();
         }
 
-        var offset = target.TransformToAncestor(ContentScroll).Transform(new System.Windows.Point(0, 0)).Y;
-        ContentScroll.ScrollToVerticalOffset(Math.Max(0, offset - 8));
+        ScrollToSection(target);
+    }
+
+    private void ScrollToSection(FrameworkElement target)
+    {
+        target.UpdateLayout();
+        ContentScroll.UpdateLayout();
+
+        var point = target.TransformToAncestor(ContentScroll).Transform(new System.Windows.Point(0, 0));
+        var targetOffset = ContentScroll.VerticalOffset + point.Y - 8;
+        ContentScroll.ScrollToVerticalOffset(Math.Max(0, targetOffset));
     }
 
     private void ContentScroll_ScrollChanged(object sender, ScrollChangedEventArgs e)
@@ -349,7 +323,8 @@ public partial class SettingsWindow : Window
         var active = sections
             .Select(section =>
             {
-                var top = section.Element.TransformToAncestor(ContentScroll).Transform(new System.Windows.Point(0, 0)).Y;
+                var point = section.Element.TransformToAncestor(ContentScroll).Transform(new System.Windows.Point(0, 0));
+                var top = ContentScroll.VerticalOffset + point.Y;
                 return (section, Distance: Math.Abs(top - viewportTop));
             })
             .OrderBy(x => x.Distance)
@@ -488,8 +463,14 @@ public partial class SettingsWindow : Window
             SelectComboByTag(TransitionStyleCombo, _settings.TransitionStyle.ToString());
             SelectComboByTag(AnimationIntensityCombo, _settings.AnimationIntensity.ToString());
             SelectComboByTag(SongProgressStyleCombo, _settings.SongProgressStyle.ToString());
+            NormalizeSongProgressColorSettings(_settings);
+            SelectComboByTag(SongProgressColorModeCombo, _settings.SongProgressColorMode.ToString());
+            UpdateSongProgressColorUi();
             SongProgressThicknessStepper.Value = _settings.SongProgressThickness;
             SongProgressOpacityStepper.Value = _settings.SongProgressOpacity;
+            UseFixedSongProgressWidthCheck.IsChecked = _settings.UseFixedSongProgressWidth;
+            SongProgressWidthStepper.Value = _settings.SongProgressWidth;
+            SelectComboByTag(SongProgressAnchorCombo, _settings.SongProgressAnchor.ToString());
             SelectComboByTag(BackgroundMaterialCombo, _settings.BackgroundMaterial.ToString());
             var maxScreenIndex = Math.Max(0, Forms.Screen.AllScreens.Length - 1);
             TargetScreenIndexStepper.Maximum = maxScreenIndex;
@@ -500,8 +481,8 @@ public partial class SettingsWindow : Window
                 SelectFontFamily(_settings.FontFamily);
             }
             SelectComboByTag(ForegroundModeCombo, _settings.ForegroundColorMode.ToString());
-            SelectComboByTag(KaraokeEffectCombo, _settings.KaraokeEffect.ToString());
             SelectComboByTag(TextEffectStyleCombo, _settings.TextEffectStyle.ToString());
+            HideUnavailableSettingsCheck.IsChecked = _settings.DisabledSettingDisplayMode == DisabledSettingDisplayMode.Hide;
 
             SourceOrderList.SetOrder(NormalizeSourceOrder(_settings.SourceRecognitionOrder));
             EnsurePlayerVisualProfiles(_settings);
@@ -552,6 +533,7 @@ public partial class SettingsWindow : Window
             ? AppSettings.DarkForegroundColor
             : AppSettings.LightForegroundColor;
         UpdateColorUi();
+        UpdatePreview();
         SaveSettings();
     }
 
@@ -570,7 +552,6 @@ public partial class SettingsWindow : Window
             PlayerProfileEnabledCheck.IsChecked = profile.Enabled;
             SelectComboByTag(PlayerProfileProgressStyleCombo, profile.SongProgressStyle.ToString());
             SelectComboByTag(PlayerProfileSpectrumStyleCombo, profile.SpectrumStyle.ToString());
-            SelectComboByTag(PlayerProfileKaraokeEffectCombo, profile.KaraokeEffect.ToString());
         }
         finally
         {
@@ -603,7 +584,6 @@ public partial class SettingsWindow : Window
         profile.Enabled = PlayerProfileEnabledCheck.IsChecked == true;
         profile.SongProgressStyle = ReadComboEnum(PlayerProfileProgressStyleCombo, SongProgressDisplayStyle.Off);
         profile.SpectrumStyle = ReadComboEnum(PlayerProfileSpectrumStyleCombo, SpectrumDisplayStyle.Center);
-        profile.KaraokeEffect = ReadComboEnum(PlayerProfileKaraokeEffectCombo, LyricKaraokeEffect.Off);
     }
 
     private PlayerVisualProfile GetSelectedPlayerProfile()
@@ -640,72 +620,6 @@ public partial class SettingsWindow : Window
                 settings.PlayerVisualProfiles[source] = new PlayerVisualProfile();
             }
         }
-    }
-
-    private void ApplySelectedLayoutPreset()
-    {
-        if (_isLoading)
-        {
-            return;
-        }
-
-        var preset = ReadComboEnum(LayoutPresetCombo, LayoutPreset.Custom);
-        switch (preset)
-        {
-            case LayoutPreset.MinimalLyrics:
-                _settings.EnableSpectrum = false;
-                _settings.ShowCoverImage = false;
-                _settings.CoverStyle = CoverDisplayStyle.Hidden;
-                _settings.CoverLayoutMode = CoverLayoutMode.Inline;
-                _settings.SongProgressStyle = SongProgressDisplayStyle.Off;
-                _settings.KaraokeEffect = LyricKaraokeEffect.Off;
-                _settings.ShowBackground = false;
-                break;
-            case LayoutPreset.CoverLyrics:
-                _settings.EnableSpectrum = true;
-                _settings.ShowSpectrumWhenLyricsAvailable = false;
-                _settings.ShowCoverImage = true;
-                _settings.CoverStyle = CoverDisplayStyle.RoundedSquare;
-                _settings.CoverLayoutMode = CoverLayoutMode.Inline;
-                _settings.CoverSize = 34;
-                _settings.SongProgressStyle = SongProgressDisplayStyle.Off;
-                break;
-            case LayoutPreset.StackedCover:
-                _settings.EnableSpectrum = true;
-                _settings.ShowCoverImage = true;
-                _settings.CoverStyle = CoverDisplayStyle.RoundedSquare;
-                _settings.CoverLayoutMode = CoverLayoutMode.Stacked;
-                _settings.CoverSize = 46;
-                _settings.ShowStackedTrackInfo = true;
-                _settings.StackedTrackInfoGap = 8;
-                _settings.StackedCoverLyricsGap = 4;
-                _settings.SongProgressStyle = SongProgressDisplayStyle.Off;
-                break;
-            case LayoutPreset.SpectrumFocus:
-                _settings.EnableSpectrum = true;
-                _settings.ShowSpectrumWhenLyricsAvailable = true;
-                _settings.SpectrumStyle = SpectrumDisplayStyle.Mirror;
-                _settings.SpectrumColorMode = SpectrumColorMode.Gradient;
-                _settings.ShowCoverImage = false;
-                _settings.CoverStyle = CoverDisplayStyle.Hidden;
-                _settings.SongProgressStyle = SongProgressDisplayStyle.SpectrumBaseline;
-                break;
-            case LayoutPreset.TimePill:
-                _settings.EnableSpectrum = true;
-                _settings.ShowSpectrumWhenLyricsAvailable = false;
-                _settings.ShowCoverImage = true;
-                _settings.CoverStyle = CoverDisplayStyle.RoundedSquare;
-                _settings.CoverLayoutMode = CoverLayoutMode.Inline;
-                _settings.SongProgressStyle = SongProgressDisplayStyle.TimePill;
-                _settings.WindowWidthOffset = Math.Max(_settings.WindowWidthOffset, 80);
-                break;
-            case LayoutPreset.Custom:
-            default:
-                return;
-        }
-
-        LoadFromSettings();
-        FlushPendingSettings();
     }
 
     private void UpdatePreview()
@@ -767,6 +681,7 @@ public partial class SettingsWindow : Window
         _settings.ForegroundColorMode = ForegroundColorMode.Custom;
         SelectComboByTag(ForegroundModeCombo, "Custom");
         UpdateColorUi();
+        UpdatePreview();
         SaveSettings();
     }
 
@@ -783,6 +698,121 @@ public partial class SettingsWindow : Window
             _settings.ForegroundColorMode == ForegroundColorMode.Custom;
     }
 
+    private void OnSongProgressColorModeChanged()
+    {
+        if (_isLoading)
+        {
+            return;
+        }
+
+        _settings.SongProgressColorMode = ReadComboEnum(SongProgressColorModeCombo, SongProgressColorMode.Text);
+        NormalizeSongProgressColorSettings(_settings);
+        if (_settings.SongProgressColorMode == SongProgressColorMode.Custom)
+        {
+            PickSongProgressColor();
+            return;
+        }
+
+        UpdateSongProgressColorUi();
+        UpdatePreview();
+        SaveSettings();
+    }
+
+    private void SongProgressColorPickerButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_settings.SongProgressColorMode != SongProgressColorMode.Custom)
+        {
+            return;
+        }
+
+        PickSongProgressColor();
+    }
+
+    private void PickSongProgressColor()
+    {
+        using var dialog = new Forms.ColorDialog { FullOpen = true };
+        if (TryParseMediaColor(_settings.SongProgressColor, out var currentColor))
+        {
+            dialog.Color = Drawing.Color.FromArgb(currentColor.R, currentColor.G, currentColor.B);
+        }
+
+        if (dialog.ShowDialog() != Forms.DialogResult.OK)
+        {
+            UpdateSongProgressColorUi();
+            return;
+        }
+
+        _settings.SongProgressColor = $"#FF{dialog.Color.R:X2}{dialog.Color.G:X2}{dialog.Color.B:X2}";
+        _settings.SongProgressColorMode = SongProgressColorMode.Custom;
+        SelectComboByTag(SongProgressColorModeCombo, nameof(SongProgressColorMode.Custom));
+        UpdateSongProgressColorUi();
+        UpdatePreview();
+        SaveSettings();
+    }
+
+    private void UpdateSongProgressColorUi()
+    {
+        NormalizeSongProgressColorSettings(_settings);
+        if (TryParseMediaColor(_settings.SongProgressColor, out var color))
+        {
+            SongProgressColorSwatch.Background = new SolidColorBrush(color);
+        }
+
+        SongProgressColorValueText.Text = _settings.SongProgressColorMode == SongProgressColorMode.Custom
+            ? _settings.SongProgressColor
+            : string.Empty;
+        SongProgressColorPickerButton.IsEnabled =
+            ReadComboEnum(SongProgressStyleCombo, SongProgressDisplayStyle.Off) != SongProgressDisplayStyle.Off &&
+            _settings.SongProgressColorMode == SongProgressColorMode.Custom;
+    }
+
+    private static void NormalizeSongProgressColorSettings(AppSettings settings)
+    {
+        switch (settings.SongProgressColorMode)
+        {
+            case SongProgressColorMode.White:
+                settings.SongProgressColor = "#FFFFFFFF";
+                settings.SongProgressColorMode = SongProgressColorMode.Custom;
+                break;
+            case SongProgressColorMode.Blue:
+                settings.SongProgressColor = "#FF60A5FA";
+                settings.SongProgressColorMode = SongProgressColorMode.Custom;
+                break;
+            case SongProgressColorMode.Cyan:
+                settings.SongProgressColor = "#FF22D3EE";
+                settings.SongProgressColorMode = SongProgressColorMode.Custom;
+                break;
+            case SongProgressColorMode.Green:
+                settings.SongProgressColor = "#FF34D399";
+                settings.SongProgressColorMode = SongProgressColorMode.Custom;
+                break;
+            case SongProgressColorMode.Orange:
+                settings.SongProgressColor = "#FFFB923C";
+                settings.SongProgressColorMode = SongProgressColorMode.Custom;
+                break;
+            case SongProgressColorMode.Pink:
+                settings.SongProgressColor = "#FFF472B6";
+                settings.SongProgressColorMode = SongProgressColorMode.Custom;
+                break;
+            case SongProgressColorMode.Purple:
+                settings.SongProgressColor = "#FFA78BFA";
+                settings.SongProgressColorMode = SongProgressColorMode.Custom;
+                break;
+        }
+
+        if (settings.SongProgressColorMode != SongProgressColorMode.Text &&
+            settings.SongProgressColorMode != SongProgressColorMode.CoverAccent &&
+            settings.SongProgressColorMode != SongProgressColorMode.Custom)
+        {
+            settings.SongProgressColorMode = SongProgressColorMode.Text;
+        }
+
+        if (!TryParseMediaColor(settings.SongProgressColor, out _))
+        {
+            settings.SongProgressColor = "#FFFFFFFF";
+        }
+    }
+
     private void OnAutoAdjustLineGapChanged()
     {
         UpdateLineGapControlsState();
@@ -792,12 +822,8 @@ public partial class SettingsWindow : Window
     private void UpdateLineGapControlsState()
     {
         var autoAdjust = AutoAdjustLineGapCheck.IsChecked == true;
-        LineGapStepper.IsEnabled = !autoAdjust;
-        LineGapOffsetStepper.IsEnabled = autoAdjust;
-        LineGapLabel.Opacity = autoAdjust ? 0.45 : 1;
-        LineGapHint.Opacity = autoAdjust ? 0.45 : 1;
-        LineGapOffsetLabel.Opacity = autoAdjust ? 1 : 0.45;
-        LineGapOffsetHint.Opacity = autoAdjust ? 1 : 0.45;
+        ApplySettingAvailability(!autoAdjust, LineGapStepper);
+        ApplySettingAvailability(autoAdjust, LineGapOffsetStepper);
     }
 
     private void OnAutoAdjustWindowWidthChanged()
@@ -809,12 +835,8 @@ public partial class SettingsWindow : Window
     private void UpdateWindowWidthControlsState()
     {
         var autoAdjust = AutoAdjustWindowWidthCheck.IsChecked == true;
-        WindowWidthStepper.IsEnabled = !autoAdjust;
-        WindowWidthOffsetStepper.IsEnabled = autoAdjust;
-        WindowWidthLabel.Opacity = autoAdjust ? 0.45 : 1;
-        WindowWidthHint.Opacity = autoAdjust ? 0.45 : 1;
-        WindowWidthOffsetLabel.Opacity = autoAdjust ? 1 : 0.45;
-        WindowWidthOffsetHint.Opacity = autoAdjust ? 1 : 0.45;
+        ApplySettingAvailability(!autoAdjust, WindowWidthStepper);
+        ApplySettingAvailability(autoAdjust, WindowWidthOffsetStepper);
     }
 
     private void OnAutoAdjustWindowHeightChanged()
@@ -826,97 +848,92 @@ public partial class SettingsWindow : Window
     private void UpdateWindowHeightControlsState()
     {
         var autoAdjust = AutoAdjustWindowHeightCheck.IsChecked == true;
-        WindowHeightStepper.IsEnabled = !autoAdjust;
-        WindowHeightOffsetStepper.IsEnabled = autoAdjust;
-        WindowHeightLabel.Opacity = autoAdjust ? 0.45 : 1;
-        WindowHeightHint.Opacity = autoAdjust ? 0.45 : 1;
-        WindowHeightOffsetLabel.Opacity = autoAdjust ? 1 : 0.45;
-        WindowHeightOffsetHint.Opacity = autoAdjust ? 1 : 0.45;
+        ApplySettingAvailability(!autoAdjust, WindowHeightStepper);
+        ApplySettingAvailability(autoAdjust, WindowHeightOffsetStepper);
+    }
+
+    private void ApplySettingAvailability(bool isAvailable, params FrameworkElement[] anchors)
+    {
+        var hideUnavailable = HideUnavailableSettingsCheck?.IsChecked == true;
+        foreach (var container in anchors
+                     .Where(anchor => anchor is not null)
+                     .Select(FindSettingsRowContainer)
+                     .Where(container => container is not null)
+                     .Distinct())
+        {
+            container!.Visibility = !isAvailable && hideUnavailable
+                ? Visibility.Collapsed
+                : Visibility.Visible;
+            container.IsEnabled = isAvailable || hideUnavailable;
+            container.Opacity = isAvailable || hideUnavailable ? 1 : 0.45;
+        }
+    }
+
+    private FrameworkElement? FindSettingsRowContainer(FrameworkElement anchor)
+    {
+        var rowStyle = TryFindResource("SettingsRowCardStyle") as Style;
+        DependencyObject? current = anchor;
+        while (current is not null)
+        {
+            if (current is Border border && ReferenceEquals(border.Style, rowStyle))
+            {
+                return border;
+            }
+
+            current = LogicalTreeHelper.GetParent(current) ?? VisualTreeHelper.GetParent(current);
+        }
+
+        return anchor;
     }
 
     private void UpdateDependentControlsState()
     {
         var spectrumEnabled = EnableSpectrumCheck.IsChecked == true;
-        EnablePureMusicSpectrumCheck.IsEnabled = spectrumEnabled;
-        ShowSpectrumWhenLyricsNotFoundCheck.IsEnabled = spectrumEnabled;
-        ShowSpectrumWhenLyricsAvailableCheck.IsEnabled = spectrumEnabled;
-        ShowSpectrumWhenLyricsAvailableLabel.Opacity = spectrumEnabled ? 1 : 0.45;
-        ShowSpectrumWhenLyricsAvailableHint.Opacity = spectrumEnabled ? 1 : 0.45;
-        SpectrumStyleCombo.IsEnabled = spectrumEnabled;
-        SpectrumColorModeCombo.IsEnabled = spectrumEnabled;
-        SpectrumStyleLabel.Opacity = spectrumEnabled ? 1 : 0.45;
-        SpectrumStyleHint.Opacity = spectrumEnabled ? 1 : 0.45;
+        ApplySettingAvailability(
+            spectrumEnabled,
+            EnablePureMusicSpectrumCheck,
+            ShowSpectrumWhenLyricsNotFoundCheck,
+            ShowSpectrumWhenLyricsAvailableCheck,
+            SpectrumStyleCombo,
+            SpectrumColorModeCombo);
         SpectrumTuningHint.Visibility = spectrumEnabled ? Visibility.Collapsed : Visibility.Visible;
 
         var translationEnabled = ShowLyricTranslationCheck.IsChecked == true;
-        TranslationLayoutCombo.IsEnabled = translationEnabled;
-        TranslationFontScaleStepper.IsEnabled = translationEnabled;
-        TranslationOpacityStepper.IsEnabled = translationEnabled;
+        ApplySettingAvailability(
+            translationEnabled,
+            TranslationLayoutCombo,
+            TranslationFontScaleStepper,
+            TranslationOpacityStepper);
 
         var localLyricsEnabled = EnableLocalLyricsCheck.IsChecked == true;
         var coverEnabled = ShowCoverImageCheck.IsChecked == true;
-        LocalMusicFoldersBox.IsEnabled = localLyricsEnabled;
-        AddLocalFolderButton.IsEnabled = localLyricsEnabled;
-        LocalLyricsModeCombo.IsEnabled = localLyricsEnabled;
-        LocalCoverModeCombo.IsEnabled = localLyricsEnabled && coverEnabled;
-        CoverStyleCombo.IsEnabled = coverEnabled;
+        ApplySettingAvailability(localLyricsEnabled, LocalMusicFoldersBox, LocalLyricsModeCombo);
+        ApplySettingAvailability(localLyricsEnabled && coverEnabled, LocalCoverModeCombo);
+        ApplySettingAvailability(coverEnabled, CoverStyleCombo);
         var coverStyleTag = (CoverStyleCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? "RoundedSquare";
         var coverVisible = coverEnabled && !string.Equals(coverStyleTag, nameof(CoverDisplayStyle.Hidden), StringComparison.OrdinalIgnoreCase);
         var coverLayoutTag = (CoverLayoutCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? "Inline";
         var stackedCoverLayout = coverVisible &&
             string.Equals(coverLayoutTag, nameof(CoverLayoutMode.Stacked), StringComparison.OrdinalIgnoreCase);
         var stackedTrackInfoEnabled = stackedCoverLayout && ShowStackedTrackInfoCheck.IsChecked == true;
-        CoverSizeStepper.IsEnabled = coverVisible;
-        CoverLayoutCombo.IsEnabled = coverVisible;
-        ShowCoverGlowCheck.IsEnabled = coverVisible;
-        CoverGlowOpacityStepper.IsEnabled = coverVisible && ShowCoverGlowCheck.IsChecked == true;
-        ShowStackedTrackInfoCheck.IsEnabled = stackedCoverLayout;
-        StackedTrackInfoGapStepper.IsEnabled = stackedTrackInfoEnabled;
-        StackedCoverGapStepper.IsEnabled = stackedCoverLayout;
-        StackedCoverXOffsetStepper.IsEnabled = stackedCoverLayout;
-        StackedCoverYOffsetStepper.IsEnabled = stackedCoverLayout;
-        StackedContentXOffsetStepper.IsEnabled = stackedCoverLayout;
-        StackedContentYOffsetStepper.IsEnabled = stackedCoverLayout;
-        CoverSizeLabel.Opacity = coverVisible ? 1 : 0.45;
-        CoverSizeHint.Opacity = coverVisible ? 1 : 0.45;
-        ShowCoverGlowLabel.Opacity = coverVisible ? 1 : 0.45;
-        ShowCoverGlowHint.Opacity = coverVisible ? 1 : 0.45;
-        CoverGlowOpacityLabel.Opacity = coverVisible && ShowCoverGlowCheck.IsChecked == true ? 1 : 0.45;
-        CoverGlowOpacityHint.Opacity = coverVisible && ShowCoverGlowCheck.IsChecked == true ? 1 : 0.45;
-        CoverLayoutLabel.Opacity = coverVisible ? 1 : 0.45;
-        CoverLayoutHint.Opacity = coverVisible ? 1 : 0.45;
-        ShowStackedTrackInfoLabel.Opacity = stackedCoverLayout ? 1 : 0.45;
-        ShowStackedTrackInfoHint.Opacity = stackedCoverLayout ? 1 : 0.45;
-        StackedTrackInfoGapLabel.Opacity = stackedTrackInfoEnabled ? 1 : 0.45;
-        StackedTrackInfoGapHint.Opacity = stackedTrackInfoEnabled ? 1 : 0.45;
-        StackedCoverGapLabel.Opacity = stackedCoverLayout ? 1 : 0.45;
-        StackedCoverGapHint.Opacity = stackedCoverLayout ? 1 : 0.45;
-        StackedCoverXOffsetLabel.Opacity = stackedCoverLayout ? 1 : 0.45;
-        StackedCoverXOffsetHint.Opacity = stackedCoverLayout ? 1 : 0.45;
-        StackedCoverYOffsetLabel.Opacity = stackedCoverLayout ? 1 : 0.45;
-        StackedCoverYOffsetHint.Opacity = stackedCoverLayout ? 1 : 0.45;
-        StackedContentXOffsetLabel.Opacity = stackedCoverLayout ? 1 : 0.45;
-        StackedContentXOffsetHint.Opacity = stackedCoverLayout ? 1 : 0.45;
-        StackedContentYOffsetLabel.Opacity = stackedCoverLayout ? 1 : 0.45;
-        StackedContentYOffsetHint.Opacity = stackedCoverLayout ? 1 : 0.45;
-        LocalLyricsModeLabel.Opacity = localLyricsEnabled ? 1 : 0.45;
-        LocalLyricsModeHint.Opacity = localLyricsEnabled ? 1 : 0.45;
-        LocalCoverModeLabel.Opacity = localLyricsEnabled && coverEnabled ? 1 : 0.45;
-        LocalCoverModeHint.Opacity = localLyricsEnabled && coverEnabled ? 1 : 0.45;
-        LocalFoldersStatusText.Opacity = localLyricsEnabled ? 1 : 0.48;
+        ApplySettingAvailability(coverVisible, CoverSizeStepper, CoverLayoutCombo, ShowCoverGlowCheck);
+        ApplySettingAvailability(coverVisible && ShowCoverGlowCheck.IsChecked == true, CoverGlowOpacityStepper);
+        ApplySettingAvailability(stackedCoverLayout, ShowStackedTrackInfoCheck, StackedCoverGapStepper, StackedCoverXOffsetStepper, StackedCoverYOffsetStepper, StackedContentXOffsetStepper, StackedContentYOffsetStepper);
+        ApplySettingAvailability(stackedTrackInfoEnabled, StackedTrackInfoGapStepper);
+
+        var progressEnabled = ReadComboEnum(SongProgressStyleCombo, SongProgressDisplayStyle.Off) != SongProgressDisplayStyle.Off;
+        ApplySettingAvailability(progressEnabled, SongProgressColorModeCombo, SongProgressColorPickerButton, SongProgressThicknessStepper, SongProgressOpacityStepper, UseFixedSongProgressWidthCheck);
+        ApplySettingAvailability(progressEnabled && UseFixedSongProgressWidthCheck.IsChecked == true, SongProgressWidthStepper, SongProgressAnchorCombo);
+        SongProgressColorPickerButton.IsEnabled =
+            progressEnabled &&
+            ReadComboEnum(SongProgressColorModeCombo, SongProgressColorMode.Text) == SongProgressColorMode.Custom;
 
         var backgroundEnabled = ShowBackgroundCheck.IsChecked == true;
-        BackgroundOpacityStepper.IsEnabled = backgroundEnabled;
-        BackgroundMaterialCombo.IsEnabled = backgroundEnabled;
-        BackgroundMaterialLabel.Opacity = backgroundEnabled ? 1 : 0.45;
-        BackgroundMaterialHint.Opacity = backgroundEnabled ? 1 : 0.45;
+        ApplySettingAvailability(backgroundEnabled, BackgroundOpacityStepper, BackgroundMaterialCombo);
 
         var autoForeground = AutoForegroundColorByBackgroundCheck.IsChecked == true;
-        ForegroundModeCombo.IsEnabled = !autoForeground;
+        ApplySettingAvailability(!autoForeground, ForegroundModeCombo, ColorPickerButton, UseCoverAccentColorCheck);
         ColorPickerButton.IsEnabled = !autoForeground && _settings.ForegroundColorMode == ForegroundColorMode.Custom;
-        UseCoverAccentColorCheck.IsEnabled = !autoForeground;
-        ForegroundModeCombo.Opacity = autoForeground ? 0.45 : 1;
-        ColorPickerButton.Opacity = autoForeground ? 0.45 : 1;
 
         var startupHiddenByAutoHide =
             ShowLyricsOnStartupCheck.IsChecked == true &&
@@ -927,17 +944,13 @@ public partial class SettingsWindow : Window
             : string.Empty;
 
         var screenIndexEnabled = ReadComboEnum(TargetScreenModeCombo, TargetScreenMode.Primary) == TargetScreenMode.ScreenIndex;
-        TargetScreenIndexStepper.IsEnabled = screenIndexEnabled;
-        TargetScreenIndexLabel.Opacity = screenIndexEnabled ? 1 : 0.45;
-        TargetScreenIndexHint.Opacity = screenIndexEnabled ? 1 : 0.45;
+        ApplySettingAvailability(screenIndexEnabled, TargetScreenIndexStepper);
 
         var playerProfilesEnabled = EnablePlayerVisualProfilesCheck.IsChecked == true;
-        PlayerProfileSourceCombo.IsEnabled = playerProfilesEnabled;
-        PlayerProfileEnabledCheck.IsEnabled = playerProfilesEnabled;
+        ApplySettingAvailability(playerProfilesEnabled, PlayerProfileSourceCombo, PlayerProfileEnabledCheck);
         var selectedPlayerProfileEnabled = playerProfilesEnabled && PlayerProfileEnabledCheck.IsChecked == true;
-        PlayerProfileProgressStyleCombo.IsEnabled = selectedPlayerProfileEnabled;
-        PlayerProfileSpectrumStyleCombo.IsEnabled = selectedPlayerProfileEnabled;
-        PlayerProfileKaraokeEffectCombo.IsEnabled = selectedPlayerProfileEnabled;
+        ApplySettingAvailability(selectedPlayerProfileEnabled, PlayerProfileProgressStyleCombo, PlayerProfileSpectrumStyleCombo);
+        UpdateSongProgressColorUi();
     }
 
     private void OnSettingChanged()
@@ -1011,7 +1024,6 @@ public partial class SettingsWindow : Window
             ? selectedFont
             : _settings.FontFamily;
         _settings.SourceRecognitionOrder = NormalizeSourceOrder(SourceOrderList.GetOrder());
-        _settings.KaraokeEffect = ReadComboEnum(KaraokeEffectCombo, LyricKaraokeEffect.Off);
         _settings.TextEffectStyle = ReadComboEnum(TextEffectStyleCombo, TextEffectStyle.Shadow);
 
         var coverStyleTag = (CoverStyleCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? "RoundedSquare";
@@ -1036,17 +1048,25 @@ public partial class SettingsWindow : Window
         _settings.TransitionStyle = Enum.TryParse<LyricTransitionStyle>(transitionStyleTag, out var transitionStyle)
             ? transitionStyle
             : LyricTransitionStyle.Slide;
-        _settings.AnimationIntensity = ReadComboEnum(AnimationIntensityCombo, AnimationIntensity.Standard);
+        _settings.AnimationIntensity = ReadComboEnum(AnimationIntensityCombo, AnimationIntensity.Smooth);
         var songProgressStyleTag = (SongProgressStyleCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? "Off";
         _settings.SongProgressStyle = Enum.TryParse<SongProgressDisplayStyle>(songProgressStyleTag, out var songProgressStyle)
             ? songProgressStyle
             : SongProgressDisplayStyle.Off;
+        _settings.SongProgressColorMode = ReadComboEnum(SongProgressColorModeCombo, SongProgressColorMode.Text);
+        NormalizeSongProgressColorSettings(_settings);
         _settings.SongProgressThickness = Math.Clamp(SongProgressThicknessStepper.Value, 1, 8);
         _settings.SongProgressOpacity = Math.Clamp(SongProgressOpacityStepper.Value, 0.15, 1);
+        _settings.UseFixedSongProgressWidth = UseFixedSongProgressWidthCheck.IsChecked == true;
+        _settings.SongProgressWidth = Math.Clamp(SongProgressWidthStepper.Value, 40, 900);
+        _settings.SongProgressAnchor = ReadComboEnum(SongProgressAnchorCombo, SongProgressAnchor.Left);
         var backgroundMaterialTag = (BackgroundMaterialCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? "Dim";
         _settings.BackgroundMaterial = Enum.TryParse<LyricsBackgroundMaterial>(backgroundMaterialTag, out var backgroundMaterial)
             ? backgroundMaterial
             : LyricsBackgroundMaterial.Dim;
+        _settings.DisabledSettingDisplayMode = HideUnavailableSettingsCheck.IsChecked == true
+            ? DisabledSettingDisplayMode.Hide
+            : DisabledSettingDisplayMode.Disable;
 
         var anchorTag = (HorizontalAnchorCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? "Left";
         _settings.HorizontalAnchor = Enum.TryParse<LyricsHorizontalAnchor>(anchorTag, out var anchor)
@@ -1057,6 +1077,9 @@ public partial class SettingsWindow : Window
         _settings.EnablePlayerVisualProfiles = EnablePlayerVisualProfilesCheck.IsChecked == true;
         SaveSelectedPlayerProfile();
 
+        UpdateLineGapControlsState();
+        UpdateWindowWidthControlsState();
+        UpdateWindowHeightControlsState();
         UpdateDependentControlsState();
         UpdatePreview();
         QueueSaveSettings();
@@ -1523,7 +1546,7 @@ public partial class SettingsWindow : Window
             $"播放器：{snapshot.TrackSourceApp}，歌词源：{selectedSource}，分数：{snapshot.BestScore}，行数：{snapshot.LineCount}\n" +
             $"位置：{FormatTimeSpan(snapshot.PlaybackPosition)}，偏移：{snapshot.AppliedOffsetMs} ms，行号：{snapshot.CurrentLineIndex}，进度：{snapshot.LineProgress:P0}\n" +
             $"候选：{snapshot.Candidates}\n" +
-            $"视觉：逐字={_settings.KaraokeEffect}，进度={_settings.SongProgressStyle}，频谱={_settings.SpectrumStyle}/{_settings.SpectrumColorMode}，动画={_settings.AnimationIntensity}\n" +
+            $"视觉：进度={_settings.SongProgressStyle}/{_settings.SongProgressColorMode}，频谱={_settings.SpectrumStyle}/{_settings.SpectrumColorMode}，动画={_settings.AnimationIntensity}\n" +
             $"窗口：屏幕={_settings.TargetScreenMode}({_settings.TargetScreenIndex})，锚点={_settings.HorizontalAnchor}，播放器视觉方案={(_settings.EnablePlayerVisualProfiles ? "开启" : "关闭")}";
     }
 
@@ -1752,7 +1775,6 @@ public partial class SettingsWindow : Window
         target.ForegroundColor = source.ForegroundColor;
         target.AutoForegroundColorByBackground = source.AutoForegroundColorByBackground;
         target.UseCoverAccentColor = source.UseCoverAccentColor;
-        target.KaraokeEffect = source.KaraokeEffect;
         target.TextEffectStyle = source.TextEffectStyle;
         target.CoverStyle = NormalizeCoverStyle(source.CoverStyle);
         target.CoverSize = source.CoverSize;
@@ -1769,8 +1791,15 @@ public partial class SettingsWindow : Window
         target.TransitionStyle = source.TransitionStyle;
         target.AnimationIntensity = source.AnimationIntensity;
         target.SongProgressStyle = source.SongProgressStyle;
+        NormalizeSongProgressColorSettings(source);
+        target.SongProgressColorMode = source.SongProgressColorMode;
+        target.SongProgressColor = source.SongProgressColor;
         target.SongProgressThickness = source.SongProgressThickness;
         target.SongProgressOpacity = source.SongProgressOpacity;
+        target.UseFixedSongProgressWidth = source.UseFixedSongProgressWidth;
+        target.SongProgressWidth = source.SongProgressWidth;
+        target.SongProgressAnchor = source.SongProgressAnchor;
+        target.DisabledSettingDisplayMode = source.DisabledSettingDisplayMode;
         target.ShowBackground = source.ShowBackground;
         target.BackgroundMaterial = source.BackgroundMaterial;
         target.BackgroundOpacity = source.BackgroundOpacity;

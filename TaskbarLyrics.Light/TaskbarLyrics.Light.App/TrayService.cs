@@ -14,9 +14,9 @@ public sealed class TrayService : IDisposable
     private readonly Action _openSettings;
     private readonly Action _rematchLyrics;
     private readonly Action _clearCaches;
-    private readonly Action _cycleSpectrumStyle;
-    private readonly Action _toggleTimelineMonitor;
+    private readonly Action<AppSettings> _applySettings;
     private readonly Action _exitApp;
+    private readonly Func<bool> _isLyricsWindowVisible;
     private readonly Func<AppSettings> _getSettings;
 
     public TrayService(
@@ -24,18 +24,18 @@ public sealed class TrayService : IDisposable
         Action openSettings,
         Action rematchLyrics,
         Action clearCaches,
-        Action cycleSpectrumStyle,
-        Action toggleTimelineMonitor,
+        Action<AppSettings> applySettings,
         Action exitApp,
+        Func<bool> isLyricsWindowVisible,
         Func<AppSettings> getSettings)
     {
         _toggleLyricsWindow = toggleLyricsWindow;
         _openSettings = openSettings;
         _rematchLyrics = rematchLyrics;
         _clearCaches = clearCaches;
-        _cycleSpectrumStyle = cycleSpectrumStyle;
-        _toggleTimelineMonitor = toggleTimelineMonitor;
+        _applySettings = applySettings;
         _exitApp = exitApp;
+        _isLyricsWindowVisible = isLyricsWindowVisible;
         _getSettings = getSettings;
         _icon = AppIconProvider.LoadTrayIcon();
         _notifyIcon = new Forms.NotifyIcon
@@ -85,9 +85,9 @@ public sealed class TrayService : IDisposable
             _openSettings,
             _rematchLyrics,
             _clearCaches,
-            _cycleSpectrumStyle,
-            _toggleTimelineMonitor,
+            _applySettings,
             _exitApp,
+            _isLyricsWindowVisible,
             _getSettings);
         _menuWindow.Closed += (_, _) => _menuWindow = null;
         _menuWindow.ShowAtCursor();

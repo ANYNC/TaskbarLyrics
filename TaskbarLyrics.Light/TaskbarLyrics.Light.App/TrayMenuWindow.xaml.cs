@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Threading;
 using System.Runtime.InteropServices;
@@ -24,11 +25,12 @@ public partial class TrayMenuWindow : Window
     private readonly Action _openSettings;
     private readonly Action _rematchLyrics;
     private readonly Action _clearCaches;
-    private readonly Action _cycleSpectrumStyle;
-    private readonly Action _toggleTimelineMonitor;
+    private readonly Action<AppSettings> _applySettings;
     private readonly Action _exitApp;
+    private readonly Func<bool> _isLyricsWindowVisible;
     private readonly Func<AppSettings> _getSettings;
     private readonly DispatcherTimer _closeTimer;
+    private TraySubmenuKind? _activeSubmenuKind;
     private int _graceTicks = 3;
 
     public TrayMenuWindow(
@@ -36,9 +38,9 @@ public partial class TrayMenuWindow : Window
         Action openSettings,
         Action rematchLyrics,
         Action clearCaches,
-        Action cycleSpectrumStyle,
-        Action toggleTimelineMonitor,
+        Action<AppSettings> applySettings,
         Action exitApp,
+        Func<bool> isLyricsWindowVisible,
         Func<AppSettings> getSettings)
     {
         InitializeComponent();
@@ -48,9 +50,9 @@ public partial class TrayMenuWindow : Window
         _openSettings = openSettings;
         _rematchLyrics = rematchLyrics;
         _clearCaches = clearCaches;
-        _cycleSpectrumStyle = cycleSpectrumStyle;
-        _toggleTimelineMonitor = toggleTimelineMonitor;
+        _applySettings = applySettings;
         _exitApp = exitApp;
+        _isLyricsWindowVisible = isLyricsWindowVisible;
         _getSettings = getSettings;
         RefreshStateText();
         SourceInitialized += OnSourceInitialized;
@@ -107,8 +109,12 @@ public partial class TrayMenuWindow : Window
             top = cursorY + gap;
         }
 
-        Left = Math.Clamp(left, screenLeft + gap, screenRight - Width - gap);
-        Top = Math.Clamp(top, screenTop + gap, screenBottom - Height - gap);
+        var minLeft = screenLeft + gap;
+        var minTop = screenTop + gap;
+        var maxLeft = Math.Max(minLeft, screenRight - Width - gap);
+        var maxTop = Math.Max(minTop, screenBottom - Height - gap);
+        Left = Math.Clamp(left, minLeft, maxLeft);
+        Top = Math.Clamp(top, minTop, maxTop);
         Show();
         _closeTimer.Start();
     }
@@ -116,10 +122,17 @@ public partial class TrayMenuWindow : Window
     private void RefreshStateText()
     {
         var settings = _getSettings();
-        SpectrumStyleText.Text = $"频谱样式：{GetSpectrumStyleLabel(settings.SpectrumStyle)}";
-        TimelineMonitorText.Text = settings.EnableSmtcTimelineMonitor
-            ? "关闭时间轴监视器"
-            : "打开时间轴监视器";
+        LyricsWindowText.Text = _isLyricsWindowVisible()
+            ? "隐藏歌词"
+            : "显示歌词";
+        SpectrumStyleText.Text = "频谱设置";
+        SongProgressStyleText.Text = "进度设置";
+        CoverStyleText.Text = "封面设置";
+        TextEffectStyleText.Text = "文字效果设置";
+        TransitionStyleText.Text = "切换动画设置";
+        TranslationText.Text = settings.ShowLyricTranslation
+            ? "隐藏翻译"
+            : "显示翻译";
     }
 
     private void OnSourceInitialized(object? sender, EventArgs e)
@@ -142,7 +155,7 @@ public partial class TrayMenuWindow : Window
             return;
         }
 
-        if (IsCursorInsideWindow())
+        if (IsCursorInsideWindow() || IsCursorInsideSubmenu())
         {
             return;
         }
@@ -152,6 +165,8 @@ public partial class TrayMenuWindow : Window
             Close();
         }
     }
+
+    private bool IsCursorInsideSubmenu() => SubmenuPopup.IsOpen && SubmenuPopup.IsMouseOver;
 
     private bool IsCursorInsideWindow()
     {
@@ -194,18 +209,13 @@ public partial class TrayMenuWindow : Window
         _clearCaches();
     }
 
-    private void CycleSpectrumStyleButton_Click(object sender, RoutedEventArgs e)
+    private void ToggleTranslationButton_Click(object sender, RoutedEventArgs e)
     {
         Close();
         DismissTrayOverflow();
-        _cycleSpectrumStyle();
-    }
-
-    private void ToggleTimelineMonitorButton_Click(object sender, RoutedEventArgs e)
-    {
-        Close();
-        DismissTrayOverflow();
-        _toggleTimelineMonitor();
+        var snapshot = _getSettings();
+        snapshot.ShowLyricTranslation = !snapshot.ShowLyricTranslation;
+        _applySettings(snapshot);
     }
 
     private void SpectrumTuningButton_Click(object sender, RoutedEventArgs e)
@@ -223,6 +233,164 @@ public partial class TrayMenuWindow : Window
         Close();
         DismissTrayOverflow();
         _exitApp();
+    }
+
+    private void CloseSubmenuOnMouseEnter(object sender, System.Windows.Input.MouseEventArgs e) => CloseSubmenu();
+
+    private void SubmenuPopup_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e)
+    {
+    }
+
+    private void SubmenuPopup_MouseLeave(object sender, System.Windows.Input.MouseEventArgs e)
+    {
+    }
+
+    private void SpectrumStyleButton_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e) =>
+        OpenSubmenu(SpectrumStyleButton, TraySubmenuKind.Spectrum);
+
+    private void SpectrumStyleButton_Click(object sender, RoutedEventArgs e) =>
+        OpenSubmenu(SpectrumStyleButton, TraySubmenuKind.Spectrum);
+
+    private void SongProgressStyleButton_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e) =>
+        OpenSubmenu(SongProgressStyleButton, TraySubmenuKind.SongProgress);
+
+    private void SongProgressStyleButton_Click(object sender, RoutedEventArgs e) =>
+        OpenSubmenu(SongProgressStyleButton, TraySubmenuKind.SongProgress);
+
+    private void CoverStyleButton_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e) =>
+        OpenSubmenu(CoverStyleButton, TraySubmenuKind.Cover);
+
+    private void CoverStyleButton_Click(object sender, RoutedEventArgs e) =>
+        OpenSubmenu(CoverStyleButton, TraySubmenuKind.Cover);
+
+    private void TextEffectStyleButton_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e) =>
+        OpenSubmenu(TextEffectStyleButton, TraySubmenuKind.TextEffect);
+
+    private void TextEffectStyleButton_Click(object sender, RoutedEventArgs e) =>
+        OpenSubmenu(TextEffectStyleButton, TraySubmenuKind.TextEffect);
+
+    private void TransitionStyleButton_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e) =>
+        OpenSubmenu(TransitionStyleButton, TraySubmenuKind.Transition);
+
+    private void TransitionStyleButton_Click(object sender, RoutedEventArgs e) =>
+        OpenSubmenu(TransitionStyleButton, TraySubmenuKind.Transition);
+
+    private void OpenSubmenu(System.Windows.Controls.Button placementTarget, TraySubmenuKind kind)
+    {
+        if (_activeSubmenuKind == kind && SubmenuPopup.IsOpen)
+        {
+            return;
+        }
+
+        _activeSubmenuKind = kind;
+        BuildSubmenu(kind);
+        SubmenuPopup.PlacementTarget = placementTarget;
+        SubmenuPopup.IsOpen = true;
+    }
+
+    private void CloseSubmenu()
+    {
+        _activeSubmenuKind = null;
+        SubmenuPopup.IsOpen = false;
+    }
+
+    private void BuildSubmenu(TraySubmenuKind kind)
+    {
+        var settings = _getSettings();
+        SubmenuItemsPanel.Children.Clear();
+        switch (kind)
+        {
+            case TraySubmenuKind.Spectrum:
+                AddSubmenuOption("关闭", !settings.EnableSpectrum, s => s.EnableSpectrum = false);
+                AddSubmenuOption("中心扩散", settings.EnableSpectrum && settings.SpectrumStyle == SpectrumDisplayStyle.Center, s => { s.EnableSpectrum = true; s.SpectrumStyle = SpectrumDisplayStyle.Center; });
+                AddSubmenuOption("底部柱状", settings.EnableSpectrum && settings.SpectrumStyle == SpectrumDisplayStyle.Bottom, s => { s.EnableSpectrum = true; s.SpectrumStyle = SpectrumDisplayStyle.Bottom; });
+                AddSubmenuOption("镜像波形", settings.EnableSpectrum && settings.SpectrumStyle == SpectrumDisplayStyle.Mirror, s => { s.EnableSpectrum = true; s.SpectrumStyle = SpectrumDisplayStyle.Mirror; });
+                AddSubmenuOption("细线", settings.EnableSpectrum && settings.SpectrumStyle == SpectrumDisplayStyle.Thin, s => { s.EnableSpectrum = true; s.SpectrumStyle = SpectrumDisplayStyle.Thin; });
+                AddSubmenuOption("点阵", settings.EnableSpectrum && settings.SpectrumStyle == SpectrumDisplayStyle.Dots, s => { s.EnableSpectrum = true; s.SpectrumStyle = SpectrumDisplayStyle.Dots; });
+                AddSubmenuOption("呼吸条", settings.EnableSpectrum && settings.SpectrumStyle == SpectrumDisplayStyle.Pulse, s => { s.EnableSpectrum = true; s.SpectrumStyle = SpectrumDisplayStyle.Pulse; });
+                break;
+            case TraySubmenuKind.SongProgress:
+                AddSubmenuOption("关闭", settings.SongProgressStyle == SongProgressDisplayStyle.Off, s => s.SongProgressStyle = SongProgressDisplayStyle.Off);
+                AddSubmenuOption("底部细线", settings.SongProgressStyle == SongProgressDisplayStyle.BottomLine, s => s.SongProgressStyle = SongProgressDisplayStyle.BottomLine);
+                AddSubmenuOption("歌词下划线", settings.SongProgressStyle == SongProgressDisplayStyle.LyricUnderline, s => s.SongProgressStyle = SongProgressDisplayStyle.LyricUnderline);
+                AddSubmenuOption("封面进度环", settings.SongProgressStyle == SongProgressDisplayStyle.CoverRing, s => s.SongProgressStyle = SongProgressDisplayStyle.CoverRing);
+                AddSubmenuOption("封面底边", settings.SongProgressStyle == SongProgressDisplayStyle.CoverBottomBar, s => s.SongProgressStyle = SongProgressDisplayStyle.CoverBottomBar);
+                AddSubmenuOption("频谱底线", settings.SongProgressStyle == SongProgressDisplayStyle.SpectrumBaseline, s => s.SongProgressStyle = SongProgressDisplayStyle.SpectrumBaseline);
+                AddSubmenuOption("时间胶囊", settings.SongProgressStyle == SongProgressDisplayStyle.TimePill, s => s.SongProgressStyle = SongProgressDisplayStyle.TimePill);
+                AddSubmenuOption("呼吸进度点", settings.SongProgressStyle == SongProgressDisplayStyle.Dots, s => s.SongProgressStyle = SongProgressDisplayStyle.Dots);
+                AddSubmenuOption("边框进度环", settings.SongProgressStyle == SongProgressDisplayStyle.BorderRing, s => s.SongProgressStyle = SongProgressDisplayStyle.BorderRing);
+                AddSubmenuOption("背景进度", settings.SongProgressStyle == SongProgressDisplayStyle.BackgroundFill, s => s.SongProgressStyle = SongProgressDisplayStyle.BackgroundFill);
+                break;
+            case TraySubmenuKind.Cover:
+                AddSubmenuOption("关闭", !settings.ShowCoverImage || settings.CoverStyle == CoverDisplayStyle.Hidden, s => { s.ShowCoverImage = false; s.CoverStyle = CoverDisplayStyle.Hidden; });
+                AddSubmenuOption("方形", settings.ShowCoverImage && settings.CoverStyle == CoverDisplayStyle.Square, s => { s.ShowCoverImage = true; s.CoverStyle = CoverDisplayStyle.Square; });
+                AddSubmenuOption("圆角方形", settings.ShowCoverImage && settings.CoverStyle == CoverDisplayStyle.RoundedSquare, s => { s.ShowCoverImage = true; s.CoverStyle = CoverDisplayStyle.RoundedSquare; });
+                AddSubmenuOption("圆形", settings.ShowCoverImage && settings.CoverStyle == CoverDisplayStyle.Circle, s => { s.ShowCoverImage = true; s.CoverStyle = CoverDisplayStyle.Circle; });
+                break;
+            case TraySubmenuKind.TextEffect:
+                AddSubmenuOption("关闭", settings.TextEffectStyle == TextEffectStyle.None, s => s.TextEffectStyle = TextEffectStyle.None);
+                AddSubmenuOption("阴影", settings.TextEffectStyle == TextEffectStyle.Shadow, s => s.TextEffectStyle = TextEffectStyle.Shadow);
+                AddSubmenuOption("描边", settings.TextEffectStyle == TextEffectStyle.Outline, s => s.TextEffectStyle = TextEffectStyle.Outline);
+                AddSubmenuOption("柔光", settings.TextEffectStyle == TextEffectStyle.Glow, s => s.TextEffectStyle = TextEffectStyle.Glow);
+                break;
+            case TraySubmenuKind.Transition:
+                AddSubmenuOption("关闭", settings.TransitionStyle == LyricTransitionStyle.None, s => s.TransitionStyle = LyricTransitionStyle.None);
+                AddSubmenuOption("上滑", settings.TransitionStyle == LyricTransitionStyle.Slide, s => s.TransitionStyle = LyricTransitionStyle.Slide);
+                AddSubmenuOption("淡入淡出", settings.TransitionStyle == LyricTransitionStyle.Fade, s => s.TransitionStyle = LyricTransitionStyle.Fade);
+                AddSubmenuOption("紧凑滑动", settings.TransitionStyle == LyricTransitionStyle.CompactSlide, s => s.TransitionStyle = LyricTransitionStyle.CompactSlide);
+                break;
+        }
+    }
+
+    private void AddSubmenuOption(string label, bool selected, Action<AppSettings> update)
+    {
+        var button = new System.Windows.Controls.Button
+        {
+            Style = (Style)FindResource("TraySubmenuButtonStyle"),
+            Content = CreateSubmenuOptionContent(label, selected)
+        };
+        button.Click += (_, _) =>
+        {
+            var snapshot = _getSettings();
+            update(snapshot);
+            _applySettings(snapshot);
+            RefreshStateText();
+            Close();
+            DismissTrayOverflow();
+        };
+        SubmenuItemsPanel.Children.Add(button);
+    }
+
+    private Grid CreateSubmenuOptionContent(string label, bool selected)
+    {
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(20) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        var check = new TextBlock
+        {
+            Text = selected ? "✓" : string.Empty,
+            VerticalAlignment = VerticalAlignment.Center,
+            Foreground = (Media.Brush)FindResource("TrayMenuTextBrush"),
+            FontFamily = new Media.FontFamily("Microsoft YaHei UI"),
+            FontSize = 12.5
+        };
+        Grid.SetColumn(check, 0);
+        grid.Children.Add(check);
+
+        var text = new TextBlock
+        {
+            Text = label,
+            VerticalAlignment = VerticalAlignment.Center,
+            Foreground = (Media.Brush)FindResource("TrayMenuTextBrush"),
+            FontFamily = new Media.FontFamily("Microsoft YaHei UI"),
+            FontSize = 12.5,
+            TextTrimming = TextTrimming.CharacterEllipsis
+        };
+        Grid.SetColumn(text, 1);
+        grid.Children.Add(text);
+
+        return grid;
     }
 
     [DllImport("user32.dll", SetLastError = true)]
@@ -252,6 +420,44 @@ public partial class TrayMenuWindow : Window
         SpectrumDisplayStyle.Dots => "点阵",
         SpectrumDisplayStyle.Pulse => "呼吸条",
         _ => "中心扩散"
+    };
+
+    private static string GetSongProgressStyleLabel(SongProgressDisplayStyle style) => style switch
+    {
+        SongProgressDisplayStyle.BottomLine => "底部细线",
+        SongProgressDisplayStyle.LyricUnderline => "歌词下划线",
+        SongProgressDisplayStyle.CoverRing => "封面进度环",
+        SongProgressDisplayStyle.CoverBottomBar => "封面底边",
+        SongProgressDisplayStyle.SpectrumBaseline => "频谱底线",
+        SongProgressDisplayStyle.TimePill => "时间胶囊",
+        SongProgressDisplayStyle.Dots => "呼吸进度点",
+        SongProgressDisplayStyle.BorderRing => "边框进度环",
+        SongProgressDisplayStyle.BackgroundFill => "背景进度",
+        _ => "关闭"
+    };
+
+    private static string GetCoverStyleLabel(CoverDisplayStyle style) => style switch
+    {
+        CoverDisplayStyle.Square => "方形",
+        CoverDisplayStyle.Circle => "圆形",
+        CoverDisplayStyle.Hidden => "关闭",
+        _ => "圆角方形"
+    };
+
+    private static string GetTextEffectStyleLabel(TextEffectStyle style) => style switch
+    {
+        TextEffectStyle.None => "关闭",
+        TextEffectStyle.Outline => "描边",
+        TextEffectStyle.Glow => "柔光",
+        _ => "阴影"
+    };
+
+    private static string GetTransitionStyleLabel(LyricTransitionStyle style) => style switch
+    {
+        LyricTransitionStyle.Fade => "淡入淡出",
+        LyricTransitionStyle.CompactSlide => "紧凑滑动",
+        LyricTransitionStyle.None => "关闭",
+        _ => "上滑"
     };
 
     private static void DismissTrayOverflow()
@@ -294,4 +500,13 @@ public partial class TrayMenuWindow : Window
     }
 
     private readonly record struct DpiScale(double X, double Y);
+
+    private enum TraySubmenuKind
+    {
+        Spectrum,
+        SongProgress,
+        Cover,
+        TextEffect,
+        Transition
+    }
 }
