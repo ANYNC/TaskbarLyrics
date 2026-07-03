@@ -248,25 +248,6 @@
                                     <TranslateTransform Y="1" />
                                 </TextBlock.RenderTransform>
                             </TextBlock>
-                            <Border x:Name="LyricUnderlineTrack"
-                                    Height="2"
-                                    HorizontalAlignment="Stretch"
-                                    VerticalAlignment="Top"
-                                    Background="#18FFFFFF"
-                                    Visibility="Collapsed"
-                                    IsHitTestVisible="False">
-                                <Border.RenderTransform>
-                                    <TranslateTransform x:Name="LyricUnderlineOffset" />
-                                </Border.RenderTransform>
-                                <Border x:Name="LyricUnderlineFill"
-                                        HorizontalAlignment="Left"
-                                        Background="#FFFFFFFF"
-                                        RenderTransformOrigin="0,0.5">
-                                    <Border.RenderTransform>
-                                        <ScaleTransform x:Name="LyricUnderlineScale" ScaleX="0" />
-                                    </Border.RenderTransform>
-                                </Border>
-                            </Border>
                             </Grid>
 
                             <Grid x:Name="SpectrumLayer"
@@ -277,21 +258,6 @@
                                     Orientation="Horizontal"
                                     VerticalAlignment="Center"
                                     Height="22" />
-                        <Border x:Name="SpectrumProgressTrack"
-                                Height="1.5"
-                                VerticalAlignment="Bottom"
-                                Background="#18FFFFFF"
-                                Visibility="Collapsed"
-                                IsHitTestVisible="False">
-                            <Border x:Name="SpectrumProgressFill"
-                                    HorizontalAlignment="Left"
-                                    Background="#FFFFFFFF"
-                                    RenderTransformOrigin="0,0.5">
-                                <Border.RenderTransform>
-                                    <ScaleTransform x:Name="SpectrumProgressScale" ScaleX="0" />
-                                </Border.RenderTransform>
-                            </Border>
-                        </Border>
                             </Grid>
                         </Grid>
                     </Border>

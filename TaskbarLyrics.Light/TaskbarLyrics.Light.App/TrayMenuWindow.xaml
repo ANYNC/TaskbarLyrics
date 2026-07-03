@@ -188,7 +188,7 @@
         <Popup x:Name="SubmenuPopup"
                Placement="Custom"
                AllowsTransparency="True"
-               PopupAnimation="Fade"
+               PopupAnimation="None"
                StaysOpen="True"
                MouseEnter="SubmenuPopup_MouseEnter"
                MouseLeave="SubmenuPopup_MouseLeave">

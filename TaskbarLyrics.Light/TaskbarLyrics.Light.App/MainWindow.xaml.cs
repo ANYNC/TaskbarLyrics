@@ -300,10 +300,11 @@ public partial class MainWindow : Window
     {
         var primary = _primaryTextColor;
         if (!_visualSettings.AutoForegroundColorByBackground &&
-            _visualSettings.UseCoverAccentColor &&
-            _coverAccentColor is { } accent)
+            _visualSettings.UseCoverAccentColor)
         {
-            primary = CreateReadableAccentColor(accent);
+            primary = _coverAccentColor is { } accent
+                ? CreateReadableAccentColor(accent)
+                : _lastAppliedPrimaryTextColor ?? primary;
         }
 
         return primary;

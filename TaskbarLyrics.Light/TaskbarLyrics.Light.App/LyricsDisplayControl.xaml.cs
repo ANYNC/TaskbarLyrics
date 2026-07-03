@@ -41,14 +41,15 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
     private const double LyricsTextPadding = 24;
     private const double StackedSideMargin = 4;
     private const double MinLyricsContentWidth = 160;
-    private const double PrimaryLineYOffset = 1;
-    private const double SecondaryLineYOffset = 1;
+    private const double PrimaryLineYOffset = 2;
+    private const double SecondaryLineYOffset = 2;
     private const double IncomingLineFadeStart = 0.08;
     private const double IncomingLineFadeDuration = 0.48;
     private const double TransitionSettlePixelThreshold = 0.75;
     private const int ProgressDotCount = 28;
     private const double TimePillWidthReserve = 92;
     private const int MaxTextWidthCacheEntries = 512;
+    private const double CoverFallbackDwellMs = 260;
 
     private readonly Border[] _spectrumBars = new Border[SpectrumBarCount];
     private readonly double[] _spectrumTargets = new double[SpectrumBarCount];
@@ -135,9 +136,9 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
 
     private bool _useCoverImageA = true;
     private int _coverGeneration;
+    private DispatcherTimer? _coverFallbackDwellTimer;
     private int _trackInfoGeneration;
     private bool _autoAdjustWindowWidth = true;
-    private bool _metricsUpdatePending;
     private double _lastNotifiedPreferredHostHeight;
     private double _lastNotifiedPreferredContentWidth;
     private double _lastNotifiedPreferredWindowWidth;
@@ -283,6 +284,7 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         StopProgressRenderer();
         StopTransitionAnimations();
         _searchDwellTimer?.Stop();
+        _coverFallbackDwellTimer?.Stop();
     }
 
     public void ApplyStyle(
@@ -969,8 +971,7 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
 
         if (imageBytes is not { Length: > 0 })
         {
-            ApplyCoverFallbackVisual(fallbackText, fallbackColor);
-            ShowCoverFallback();
+            ScheduleCoverFallback(fallbackText, fallbackColor, generation);
             return false;
         }
 
@@ -979,20 +980,54 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
             var bitmap = DecodeCoverBitmap(imageBytes);
             if (bitmap is null)
             {
-                ApplyCoverFallbackVisual(fallbackText, fallbackColor);
-                ShowCoverFallback();
+                ScheduleCoverFallback(fallbackText, fallbackColor, generation);
                 return false;
             }
 
+            CancelCoverFallbackDwell();
             CrossfadeCover(bitmap, generation);
             return true;
         }
         catch
         {
-            ApplyCoverFallbackVisual(fallbackText, fallbackColor);
-            ShowCoverFallback();
+            ScheduleCoverFallback(fallbackText, fallbackColor, generation);
             return false;
         }
+    }
+
+    private void ScheduleCoverFallback(string fallbackText, Media.Color fallbackColor, int generation)
+    {
+        CancelCoverFallbackDwell();
+        if (!IsLoaded || ResolveVisibleCoverImage() is null)
+        {
+            ApplyCoverFallbackVisual(fallbackText, fallbackColor);
+            ShowCoverFallback();
+            return;
+        }
+
+        _coverFallbackDwellTimer = new DispatcherTimer(DispatcherPriority.Render)
+        {
+            Interval = TimeSpan.FromMilliseconds(CoverFallbackDwellMs)
+        };
+        _coverFallbackDwellTimer.Tick += (_, _) =>
+        {
+            _coverFallbackDwellTimer?.Stop();
+            _coverFallbackDwellTimer = null;
+            if (generation != _coverGeneration)
+            {
+                return;
+            }
+
+            ApplyCoverFallbackVisual(fallbackText, fallbackColor);
+            ShowCoverFallback();
+        };
+        _coverFallbackDwellTimer.Start();
+    }
+
+    private void CancelCoverFallbackDwell()
+    {
+        _coverFallbackDwellTimer?.Stop();
+        _coverFallbackDwellTimer = null;
     }
 
     private void ApplyCoverFallbackVisual(string fallbackText, Media.Color fallbackColor)
@@ -1963,11 +1998,6 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
             _lastCurrentLineIndex = _transitionLineIndex;
         }
 
-        if (_metricsUpdatePending)
-        {
-            UpdateMetrics();
-        }
-
         if (_queuedFrame is { } frame)
         {
             _queuedFrame = null;
@@ -2338,12 +2368,6 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         BottomProgressTrack.Height = _songProgressThickness;
         BottomProgressTrack.Background = _progressTrackBrush;
         BottomProgressFill.Background = _progressFillBrush;
-        LyricUnderlineTrack.Height = Math.Max(1, _songProgressThickness);
-        LyricUnderlineTrack.Background = _progressTrackBrush;
-        LyricUnderlineFill.Background = _progressFillBrush;
-        SpectrumProgressTrack.Height = Math.Max(1, _songProgressThickness * 0.75);
-        SpectrumProgressTrack.Background = _progressTrackBrush;
-        SpectrumProgressFill.Background = _progressFillBrush;
         BackgroundProgressFill.Background = _backgroundProgressBrush;
         BackgroundProgressTrack.CornerRadius = SurfaceBorder.CornerRadius;
         BackgroundProgressFill.CornerRadius = SurfaceBorder.CornerRadius;
@@ -2392,16 +2416,6 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
     private void ApplySongProgressWidth()
     {
         var width = _useFixedSongProgressWidth ? _songProgressWidth : double.NaN;
-        var contentAlignment = _useFixedSongProgressWidth
-            ? GetFixedSongProgressAlignment()
-            : System.Windows.HorizontalAlignment.Stretch;
-        foreach (var track in new[] { LyricUnderlineTrack, SpectrumProgressTrack })
-        {
-            track.Width = width;
-            track.HorizontalAlignment = contentAlignment;
-            track.Margin = new Thickness(0);
-        }
-
         ApplySongProgressFillAnchor();
 
         BottomProgressTrack.Width = width;
@@ -2413,13 +2427,6 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
             : new Thickness(0);
     }
 
-    private System.Windows.HorizontalAlignment GetFixedSongProgressAlignment() => _songProgressAnchor switch
-    {
-        SongProgressAnchor.Center => System.Windows.HorizontalAlignment.Center,
-        SongProgressAnchor.Right => System.Windows.HorizontalAlignment.Right,
-        _ => System.Windows.HorizontalAlignment.Left
-    };
-
     private void ApplySongProgressFillAnchor()
     {
         var reverse = _useFixedSongProgressWidth && _songProgressAnchor == SongProgressAnchor.Right;
@@ -2430,11 +2437,8 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
             ? new System.Windows.Point(1, 0.5)
             : new System.Windows.Point(0, 0.5);
 
-        foreach (var fill in new[] { BottomProgressFill, LyricUnderlineFill, SpectrumProgressFill })
-        {
-            fill.HorizontalAlignment = fillAlignment;
-            fill.RenderTransformOrigin = origin;
-        }
+        BottomProgressFill.HorizontalAlignment = fillAlignment;
+        BottomProgressFill.RenderTransformOrigin = origin;
     }
 
     private double GetFixedSongProgressLeftOffsetInSurface()
@@ -2458,7 +2462,7 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         {
             return IsStackedCoverLayout
                 ? Math.Max(0, LayoutGrid.Margin.Left + ContentGrid.Margin.Left + _stackedContentXOffset)
-                : Math.Max(0, (_showCover ? _coverSize + _coverGap : 0) + ContentGrid.Margin.Left);
+                : Math.Max(0, (_showCover ? GetCoverSlotSize() + _coverGap : 0) + ContentGrid.Margin.Left);
         }
 
         try
@@ -2497,18 +2501,11 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
             case SongProgressDisplayStyle.BottomLine:
                 SetProgressFill(BottomProgressTrack, BottomProgressFill, BottomProgressScale, progress);
                 break;
-            case SongProgressDisplayStyle.LyricUnderline:
-                LyricUnderlineOffset.Y = _lyricsTrackTopInset + Math.Max(2, _currentRowBoxHeight - 2);
-                SetProgressFill(LyricUnderlineTrack, LyricUnderlineFill, LyricUnderlineScale, progress);
-                break;
             case SongProgressDisplayStyle.CoverRing:
                 UpdateCoverProgressGeometry();
                 break;
             case SongProgressDisplayStyle.CoverBottomBar:
                 SetProgressFill(CoverBottomProgressTrack, CoverBottomProgressFill, CoverBottomProgressScale, progress);
-                break;
-            case SongProgressDisplayStyle.SpectrumBaseline:
-                SetProgressFill(SpectrumProgressTrack, SpectrumProgressFill, SpectrumProgressScale, progress);
                 break;
             case SongProgressDisplayStyle.TimePill:
                 TimePillText.Text = $"{FormatProgressTime(_songProgressPosition)} / {FormatProgressTime(_songProgressDuration)}";
@@ -2528,11 +2525,9 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
     private void UpdateSongProgressVisibility(SongProgressDisplayStyle activeStyle)
     {
         SetProgressVisibility(BottomProgressTrack, activeStyle == SongProgressDisplayStyle.BottomLine);
-        SetProgressVisibility(LyricUnderlineTrack, activeStyle == SongProgressDisplayStyle.LyricUnderline);
         SetProgressVisibility(CoverProgressRingTrack, activeStyle == SongProgressDisplayStyle.CoverRing);
         SetProgressVisibility(CoverProgressRingValue, activeStyle == SongProgressDisplayStyle.CoverRing);
         SetProgressVisibility(CoverBottomProgressTrack, activeStyle == SongProgressDisplayStyle.CoverBottomBar);
-        SetProgressVisibility(SpectrumProgressTrack, activeStyle == SongProgressDisplayStyle.SpectrumBaseline);
         SetProgressVisibility(TimePillBorder, activeStyle == SongProgressDisplayStyle.TimePill);
         SetProgressVisibility(ProgressDotsPanel, activeStyle == SongProgressDisplayStyle.Dots);
         SetProgressVisibility(BorderProgressRingTrack, activeStyle == SongProgressDisplayStyle.BorderRing);
@@ -2614,11 +2609,6 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         if (_songProgressStyle is SongProgressDisplayStyle.CoverRing or SongProgressDisplayStyle.CoverBottomBar)
         {
             return _showCover ? _songProgressStyle : SongProgressDisplayStyle.BottomLine;
-        }
-
-        if (_songProgressStyle == SongProgressDisplayStyle.SpectrumBaseline)
-        {
-            return _isSpectrumMode ? SongProgressDisplayStyle.SpectrumBaseline : SongProgressDisplayStyle.BottomLine;
         }
 
         return _songProgressStyle;
@@ -2946,7 +2936,7 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         height = Math.Max(2, height);
         inset = Math.Clamp(inset, 0.5, Math.Min(width, height) / 2);
         var maxRadius = Math.Max(0, (Math.Min(width, height) / 2) - inset);
-        var radius = Math.Clamp(cornerRadius - inset, 0, maxRadius);
+        var radius = Math.Clamp(cornerRadius, 0, maxRadius);
         var left = inset;
         var top = inset;
         var right = width - inset;
@@ -3191,11 +3181,8 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
 
         if (_isTransitioning)
         {
-            _metricsUpdatePending = true;
-            return;
+            CancelActiveTransition();
         }
-
-        _metricsUpdatePending = false;
         if (ActualHeight <= 0)
         {
             ApplyMetricsFromFont(_requestedFontSize);

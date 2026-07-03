@@ -87,32 +87,6 @@
                         <StackPanel Orientation="Horizontal"><TextBlock Width="28" Text="i" /><TextBlock Text="关于更新" FontWeight="SemiBold" /></StackPanel>
                     </RadioButton>
 
-                    <Border x:Name="SidebarPreviewPanel"
-                            Margin="0,20,0,0"
-                            Padding="10,10,10,12"
-                            Background="#66081122"
-                            BorderBrush="#2478A0FF"
-                            BorderThickness="1"
-                            CornerRadius="10">
-                        <StackPanel>
-                            <TextBlock Text="实时预览"
-                                       FontSize="12"
-                                       FontWeight="SemiBold"
-                                       Foreground="#C7D2FE"
-                                       Margin="2,0,0,8" />
-                            <Border x:Name="PreviewDisplayHost"
-                                    Height="44"
-                                    Background="Transparent"
-                                    BorderThickness="0"
-                                    Padding="2,0"
-                                    ClipToBounds="True">
-                                <local:LyricsDisplayControl x:Name="PreviewDisplay"
-                                                            HorizontalAlignment="Stretch"
-                                                            VerticalAlignment="Center"
-                                                            IsHitTestVisible="False" />
-                            </Border>
-                        </StackPanel>
-                    </Border>
                 </StackPanel>
             </DockPanel>
         </Border>
@@ -120,6 +94,7 @@
         <!-- 主区域 -->
         <Grid Grid.Column="1">
             <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
@@ -139,8 +114,42 @@
                         Content="↺  恢复默认设置" />
             </Grid>
 
+            <Border x:Name="PreviewPanel"
+                    Grid.Row="1"
+                    Margin="40,0,36,18"
+                    Padding="16,12,16,14"
+                    Background="#66081122"
+                    BorderBrush="#2478A0FF"
+                    BorderThickness="1"
+                    CornerRadius="10">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Text="实时预览"
+                               FontSize="12"
+                               FontWeight="SemiBold"
+                               Foreground="#C7D2FE"
+                               Margin="2,0,0,8" />
+                    <Border x:Name="PreviewDisplayHost"
+                            Grid.Row="1"
+                            Height="56"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            Padding="2,0"
+                            ClipToBounds="True">
+                        <local:LyricsDisplayControl x:Name="PreviewDisplay"
+                                                    HorizontalAlignment="Stretch"
+                                                    VerticalAlignment="Center"
+                                                    MinWidth="420"
+                                                    IsHitTestVisible="False" />
+                    </Border>
+                </Grid>
+            </Border>
+
             <ScrollViewer x:Name="ContentScroll"
-                          Grid.Row="1"
+                          Grid.Row="2"
                           Margin="40,0,36,36"
                           VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled"

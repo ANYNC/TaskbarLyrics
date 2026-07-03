@@ -333,13 +333,20 @@ public partial class TrayMenuWindow : Window
         }
 
         _activeSubmenuKind = kind;
-        SubmenuPopup.IsOpen = false;
+        var wasOpen = SubmenuPopup.IsOpen;
         BuildSubmenu(kind);
         SubmenuItemsPanel.UpdateLayout();
         SubmenuPopup.PlacementTarget = placementTarget;
-        SubmenuPopup.HorizontalOffset = 0;
         SubmenuPopup.VerticalOffset = 0;
+        SubmenuPopup.HorizontalOffset = wasOpen ? 0.1 : 0;
         SubmenuPopup.IsOpen = true;
+        SubmenuPopup.HorizontalOffset = 0;
+        if (wasOpen)
+        {
+            SetSubmenuOpenState();
+            return;
+        }
+
         AnimateSubmenuOpen();
     }
 
@@ -500,6 +507,8 @@ public partial class TrayMenuWindow : Window
     {
         var settings = _getSettings();
         var duration = LightMotion.SubmenuOpenMs(settings.AnimationIntensity);
+        SubmenuChrome.BeginAnimation(OpacityProperty, null);
+        SubmenuTransform.BeginAnimation(Media.TranslateTransform.XProperty, null);
         SubmenuChrome.Opacity = 0;
         SubmenuTransform.X = -5;
         var opacityAnimation = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(duration))
@@ -525,6 +534,14 @@ public partial class TrayMenuWindow : Window
             SubmenuTransform.X = 0;
         };
         SubmenuTransform.BeginAnimation(Media.TranslateTransform.XProperty, moveAnimation);
+    }
+
+    private void SetSubmenuOpenState()
+    {
+        SubmenuChrome.BeginAnimation(OpacityProperty, null);
+        SubmenuTransform.BeginAnimation(Media.TranslateTransform.XProperty, null);
+        SubmenuChrome.Opacity = 1;
+        SubmenuTransform.X = 0;
     }
 
     [DllImport("user32.dll", SetLastError = true)]

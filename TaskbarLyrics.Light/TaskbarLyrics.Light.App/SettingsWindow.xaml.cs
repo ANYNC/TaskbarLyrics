@@ -262,13 +262,9 @@ public partial class SettingsWindow : Window
         _sidebarCollapsed = !_sidebarCollapsed;
         SidebarColumn.Width = new GridLength(_sidebarCollapsed ? 72 : 248);
         BrandTitle.Visibility = _sidebarCollapsed ? Visibility.Collapsed : Visibility.Visible;
-        SidebarPreviewPanel.Visibility = _sidebarCollapsed ? Visibility.Collapsed : Visibility.Visible;
         SidebarToggleButton.RenderTransform = new RotateTransform(_sidebarCollapsed ? 180 : 0);
         SidebarToggleButton.RenderTransformOrigin = new System.Windows.Point(0.5, 0.5);
-        if (!_sidebarCollapsed)
-        {
-            UpdatePreview();
-        }
+        UpdatePreview();
     }
 
     private void Nav_Checked(object sender, RoutedEventArgs e)
@@ -659,17 +655,17 @@ public partial class SettingsWindow : Window
         }
 
         var previewSettings = _settings.Clone();
-        if (!TryParseMediaColor(previewSettings.ForegroundColor, out var primary))
-        {
-            primary = Colors.White;
-        }
-
+        previewSettings.TransitionStyle = LyricTransitionStyle.None;
+        previewSettings.CoverTransitionStyle = CoverTransitionStyle.None;
+        var accent = Media.Color.FromRgb(88, 166, 255);
+        var primary = ResolvePreviewPrimaryColor(previewSettings, accent);
         var secondary = Media.Color.FromArgb(
             (byte)Math.Clamp((int)(primary.A * 0.76), 0, 255),
             primary.R,
             primary.G,
             primary.B);
-        var accent = Media.Color.FromRgb(88, 166, 255);
+        ApplyPreviewDisplayWidth();
+        PreviewDisplay.UpdateLayout();
         PreviewDisplay.ApplyStyle(previewSettings, primary, secondary, accent, Media.Color.FromRgb(8, 17, 34));
         PreviewDisplay.SetTrackInfo("Light 预览", "TaskbarLyrics");
         PreviewDisplay.SetCover(null, "L", accent);
@@ -678,7 +674,7 @@ public partial class SettingsWindow : Window
             ? "正在预览歌词效果 (Preview translation)"
             : "正在预览歌词效果";
         var showSpectrum = previewSettings.EnableSpectrum && previewSettings.ShowSpectrumWhenLyricsAvailable;
-        PreviewDisplay.SetLyrics(current, "下一句歌词会在这里", 0.46, 0, "settings-preview", showSpectrum, true);
+        PreviewDisplay.SetLyrics(current, "下一句歌词会在这里", 0.46, -1, null, showSpectrum, true);
         PreviewDisplay.SetSongProgress(TimeSpan.FromSeconds(83), TimeSpan.FromSeconds(225), true);
         PreviewDisplay.SetSpectrum(new[]
         {
@@ -690,13 +686,67 @@ public partial class SettingsWindow : Window
 
     private void UpdatePreviewHostHeight()
     {
+        ApplyPreviewDisplayWidth();
         PreviewDisplay.UpdateLayout();
         var preferredHeight = CoercePreviewHostHeight(PreviewDisplay.PreferredWindowHeight);
         PreviewDisplayHost.BeginAnimation(FrameworkElement.HeightProperty, null);
         PreviewDisplayHost.Height = preferredHeight;
 
         static double CoercePreviewHostHeight(double height) =>
-            Math.Clamp(double.IsFinite(height) && height > 0 ? height : 44, 34, 72);
+            Math.Clamp(double.IsFinite(height) && height > 0 ? height : 56, 42, 128);
+    }
+
+    private void ApplyPreviewDisplayWidth()
+    {
+        var hostWidth = PreviewDisplayHost.ActualWidth - PreviewDisplayHost.Padding.Left - PreviewDisplayHost.Padding.Right;
+        if (double.IsFinite(hostWidth) && hostWidth > 0)
+        {
+            PreviewDisplay.Width = Math.Max(420, hostWidth);
+        }
+    }
+
+    private static Media.Color ResolvePreviewPrimaryColor(AppSettings settings, Media.Color accent)
+    {
+        if (settings.AutoForegroundColorByBackground)
+        {
+            return Colors.White;
+        }
+
+        if (settings.UseCoverAccentColor)
+        {
+            return CreateReadablePreviewAccentColor(accent);
+        }
+
+        return TryParseMediaColor(settings.ForegroundColor, out var primary)
+            ? primary
+            : Colors.White;
+    }
+
+    private static Media.Color CreateReadablePreviewAccentColor(Media.Color accent)
+    {
+        var luminance = ((0.2126 * accent.R) + (0.7152 * accent.G) + (0.0722 * accent.B)) / 255.0;
+        if (luminance < 0.38)
+        {
+            return MixColors(accent, Colors.White, 0.58);
+        }
+
+        if (luminance > 0.78)
+        {
+            return MixColors(accent, Media.Color.FromRgb(20, 24, 32), 0.42);
+        }
+
+        return MixColors(accent, Colors.White, 0.18);
+    }
+
+    private static Media.Color MixColors(Media.Color a, Media.Color b, double amount)
+    {
+        amount = Math.Clamp(amount, 0, 1);
+        var inverse = 1 - amount;
+        return Media.Color.FromArgb(
+            255,
+            (byte)Math.Clamp(Math.Round((a.R * inverse) + (b.R * amount)), 0, 255),
+            (byte)Math.Clamp(Math.Round((a.G * inverse) + (b.G * amount)), 0, 255),
+            (byte)Math.Clamp(Math.Round((a.B * inverse) + (b.B * amount)), 0, 255));
     }
 
     private void ColorPickerButton_Click(object sender, RoutedEventArgs e)
