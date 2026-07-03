@@ -238,13 +238,22 @@ public sealed class LyricProviderRegistry : ILyricProviderRegistry
             .ToList();
         var documents = new Dictionary<ILyricProvider, LyricDocument?>();
         var bestScore = 0;
+        DateTimeOffset? weakWaitDeadline = null;
 
         while (pendingTasks.Count > 0)
         {
             Task completedTask;
-            if (bestScore >= LyricMatchingPolicy.FallbackSoftWaitScore)
+            if (weakWaitDeadline is not null)
             {
-                var softTimeoutTask = Task.Delay(LyricMatchingPolicy.FallbackSoftWait, batchCts.Token);
+                var remainingWait = weakWaitDeadline.Value - DateTimeOffset.UtcNow;
+                if (remainingWait <= TimeSpan.Zero)
+                {
+                    Log.Info($"回退批次弱等待窗口结束，采用当前最佳候选 {bestScore} 分。");
+                    batchCts.Cancel();
+                    break;
+                }
+
+                var softTimeoutTask = Task.Delay(remainingWait, batchCts.Token);
                 completedTask = await Task.WhenAny(pendingTasks.Cast<Task>().Append(softTimeoutTask));
                 if (completedTask == softTimeoutTask)
                 {
@@ -270,11 +279,12 @@ public sealed class LyricProviderRegistry : ILyricProviderRegistry
             var weightedDocument = ApplyQualityWeight(provider, document);
             documents[provider] = weightedDocument;
             bestScore = Math.Max(bestScore, weightedDocument.BestScore);
-            if (bestScore >= LyricMatchingPolicy.FallbackImmediateExitScore)
+            if (bestScore >= LyricMatchingPolicy.FallbackImmediateExitScore &&
+                weakWaitDeadline is null &&
+                pendingTasks.Count > 0)
             {
-                Log.Info($"回退歌词源 [{provider.SourceApp}] 达到 {bestScore} 分，触发高置信快速返回。");
-                batchCts.Cancel();
-                break;
+                weakWaitDeadline = DateTimeOffset.UtcNow + LyricMatchingPolicy.FallbackSoftWait;
+                Log.Info($"回退歌词源 [{provider.SourceApp}] 达到 {bestScore} 分，进入 {LyricMatchingPolicy.FallbackSoftWait.TotalMilliseconds:F0} ms 弱等待窗口。");
             }
         }
 
@@ -286,7 +296,7 @@ public sealed class LyricProviderRegistry : ILyricProviderRegistry
         var qualityWeight = LyricMatchingPolicy.SourceQualityWeights.TryGetValue(provider.SourceApp, out var configuredWeight)
             ? configuredWeight
             : 0;
-        var weightedScore = Math.Min(100, document.BestScore + qualityWeight);
+        var weightedScore = document.BestScore + qualityWeight;
         Log.Info($"回退歌词源 [{provider.SourceApp}] 基础分: {document.BestScore}，质量权重: +{qualityWeight}，最终分: {weightedScore}");
         return new LyricDocument(document.Lines, weightedScore, document.IsPureMusic);
     }
