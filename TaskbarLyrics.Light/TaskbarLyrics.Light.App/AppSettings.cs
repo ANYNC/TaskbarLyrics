@@ -194,11 +194,11 @@ public sealed class AppSettings
 
     public bool EnableLocalLyrics { get; set; } = true;
 
-    public bool ShowLyricTranslation { get; set; } = false;
+    public bool ShowLyricTranslation { get; set; } = true;
 
-    public LyricTranslationLayout TranslationLayout { get; set; } = LyricTranslationLayout.Inline;
+    public LyricTranslationLayout TranslationLayout { get; set; } = LyricTranslationLayout.NewLine;
 
-    public double TranslationFontScale { get; set; } = 0.86;
+    public double TranslationFontScale { get; set; } = 1;
 
     public double TranslationOpacity { get; set; } = 1;
 
@@ -244,11 +244,11 @@ public sealed class AppSettings
 
     public int SpotifyLyricOffsetMs { get; set; }
 
-    public double FontSize { get; set; } = 14;
+    public double FontSize { get; set; } = 21;
 
-    public bool AutoAdjustLineGap { get; set; } = true;
+    public bool AutoAdjustLineGap { get; set; } = false;
 
-    public double LineGap { get; set; } = 2;
+    public double LineGap { get; set; } = 0;
 
     public double LineGapOffset { get; set; } = -1;
 
@@ -292,11 +292,13 @@ public sealed class AppSettings
 
     public LyricTransitionStyle TransitionStyle { get; set; } = LyricTransitionStyle.Slide;
 
-    public SongProgressDisplayStyle SongProgressStyle { get; set; } = SongProgressDisplayStyle.Off;
+    public SongProgressDisplayStyle SongProgressStyle { get; set; } = SongProgressDisplayStyle.CoverRing;
 
     public double SongProgressThickness { get; set; } = 2;
 
     public double SongProgressOpacity { get; set; } = 0.9;
+
+    public double SongProgressYOffset { get; set; } = 2;
 
     public SongProgressColorMode SongProgressColorMode { get; set; } = SongProgressColorMode.Text;
 
@@ -326,15 +328,15 @@ public sealed class AppSettings
 
     public bool ShowTextShadow { get; set; } = true;
 
-    public double WindowWidth { get; set; } = 420;
+    public double WindowWidth { get; set; } = 320;
 
-    public bool AutoAdjustWindowWidth { get; set; } = true;
+    public bool AutoAdjustWindowWidth { get; set; } = false;
 
     public double WindowWidthOffset { get; set; }
 
     public double WindowHeight { get; set; } = 44;
 
-    public bool AutoAdjustWindowHeight { get; set; } = true;
+    public bool AutoAdjustWindowHeight { get; set; } = false;
 
     public double WindowHeightOffset { get; set; }
 
@@ -346,7 +348,7 @@ public sealed class AppSettings
 
     public double XOffset { get; set; }
 
-    public double YOffset { get; set; } = -40;
+    public double YOffset { get; set; } = 0;
 
     public bool ForceAlwaysOnTop { get; set; } = true;
 

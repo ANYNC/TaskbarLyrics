@@ -141,8 +141,9 @@
                             ClipToBounds="True">
                         <local:LyricsDisplayControl x:Name="PreviewDisplay"
                                                     HorizontalAlignment="Stretch"
-                                                    VerticalAlignment="Center"
+                                                    VerticalAlignment="Stretch"
                                                     MinWidth="420"
+                                                    Margin="8,3"
                                                     IsHitTestVisible="False" />
                     </Border>
                 </Grid>
@@ -1078,6 +1079,19 @@
                                         <TextBlock Text="范围 0.15 到 1。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
                                     </StackPanel>
                                     <ui:NumberStepper x:Name="SongProgressOpacityStepper" Grid.Column="1" Minimum="0.15" Maximum="1" Step="0.05" Decimals="2" />
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource SettingsRowCardStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="180" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="进度条 Y 偏移 (px)" FontWeight="SemiBold" />
+                                        <TextBlock Text="负数向上，正数向下；底部进度条会参与自动高度计算。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                    <ui:NumberStepper x:Name="SongProgressYOffsetStepper" Grid.Column="1" Minimum="-80" Maximum="80" Step="1" Decimals="0" />
                                 </Grid>
                             </Border>
                             <Border Style="{StaticResource SettingsRowCardStyle}">

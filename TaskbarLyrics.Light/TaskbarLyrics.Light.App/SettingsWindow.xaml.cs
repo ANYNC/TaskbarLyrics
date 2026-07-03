@@ -220,6 +220,7 @@ public partial class SettingsWindow : Window
         SongProgressColorModeCombo.SelectionChanged += (_, _) => OnSongProgressColorModeChanged();
         SongProgressThicknessStepper.ValueChanged += (_, _) => OnSettingChanged();
         SongProgressOpacityStepper.ValueChanged += (_, _) => OnSettingChanged();
+        SongProgressYOffsetStepper.ValueChanged += (_, _) => OnSettingChanged();
         BackgroundMaterialCombo.SelectionChanged += (_, _) => OnSettingChanged();
         HorizontalAnchorCombo.SelectionChanged += (_, _) => OnSettingChanged();
         TargetScreenModeCombo.SelectionChanged += (_, _) => OnSettingChanged();
@@ -482,6 +483,7 @@ public partial class SettingsWindow : Window
             UpdateSongProgressColorUi();
             SongProgressThicknessStepper.Value = _settings.SongProgressThickness;
             SongProgressOpacityStepper.Value = _settings.SongProgressOpacity;
+            SongProgressYOffsetStepper.Value = _settings.SongProgressYOffset;
             UseFixedSongProgressWidthCheck.IsChecked = _settings.UseFixedSongProgressWidth;
             SongProgressWidthStepper.Value = _settings.SongProgressWidth;
             SelectComboByTag(SongProgressAnchorCombo, _settings.SongProgressAnchor.ToString());
@@ -681,24 +683,35 @@ public partial class SettingsWindow : Window
             0.22f, 0.45f, 0.72f, 0.38f, 0.61f, 0.86f, 0.54f, 0.31f,
             0.66f, 0.92f, 0.58f, 0.37f, 0.74f, 0.49f, 0.83f, 0.41f
         });
-        UpdatePreviewHostHeight();
+        UpdatePreviewHostHeight(previewSettings);
     }
 
-    private void UpdatePreviewHostHeight()
+    private void UpdatePreviewHostHeight(AppSettings previewSettings)
     {
         ApplyPreviewDisplayWidth();
         PreviewDisplay.UpdateLayout();
-        var preferredHeight = CoercePreviewHostHeight(PreviewDisplay.PreferredWindowHeight);
+        var preferredHeight = PreviewDisplay.PreferredWindowHeight;
+        var targetHeight = previewSettings.AutoAdjustWindowHeight
+            ? preferredHeight + previewSettings.WindowHeightOffset
+            : previewSettings.WindowHeight;
+        var resolvedHeight = CoercePreviewHostHeight(targetHeight);
         PreviewDisplayHost.BeginAnimation(FrameworkElement.HeightProperty, null);
-        PreviewDisplayHost.Height = preferredHeight;
+        PreviewDisplayHost.Height = resolvedHeight;
+        PreviewDisplayHost.UpdateLayout();
+        PreviewDisplay.UpdateLayout();
 
         static double CoercePreviewHostHeight(double height) =>
-            Math.Clamp(double.IsFinite(height) && height > 0 ? height : 56, 42, 128);
+            Math.Clamp(double.IsFinite(height) && height > 0 ? height : 56, 36, 240);
     }
 
     private void ApplyPreviewDisplayWidth()
     {
-        var hostWidth = PreviewDisplayHost.ActualWidth - PreviewDisplayHost.Padding.Left - PreviewDisplayHost.Padding.Right;
+        var margin = PreviewDisplay.Margin;
+        var hostWidth = PreviewDisplayHost.ActualWidth -
+            PreviewDisplayHost.Padding.Left -
+            PreviewDisplayHost.Padding.Right -
+            margin.Left -
+            margin.Right;
         if (double.IsFinite(hostWidth) && hostWidth > 0)
         {
             PreviewDisplay.Width = Math.Max(420, hostWidth);
@@ -1017,7 +1030,7 @@ public partial class SettingsWindow : Window
         ApplySettingAvailability(stackedTrackInfoEnabled, StackedTrackInfoGapStepper);
 
         var progressEnabled = ReadComboEnum(SongProgressStyleCombo, SongProgressDisplayStyle.Off) != SongProgressDisplayStyle.Off;
-        ApplySettingAvailability(progressEnabled, SongProgressColorModeCombo, SongProgressColorPickerButton, SongProgressThicknessStepper, SongProgressOpacityStepper, UseFixedSongProgressWidthCheck);
+        ApplySettingAvailability(progressEnabled, SongProgressColorModeCombo, SongProgressColorPickerButton, SongProgressThicknessStepper, SongProgressOpacityStepper, SongProgressYOffsetStepper, UseFixedSongProgressWidthCheck);
         ApplySettingAvailability(progressEnabled && UseFixedSongProgressWidthCheck.IsChecked == true, SongProgressWidthStepper, SongProgressAnchorCombo);
         SongProgressColorPickerButton.IsEnabled =
             progressEnabled &&
@@ -1155,6 +1168,7 @@ public partial class SettingsWindow : Window
         NormalizeSongProgressColorSettings(_settings);
         _settings.SongProgressThickness = Math.Clamp(SongProgressThicknessStepper.Value, 1, 8);
         _settings.SongProgressOpacity = Math.Clamp(SongProgressOpacityStepper.Value, 0.15, 1);
+        _settings.SongProgressYOffset = Math.Clamp(SongProgressYOffsetStepper.Value, -80, 80);
         _settings.UseFixedSongProgressWidth = UseFixedSongProgressWidthCheck.IsChecked == true;
         _settings.SongProgressWidth = Math.Clamp(SongProgressWidthStepper.Value, 40, 900);
         _settings.SongProgressAnchor = ReadComboEnum(SongProgressAnchorCombo, SongProgressAnchor.Left);
@@ -1901,6 +1915,7 @@ public partial class SettingsWindow : Window
         target.SongProgressColor = source.SongProgressColor;
         target.SongProgressThickness = source.SongProgressThickness;
         target.SongProgressOpacity = source.SongProgressOpacity;
+        target.SongProgressYOffset = source.SongProgressYOffset;
         target.UseFixedSongProgressWidth = source.UseFixedSongProgressWidth;
         target.SongProgressWidth = source.SongProgressWidth;
         target.SongProgressAnchor = source.SongProgressAnchor;

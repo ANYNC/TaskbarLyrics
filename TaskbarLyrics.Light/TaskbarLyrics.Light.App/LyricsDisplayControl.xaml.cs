@@ -116,6 +116,7 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
     private double _translationOpacity = 1;
     private double _songProgressThickness = 2;
     private double _songProgressOpacity = 0.9;
+    private double _songProgressYOffset = 5;
     private bool _useFixedSongProgressWidth;
     private double _songProgressWidth = 180;
     private int _transitionGeneration;
@@ -140,6 +141,7 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
     private int _trackInfoGeneration;
     private bool _autoAdjustWindowWidth = true;
     private double _lastNotifiedPreferredHostHeight;
+    private double _lastNotifiedPreferredWindowHeight = -1;
     private double _lastNotifiedPreferredContentWidth;
     private double _lastNotifiedPreferredWindowWidth;
 
@@ -190,8 +192,9 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
     public double PreferredWindowHeight =>
         IsStackedCoverLayout
             ? GetCoverSlotSize() + _stackedCoverLyricsGap + PreferredHostHeight + LyricsGridTopMargin + WindowVerticalMargin +
+                GetSongProgressBarVerticalReserve() +
                 (StackedTransitionClipBuffer * 2)
-            : PreferredWindowBottomAnchorHeight;
+            : PreferredWindowBottomAnchorHeight + GetSongProgressBarVerticalReserve();
 
     public double PreferredWindowBottomAnchorHeight =>
         Math.Max(
@@ -339,6 +342,7 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
             : SpectrumColorMode.Text;
         _songProgressThickness = Math.Clamp(settings.SongProgressThickness, 1, 8);
         _songProgressOpacity = Math.Clamp(settings.SongProgressOpacity, 0.15, 1);
+        _songProgressYOffset = Math.Clamp(settings.SongProgressYOffset, -80, 80);
         _songProgressColorMode = Enum.IsDefined(settings.SongProgressColorMode)
             ? settings.SongProgressColorMode
             : SongProgressColorMode.Text;
@@ -580,7 +584,7 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
             Grid.SetColumn(ContentGrid, 0);
             Grid.SetColumnSpan(ContentGrid, 3);
 
-            LayoutGrid.Margin = new Thickness(GetStackedLayoutLeftInset(), 0, 0, 0);
+            LayoutGrid.Margin = new Thickness(GetStackedLayoutLeftInset(), 0, 0, GetSongProgressBarVerticalReserve());
             CoverBorder.HorizontalAlignment = System.Windows.HorizontalAlignment.Left;
             CoverBorder.VerticalAlignment = System.Windows.VerticalAlignment.Center;
             CoverBorder.Margin = new Thickness(StackedSideMargin, 0, 0, 0);
@@ -625,7 +629,7 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         Grid.SetColumn(ContentGrid, 2);
         Grid.SetColumnSpan(ContentGrid, 1);
 
-        LayoutGrid.Margin = new Thickness(0);
+        LayoutGrid.Margin = new Thickness(0, 0, 0, GetSongProgressBarVerticalReserve());
         CoverBorder.HorizontalAlignment = System.Windows.HorizontalAlignment.Center;
         CoverBorder.VerticalAlignment = System.Windows.VerticalAlignment.Center;
         CoverBorder.Margin = new Thickness(0);
@@ -2422,9 +2426,10 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         BottomProgressTrack.HorizontalAlignment = _useFixedSongProgressWidth
             ? System.Windows.HorizontalAlignment.Left
             : System.Windows.HorizontalAlignment.Stretch;
+        var bottomOffset = Math.Max(0, -_songProgressYOffset);
         BottomProgressTrack.Margin = _useFixedSongProgressWidth
-            ? new Thickness(GetFixedSongProgressLeftOffsetInSurface(), 0, 0, 0)
-            : new Thickness(0);
+            ? new Thickness(GetFixedSongProgressLeftOffsetInSurface(), 0, 0, bottomOffset)
+            : new Thickness(0, 0, 0, bottomOffset);
     }
 
     private void ApplySongProgressFillAnchor()
@@ -2613,6 +2618,26 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
 
         return _songProgressStyle;
     }
+
+    private SongProgressDisplayStyle ResolveLayoutSongProgressStyle()
+    {
+        if (_songProgressStyle == SongProgressDisplayStyle.Off)
+        {
+            return SongProgressDisplayStyle.Off;
+        }
+
+        if (_songProgressStyle is SongProgressDisplayStyle.CoverRing or SongProgressDisplayStyle.CoverBottomBar)
+        {
+            return _showCover ? _songProgressStyle : SongProgressDisplayStyle.BottomLine;
+        }
+
+        return _songProgressStyle;
+    }
+
+    private double GetSongProgressBarVerticalReserve() =>
+        ResolveLayoutSongProgressStyle() == SongProgressDisplayStyle.BottomLine
+            ? Math.Max(0, _songProgressThickness + Math.Max(0, _songProgressYOffset))
+            : 0;
 
     private void StartProgressRenderer()
     {
@@ -3193,8 +3218,10 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         var layoutHeight = IsStackedCoverLayout
             ? ContentGrid.ActualHeight > 0
                 ? ContentGrid.ActualHeight
-                : Math.Max(0, ActualHeight - _coverSize - _stackedCoverLyricsGap)
-            : ActualHeight;
+                : Math.Max(0, ActualHeight - GetSongProgressBarVerticalReserve() - _coverSize - _stackedCoverLyricsGap)
+            : LayoutGrid.ActualHeight > 0
+                ? LayoutGrid.ActualHeight
+                : Math.Max(0, ActualHeight - GetSongProgressBarVerticalReserve());
         var availableHost = Math.Max(MinHostHeight, layoutHeight - DescenderBuffer - GetLyricsGridTopInset());
         ApplyMetricsFromFont(_requestedFontSize, availableHost);
         ApplyLineMetrics();
@@ -3403,13 +3430,21 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
 
     private void NotifyPreferredHeightIfChanged(double hostHeight)
     {
-        if (Math.Abs(hostHeight - _lastNotifiedPreferredHostHeight) < 0.5)
+        var hostChanged = Math.Abs(hostHeight - _lastNotifiedPreferredHostHeight) >= 0.5;
+        if (hostChanged)
+        {
+            _lastNotifiedPreferredHostHeight = hostHeight;
+            PreferredHostHeight = hostHeight;
+        }
+
+        var windowHeight = PreferredWindowHeight;
+        var windowChanged = Math.Abs(windowHeight - _lastNotifiedPreferredWindowHeight) >= 0.5;
+        if (!hostChanged && !windowChanged)
         {
             return;
         }
 
-        _lastNotifiedPreferredHostHeight = hostHeight;
-        PreferredHostHeight = hostHeight;
+        _lastNotifiedPreferredWindowHeight = windowHeight;
         PreferredHeightChanged?.Invoke(this, EventArgs.Empty);
     }
 

@@ -23,6 +23,19 @@ public partial class MainWindow : Window
     private const int LyricsTickInterval = 4;
     private const int AutoForegroundSampleInterval = 30;
 
+    private enum TaskbarEdge
+    {
+        Left,
+        Top,
+        Right,
+        Bottom
+    }
+
+    private readonly record struct TaskbarPlacement(TaskbarEdge Edge, double Thickness)
+    {
+        public bool IsHorizontal => Edge is TaskbarEdge.Top or TaskbarEdge.Bottom;
+    }
+
     private readonly IMusicSessionProvider _musicSessionProvider;
     private readonly SystemAudioSpectrumService _audioSpectrumService = new();
     private readonly DispatcherTimer _frameTimer;
@@ -1494,13 +1507,11 @@ public partial class MainWindow : Window
         var metrics = GetTargetScreenMetrics();
         var workArea = metrics.WorkArea;
         var screenWidth = metrics.Bounds.Width;
-        var screenHeight = metrics.Bounds.Height;
         const double normalTaskbarHeight = 48;
-        var taskbarHeight = Math.Max(normalTaskbarHeight, metrics.Bounds.Bottom - workArea.Bottom);
-        if (taskbarHeight <= normalTaskbarHeight && metrics.Bounds.Height > workArea.Height)
-        {
-            taskbarHeight = Math.Max(normalTaskbarHeight, metrics.Bounds.Height - workArea.Height);
-        }
+        var taskbarPlacement = GetTaskbarPlacement(metrics.Bounds, workArea);
+        var taskbarHeight = taskbarPlacement.IsHorizontal && taskbarPlacement.Thickness > 0
+            ? taskbarPlacement.Thickness
+            : normalTaskbarHeight;
 
         var settings = (System.Windows.Application.Current as App)?.Settings ?? new AppSettings();
         var desiredWidth = settings.AutoAdjustWindowWidth
@@ -1521,8 +1532,40 @@ public partial class MainWindow : Window
         };
 
         var verticalGrowth = Math.Max(0, desiredHeight - bottomAnchorHeight);
-        var desiredTop = metrics.Bounds.Top + screenHeight - taskbarHeight + ((taskbarHeight - bottomAnchorHeight) / 2.0) + settings.YOffset - verticalGrowth;
+        var desiredTop = taskbarPlacement.Edge == TaskbarEdge.Top
+            ? metrics.Bounds.Top + ((taskbarHeight - bottomAnchorHeight) / 2.0) + settings.YOffset
+            : metrics.Bounds.Bottom - taskbarHeight + ((taskbarHeight - bottomAnchorHeight) / 2.0) + settings.YOffset - verticalGrowth;
         ApplyAnchorBounds(desiredLeft, desiredTop, desiredWidth, desiredHeight);
+    }
+
+    private static TaskbarPlacement GetTaskbarPlacement(Rect bounds, Rect workArea)
+    {
+        var leftInset = Math.Max(0, workArea.Left - bounds.Left);
+        var topInset = Math.Max(0, workArea.Top - bounds.Top);
+        var rightInset = Math.Max(0, bounds.Right - workArea.Right);
+        var bottomInset = Math.Max(0, bounds.Bottom - workArea.Bottom);
+        var maxInset = Math.Max(Math.Max(leftInset, topInset), Math.Max(rightInset, bottomInset));
+        if (maxInset < 1)
+        {
+            return new TaskbarPlacement(TaskbarEdge.Bottom, 0);
+        }
+
+        if (bottomInset >= maxInset)
+        {
+            return new TaskbarPlacement(TaskbarEdge.Bottom, bottomInset);
+        }
+
+        if (topInset >= maxInset)
+        {
+            return new TaskbarPlacement(TaskbarEdge.Top, topInset);
+        }
+
+        if (rightInset >= maxInset)
+        {
+            return new TaskbarPlacement(TaskbarEdge.Right, rightInset);
+        }
+
+        return new TaskbarPlacement(TaskbarEdge.Left, leftInset);
     }
 
     private void ApplyAnchorBounds(
