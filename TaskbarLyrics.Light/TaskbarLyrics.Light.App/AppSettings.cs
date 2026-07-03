@@ -270,7 +270,7 @@ public sealed class AppSettings
 
     public bool ShowCoverGlow { get; set; } = false;
 
-    public double CoverGlowOpacity { get; set; } = 0.22;
+    public double CoverGlowOpacity { get; set; } = 0.5;
 
     public CoverLayoutMode CoverLayoutMode { get; set; } = CoverLayoutMode.Inline;
 
@@ -308,7 +308,9 @@ public sealed class AppSettings
 
     public AnimationIntensity AnimationIntensity { get; set; } = AnimationIntensity.Smooth;
 
-    public TextEffectStyle TextEffectStyle { get; set; } = TextEffectStyle.Shadow;
+    public TextEffectStyle TextEffectStyle { get; set; } = TextEffectStyle.Glow;
+
+    public double TextGlowOpacity { get; set; } = 0.5;
 
     public bool UseFixedSongProgressWidth { get; set; } = false;
 

@@ -106,7 +106,7 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
     private double _songProgressVisual;
     private long _progressLastTimestamp;
     private LyricTranslationLayout _translationLayout = LyricTranslationLayout.Inline;
-    private TextEffectStyle _textEffectStyle = TextEffectStyle.Shadow;
+    private TextEffectStyle _textEffectStyle = TextEffectStyle.Glow;
     private SpectrumColorMode _spectrumColorMode = SpectrumColorMode.Text;
     private AnimationIntensity _animationIntensity = AnimationIntensity.Smooth;
     private CoverTransitionStyle _coverTransitionStyle = CoverTransitionStyle.SlideLeft;
@@ -149,6 +149,7 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
     private Media.FontFamily _fontFamily = new(AppSettings.DefaultFontFamily);
     private System.Windows.FontWeight _fontWeight = FontWeights.Bold;
     private Media.Effects.Effect? _textShadowEffect;
+    private double _textGlowOpacity = 0.5;
     private Media.Color _resolvedPrimaryColor = Media.Colors.White;
     private Media.Color _resolvedSecondaryColor = Media.Color.FromArgb(190, 255, 255, 255);
     private Media.Color? _coverAccentColor;
@@ -157,7 +158,7 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
     private double _coverGap = DefaultCoverGap;
     private CoverDisplayStyle _coverDisplayStyle = CoverDisplayStyle.RoundedSquare;
     private bool _showCoverGlow;
-    private double _coverGlowOpacity = 0.22;
+    private double _coverGlowOpacity = 0.5;
     private double _stackedCoverLyricsGap = 6;
     private double _stackedCoverXOffset;
     private double _stackedCoverYOffset;
@@ -330,13 +331,8 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         _translationFontScale = Math.Clamp(settings.TranslationFontScale, 0.62, 1);
         _translationOpacity = Math.Clamp(settings.TranslationOpacity, 0.18, 1);
         ApplyTextBrushColors(primary, secondary);
-        _textEffectStyle = Enum.IsDefined(settings.TextEffectStyle)
-            ? settings.TextEffectStyle
-            : (settings.ShowTextShadow ? TextEffectStyle.Shadow : TextEffectStyle.None);
-        if (!settings.ShowTextShadow)
-        {
-            _textEffectStyle = TextEffectStyle.None;
-        }
+        _textEffectStyle = ResolveTextEffectStyle(settings);
+        _textGlowOpacity = Math.Clamp(settings.TextGlowOpacity, 0, 1);
         _spectrumColorMode = Enum.IsDefined(settings.SpectrumColorMode)
             ? settings.SpectrumColorMode
             : SpectrumColorMode.Text;
@@ -519,7 +515,7 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
             : CoverLayoutMode.Inline;
         _showCover = style != CoverDisplayStyle.Hidden;
         _showCoverGlow = settings.ShowCoverGlow && _showCover;
-        _coverGlowOpacity = Math.Clamp(settings.CoverGlowOpacity, 0, 0.8);
+        _coverGlowOpacity = Math.Clamp(settings.CoverGlowOpacity, 0, 1);
         _stackedCoverLyricsGap = Math.Clamp(settings.StackedCoverLyricsGap, 0, 40);
         _stackedCoverXOffset = Math.Clamp(settings.StackedCoverXOffset, -120, 120);
         _stackedCoverYOffset = Math.Clamp(settings.StackedCoverYOffset, -80, 80);
@@ -778,6 +774,13 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
 
         SetDisplayMode(false);
 
+        if (!isPlaying)
+        {
+            ApplyPausedFrame(safeCurrent, displayNext, p, currentLineIndex, normalizedTrackId);
+            UpdatePreferredWidth();
+            return;
+        }
+
         if (normalizedTrackId.Length > 0 && normalizedTrackId != _lastTrackId)
         {
             ResetForTrackSwitch(safeCurrent, displayNext, p, currentLineIndex, normalizedTrackId);
@@ -791,6 +794,31 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
 
         ApplyFrame(safeCurrent, displayNext, p, currentLineIndex);
         UpdatePreferredWidth();
+    }
+
+    private void ApplyPausedFrame(
+        string safeCurrent,
+        string safeNext,
+        double progress,
+        int currentLineIndex,
+        string normalizedTrackId)
+    {
+        CancelActiveTransition();
+        _searchDwellTimer?.Stop();
+        _trackSwitchSearchStartedAt = DateTime.MinValue;
+
+        if (normalizedTrackId.Length > 0)
+        {
+            _lastTrackId = normalizedTrackId;
+        }
+
+        _lastCurrentLineIndex = currentLineIndex >= 0 ? currentLineIndex : -1;
+
+        ApplySingleLyricBlockModeForLine(safeCurrent);
+        SetCurrentLine(safeCurrent, progress);
+        SetSecondaryLine(safeNext);
+        UpdateSecondaryOpacity(progress);
+        _lastLineProgress = progress;
     }
 
     public void SetSongProgress(TimeSpan position, TimeSpan duration, bool isPlaying)
@@ -821,6 +849,12 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         _songProgressPosition = position;
         _songProgressDuration = duration;
         _songProgress = Math.Clamp(position.TotalMilliseconds / duration.TotalMilliseconds, 0, 1);
+        if (!isPlaying)
+        {
+            _songProgressVisual = _songProgress;
+            _hasSongProgressVisual = true;
+        }
+
         if (!_hasSongProgressVisual || !hadSongProgress)
         {
             _songProgressVisual = _songProgress;
@@ -2292,35 +2326,72 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
 
     private Media.Effects.Effect? CreateTextEffect()
     {
+        var contrastColor = GetTextEffectContrastColor();
+        var glowColor = GetTextGlowColor(contrastColor);
         return _textEffectStyle switch
         {
             TextEffectStyle.None => null,
             TextEffectStyle.Outline => new Media.Effects.DropShadowEffect
             {
-                Color = Media.Colors.Black,
-                Opacity = 0.72,
-                BlurRadius = 0,
+                Color = contrastColor,
+                Opacity = 0.66,
+                BlurRadius = 2.4,
                 ShadowDepth = 0,
-                RenderingBias = Media.Effects.RenderingBias.Performance
+                RenderingBias = Media.Effects.RenderingBias.Quality
             },
             TextEffectStyle.Glow => new Media.Effects.DropShadowEffect
             {
-                Color = _resolvedPrimaryColor,
-                Opacity = 0.42,
-                BlurRadius = 8,
+                Color = glowColor,
+                Opacity = _textGlowOpacity,
+                BlurRadius = 9,
                 ShadowDepth = 0,
-                RenderingBias = Media.Effects.RenderingBias.Performance
+                RenderingBias = Media.Effects.RenderingBias.Quality
             },
             _ => new Media.Effects.DropShadowEffect
             {
-                Color = Media.Colors.Black,
-                Opacity = 0.36,
-                BlurRadius = 2,
-                ShadowDepth = 1,
+                Color = contrastColor,
+                Opacity = 0.52,
+                BlurRadius = 3.2,
+                ShadowDepth = 1.2,
                 Direction = 270,
-                RenderingBias = Media.Effects.RenderingBias.Performance
+                RenderingBias = Media.Effects.RenderingBias.Quality
             }
         };
+    }
+
+    private static TextEffectStyle ResolveTextEffectStyle(AppSettings settings)
+    {
+        if (Enum.IsDefined(settings.TextEffectStyle))
+        {
+            return settings.TextEffectStyle;
+        }
+
+        return settings.ShowTextShadow ? TextEffectStyle.Glow : TextEffectStyle.None;
+    }
+
+    private Media.Color GetTextEffectContrastColor() =>
+        GetRelativeLuminance(_resolvedPrimaryColor) < 0.28
+            ? Media.Colors.White
+            : Media.Colors.Black;
+
+    private Media.Color GetTextGlowColor(Media.Color contrastColor) =>
+        GetRelativeLuminance(_resolvedPrimaryColor) < 0.22
+            ? contrastColor
+            : _resolvedPrimaryColor;
+
+    private static double GetRelativeLuminance(Media.Color color)
+    {
+        static double Linearize(byte channel)
+        {
+            var value = channel / 255d;
+            return value <= 0.03928
+                ? value / 12.92
+                : Math.Pow((value + 0.055) / 1.055, 2.4);
+        }
+
+        return (0.2126 * Linearize(color.R)) +
+            (0.7152 * Linearize(color.G)) +
+            (0.0722 * Linearize(color.B));
     }
 
     private Media.Brush GetSpectrumBrush(int index)

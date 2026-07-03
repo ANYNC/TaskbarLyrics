@@ -169,8 +169,6 @@ public partial class SettingsWindow : Window
         ShowBackgroundCheck.Unchecked += (_, _) => OnSettingChanged();
         ShowBorderCheck.Checked += (_, _) => OnSettingChanged();
         ShowBorderCheck.Unchecked += (_, _) => OnSettingChanged();
-        ShowTextShadowCheck.Checked += (_, _) => OnSettingChanged();
-        ShowTextShadowCheck.Unchecked += (_, _) => OnSettingChanged();
         AutoForegroundColorByBackgroundCheck.Checked += (_, _) => OnSettingChanged();
         AutoForegroundColorByBackgroundCheck.Unchecked += (_, _) => OnSettingChanged();
         UseCoverAccentColorCheck.Checked += (_, _) => OnSettingChanged();
@@ -198,7 +196,8 @@ public partial class SettingsWindow : Window
         FontFamilyCombo.SelectionChanged += (_, _) => OnSettingChanged();
         FontWeightCombo.SelectionChanged += (_, _) => OnSettingChanged();
         ForegroundModeCombo.SelectionChanged += (_, _) => OnForegroundModeChanged();
-        TextEffectStyleCombo.SelectionChanged += (_, _) => OnSettingChanged();
+        TextEffectStyleCombo.SelectionChanged += (_, _) => OnTextEffectStyleChanged();
+        TextGlowOpacityStepper.ValueChanged += (_, _) => OnSettingChanged();
         CoverStyleCombo.SelectionChanged += (_, _) => OnSettingChanged();
         CoverTransitionStyleCombo.SelectionChanged += (_, _) => OnSettingChanged();
         CoverSizeStepper.ValueChanged += (_, _) => OnSettingChanged();
@@ -436,7 +435,7 @@ public partial class SettingsWindow : Window
             LocalMusicFoldersBox.Text = string.Join(Environment.NewLine, _settings.LocalMusicFolders);
             ShowBackgroundCheck.IsChecked = _settings.ShowBackground;
             ShowBorderCheck.IsChecked = _settings.ShowBorder;
-            ShowTextShadowCheck.IsChecked = _settings.ShowTextShadow;
+            ShowTextShadowCheck.IsChecked = _settings.TextEffectStyle != TextEffectStyle.None;
             AutoForegroundColorByBackgroundCheck.IsChecked = _settings.AutoForegroundColorByBackground;
             UseCoverAccentColorCheck.IsChecked = _settings.UseCoverAccentColor;
             EnableSmtcTimelineMonitorCheck.IsChecked = _settings.EnableSmtcTimelineMonitor;
@@ -498,6 +497,7 @@ public partial class SettingsWindow : Window
             }
             SelectComboByTag(ForegroundModeCombo, _settings.ForegroundColorMode.ToString());
             SelectComboByTag(TextEffectStyleCombo, _settings.TextEffectStyle.ToString());
+            TextGlowOpacityStepper.Value = _settings.TextGlowOpacity;
             HideUnavailableSettingsCheck.IsChecked = _settings.DisabledSettingDisplayMode == DisabledSettingDisplayMode.Hide;
 
             SourceOrderList.SetOrder(NormalizeSourceOrder(_settings.SourceRecognitionOrder));
@@ -551,6 +551,18 @@ public partial class SettingsWindow : Window
         UpdateColorUi();
         UpdatePreview();
         SaveSettings();
+    }
+
+    private void OnTextEffectStyleChanged()
+    {
+        if (_isLoading)
+        {
+            return;
+        }
+
+        ShowTextShadowCheck.IsChecked =
+            ReadComboEnum(TextEffectStyleCombo, TextEffectStyle.Glow) != TextEffectStyle.None;
+        OnSettingChanged();
     }
 
     private void LoadSelectedPlayerProfile()
@@ -1043,6 +1055,9 @@ public partial class SettingsWindow : Window
         ApplySettingAvailability(!autoForeground, ForegroundModeCombo, ColorPickerButton, UseCoverAccentColorCheck);
         ColorPickerButton.IsEnabled = !autoForeground && _settings.ForegroundColorMode == ForegroundColorMode.Custom;
 
+        var textGlowEnabled = ReadComboEnum(TextEffectStyleCombo, TextEffectStyle.Glow) == TextEffectStyle.Glow;
+        ApplySettingAvailability(textGlowEnabled, TextGlowOpacityStepper);
+
         var startupHiddenByAutoHide =
             ShowLyricsOnStartupCheck.IsChecked == true &&
             AutoHideLyricsWhenPlayerClosesCheck.IsChecked == true;
@@ -1109,7 +1124,6 @@ public partial class SettingsWindow : Window
         _settings.AutoCheckUpdates = AutoCheckUpdatesCheck.IsChecked == true;
         _settings.ShowBackground = ShowBackgroundCheck.IsChecked == true;
         _settings.ShowBorder = ShowBorderCheck.IsChecked == true;
-        _settings.ShowTextShadow = ShowTextShadowCheck.IsChecked == true;
         _settings.AutoForegroundColorByBackground = AutoForegroundColorByBackgroundCheck.IsChecked == true;
         _settings.UseCoverAccentColor = UseCoverAccentColorCheck.IsChecked == true;
         _settings.EnableSmtcTimelineMonitor = EnableSmtcTimelineMonitorCheck.IsChecked == true;
@@ -1132,7 +1146,10 @@ public partial class SettingsWindow : Window
             ? selectedFont
             : _settings.FontFamily;
         _settings.SourceRecognitionOrder = NormalizeSourceOrder(SourceOrderList.GetOrder());
-        _settings.TextEffectStyle = ReadComboEnum(TextEffectStyleCombo, TextEffectStyle.Shadow);
+        _settings.TextEffectStyle = ReadComboEnum(TextEffectStyleCombo, TextEffectStyle.Glow);
+        _settings.ShowTextShadow = _settings.TextEffectStyle != TextEffectStyle.None;
+        _settings.TextGlowOpacity = Math.Clamp(TextGlowOpacityStepper.Value, 0, 1);
+        ShowTextShadowCheck.IsChecked = _settings.ShowTextShadow;
 
         var coverStyleTag = (CoverStyleCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? "RoundedSquare";
         _settings.CoverStyle = Enum.TryParse<CoverDisplayStyle>(coverStyleTag, out var coverStyle)
@@ -1141,7 +1158,7 @@ public partial class SettingsWindow : Window
         _settings.CoverSize = CoverSizeStepper.Value;
         _settings.CoverTransitionStyle = ReadComboEnum(CoverTransitionStyleCombo, CoverTransitionStyle.SlideLeft);
         _settings.ShowCoverGlow = ShowCoverGlowCheck.IsChecked == true;
-        _settings.CoverGlowOpacity = Math.Clamp(CoverGlowOpacityStepper.Value, 0, 0.8);
+        _settings.CoverGlowOpacity = Math.Clamp(CoverGlowOpacityStepper.Value, 0, 1);
         var coverLayoutTag = (CoverLayoutCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? "Inline";
         _settings.CoverLayoutMode = Enum.TryParse<CoverLayoutMode>(coverLayoutTag, out var coverLayoutMode)
             ? coverLayoutMode
@@ -1894,6 +1911,7 @@ public partial class SettingsWindow : Window
         target.AutoForegroundColorByBackground = source.AutoForegroundColorByBackground;
         target.UseCoverAccentColor = source.UseCoverAccentColor;
         target.TextEffectStyle = source.TextEffectStyle;
+        target.TextGlowOpacity = source.TextGlowOpacity;
         target.CoverStyle = NormalizeCoverStyle(source.CoverStyle);
         target.CoverSize = source.CoverSize;
         target.CoverTransitionStyle = source.CoverTransitionStyle;
@@ -1924,7 +1942,7 @@ public partial class SettingsWindow : Window
         target.BackgroundMaterial = source.BackgroundMaterial;
         target.BackgroundOpacity = source.BackgroundOpacity;
         target.ShowBorder = source.ShowBorder;
-        target.ShowTextShadow = source.ShowTextShadow;
+        target.ShowTextShadow = source.TextEffectStyle != TextEffectStyle.None;
         target.WindowWidth = source.WindowWidth;
         target.WindowWidthOffset = source.WindowWidthOffset;
         target.AutoAdjustWindowWidth = source.AutoAdjustWindowWidth;

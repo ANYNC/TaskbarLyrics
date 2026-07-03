@@ -83,6 +83,14 @@ public sealed class SettingsStore
             settings.AnimationIntensity = AnimationIntensity.Smooth;
         }
 
+        if (!json.Contains("\"TextEffectStyle\"", StringComparison.Ordinal) &&
+            json.Contains("\"ShowTextShadow\"", StringComparison.Ordinal))
+        {
+            settings.TextEffectStyle = settings.ShowTextShadow
+                ? TextEffectStyle.Shadow
+                : TextEffectStyle.None;
+        }
+
         if (!json.Contains("\"TranslationOpacity\"", StringComparison.Ordinal))
         {
             settings.TranslationOpacity = 1;
@@ -94,6 +102,7 @@ public sealed class SettingsStore
         }
 
         NormalizeSongProgressColorSettings(settings);
+        NormalizeTextEffectSettings(settings);
 
         EnsurePlayerVisualProfile(settings, "QQMusic");
         EnsurePlayerVisualProfile(settings, "Netease");
@@ -105,6 +114,7 @@ public sealed class SettingsStore
     {
         settings.TransitionStyle = AppSettings.NormalizeTransitionStyle(settings.TransitionStyle);
         settings.SongProgressStyle = AppSettings.NormalizeSongProgressStyle(settings.SongProgressStyle);
+        NormalizeTextEffectSettings(settings);
         if (settings.PlayerVisualProfiles is null)
         {
             return;
@@ -117,6 +127,27 @@ public sealed class SettingsStore
                 profile.SongProgressStyle = AppSettings.NormalizeSongProgressStyle(profile.SongProgressStyle);
             }
         }
+    }
+
+    private static void NormalizeTextEffectSettings(AppSettings settings)
+    {
+        if (!Enum.IsDefined(settings.TextEffectStyle))
+        {
+            settings.TextEffectStyle = settings.ShowTextShadow
+                ? TextEffectStyle.Glow
+                : TextEffectStyle.None;
+        }
+
+        settings.ShowTextShadow = settings.TextEffectStyle != TextEffectStyle.None;
+        settings.CoverGlowOpacity = NormalizeOpacity(settings.CoverGlowOpacity, 0.5);
+        settings.TextGlowOpacity = NormalizeOpacity(settings.TextGlowOpacity, 0.5);
+    }
+
+    private static double NormalizeOpacity(double value, double fallback)
+    {
+        return double.IsFinite(value)
+            ? Math.Clamp(value, 0, 1)
+            : fallback;
     }
 
     private static void NormalizeSongProgressColorSettings(AppSettings settings)

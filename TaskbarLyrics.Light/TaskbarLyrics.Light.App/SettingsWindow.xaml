@@ -906,6 +906,19 @@
                                     </ComboBox>
                                 </Grid>
                             </Border>
+                            <Border Style="{StaticResource SettingsRowCardStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="180" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock x:Name="TextGlowOpacityLabel" Text="文字柔光强度" FontWeight="SemiBold" />
+                                        <TextBlock x:Name="TextGlowOpacityHint" Text="仅在文字效果选择柔光时生效。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                    <ui:NumberStepper x:Name="TextGlowOpacityStepper" Grid.Column="1" Minimum="0" Maximum="1" Step="0.02" Decimals="2" />
+                                </Grid>
+                            </Border>
                             <TextBlock Text="封面呈现" Style="{StaticResource SettingsGroupTitleStyle}" />
                             <Border Style="{StaticResource SettingsRowCardStyle}">
                                 <Grid>
@@ -958,7 +971,7 @@
                                         <TextBlock x:Name="CoverGlowOpacityLabel" Text="封面柔光强度" FontWeight="SemiBold" />
                                         <TextBlock x:Name="CoverGlowOpacityHint" Text="仅开启封面柔光后生效。" Foreground="{StaticResource SettingsMutedBrush}" FontSize="12" Margin="0,3,0,0" />
                                     </StackPanel>
-                                    <ui:NumberStepper x:Name="CoverGlowOpacityStepper" Grid.Column="1" Minimum="0" Maximum="0.8" Step="0.02" Decimals="2" />
+                                    <ui:NumberStepper x:Name="CoverGlowOpacityStepper" Grid.Column="1" Minimum="0" Maximum="1" Step="0.02" Decimals="2" />
                                 </Grid>
                             </Border>
                             <Border Style="{StaticResource SettingsRowCardStyle}">
@@ -1315,7 +1328,7 @@
                                     </ComboBox>
                                 </Grid>
                             </Border>
-                            <Border Style="{StaticResource SettingsRowCardStyle}">
+                            <Border Style="{StaticResource SettingsRowCardStyle}" Visibility="Collapsed">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
