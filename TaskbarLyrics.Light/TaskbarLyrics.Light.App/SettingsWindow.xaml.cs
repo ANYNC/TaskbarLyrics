@@ -373,8 +373,9 @@ public partial class SettingsWindow : Window
             }
         };
         options.AddRange(GetFontOptions());
+        var distinctOptions = DistinctFontOptionsByValue(options);
 
-        FontFamilyCombo.ItemsSource = options;
+        FontFamilyCombo.ItemsSource = distinctOptions;
         FontFamilyCombo.DisplayMemberPath = nameof(FontOption.Label);
         FontFamilyCombo.SelectedValuePath = nameof(FontOption.Value);
     }
@@ -1774,12 +1775,21 @@ public partial class SettingsWindow : Window
                 Value = x.Source,
                 Label = GetLocalizedFontName(x)
             })
-            .Where(x => !x.Label.Contains(AppSettings.BundledFontFamily, StringComparison.OrdinalIgnoreCase))
+            .Where(x =>
+                !string.Equals(x.Value, AppSettings.DefaultFontFamily, StringComparison.OrdinalIgnoreCase) &&
+                !x.Label.Contains(AppSettings.BundledFontFamily, StringComparison.OrdinalIgnoreCase))
             .OrderBy(x => x.Label, StringComparer.CurrentCultureIgnoreCase)
             .ToList();
 
         return fonts;
     }
+
+    private static List<FontOption> DistinctFontOptionsByValue(IEnumerable<FontOption> fonts) =>
+        fonts
+            .Where(x => !string.IsNullOrWhiteSpace(x.Value))
+            .GroupBy(x => x.Value.Trim(), StringComparer.OrdinalIgnoreCase)
+            .Select(x => x.First())
+            .ToList();
 
     private static string GetLocalizedFontName(Media.FontFamily fontFamily)
     {
@@ -1825,7 +1835,10 @@ public partial class SettingsWindow : Window
             ];
         }
 
-        var byValue = fonts.ToDictionary(x => x.Value, x => x.Value, StringComparer.OrdinalIgnoreCase);
+        fonts = DistinctFontOptionsByValue(fonts);
+        var byValue = fonts
+            .GroupBy(x => x.Value.Trim(), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(x => x.Key, x => x.First().Value, StringComparer.OrdinalIgnoreCase);
         var byLabel = fonts
             .GroupBy(x => x.Label, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(x => x.Key, x => x.First().Value, StringComparer.OrdinalIgnoreCase);
