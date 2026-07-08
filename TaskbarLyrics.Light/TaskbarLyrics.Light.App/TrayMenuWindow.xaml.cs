@@ -395,7 +395,8 @@ public partial class TrayMenuWindow : Window
                 AddSubmenuOption("背景进度", songProgressStyle == SongProgressDisplayStyle.BackgroundFill, s => s.SongProgressStyle = SongProgressDisplayStyle.BackgroundFill);
                 break;
             case TraySubmenuKind.Cover:
-                AddSubmenuOption("关闭", !settings.ShowCoverImage || settings.CoverStyle == CoverDisplayStyle.Hidden, s => { s.ShowCoverImage = false; s.CoverStyle = CoverDisplayStyle.Hidden; });
+                AddSubmenuOption("关闭", !settings.ShowCoverImage, s => s.ShowCoverImage = false);
+                AddSubmenuOption("隐藏", settings.ShowCoverImage && settings.CoverStyle == CoverDisplayStyle.Hidden, s => { s.ShowCoverImage = true; s.CoverStyle = CoverDisplayStyle.Hidden; });
                 AddSubmenuOption("方形", settings.ShowCoverImage && settings.CoverStyle == CoverDisplayStyle.Square, s => { s.ShowCoverImage = true; s.CoverStyle = CoverDisplayStyle.Square; });
                 AddSubmenuOption("圆角方形", settings.ShowCoverImage && settings.CoverStyle == CoverDisplayStyle.RoundedSquare, s => { s.ShowCoverImage = true; s.CoverStyle = CoverDisplayStyle.RoundedSquare; });
                 AddSubmenuOption("圆形", settings.ShowCoverImage && settings.CoverStyle == CoverDisplayStyle.Circle, s => { s.ShowCoverImage = true; s.CoverStyle = CoverDisplayStyle.Circle; });
@@ -621,7 +622,7 @@ public partial class TrayMenuWindow : Window
     {
         CoverDisplayStyle.Square => "方形",
         CoverDisplayStyle.Circle => "圆形",
-        CoverDisplayStyle.Hidden => "关闭",
+        CoverDisplayStyle.Hidden => "隐藏",
         _ => "圆角方形"
     };
 
