@@ -56,7 +56,7 @@
             <label class="row"><span><strong>开机自启动</strong><small>Windows 启动时自动运行 TaskbarLyrics。</small></span><input data-key="startWithWindows" type="checkbox"></label>
             <label class="row"><span><strong>显示歌词翻译</strong><small>统一控制各歌词源的翻译显示。</small></span><input data-key="showLyricTranslation" type="checkbox"></label>
             <label class="row"><span><strong>显示频谱</strong><small>启用后，可在特定歌词状态下显示实时音频频谱。</small></span><input data-key="enableSpectrum" type="checkbox"></label>
-            <label class="form-row child-row spectrum-child"><span><strong>频谱显示模式</strong><small>选择在哪些歌词状态下显示实时频谱。</small></span><select data-key="spectrumDisplayMode"><option value="PureMusicOnly">仅纯音乐时</option><option value="PureMusicOrNoLyrics">纯音乐或无歌词时</option><option value="Always">始终显示</option></select></label>
+            <label class="form-row child-row spectrum-child"><span><strong>频谱显示模式</strong><small>选择在哪些歌词状态下显示实时频谱。</small></span><button class="select-trigger" type="button" data-key="spectrumDisplayMode" aria-haspopup="listbox" aria-expanded="false"><span class="select-trigger-value"></span><span class="select-chevron">⌄</span></button></label>
             <label class="row"><span><strong>显示背景</strong><small>为歌词窗口启用半透明背景。</small></span><input data-key="showBackground" type="checkbox"></label>
             <label class="row"><span><strong>显示边框</strong><small>为歌词窗口绘制边框，便于深浅背景上分辨。</small></span><input data-key="showBorder" type="checkbox"></label>
           </div>
@@ -70,9 +70,9 @@
             <div class="form-row size-row"><span><strong>封面大小</strong><small>控制歌词窗口左侧封面尺寸。</small></span><div class="size-control"><div class="stepper" data-key="coverSize" data-safe-key="useSafeCoverSizeRange" data-safe-min="20" data-safe-max="40" data-extended-min="12" data-extended-max="200" data-step="1" data-decimals="0"><button type="button" data-step="-1">-</button><input data-key="coverSize" inputmode="decimal"><button type="button" data-step="1">+</button></div><label class="mini-switch"><span>安全范围</span><input data-key="useSafeCoverSizeRange" type="checkbox"></label></div></div>
             <div class="form-row"><span><strong>封面间距</strong><small>控制封面和歌词之间的距离。</small></span><div class="stepper" data-key="coverGap" data-min="0" data-max="240" data-step="1" data-decimals="0"><button type="button" data-step="-1">-</button><input data-key="coverGap" inputmode="decimal"><button type="button" data-step="1">+</button></div></div>
             <div class="form-row"><span><strong>封面圆角</strong><small>控制封面边角的圆润程度。</small></span><div class="range-control"><input data-key="coverCornerRadius" type="range" min="0" max="20" step="1"><output data-value-for="coverCornerRadius">0 px</output></div></div>
-            <label class="form-row"><strong>字体</strong><select data-key="fontFamily"></select></label>
-            <label class="form-row"><strong>字重</strong><select data-key="fontWeight"><option value="Light">细体</option><option value="Normal">常规</option><option value="Medium">中等</option><option value="SemiBold">半粗体</option><option value="Bold">粗体</option></select></label>
-            <div class="form-row"><strong>文字颜色</strong><div class="color-mode-control"><select data-key="foregroundColorMode"><option value="Dark">深色</option><option value="Light">浅色</option><option value="Custom">自定义</option></select><button id="colorPicker" class="color-control" type="button"><span id="colorSwatch" class="swatch"></span><span id="colorValue">#FFFFFFFF</span><i>✎</i></button></div></div>
+            <label class="form-row"><strong>字体</strong><button id="fontFamilySelect" class="select-trigger" type="button" data-key="fontFamily" aria-haspopup="listbox" aria-expanded="false"><span class="select-trigger-value"></span><span class="select-chevron">⌄</span></button></label>
+            <label class="form-row"><strong>字重</strong><button class="select-trigger" type="button" data-key="fontWeight" aria-haspopup="listbox" aria-expanded="false"><span class="select-trigger-value"></span><span class="select-chevron">⌄</span></button></label>
+            <div class="form-row"><strong>文字颜色</strong><div id="colorModeControl" class="color-mode-control"><button class="select-trigger" type="button" data-key="foregroundColorMode" aria-haspopup="listbox" aria-expanded="false"><span class="select-trigger-value"></span><span class="select-chevron">⌄</span></button><div id="presetColorReadout" class="preset-color-readout"><span class="swatch"></span><span id="colorValue">#FFFFFFFF</span></div><div id="customColorControl" class="custom-color-control" hidden><button id="colorPicker" class="color-control" type="button" aria-haspopup="dialog" aria-expanded="false"><span id="colorSwatch" class="swatch"></span><span>选择颜色</span></button><input id="colorHexInput" class="color-hex-input" maxlength="9" spellcheck="false" aria-label="自定义文字颜色值"></div></div></div>
             <label class="row"><span><strong>文字阴影</strong><small>为歌词文字增加轻量阴影，提高复杂背景上的可读性。</small></span><input data-key="showTextShadow" type="checkbox"></label>
           </div>
         </section>
@@ -83,7 +83,7 @@
           <div class="rows">
             <div class="form-row"><span><strong>背景不透明度</strong><small>范围 0 到 1，数值越大背景越不透明。</small></span><div class="stepper" data-key="backgroundOpacity" data-min="0" data-max="1" data-step="0.05" data-decimals="2"><button type="button" data-step="-1">-</button><input data-key="backgroundOpacity" inputmode="decimal"><button type="button" data-step="1">+</button></div></div>
             <div class="form-row"><strong>窗口宽度 (px)</strong><div class="stepper" data-key="windowWidth" data-min="320" data-max="1400" data-step="10" data-decimals="0"><button type="button" data-step="-1">-</button><input data-key="windowWidth" inputmode="decimal"><button type="button" data-step="1">+</button></div></div>
-            <label class="form-row"><strong>水平锚点</strong><select data-key="horizontalAnchor"><option value="Left">左侧</option><option value="Center">居中</option><option value="Right">右侧</option></select></label>
+            <label class="form-row"><strong>水平锚点</strong><button class="select-trigger" type="button" data-key="horizontalAnchor" aria-haspopup="listbox" aria-expanded="false"><span class="select-trigger-value"></span><span class="select-chevron">⌄</span></button></label>
             <div class="form-row"><strong>X 偏移 (px)</strong><div class="stepper" data-key="xOffset" data-min="-2000" data-max="2000" data-step="10" data-decimals="0"><button type="button" data-step="-1">-</button><input data-key="xOffset" inputmode="decimal"><button type="button" data-step="1">+</button></div></div>
             <div class="form-row"><strong>Y 偏移 (px)</strong><div class="stepper" data-key="yOffset" data-min="-2000" data-max="2000" data-step="10" data-decimals="0"><button type="button" data-step="-1">-</button><input data-key="yOffset" inputmode="decimal"><button type="button" data-step="1">+</button></div></div>
             <label class="row"><span><strong>强制歌词置顶</strong><small>启用后歌词窗口将保持最高优先级，会覆盖在全屏应用之上。关闭时不会遮挡全屏应用。</small></span><input data-key="forceAlwaysOnTop" type="checkbox"></label>
@@ -127,6 +127,14 @@
         </section>
       </div>
     </main>
+  </div>
+  <div id="selectPopover" class="select-popover" hidden><div id="selectListbox" class="select-listbox" role="listbox" tabindex="-1"></div></div>
+  <div id="colorPopover" class="color-popover" role="dialog" aria-label="选择自定义文字颜色" hidden>
+    <div id="colorArea" class="color-area" tabindex="0" aria-label="饱和度和明度"><span id="colorCursor" class="color-cursor"></span></div>
+    <input id="hueSlider" class="hue-slider" type="range" min="0" max="360" step="1" aria-label="色相">
+    <div id="colorPresets" class="color-presets" aria-label="常用颜色"></div>
+    <div class="color-draft-row"><span id="colorDraftPreview" class="color-draft-preview"></span><input id="colorDraftInput" class="color-hex-input" maxlength="9" spellcheck="false" aria-label="颜色十六进制值"></div>
+    <div class="color-popover-actions"><button id="colorCancelButton" class="secondary" type="button">取消</button><button id="colorApplyButton" class="primary" type="button">应用</button></div>
   </div>
   <script src="settings.js"></script>
 </body>
