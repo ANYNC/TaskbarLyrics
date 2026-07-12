@@ -12,7 +12,7 @@
                  WindowStartupLocation="CenterScreen"
                  WindowStyle="None"
                  ResizeMode="CanResize"
-                 Background="#070E1D"
+                 Background="#18181B"
                  Foreground="#F8FAFC"
                  WindowCornerPreference="Round"
                  ExtendsContentIntoTitleBar="True"
@@ -76,7 +76,7 @@
         </Style>
     </ui:FluentWindow.Resources>
 
-    <Grid Background="#070E1D">
+    <Grid Background="#18181B">
         <Grid.RowDefinitions>
             <RowDefinition Height="40" />
             <RowDefinition Height="*" />
@@ -90,7 +90,7 @@
 
         <Border Grid.Row="0"
                 Grid.ColumnSpan="3"
-                Background="#070E1D"
+                Background="#18181B"
                 MouseLeftButtonDown="CaptionDragArea_MouseLeftButtonDown">
             <TextBlock Text="TaskbarLyrics - 设置"
                        Margin="16,0,0,0"
@@ -125,6 +125,6 @@
         <wv2:WebView2 x:Name="SettingsWebView"
                       Grid.Row="1"
                       Grid.Column="1"
-                      DefaultBackgroundColor="#070E1D" />
+                      DefaultBackgroundColor="#18181B" />
     </Grid>
 </ui:FluentWindow>

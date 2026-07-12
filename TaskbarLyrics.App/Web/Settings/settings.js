@@ -21,6 +21,26 @@ let state = null;
 let fonts = [];
 let draggedSource = null;
 let updateReleaseUrl = "";
+let activeSelectTrigger = null;
+let activeSelectIndex = -1;
+let colorDraft = { h: 0, s: 0, v: 1, hex: "#FFFFFFFF" };
+let colorPointerActive = false;
+
+const selectOptions = {
+  spectrumDisplayMode: [
+    { value: "PureMusicOnly", label: "仅纯音乐时" },
+    { value: "PureMusicOrNoLyrics", label: "纯音乐或无歌词时" },
+    { value: "Always", label: "始终显示" }
+  ],
+  fontFamily: [],
+  fontWeight: [
+    { value: "Light", label: "细体" }, { value: "Normal", label: "常规" },
+    { value: "Medium", label: "中等" }, { value: "SemiBold", label: "半粗体" }, { value: "Bold", label: "粗体" }
+  ],
+  foregroundColorMode: [{ value: "Dark", label: "深色" }, { value: "Light", label: "浅色" }, { value: "Custom", label: "自定义" }],
+  horizontalAnchor: [{ value: "Left", label: "左侧" }, { value: "Center", label: "居中" }, { value: "Right", label: "右侧" }]
+};
+const presetColors = ["#FFFFFFFF", "#FFA1A1AA", "#FF18181B", "#FFEF4444", "#FFF97316", "#FFEAB308", "#FF22C55E", "#FF06B6D4", "#FF3B82F6", "#FFA855F7"];
 
 const bridge = {
   post(message) {
@@ -39,6 +59,7 @@ function updateSetting(key, value) {
     updateColorModeControl();
   }
   if (key === "enableSpectrum") updateSpectrumChildren();
+  syncSelectTriggers();
   updateDimensionSteppers(key);
   updateRangeControls();
   animateSettingFeedback(key);
@@ -74,15 +95,10 @@ function setState(nextState, fontList = fonts) {
 }
 
 function renderFonts() {
-  const select = document.querySelector('select[data-key="fontFamily"]');
-  if (!select || select.options.length > 0) return;
-
-  for (const font of fonts) {
-    const option = document.createElement("option");
-    option.value = typeof font === "string" ? font : font.value;
-    option.textContent = typeof font === "string" ? font : font.label;
-    select.appendChild(option);
-  }
+  selectOptions.fontFamily = fonts.map((font) => ({
+    value: typeof font === "string" ? font : font.value,
+    label: typeof font === "string" ? font : font.label
+  })).filter((font) => font.value);
 }
 
 function renderControls() {
@@ -101,6 +117,7 @@ function renderControls() {
     }
   }
 
+  syncSelectTriggers();
   updateSwatch(state.foregroundColor);
   updateColorModeControl();
   updateSpectrumChildren();
@@ -194,6 +211,78 @@ function updateDimensionSteppers(changedKey = "") {
   });
 }
 
+function escapeHtml(value) {
+  const node = document.createElement("span");
+  node.textContent = value;
+  return node.innerHTML;
+}
+
+function syncSelectTriggers() {
+  document.querySelectorAll(".select-trigger[data-key]").forEach((trigger) => {
+    const options = selectOptions[trigger.dataset.key] ?? [];
+    const selected = options.find((option) => String(option.value) === String(state?.[trigger.dataset.key]));
+    trigger.querySelector(".select-trigger-value").textContent = selected?.label ?? "请选择";
+  });
+}
+
+function positionPopover(popover, trigger, minimumWidth) {
+  const rect = trigger.getBoundingClientRect();
+  const margin = 8;
+  const width = Math.min(window.innerWidth - margin * 2, Math.max(minimumWidth, rect.width));
+  popover.style.width = `${width}px`;
+  const height = popover.offsetHeight;
+  const below = window.innerHeight - rect.bottom - margin;
+  const top = below >= height || below >= rect.top ? rect.bottom + 5 : rect.top - height - 5;
+  popover.style.left = `${Math.min(window.innerWidth - width - margin, Math.max(margin, rect.left))}px`;
+  popover.style.top = `${Math.max(margin, Math.min(window.innerHeight - height - margin, top))}px`;
+}
+
+function renderSelectOptions() {
+  if (!activeSelectTrigger) return;
+  const key = activeSelectTrigger.dataset.key;
+  const options = selectOptions[key] ?? [];
+  const listbox = document.getElementById("selectListbox");
+  listbox.innerHTML = options.map((option, index) => {
+    const selected = String(option.value) === String(state?.[key]);
+    return `<div id="selectOption-${index}" class="select-option${index === activeSelectIndex ? " is-active" : ""}" role="option" aria-selected="${selected}" data-option-index="${index}"><span class="select-option-check">✓</span><span>${escapeHtml(option.label)}</span></div>`;
+  }).join("");
+  listbox.setAttribute("aria-activedescendant", `selectOption-${activeSelectIndex}`);
+  listbox.querySelector(".is-active")?.scrollIntoView({ block: "nearest" });
+}
+
+function openSelect(trigger, direction = 0) {
+  closeColorPopover(false);
+  if (activeSelectTrigger && activeSelectTrigger !== trigger) closeSelect(false);
+  activeSelectTrigger = trigger;
+  const options = selectOptions[trigger.dataset.key] ?? [];
+  const selectedIndex = options.findIndex((option) => String(option.value) === String(state?.[trigger.dataset.key]));
+  activeSelectIndex = direction < 0 ? options.length - 1 : Math.max(0, selectedIndex);
+  trigger.setAttribute("aria-expanded", "true");
+  document.getElementById("selectPopover").hidden = false;
+  renderSelectOptions();
+  positionPopover(document.getElementById("selectPopover"), trigger, 210);
+  document.getElementById("selectListbox").focus({ preventScroll: true });
+}
+
+function closeSelect(returnFocus = true) {
+  if (!activeSelectTrigger) return;
+  const trigger = activeSelectTrigger;
+  trigger.setAttribute("aria-expanded", "false");
+  document.getElementById("selectPopover").hidden = true;
+  activeSelectTrigger = null;
+  activeSelectIndex = -1;
+  if (returnFocus) trigger.focus({ preventScroll: true });
+}
+
+function chooseSelectOption(index) {
+  if (!activeSelectTrigger) return;
+  const key = activeSelectTrigger.dataset.key;
+  const option = (selectOptions[key] ?? [])[index];
+  if (!option) return;
+  updateSetting(key, option.value);
+  closeSelect(true);
+}
+
 function updateSwatch(color) {
   const swatch = document.getElementById("colorSwatch");
   if (!swatch) return;
@@ -201,6 +290,8 @@ function updateSwatch(color) {
   swatch.style.background = normalized;
   const value = document.getElementById("colorValue");
   if (value) value.textContent = color ?? "";
+  const presetSwatch = document.querySelector("#presetColorReadout .swatch");
+  if (presetSwatch) presetSwatch.style.background = normalized;
   swatch.animate(
     [{ transform: "scale(1)" }, { transform: "scale(1.14)" }, { transform: "scale(1)" }],
     { duration: 160, easing: "ease-out" }
@@ -218,8 +309,12 @@ function updateForegroundMode(mode) {
 function updateColorModeControl() {
   const picker = document.getElementById("colorPicker");
   if (!picker || !state) return;
-  picker.disabled = state.foregroundColorMode !== "Custom";
-  picker.title = picker.disabled ? "选择自定义后可设置颜色" : "选择自定义颜色";
+  const custom = state.foregroundColorMode === "Custom";
+  document.getElementById("colorModeControl")?.classList.toggle("is-custom", custom);
+  document.getElementById("customColorControl").hidden = !custom;
+  document.getElementById("presetColorReadout").hidden = custom;
+  document.getElementById("colorHexInput").value = state.foregroundColor ?? "";
+  picker.title = "选择自定义颜色";
 }
 
 function normalizeCssColor(color) {
@@ -228,6 +323,73 @@ function normalizeCssColor(color) {
     return `#${color.slice(3)}`;
   }
   return color;
+}
+
+function hexToRgb(hex) {
+  const value = hex.replace("#", "").slice(-6);
+  return { r: parseInt(value.slice(0, 2), 16), g: parseInt(value.slice(2, 4), 16), b: parseInt(value.slice(4, 6), 16) };
+}
+
+function rgbToArgb({ r, g, b }) {
+  return `#FF${[r, g, b].map((value) => Math.round(value).toString(16).padStart(2, "0")).join("")}`.toUpperCase();
+}
+
+function rgbToHsv({ r, g, b }) {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), delta = max - min;
+  let h = 0;
+  if (delta) h = max === r ? 60 * (((g - b) / delta) % 6) : max === g ? 60 * ((b - r) / delta + 2) : 60 * ((r - g) / delta + 4);
+  return { h: (h + 360) % 360, s: max ? delta / max : 0, v: max };
+}
+
+function hsvToRgb({ h, s, v }) {
+  const c = v * s, x = c * (1 - Math.abs((h / 60) % 2 - 1)), m = v - c;
+  const [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+  return { r: (r + m) * 255, g: (g + m) * 255, b: (b + m) * 255 };
+}
+
+function updateColorDraft(keepInput = false) {
+  colorDraft.hex = rgbToArgb(hsvToRgb(colorDraft));
+  document.getElementById("colorArea").style.setProperty("--picker-hue", colorDraft.h);
+  document.getElementById("hueSlider").value = Math.round(colorDraft.h);
+  document.getElementById("colorCursor").style.left = `${colorDraft.s * 100}%`;
+  document.getElementById("colorCursor").style.top = `${(1 - colorDraft.v) * 100}%`;
+  document.getElementById("colorDraftPreview").style.background = normalizeCssColor(colorDraft.hex);
+  if (!keepInput) document.getElementById("colorDraftInput").value = colorDraft.hex;
+}
+
+function setColorDraftFromArgb(argb) {
+  if (!/^#[0-9a-f]{8}$/i.test(argb)) return false;
+  colorDraft = { ...rgbToHsv(hexToRgb(argb)), hex: argb.toUpperCase() };
+  updateColorDraft();
+  return true;
+}
+
+function openColorPopover() {
+  if (!state || state.foregroundColorMode !== "Custom") return;
+  closeSelect(false);
+  setColorDraftFromArgb(state.foregroundColor);
+  const popover = document.getElementById("colorPopover");
+  popover.hidden = false;
+  document.getElementById("colorPicker").setAttribute("aria-expanded", "true");
+  positionPopover(popover, document.getElementById("colorPicker"), 264);
+  document.getElementById("colorArea").focus({ preventScroll: true });
+}
+
+function closeColorPopover(returnFocus = true) {
+  const popover = document.getElementById("colorPopover");
+  if (!popover || popover.hidden) return;
+  popover.hidden = true;
+  document.getElementById("colorPicker").setAttribute("aria-expanded", "false");
+  colorPointerActive = false;
+  if (returnFocus) document.getElementById("colorPicker").focus({ preventScroll: true });
+}
+
+function updateColorFromPointer(event) {
+  const rect = document.getElementById("colorArea").getBoundingClientRect();
+  colorDraft.s = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+  colorDraft.v = 1 - Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height));
+  updateColorDraft();
 }
 
 function renderOrder() {
@@ -318,7 +480,74 @@ function formatNumber(value, decimals) {
   return Number(value.toFixed(decimals)).toString();
 }
 
+function setupCustomControls() {
+  document.getElementById("colorPresets").innerHTML = presetColors.map((color) => `<button class="color-preset" type="button" style="--preset:${color}" data-preset-color="${color}" aria-label="选择 ${color}"></button>`).join("");
+
+  document.addEventListener("click", (event) => {
+    const trigger = event.target.closest(".select-trigger");
+    if (trigger) {
+      if (activeSelectTrigger === trigger) closeSelect(true); else openSelect(trigger);
+      return;
+    }
+    const option = event.target.closest("[data-option-index]");
+    if (option) chooseSelectOption(Number(option.dataset.optionIndex));
+  });
+
+  document.addEventListener("keydown", (event) => {
+    const trigger = event.target.closest(".select-trigger");
+    if (trigger && ["ArrowDown", "ArrowUp", "Home", "End", "Enter", " "].includes(event.key)) {
+      event.preventDefault();
+      openSelect(trigger, event.key === "ArrowUp" || event.key === "End" ? -1 : 1);
+      return;
+    }
+    if (event.target === document.getElementById("selectListbox") && activeSelectTrigger) {
+      const options = selectOptions[activeSelectTrigger.dataset.key] ?? [];
+      if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
+        event.preventDefault();
+        if (event.key === "Home") activeSelectIndex = 0;
+        else if (event.key === "End") activeSelectIndex = options.length - 1;
+        else activeSelectIndex = (activeSelectIndex + (event.key === "ArrowDown" ? 1 : -1) + options.length) % options.length;
+        renderSelectOptions();
+      } else if (["Enter", " "].includes(event.key)) { event.preventDefault(); chooseSelectOption(activeSelectIndex); }
+      else if (event.key === "Escape") { event.preventDefault(); closeSelect(true); }
+    } else if (event.key === "Escape") closeColorPopover(true);
+  });
+
+  document.addEventListener("pointerdown", (event) => {
+    if (activeSelectTrigger && !document.getElementById("selectPopover").contains(event.target) && !activeSelectTrigger.contains(event.target)) closeSelect(false);
+    if (!document.getElementById("colorPopover").hidden && !document.getElementById("colorPopover").contains(event.target) && !document.getElementById("colorPicker").contains(event.target)) closeColorPopover(false);
+  });
+  window.addEventListener("resize", () => { closeSelect(false); closeColorPopover(false); });
+
+  document.getElementById("colorPicker").addEventListener("click", () => document.getElementById("colorPopover").hidden ? openColorPopover() : closeColorPopover(true));
+  document.getElementById("colorArea").addEventListener("pointerdown", (event) => { colorPointerActive = true; event.currentTarget.setPointerCapture(event.pointerId); updateColorFromPointer(event); });
+  document.getElementById("colorArea").addEventListener("pointermove", (event) => { if (colorPointerActive) updateColorFromPointer(event); });
+  document.getElementById("colorArea").addEventListener("pointerup", (event) => { colorPointerActive = false; event.currentTarget.releasePointerCapture(event.pointerId); });
+  document.getElementById("hueSlider").addEventListener("input", (event) => { colorDraft.h = Number(event.target.value); updateColorDraft(); });
+  document.getElementById("colorDraftInput").addEventListener("input", (event) => {
+    const valid = /^#[0-9a-f]{8}$/i.test(event.target.value);
+    event.target.classList.toggle("invalid", !valid);
+    if (valid) setColorDraftFromArgb(event.target.value);
+  });
+  document.getElementById("colorPresets").addEventListener("click", (event) => {
+    const preset = event.target.closest("[data-preset-color]");
+    if (preset) setColorDraftFromArgb(preset.dataset.presetColor);
+  });
+  document.getElementById("colorCancelButton").addEventListener("click", () => closeColorPopover(true));
+  document.getElementById("colorApplyButton").addEventListener("click", () => {
+    if (!/^#[0-9a-f]{8}$/i.test(document.getElementById("colorDraftInput").value)) return;
+    updateSetting("foregroundColor", colorDraft.hex);
+    closeColorPopover(true);
+  });
+  document.getElementById("colorHexInput").addEventListener("change", (event) => {
+    if (!/^#[0-9a-f]{8}$/i.test(event.target.value)) { event.target.classList.add("invalid"); return; }
+    event.target.classList.remove("invalid");
+    updateSetting("foregroundColor", event.target.value.toUpperCase());
+  });
+}
+
 function setupEvents() {
+  setupCustomControls();
   document.querySelectorAll("input, select, textarea").forEach((element) => {
     element.addEventListener("change", () => {
       const key = element.dataset.key;
@@ -359,17 +588,6 @@ function setupEvents() {
       updateRangeValue(input);
       updateSetting(input.dataset.key, Number(input.value));
     });
-  });
-
-  document.querySelector('select[data-key="foregroundColorMode"]')?.addEventListener("change", (event) => {
-    if (event.currentTarget.value === "Custom") {
-      bridge.post({ type: "pickColor" });
-    }
-  });
-
-  document.getElementById("colorPicker")?.addEventListener("click", () => {
-    if (state?.foregroundColorMode !== "Custom") return;
-    bridge.post({ type: "pickColor" });
   });
 
   document.getElementById("resetButton")?.addEventListener("click", () => {
