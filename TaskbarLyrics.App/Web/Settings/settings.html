@@ -7,135 +7,172 @@
   <link rel="stylesheet" href="settings.css">
 </head>
 <body>
-  <div class="window">
-    <aside id="sidebar" class="sidebar">
+
+  <div id="appShell" class="app-shell">
+    <aside class="sidebar" aria-label="设置导航">
       <div class="brand">
-        <div class="brand-icon">◎</div>
-        <strong>TaskbarLyrics</strong>
+        <div class="brand-mark" aria-hidden="true">TL</div>
+        <div class="brand-copy"><strong>TaskbarLyrics</strong><small>桌面歌词工具</small></div>
       </div>
+
       <nav class="nav">
-        <button class="nav-item active" data-target="players"><span>▷</span><b>播放器</b></button>
-        <button class="nav-item" data-target="lyrics"><span>Aa</span><b>歌词</b></button>
-        <button class="nav-item" data-target="appearance"><span>◌</span><b>外观</b></button>
-        <button class="nav-item" data-target="layout"><span>▦</span><b>布局</b></button>
-        <button class="nav-item" data-target="debug"><span>♢</span><b>调试</b></button>
-        <button class="nav-item" data-target="about"><span>i</span><b>关于</b></button>
+        <button class="nav-item active" data-nav="sources" type="button"><svg viewBox="0 0 24 24"><path d="M6 4v16M10 7h8M10 12h8M10 17h5"/></svg><span>播放源</span></button>
+        <button class="nav-item" data-nav="lyrics" type="button"><svg viewBox="0 0 24 24"><path d="M4 7h10M4 12h16M4 17h12"/></svg><span>歌词</span></button>
+        <button class="nav-item" data-nav="appearance" type="button"><svg viewBox="0 0 24 24"><path d="M4 19 10 5h4l6 14M7 14h10"/></svg><span>外观</span></button>
+        <button class="nav-item" data-nav="window" type="button"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="M3.5 9h17"/></svg><span>窗口</span></button>
+        <button class="nav-item" data-nav="general" type="button"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1l2-1.5-2-3.4-2.4 1A8 8 0 0 0 15 6l-.3-2.6h-4L10.4 6A8 8 0 0 0 9 7.1l-2.4-1-2 3.4L6.7 11a7 7 0 0 0 0 2l-2.1 1.5 2 3.4 2.4-1a8 8 0 0 0 1.4.8l.3 2.9h4l.3-2.9a8 8 0 0 0 1.4-.8l2.4 1 2-3.4-2-1.5c.1-.3.2-.7.2-1Z"/></svg><span>常规</span></button>
+        <button class="nav-item" data-nav="advanced" type="button"><svg viewBox="0 0 24 24"><path d="m14 4-4 16M5 8l-3 4 3 4M19 8l3 4-3 4"/></svg><span>高级</span></button>
+        <button class="nav-item" data-nav="about" type="button"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg><span>关于</span></button>
       </nav>
-      <button id="sidebarToggle" class="collapse" title="收缩侧边栏">‹</button>
+
+      <div class="sidebar-footer">
+        <div class="sidebar-note">设置即时生效</div>
+        <button id="sidebarToggle" class="icon-button" type="button" aria-label="折叠侧栏" title="折叠侧栏"><svg id="collapseIcon" viewBox="0 0 24 24"><path d="m14.5 6-6 6 6 6"/></svg></button>
+      </div>
     </aside>
 
-    <main class="main">
-      <header class="header">
-        <div>
-          <h1>设置</h1>
-          <p>调整播放器识别、歌词显示、外观和任务栏布局。</p>
-        </div>
-        <button id="resetButton" class="reset"><span>↺</span>恢复默认设置</button>
+    <main class="workspace">
+      <header class="topbar">
+        <div class="title-block"><h1 id="pageTitle">播放源</h1><p id="pageSubtitle">选择需要监听的音乐软件，并调整识别优先级。</p></div>
+        <div class="top-actions"><span id="saveState" class="save-state">更改已实时应用</span><button id="restoreButton" class="btn ghost" type="button">恢复默认</button></div>
       </header>
 
-      <div id="content" class="content">
-        <section id="players" class="card reveal">
-          <h2>播放器集成</h2>
-          <p class="section-desc">选择要监听的音乐播放器，并通过拖拽调整优先识别顺序。</p>
-          <div class="players">
-            <label class="player"><img class="app-icon" src="../../Assets/PlayerIcons/QQ音乐.png" alt=""><strong>QQ音乐</strong><input data-key="enableQQMusic" type="checkbox"></label>
-            <label class="player"><img class="app-icon" src="../../Assets/PlayerIcons/网易云音乐.png" alt=""><strong>网易云音乐</strong><input data-key="enableNetease" type="checkbox"></label>
-            <label class="player"><img class="app-icon" src="../../Assets/PlayerIcons/酷狗音乐.png" alt=""><strong>酷狗音乐</strong><input data-key="enableKugou" type="checkbox"></label>
-            <label class="player"><img class="app-icon" src="../../Assets/PlayerIcons/spotify.png" alt=""><strong>Spotify</strong><input data-key="enableSpotify" type="checkbox"></label>
-          </div>
-          <div id="sourceOrder" class="order" aria-label="播放器识别顺序"></div>
-        </section>
-
-        <section id="lyrics" class="card reveal">
-          <h2>歌词设置</h2>
-          <p class="section-desc">控制歌词窗口启动行为、翻译与显示辅助项。</p>
-          <div class="rows">
-            <label class="row"><span><strong>优先使用本地歌词</strong><small>播放本地音乐时，先从下方目录中匹配同名歌词文件。</small></span><input data-key="enableLocalLyrics" type="checkbox"></label>
-            <label class="form-row local-folders-row"><span><strong>本地音乐目录</strong><small>一行一个目录，支持同名 .lrc / .qrc / .krc 歌词文件。</small></span><textarea data-key="localMusicFolders" spellcheck="false" placeholder="D:\Music&#10;E:\Local Songs"></textarea></label>
-            <label class="row"><span><strong>启动时显示歌词</strong><small>应用启动后自动显示歌词悬浮窗口。</small></span><input data-key="showLyricsOnStartup" type="checkbox"></label>
-            <label class="row"><span><strong>开机自启动</strong><small>Windows 启动时自动运行 TaskbarLyrics。</small></span><input data-key="startWithWindows" type="checkbox"></label>
-            <label class="row"><span><strong>显示歌词翻译</strong><small>统一控制各歌词源的翻译显示。</small></span><input data-key="showLyricTranslation" type="checkbox"></label>
-            <label class="row"><span><strong>显示频谱</strong><small>启用后，可在特定歌词状态下显示实时音频频谱。</small></span><input data-key="enableSpectrum" type="checkbox"></label>
-            <label class="form-row child-row spectrum-child"><span><strong>频谱显示模式</strong><small>选择在哪些歌词状态下显示实时频谱。</small></span><button class="select-trigger" type="button" data-key="spectrumDisplayMode" aria-haspopup="listbox" aria-expanded="false"><span class="select-trigger-value"></span><span class="select-chevron">⌄</span></button></label>
-            <label class="row"><span><strong>显示背景</strong><small>为歌词窗口启用半透明背景。</small></span><input data-key="showBackground" type="checkbox"></label>
-            <label class="row"><span><strong>显示边框</strong><small>为歌词窗口绘制边框，便于深浅背景上分辨。</small></span><input data-key="showBorder" type="checkbox"></label>
+      <div class="page-stack">
+        <section class="page active" data-page="sources" aria-labelledby="sourcesHeading">
+          <div class="page-inner">
+            <section class="panel">
+              <div class="panel-head"><div><h2 id="sourcesHeading" tabindex="-1">已启用的播放源</h2><p>按需启用播放器。新增适配器会自动进入列表，无需改变页面结构。</p></div><span id="sourceCount" class="source-count"></span></div>
+              <div class="panel-body"><div id="sourceGrid" class="source-grid"></div></div>
+            </section>
+            <section class="panel">
+              <div class="panel-head"><div><h2>识别优先级</h2><p>拖动手柄调整顺序；多个播放器同时运行时，优先使用靠前的来源。</p></div></div>
+              <div class="panel-body"><div id="priorityList" class="priority-list"></div></div>
+            </section>
+            <section class="panel">
+              <div class="panel-head"><div><h2>本地歌词</h2><p>优先从音乐所在目录匹配同名歌词文件。</p></div></div>
+              <div class="settings">
+                <div class="setting-row compact"><div class="setting-label"><strong>优先使用本地歌词</strong><small>支持 .lrc、.qrc 和 .krc 文件。</small></div><label class="switch"><input type="checkbox" data-setting="enableLocalLyrics" aria-label="优先使用本地歌词"><span class="switch-track"></span></label></div>
+                <div class="setting-row child" data-depends="enableLocalLyrics"><div class="setting-label"><strong>本地音乐目录</strong><small>每行一个目录；关闭上方开关后保留内容。</small></div><div class="folder-control"><textarea class="control" data-setting="localMusicFolders" aria-label="本地音乐目录"></textarea><button id="browseButton" class="btn" type="button">浏览</button></div></div>
+              </div>
+            </section>
           </div>
         </section>
 
-        <section id="appearance" class="card reveal">
-          <h2>外观</h2>
-          <p class="section-desc">调整歌词字体、字号和文字颜色。</p>
-          <div class="rows">
-            <div class="form-row size-row"><span><strong>字号</strong><small>控制歌词文字大小。</small></span><div class="size-control"><div class="stepper" data-key="fontSize" data-safe-key="useSafeFontSizeRange" data-safe-min="10" data-safe-max="24" data-extended-min="6" data-extended-max="96" data-step="1" data-decimals="0"><button type="button" data-step="-1">-</button><input data-key="fontSize" inputmode="decimal"><button type="button" data-step="1">+</button></div><label class="mini-switch"><span>安全范围</span><input data-key="useSafeFontSizeRange" type="checkbox"></label></div></div>
-            <div class="form-row size-row"><span><strong>封面大小</strong><small>控制歌词窗口左侧封面尺寸。</small></span><div class="size-control"><div class="stepper" data-key="coverSize" data-safe-key="useSafeCoverSizeRange" data-safe-min="20" data-safe-max="40" data-extended-min="12" data-extended-max="200" data-step="1" data-decimals="0"><button type="button" data-step="-1">-</button><input data-key="coverSize" inputmode="decimal"><button type="button" data-step="1">+</button></div><label class="mini-switch"><span>安全范围</span><input data-key="useSafeCoverSizeRange" type="checkbox"></label></div></div>
-            <div class="form-row"><span><strong>封面间距</strong><small>控制封面和歌词之间的距离。</small></span><div class="stepper" data-key="coverGap" data-min="0" data-max="240" data-step="1" data-decimals="0"><button type="button" data-step="-1">-</button><input data-key="coverGap" inputmode="decimal"><button type="button" data-step="1">+</button></div></div>
-            <div class="form-row"><span><strong>封面圆角</strong><small>控制封面边角的圆润程度。</small></span><div class="range-control"><input data-key="coverCornerRadius" type="range" min="0" max="20" step="1"><output data-value-for="coverCornerRadius">0 px</output></div></div>
-            <label class="form-row"><strong>字体</strong><button id="fontFamilySelect" class="select-trigger" type="button" data-key="fontFamily" aria-haspopup="listbox" aria-expanded="false"><span class="select-trigger-value"></span><span class="select-chevron">⌄</span></button></label>
-            <label class="form-row"><strong>字重</strong><button class="select-trigger" type="button" data-key="fontWeight" aria-haspopup="listbox" aria-expanded="false"><span class="select-trigger-value"></span><span class="select-chevron">⌄</span></button></label>
-            <div class="form-row"><strong>文字颜色</strong><div id="colorModeControl" class="color-mode-control"><button class="select-trigger" type="button" data-key="foregroundColorMode" aria-haspopup="listbox" aria-expanded="false"><span class="select-trigger-value"></span><span class="select-chevron">⌄</span></button><div id="presetColorReadout" class="preset-color-readout"><span class="swatch"></span><span id="colorValue">#FFFFFFFF</span></div><div id="customColorControl" class="custom-color-control" hidden><button id="colorPicker" class="color-control" type="button" aria-haspopup="dialog" aria-expanded="false"><span id="colorSwatch" class="swatch"></span><span>选择颜色</span></button><input id="colorHexInput" class="color-hex-input" maxlength="9" spellcheck="false" aria-label="自定义文字颜色值"></div></div></div>
-            <label class="row"><span><strong>文字阴影</strong><small>为歌词文字增加轻量阴影，提高复杂背景上的可读性。</small></span><input data-key="showTextShadow" type="checkbox"></label>
+        <section class="page" data-page="lyrics" aria-labelledby="lyricsHeading">
+          <div class="page-inner">
+            <section class="panel">
+              <div class="panel-head"><div><h2 id="lyricsHeading" tabindex="-1">显示行为</h2><p>控制歌词何时出现，以及是否显示翻译。</p></div></div>
+              <div class="settings">
+                <div class="setting-row compact"><div class="setting-label"><strong>启动时显示歌词</strong><small>应用启动后自动显示任务栏歌词窗口。</small></div><label class="switch"><input type="checkbox" data-setting="showLyricsOnStartup" aria-label="启动时显示歌词"><span class="switch-track"></span></label></div>
+                <div class="setting-row compact"><div class="setting-label"><strong>显示歌词翻译</strong><small>当歌词源包含翻译时显示第二行内容。</small></div><label class="switch"><input type="checkbox" data-setting="showLyricTranslation" aria-label="显示歌词翻译"><span class="switch-track"></span></label></div>
+              </div>
+            </section>
+            <section class="panel">
+              <div class="panel-head"><div><h2>频谱</h2><p>在纯音乐或无歌词时显示实时音频频谱。</p></div></div>
+              <div class="settings">
+                <div class="setting-row compact"><div class="setting-label"><strong>显示频谱</strong><small>关闭后保留当前显示模式。</small></div><label class="switch"><input type="checkbox" data-setting="enableSpectrum" aria-label="显示频谱"><span class="switch-track"></span></label></div>
+                <div class="setting-row child" data-depends="enableSpectrum"><div class="setting-label"><strong>频谱显示模式</strong><small>选择哪些播放状态下显示。</small></div><button class="control select-trigger" type="button" data-setting="spectrumDisplayMode" aria-label="频谱显示模式" aria-haspopup="listbox" aria-expanded="false"><span class="select-trigger-value"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+              </div>
+            </section>
           </div>
         </section>
 
-        <section id="layout" class="card reveal">
-          <h2>窗口设置</h2>
-          <p class="section-desc">调整任务栏歌词窗口的位置、宽度与透明度。</p>
-          <div class="rows">
-            <div class="form-row"><span><strong>背景不透明度</strong><small>范围 0 到 1，数值越大背景越不透明。</small></span><div class="stepper" data-key="backgroundOpacity" data-min="0" data-max="1" data-step="0.05" data-decimals="2"><button type="button" data-step="-1">-</button><input data-key="backgroundOpacity" inputmode="decimal"><button type="button" data-step="1">+</button></div></div>
-            <div class="form-row"><strong>窗口宽度 (px)</strong><div class="stepper" data-key="windowWidth" data-min="320" data-max="1400" data-step="10" data-decimals="0"><button type="button" data-step="-1">-</button><input data-key="windowWidth" inputmode="decimal"><button type="button" data-step="1">+</button></div></div>
-            <label class="form-row"><strong>水平锚点</strong><button class="select-trigger" type="button" data-key="horizontalAnchor" aria-haspopup="listbox" aria-expanded="false"><span class="select-trigger-value"></span><span class="select-chevron">⌄</span></button></label>
-            <div class="form-row"><strong>X 偏移 (px)</strong><div class="stepper" data-key="xOffset" data-min="-2000" data-max="2000" data-step="10" data-decimals="0"><button type="button" data-step="-1">-</button><input data-key="xOffset" inputmode="decimal"><button type="button" data-step="1">+</button></div></div>
-            <div class="form-row"><strong>Y 偏移 (px)</strong><div class="stepper" data-key="yOffset" data-min="-2000" data-max="2000" data-step="10" data-decimals="0"><button type="button" data-step="-1">-</button><input data-key="yOffset" inputmode="decimal"><button type="button" data-step="1">+</button></div></div>
-            <label class="row"><span><strong>强制歌词置顶</strong><small>启用后歌词窗口将保持最高优先级，会覆盖在全屏应用之上。关闭时不会遮挡全屏应用。</small></span><input data-key="forceAlwaysOnTop" type="checkbox"></label>
-          </div>
-        </section>
-
-        <section id="debug" class="card reveal">
-          <h2>数据与调试</h2>
-          <p class="section-desc">清理缓存或打开辅助调试选项。</p>
-          <div class="rows">
-            <label class="row"><span><strong>SMTC 时间轴监视器</strong><small>用于观察播放器时间轴数据，排查同步问题。</small></span><input data-key="enableSmtcTimelineMonitor" type="checkbox"></label>
-            <div class="row"><span><strong>频谱调试</strong><small>打开临时滑块面板，实时调整频谱响应参数。</small></span><button id="spectrumTuningButton" class="primary">打开调试</button></div>
-            <div class="row"><span><strong>歌词缓存</strong><small>清除后首次重新匹配会稍慢。</small></span><button id="clearCacheButton" class="danger">清除缓存</button></div>
-          </div>
-        </section>
-
-        <section id="about" class="card reveal">
-          <h2>关于</h2>
-          <div class="about-panel">
-            <div class="about-hero">
-              <div class="about-logo">●</div>
-              <strong>TaskbarLyrics</strong>
-              <p>一个开源、<span class="crossed-word">轻量</span>、现代化的任务栏歌词工具。</p>
-              <small id="appVersion">当前版本 --</small>
-            </div>
-            <div class="about-grid">
-              <div><span>开源仓库</span><button id="repositoryButton" class="link-button" type="button">GitHub</button></div>
-              <div><span>开源协议</span><strong>MIT License</strong></div>
-              <div><span>界面技术</span><strong>WPF + WebView2</strong></div>
-              <div><span>主要依赖</span><strong>WPF-UI / WebView2 / Lyricify</strong></div>
-            </div>
-            <div class="update-box">
-              <label class="row compact-row"><span><strong>自动检查更新</strong><small>每天最多检查一次，发现新版本时通过系统通知提醒。</small></span><input data-key="autoCheckUpdates" type="checkbox"></label>
-              <small id="updateStatus">从 GitHub Releases 检查是否有新版本。</small>
-              <div class="update-actions">
-                <button id="checkUpdateButton" class="primary wide" type="button">检查更新</button>
-                <button id="openReleaseButton" class="secondary wide hidden" type="button">打开发布页</button>
+        <section class="page" data-page="appearance" aria-labelledby="appearanceHeading">
+          <div class="page-inner">
+            <div class="live-note"><div class="live-note-copy"><strong>设置即时生效</strong><small>请直接查看任务栏歌词窗口，真实效果会随参数同步更新。</small></div><button id="showLyricsWindowButton" class="btn ghost" type="button" data-show-lyrics-window>显示歌词窗口</button></div>
+            <div class="panel">
+              <div class="panel-head"><div><h2 id="appearanceHeading" tabindex="-1">文字与封面</h2><p>修改会实时应用到任务栏歌词窗口。</p></div></div>
+              <div class="settings">
+                <div class="setting-row"><div class="setting-label"><strong>字号</strong><small>控制歌词文字大小。</small></div><div class="size-control"><div class="stepper"><button type="button" data-step-target="fontSize" data-delta="-1" aria-label="减小字号">−</button><input class="control" type="number" min="10" max="24" data-setting="fontSize" aria-label="字号"><button type="button" data-step-target="fontSize" data-delta="1" aria-label="增大字号">+</button></div><label class="safe-range-option"><span data-safe-copy="fontSize">安全范围 10–24 px</span><span class="switch small"><input type="checkbox" data-setting="useSafeFontSizeRange" aria-label="字号使用安全范围"><span class="switch-track"></span></span></label></div></div>
+                <div class="setting-row"><div class="setting-label"><strong>字体</strong><small>正式应用会注入当前系统已安装字体。</small></div><button id="fontFamilySelect" class="control select-trigger" type="button" data-setting="fontFamily" aria-label="字体" aria-haspopup="listbox" aria-expanded="false"><span class="select-trigger-value"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+                <div class="setting-row"><div class="setting-label"><strong>字重</strong><small>提供细体、常规、中等、半粗和粗体五档。</small></div><button class="control select-trigger" type="button" data-setting="fontWeight" aria-label="字重" aria-haspopup="listbox" aria-expanded="false"><span class="select-trigger-value"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+                <div class="setting-row"><div class="setting-label"><strong>文字颜色</strong><small>选择预设颜色，或使用自定义颜色。</small></div><div class="color-mode-control"><button class="control select-trigger" type="button" data-setting="foregroundColorMode" aria-label="文字颜色模式" aria-haspopup="listbox" aria-expanded="false"><span class="select-trigger-value"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><div class="preset-color-readout" data-preset-color><span class="color-swatch" data-mode-swatch></span><span data-mode-value>#FFFFFF</span></div><div class="color-control custom-color-control" data-custom-color hidden><button id="colorPickerButton" class="color-picker-button" type="button" data-setting="foregroundColor" aria-label="打开自定义取色器" aria-haspopup="dialog" aria-expanded="false"><span class="color-swatch" data-color-swatch></span><span>选择颜色</span></button><input class="control color-value-input" data-color-text="foregroundColor" aria-label="自定义文字颜色值" maxlength="7" spellcheck="false"></div></div></div>
+                <div class="setting-row compact"><div class="setting-label"><strong>文字阴影</strong><small>增强复杂背景上的可读性。</small></div><label class="switch"><input type="checkbox" data-setting="showTextShadow" aria-label="文字阴影"><span class="switch-track"></span></label></div>
+                <div class="setting-row"><div class="setting-label"><strong>封面大小</strong><small>控制歌词窗口左侧封面尺寸。</small></div><div class="size-control"><div class="stepper"><button type="button" data-step-target="coverSize" data-delta="-1" aria-label="减小封面">−</button><input class="control" type="number" min="20" max="40" data-setting="coverSize" aria-label="封面大小"><button type="button" data-step-target="coverSize" data-delta="1" aria-label="增大封面">+</button></div><label class="safe-range-option"><span data-safe-copy="coverSize">安全范围 20–40 px</span><span class="switch small"><input type="checkbox" data-setting="useSafeCoverSizeRange" aria-label="封面大小使用安全范围"><span class="switch-track"></span></span></label></div></div>
+                <div class="setting-row"><div class="setting-label"><strong>封面间距</strong><small>封面与歌词之间的距离。</small></div><div class="range-control"><input type="range" min="0" max="24" step="1" data-setting="coverGap" aria-label="封面间距"><output data-output="coverGap"></output></div></div>
+                <div class="setting-row"><div class="setting-label"><strong>封面圆角</strong><small>不超过封面尺寸的一半。</small></div><div class="range-control"><input type="range" min="0" max="20" step="1" data-setting="coverCornerRadius" aria-label="封面圆角"><output data-output="coverCornerRadius"></output></div></div>
               </div>
             </div>
+          </div>
+        </section>
+
+        <section class="page" data-page="window" aria-labelledby="windowHeading">
+          <div class="page-inner">
+            <div class="live-note"><div class="live-note-copy"><strong>设置即时生效</strong><small>窗口背景、宽度与锚点会直接同步到任务栏歌词窗口。</small></div><button class="btn ghost" type="button" data-show-lyrics-window>显示歌词窗口</button></div>
+            <div class="panel">
+              <div class="panel-head"><div><h2 id="windowHeading" tabindex="-1">窗口外观与位置</h2><p>调整任务栏歌词窗口的边界、宽度与锚点。</p></div></div>
+              <div class="settings">
+                <div class="setting-row compact"><div class="setting-label"><strong>显示背景</strong><small>启用半透明背景以提升对比度。</small></div><label class="switch"><input type="checkbox" data-setting="showBackground" aria-label="显示背景"><span class="switch-track"></span></label></div>
+                <div class="setting-row child" data-depends="showBackground"><div class="setting-label"><strong>背景不透明度</strong><small>数值越高，背景越实。</small></div><div class="range-control"><input type="range" min="0" max="1" step="0.05" data-setting="backgroundOpacity" aria-label="背景不透明度"><output data-output="backgroundOpacity"></output></div></div>
+                <div class="setting-row compact"><div class="setting-label"><strong>显示边框</strong><small>在深浅背景上增强窗口边缘识别。</small></div><label class="switch"><input type="checkbox" data-setting="showBorder" aria-label="显示边框"><span class="switch-track"></span></label></div>
+                <div class="setting-row"><div class="setting-label"><strong>窗口宽度</strong><small>范围 320–1400 px。</small></div><div class="stepper"><button type="button" data-step-target="windowWidth" data-delta="-20" aria-label="减小窗口宽度">−</button><input class="control" type="number" min="320" max="1400" data-setting="windowWidth" aria-label="窗口宽度"><button type="button" data-step-target="windowWidth" data-delta="20" aria-label="增大窗口宽度">+</button></div></div>
+                <div class="setting-row"><div class="setting-label"><strong>水平锚点</strong><small>决定歌词依附在任务栏的区域。</small></div><button class="control select-trigger" type="button" data-setting="horizontalAnchor" aria-label="水平锚点" aria-haspopup="listbox" aria-expanded="false"><span class="select-trigger-value"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+                <div class="setting-row"><div class="setting-label"><strong>X 偏移</strong><small>相对水平锚点微调窗口位置，范围 -2000～2000 px。</small></div><div class="stepper"><button type="button" data-step-target="xOffset" data-delta="-10" aria-label="减小 X 偏移">−</button><input class="control" type="number" min="-2000" max="2000" data-setting="xOffset" aria-label="X 偏移"><button type="button" data-step-target="xOffset" data-delta="10" aria-label="增大 X 偏移">+</button></div></div>
+                <div class="setting-row"><div class="setting-label"><strong>Y 偏移</strong><small>相对任务栏垂直微调窗口位置，范围 -2000～2000 px。</small></div><div class="stepper"><button type="button" data-step-target="yOffset" data-delta="-10" aria-label="减小 Y 偏移">−</button><input class="control" type="number" min="-2000" max="2000" data-setting="yOffset" aria-label="Y 偏移"><button type="button" data-step-target="yOffset" data-delta="10" aria-label="增大 Y 偏移">+</button></div></div>
+                <div class="setting-row compact"><div class="setting-label"><strong>强制歌词置顶</strong><small>关闭时不会遮挡全屏应用。</small></div><label class="switch"><input type="checkbox" data-setting="forceAlwaysOnTop" aria-label="强制歌词置顶"><span class="switch-track"></span></label></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="page" data-page="general" aria-labelledby="generalHeading">
+          <div class="page-inner">
+            <section class="panel"><div class="panel-head"><div><h2 id="generalHeading" tabindex="-1">启动与后台</h2><p>控制 TaskbarLyrics 的日常运行行为。</p></div></div><div class="settings">
+              <div class="setting-row compact"><div class="setting-label"><strong>开机自动启动</strong><small>登录 Windows 后自动运行。</small></div><label class="switch"><input type="checkbox" data-setting="startWithWindows" aria-label="开机自动启动"><span class="switch-track"></span></label></div>
+            </div></section>
+          </div>
+        </section>
+
+        <section class="page" data-page="advanced" aria-labelledby="advancedHeading">
+          <div class="page-inner">
+            <section class="panel"><div class="panel-head"><div><h2 id="advancedHeading" tabindex="-1">诊断工具</h2><p>这些选项仅用于定位播放同步和频谱问题。</p></div></div><div class="settings">
+              <div class="setting-row compact"><div class="setting-label"><strong>SMTC 时间轴监视器</strong><small>观察播放器时间轴数据，不建议日常开启。</small></div><label class="switch"><input type="checkbox" data-setting="enableSmtcTimelineMonitor" aria-label="SMTC 时间轴监视器"><span class="switch-track"></span></label></div>
+              <div class="setting-row compact"><div class="setting-label"><strong>频谱调试</strong><small>打开临时滑块面板，实时调整频谱响应参数。</small></div><button id="spectrumTuningButton" class="btn" type="button">打开调试</button></div>
+            </div></section>
+            <section class="panel"><div class="panel-head"><div><h2>数据维护</h2><p>清理缓存不会删除应用设置。</p></div></div><div class="settings"><div class="setting-row compact"><div class="setting-label"><strong>歌词与封面缓存</strong><small>清理后首次重新匹配可能稍慢。</small></div><button id="clearCacheButton" class="btn danger" type="button">清除缓存</button></div></div></section>
+          </div>
+        </section>
+
+        <section class="page" data-page="about" aria-labelledby="aboutHeading">
+          <div class="about-layout">
+            <section class="panel about-product">
+              <div class="about-logo" aria-hidden="true">TL</div>
+              <div class="about-copy"><div class="about-title-row"><h2 id="aboutHeading" tabindex="-1">TaskbarLyrics</h2><span class="version-badge">Version --</span></div><p>一个把歌词放到任务栏附近的自由开源桌面工具。</p></div>
+              <button id="repositoryButton" class="btn ghost" type="button">GitHub 仓库</button>
+            </section>
+            <section class="panel">
+              <div class="panel-head"><div><h2>更新</h2><p>保持应用处于最新稳定版本。</p></div></div>
+              <div class="settings"><div class="setting-row compact"><div class="setting-label"><strong>自动检查更新</strong><small>每天最多检查一次，并通过系统通知提醒。</small></div><label class="switch"><input type="checkbox" data-setting="autoCheckUpdates" aria-label="自动检查更新"><span class="switch-track"></span></label></div></div>
+              <div class="update-summary"><div class="update-status"><strong id="updateStatusTitle">尚未检查更新</strong><small id="updateStatusDetail">当前版本 --</small></div><div class="update-actions"><button id="checkUpdateButton" class="btn primary" type="button">检查更新</button><button id="openReleaseButton" class="btn" type="button" hidden>打开发布页</button></div></div>
+            </section>
+            <section class="panel">
+              <div class="panel-head"><div><h2>开源与技术</h2><p>项目源代码、许可证和主要技术信息。</p></div></div>
+              <div class="resource-list">
+                <div class="resource-item"><span>开源许可证</span><strong>MIT License</strong><span></span></div>
+                <div class="resource-item"><span>源代码</span><strong>GitHub</strong><button class="btn ghost small" type="button" data-repository-link>打开仓库</button></div>
+                <div class="resource-item"><span>界面技术</span><strong>WPF + WebView2</strong><span></span></div>
+                <div class="resource-item"><span>主要依赖</span><strong>WPF-UI / WebView2 / Lyricify</strong><span></span></div>
+              </div>
+            </section>
+            <div class="about-footer">TaskbarLyrics 是自由开源软件。</div>
           </div>
         </section>
       </div>
     </main>
   </div>
-  <div id="selectPopover" class="select-popover" hidden><div id="selectListbox" class="select-listbox" role="listbox" tabindex="-1"></div></div>
-  <div id="colorPopover" class="color-popover" role="dialog" aria-label="选择自定义文字颜色" hidden>
+
+  <dialog id="restoreDialog"><div class="dialog-body"><h2>恢复默认设置？</h2><p>所有设置和播放源顺序都会恢复为默认值，并立即应用到歌词窗口。</p></div><div class="dialog-actions"><button class="btn ghost" type="button" data-dialog-cancel="restoreDialog">取消</button><button id="confirmRestore" class="btn primary" type="button">恢复默认</button></div></dialog>
+  <dialog id="clearDialog"><div class="dialog-body"><h2>清除歌词与封面缓存？</h2><p>清理后首次重新匹配歌词和封面可能稍慢，应用设置不会受到影响。</p></div><div class="dialog-actions"><button class="btn ghost" type="button" data-dialog-cancel="clearDialog">取消</button><button id="confirmClear" class="btn danger" type="button">清除缓存</button></div></dialog>
+  <div id="selectPopover" class="select-popover" hidden><div id="selectListbox" class="select-listbox" role="listbox" tabindex="-1" aria-label="选项"></div></div>
+  <div id="colorPopover" class="color-popover" role="dialog" aria-label="选择自定义颜色" hidden>
     <div id="colorArea" class="color-area" tabindex="0" aria-label="饱和度和明度"><span id="colorCursor" class="color-cursor"></span></div>
     <input id="hueSlider" class="hue-slider" type="range" min="0" max="360" step="1" aria-label="色相">
     <div id="colorPresets" class="color-presets" aria-label="常用颜色"></div>
-    <div class="color-draft-row"><span id="colorDraftPreview" class="color-draft-preview"></span><input id="colorDraftInput" class="color-hex-input" maxlength="9" spellcheck="false" aria-label="颜色十六进制值"></div>
-    <div class="color-popover-actions"><button id="colorCancelButton" class="secondary" type="button">取消</button><button id="colorApplyButton" class="primary" type="button">应用</button></div>
+    <div class="color-draft-row"><span id="colorDraftPreview" class="color-draft-preview"></span><input id="colorDraftInput" class="control color-value-input" aria-label="颜色十六进制值" maxlength="7" spellcheck="false"></div>
+    <div class="color-popover-actions"><button id="colorCancelButton" class="btn ghost small" type="button">取消</button><button id="colorApplyButton" class="btn primary small" type="button">应用</button></div>
   </div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
   <script src="settings.js"></script>
 </body>
 </html>
