@@ -157,6 +157,15 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             case "pickColor":
                 await PickForegroundColorAsync();
                 break;
+            case "pickLocalFolder":
+                await PickLocalFolderAsync();
+                break;
+            case "showLyricsWindow":
+                if (System.Windows.Application.Current is App lyricsApp)
+                {
+                    lyricsApp.ShowLyricsWindow();
+                }
+                break;
             case "checkForUpdates":
                 await CheckForUpdatesAsync();
                 break;
@@ -501,6 +510,32 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
 
         _settings.ForegroundColor = $"#FF{dialog.Color.R:X2}{dialog.Color.G:X2}{dialog.Color.B:X2}";
         _settings.ForegroundColorMode = ForegroundColorMode.Custom;
+        SaveSettings();
+        await PushSettingsToWebAsync();
+    }
+
+    private async Task PickLocalFolderAsync()
+    {
+        using var dialog = new Forms.FolderBrowserDialog
+        {
+            Description = "选择本地音乐目录",
+            UseDescriptionForTitle = true,
+            ShowNewFolderButton = true
+        };
+
+        var initialFolder = _settings.LocalMusicFolders.FirstOrDefault(Directory.Exists);
+        if (!string.IsNullOrWhiteSpace(initialFolder))
+        {
+            dialog.SelectedPath = initialFolder;
+        }
+
+        if (dialog.ShowDialog() != Forms.DialogResult.OK || string.IsNullOrWhiteSpace(dialog.SelectedPath))
+        {
+            return;
+        }
+
+        _settings.LocalMusicFolders = NormalizeLocalMusicFolders(
+            _settings.LocalMusicFolders.Append(dialog.SelectedPath));
         SaveSettings();
         await PushSettingsToWebAsync();
     }

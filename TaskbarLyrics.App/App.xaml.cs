@@ -231,6 +231,17 @@ public partial class App : System.Windows.Application
         }
     }
 
+    public void ShowLyricsWindow()
+    {
+        if (_lyricsWindowHost is null)
+        {
+            return;
+        }
+
+        UserWantsLyricsVisible = true;
+        _lyricsWindowHost.Show();
+    }
+
     public void MarkLyricsHiddenByUser()
     {
         UserWantsLyricsVisible = false;
