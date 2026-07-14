@@ -444,6 +444,7 @@
 
     function setWindowState(nextState) {
       const maximized = nextState === "maximized";
+      document.documentElement.classList.toggle("window-maximized", maximized);
       $$(".caption-glyph-max").forEach(el => el.hidden = maximized);
       $$(".caption-glyph-restore").forEach(el => el.hidden = !maximized);
     }
@@ -702,6 +703,15 @@
       bridge.post({ type: "checkForUpdates" });
     });
     $("#openReleaseButton").addEventListener("click", () => { if (updateReleaseUrl) bridge.post({ type: "openExternalLink", value: updateReleaseUrl }); });
+
+    document.addEventListener("pointerdown", event => {
+      if (event.button !== 0) return;
+      const resizeHandle = event.target.closest?.("[data-window-resize]");
+      if (!resizeHandle) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      bridge.post({ type: "windowResizeStart", value: resizeHandle.dataset.windowResize });
+    }, true);
 
     document.addEventListener("pointerdown", event => {
       if (event.button !== 0) return;

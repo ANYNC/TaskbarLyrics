@@ -46,11 +46,6 @@ public partial class SmtcTimelineMonitorWindow : Wpf.Ui.Controls.FluentWindow
     private void OnSourceInitialized(object? sender, EventArgs e)
     {
         ApplyWindowChromeAttributes();
-        var hwnd = new WindowInteropHelper(this).Handle;
-        if (hwnd != IntPtr.Zero && HwndSource.FromHwnd(hwnd) is { } source)
-        {
-            source.AddHook(WndProc);
-        }
     }
 
     private async void OnLoaded(object? sender, RoutedEventArgs e)
@@ -62,13 +57,6 @@ public partial class SmtcTimelineMonitorWindow : Wpf.Ui.Controls.FluentWindow
     private void OnClosed(object? sender, EventArgs e)
     {
         _timer.Stop();
-        var hwnd = new WindowInteropHelper(this).Handle;
-        if (hwnd != IntPtr.Zero && HwndSource.FromHwnd(hwnd) is { } source)
-        {
-            source.RemoveHook(WndProc);
-        }
-
-        EdgeHitThrough.Detach(new WindowInteropHelper(this).Handle);
 
         if (MonitorWebView.CoreWebView2 is not null)
         {
@@ -105,7 +93,6 @@ public partial class SmtcTimelineMonitorWindow : Wpf.Ui.Controls.FluentWindow
         var htmlPath = Path.Combine(AppContext.BaseDirectory, "Web", "SmtcMonitor", "index.html");
         MonitorWebView.Source = new Uri(htmlPath);
         _isWebReady = true;
-        EdgeHitThrough.Attach(new WindowInteropHelper(this).Handle);
     }
 
     private void PushDiagnostics()
@@ -186,7 +173,10 @@ public partial class SmtcTimelineMonitorWindow : Wpf.Ui.Controls.FluentWindow
                 _ = MonitorWebView.ExecuteScriptAsync("window.smtcMonitor?.setPaused(false);");
                 break;
             case "windowDrag":
-                BeginNativeWindowDrag();
+                NativeWindowInteraction.BeginDrag(this);
+                break;
+            case "windowResizeStart":
+                NativeWindowInteraction.BeginResize(this, message.Edge);
                 break;
             case "windowMinimize":
                 WindowState = WindowState.Minimized;
@@ -195,53 +185,6 @@ public partial class SmtcTimelineMonitorWindow : Wpf.Ui.Controls.FluentWindow
                 Close();
                 break;
         }
-    }
-
-    private void BeginNativeWindowDrag()
-    {
-        var hwnd = new WindowInteropHelper(this).Handle;
-        if (hwnd == IntPtr.Zero)
-        {
-            return;
-        }
-
-        _ = ReleaseCapture();
-        _ = SendMessage(hwnd, WindowMessageNonClientLeftButtonDown, HitTestCaption, 0);
-    }
-
-    private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
-    {
-        if (msg != WindowMessageNonClientHitTest || WindowState == WindowState.Maximized)
-        {
-            return IntPtr.Zero;
-        }
-
-        if (!GetWindowRect(hwnd, out var rect))
-        {
-            return IntPtr.Zero;
-        }
-
-        var x = GetSignedLowWord(lParam);
-        var y = GetSignedHighWord(lParam);
-        const int border = 8;
-
-        var left = x >= rect.Left && x < rect.Left + border;
-        var right = x <= rect.Right && x > rect.Right - border;
-        var top = y >= rect.Top && y < rect.Top + border;
-        var bottom = y <= rect.Bottom && y > rect.Bottom - border;
-
-        handled = true;
-        if (top && left) return new IntPtr(HitTestTopLeft);
-        if (top && right) return new IntPtr(HitTestTopRight);
-        if (bottom && left) return new IntPtr(HitTestBottomLeft);
-        if (bottom && right) return new IntPtr(HitTestBottomRight);
-        if (left) return new IntPtr(HitTestLeft);
-        if (right) return new IntPtr(HitTestRight);
-        if (top) return new IntPtr(HitTestTop);
-        if (bottom) return new IntPtr(HitTestBottom);
-
-        handled = false;
-        return IntPtr.Zero;
     }
 
     private void ApplyWindowChromeAttributes()
@@ -267,45 +210,13 @@ public partial class SmtcTimelineMonitorWindow : Wpf.Ui.Controls.FluentWindow
     private const int DwmWindowAttributeUseImmersiveDarkMode = 20;
     private const int DwmWindowAttributeWindowCornerPreference = 33;
     private const int DwmWindowCornerPreferenceRound = 2;
-    private const int WindowMessageNonClientHitTest = 0x0084;
-    private const int WindowMessageNonClientLeftButtonDown = 0x00A1;
-    private const int HitTestCaption = 2;
-    private const int HitTestLeft = 10;
-    private const int HitTestRight = 11;
-    private const int HitTestTop = 12;
-    private const int HitTestTopLeft = 13;
-    private const int HitTestTopRight = 14;
-    private const int HitTestBottom = 15;
-    private const int HitTestBottomLeft = 16;
-    private const int HitTestBottomRight = 17;
-
     [DllImport("dwmapi.dll", PreserveSig = true)]
     private static extern int DwmSetWindowAttribute(IntPtr hwnd, int dwAttribute, ref int pvAttribute, int cbAttribute);
-
-    [DllImport("user32.dll", SetLastError = true)]
-    private static extern bool GetWindowRect(IntPtr hwnd, out NativeRect rect);
-
-    [DllImport("user32.dll", PreserveSig = true)]
-    private static extern bool ReleaseCapture();
-
-    [DllImport("user32.dll", PreserveSig = true)]
-    private static extern IntPtr SendMessage(IntPtr hwnd, int message, int wParam, int lParam);
-
-    private static int GetSignedLowWord(IntPtr value) => unchecked((short)((long)value & 0xFFFF));
-    private static int GetSignedHighWord(IntPtr value) => unchecked((short)(((long)value >> 16) & 0xFFFF));
-
-    [StructLayout(LayoutKind.Sequential)]
-    private readonly struct NativeRect
-    {
-        public readonly int Left;
-        public readonly int Top;
-        public readonly int Right;
-        public readonly int Bottom;
-    }
 
     private sealed class MonitorMessage
     {
         public string? Type { get; set; }
         public string? Text { get; set; }
+        public string? Edge { get; set; }
     }
 }

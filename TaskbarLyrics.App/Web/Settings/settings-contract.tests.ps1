@@ -32,7 +32,7 @@ foreach ($key in $settings) {
 $requiredHtml = @(
     'id="sourceGrid"', 'id="priorityList"', 'id="selectPopover"', 'role="listbox"',
     'id="colorPopover"', 'id="colorArea"', 'id="restoreDialog"', 'id="clearDialog"',
-    'id="browseButton"', 'id="showLyricsWindowButton"'
+    'id="browseButton"', 'id="showLyricsWindowButton"', 'data-window-resize="top"'
 )
 foreach ($marker in $requiredHtml) {
     if (-not $html.Contains($marker)) { $errors.Add("missing html marker: $marker") }
@@ -45,7 +45,7 @@ $requiredScript = @(
     'window.settingsApp = { setState, setUpdateStatus }', 'window.settingsApp.setWindowState = setWindowState',
     'window.chrome?.webview?.postMessage',
     'type: "reorderSources"', 'type: "pickLocalFolder"', 'type: "showLyricsWindow"',
-    'type: "windowDrag"', 'type: "windowMinimize"', 'type: "windowMaximize"', 'type: "windowClose"',
+    'type: "windowDrag"', 'type: "windowResizeStart"', 'type: "windowMinimize"', 'type: "windowMaximize"', 'type: "windowClose"',
     'function openSelect', 'function closeSelect', 'function rgbToHex', 'function toArgb',
     'function activatePage', 'function renderSources', 'function renderPriority', 'function setWindowState',
     'function positionPopover', 'function postSourceOrder', '"ArrowDown"', '"Home"', '"Escape"'
@@ -62,7 +62,7 @@ foreach ($unsupported in @('AppleMusic', 'Foobar', 'MusicBee', 'AIMP', 'VLC', 'W
     if ($script.Contains($unsupported)) { $errors.Add("unsupported source exposed: $unsupported") }
 }
 
-foreach ($marker in @('case "pickLocalFolder":', 'case "showLyricsWindow":', 'case "windowDrag":', 'case "windowClose":')) {
+foreach ($marker in @('case "pickLocalFolder":', 'case "showLyricsWindow":', 'case "windowDrag":', 'case "windowResizeStart":', 'case "windowClose":')) {
     if (-not $settingsWindow.Contains($marker)) { $errors.Add("missing desktop message: $marker") }
 }
 if (-not $app.Contains('public void ShowLyricsWindow()')) { $errors.Add('missing App.ShowLyricsWindow') }

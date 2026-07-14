@@ -30,11 +30,11 @@
     .titlebar h1 { margin: 0 0 3px; font-size: 16px; font-weight: 700; }
     .titlebar p { margin: 0; color: var(--muted-foreground); font-size: 11px; }
     .titlebar .spacer { flex: 1; }
-    .caption-controls { position: fixed; top: 0; right: 0; z-index: 300; display: flex; }
-    .caption-button { width: 40px; height: 32px; display: grid; place-items: center; border: 0; background: transparent; color: var(--muted-foreground); cursor: pointer; transition: background var(--duration-fast) ease, color var(--duration-fast) ease; }
+    .caption-controls { position: fixed; top: 0; right: 0; z-index: 300; display: flex; height: 35px; }
+    .caption-button { width: 40px; height: 100%; display: grid; place-items: center; border: 0; background: transparent; color: var(--muted-foreground); cursor: pointer; transition: background var(--duration-fast) ease, color var(--duration-fast) ease; }
     .caption-button:hover { background: var(--surface-hover); color: var(--foreground); }
     .caption-button.close:hover { background: var(--danger); color: #fff; }
-    .caption-button svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.5; }
+    .caption-button svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 
     .toolbar { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
     .toolbar .label { color: var(--subtle); font-size: 10px; letter-spacing: .3px; text-transform: uppercase; margin-right: 2px; }
@@ -100,11 +100,32 @@
     ::-webkit-scrollbar-thumb { border: 3px solid transparent; border-radius: 99px; background: var(--muted-foreground); background-clip: padding-box; }
     [data-caption-drag] { user-select: none; -webkit-user-select: none; cursor: default; }
 
+    .window-resize-handles { position: fixed; inset: 0; z-index: 1000; pointer-events: none; }
+    .window-resize-handle { position: absolute; pointer-events: auto; }
+    .window-resize-handle.edge-top { top: 0; left: 12px; right: 12px; height: 6px; cursor: ns-resize; }
+    .window-resize-handle.edge-right { top: 12px; right: 0; bottom: 12px; width: 6px; cursor: ew-resize; }
+    .window-resize-handle.edge-bottom { right: 12px; bottom: 0; left: 12px; height: 6px; cursor: ns-resize; }
+    .window-resize-handle.edge-left { top: 12px; bottom: 12px; left: 0; width: 6px; cursor: ew-resize; }
+    .window-resize-handle.corner-top-left { top: 0; left: 0; width: 12px; height: 12px; cursor: nwse-resize; }
+    .window-resize-handle.corner-top-right { top: 0; right: 0; width: 12px; height: 12px; cursor: nesw-resize; }
+    .window-resize-handle.corner-bottom-right { right: 0; bottom: 0; width: 12px; height: 12px; cursor: nwse-resize; }
+    .window-resize-handle.corner-bottom-left { bottom: 0; left: 0; width: 12px; height: 12px; cursor: nesw-resize; }
+
     .toast { position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 14px); padding: 9px 13px; border: 1px solid var(--input); border-radius: var(--radius-sm); background: var(--popover); color: var(--popover-foreground); font-size: 11px; opacity: 0; pointer-events: none; transition: opacity var(--duration-fast) ease, transform var(--duration-fast) ease; box-shadow: var(--shadow); }
     .toast.show { opacity: 1; transform: translate(-50%, 0); }
   </style>
 </head>
 <body>
+  <div class="window-resize-handles" aria-hidden="true">
+    <div class="window-resize-handle edge-top" data-window-resize="top"></div>
+    <div class="window-resize-handle edge-right" data-window-resize="right"></div>
+    <div class="window-resize-handle edge-bottom" data-window-resize="bottom"></div>
+    <div class="window-resize-handle edge-left" data-window-resize="left"></div>
+    <div class="window-resize-handle corner-top-left" data-window-resize="topLeft"></div>
+    <div class="window-resize-handle corner-top-right" data-window-resize="topRight"></div>
+    <div class="window-resize-handle corner-bottom-right" data-window-resize="bottomRight"></div>
+    <div class="window-resize-handle corner-bottom-left" data-window-resize="bottomLeft"></div>
+  </div>
   <div class="window">
     <header class="titlebar" data-caption-drag>
       <div class="titles">
@@ -316,6 +337,14 @@
 
     let toastTimer; function showToast(msg) { clearTimeout(toastTimer); const el = $("#toast"); el.textContent = msg; el.classList.add("show"); toastTimer = setTimeout(() => el.classList.remove("show"), 1500); }
 
+    document.addEventListener("pointerdown", e => {
+      if (e.button !== 0) return;
+      const handle = e.target.closest?.("[data-window-resize]");
+      if (!handle) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      bridge.post({ type: "windowResizeStart", edge: handle.dataset.windowResize });
+    }, true);
     document.addEventListener("pointerdown", e => { if (e.button !== 0) return; const d = e.target.closest("[data-caption-drag]"); if (!d || e.target.closest("button, input, select, textarea")) return; bridge.post({ type: "windowDrag" }); });
     document.addEventListener("click", e => { const a = e.target.closest("[data-window-action]"); if (!a) return; const t = a.dataset.windowAction; bridge.post({ type: t === "minimize" ? "windowMinimize" : "windowClose" }); });
 
