@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>频谱调试</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --background: oklch(0.145 0 0); --foreground: oklch(0.985 0 0);
+      --card: oklch(0.205 0 0); --card-foreground: oklch(0.985 0 0);
+      --popover: oklch(0.205 0 0); --popover-foreground: oklch(0.985 0 0);
+      --primary: oklch(0.922 0 0); --primary-foreground: oklch(0.205 0 0);
+      --secondary: oklch(0.269 0 0); --secondary-foreground: oklch(0.985 0 0);
+      --muted: oklch(0.269 0 0); --muted-foreground: oklch(0.708 0 0);
+      --border: oklch(1 0 0 / 10%); --input: oklch(1 0 0 / 15%);
+      --ring: var(--primary); --surface-hover: oklch(0.31 0 0); --subtle: oklch(0.62 0 0);
+      --success: oklch(0.765 0.177 157deg); --warning: oklch(0.78 0.16 70); --danger: oklch(0.704 0.191 22.216);
+      --radius: 0.625rem; --radius-sm: calc(var(--radius) - 3px); --radius-lg: calc(var(--radius) + 2px);
+      --duration-fast: 120ms; --duration: 180ms;
+      --shadow: 0 18px 60px rgba(0,0,0,.5); --shadow-sm: 0 1px 2px rgba(0,0,0,.28);
+      font-family: "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; background: var(--background); color: var(--foreground); overflow: hidden; }
+    button, input { font: inherit; } button { color: inherit; }
+    .window { width: 100vw; height: 100vh; display: grid; grid-template-rows: auto auto auto auto 1fr; overflow: hidden; background: var(--background); }
+
+    .titlebar { display: flex; align-items: flex-start; gap: 12px; padding: 14px 96px 12px 16px; border-bottom: 1px solid var(--border); }
+    .titlebar h1 { margin: 0 0 3px; font-size: 16px; font-weight: 700; }
+    .titlebar p { margin: 0; color: var(--muted-foreground); font-size: 11px; }
+    .titlebar .spacer { flex: 1; }
+    .caption-controls { position: fixed; top: 0; right: 0; z-index: 300; display: flex; }
+    .caption-button { width: 40px; height: 32px; display: grid; place-items: center; border: 0; background: transparent; color: var(--muted-foreground); cursor: pointer; transition: background var(--duration-fast) ease, color var(--duration-fast) ease; }
+    .caption-button:hover { background: var(--surface-hover); color: var(--foreground); }
+    .caption-button.close:hover { background: var(--danger); color: #fff; }
+    .caption-button svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.5; }
+
+    .toolbar { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+    .toolbar .label { color: var(--subtle); font-size: 10px; letter-spacing: .3px; text-transform: uppercase; margin-right: 2px; }
+    .segmented { display: inline-flex; border: 1px solid var(--input); border-radius: var(--radius-sm); overflow: hidden; }
+    .segmented button { border: 0; background: transparent; color: var(--muted-foreground); padding: 5px 10px; font-size: 11px; cursor: pointer; transition: background var(--duration-fast) ease, color var(--duration-fast) ease; }
+    .segmented button + button { border-left: 1px solid var(--input); }
+    .segmented button:hover { color: var(--foreground); }
+    .segmented button.active { background: var(--secondary); color: var(--foreground); }
+    .toolbar .right { margin-left: auto; display: flex; gap: 8px; }
+
+    .preview-wrap { padding: 12px 14px 4px; }
+    .preview { position: relative; border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); overflow: hidden; box-shadow: var(--shadow-sm); }
+    .preview canvas { display: block; width: 100%; height: 116px; }
+    .preview .badge { position: absolute; top: 8px; left: 10px; display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border-radius: 99px; background: oklch(0 0 0 / 35%); font-size: 10px; color: var(--muted-foreground); backdrop-filter: blur(4px); }
+    .preview .badge.compare { background: color-mix(in oklch, var(--warning) 22%, transparent); color: var(--warning); }
+    .preview .meter { position: absolute; top: 8px; right: 10px; font-family: Consolas, monospace; font-size: 10px; color: var(--subtle); }
+
+    .diag { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 10px 14px 4px; }
+    .diag .cell { border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--card); padding: 7px 10px; }
+    .diag .k { color: var(--subtle); font-size: 9px; letter-spacing: .3px; text-transform: uppercase; }
+    .diag .v { font-family: Consolas, monospace; font-size: 12px; color: var(--foreground); margin-top: 2px; }
+    .diag .v.ok { color: var(--success); } .diag .v.warn { color: var(--warning); }
+
+    .sliders { min-height: 0; overflow: auto; padding: 4px 14px 14px; }
+    .group { margin-top: 10px; }
+    .group-head { display: flex; align-items: baseline; gap: 8px; padding: 6px 0 2px; }
+    .group-title { color: var(--foreground); font-size: 11px; font-weight: 700; letter-spacing: .3px; }
+    .group-desc { color: var(--subtle); font-size: 10px; }
+    .group-count { margin-left: auto; color: var(--warning); font-size: 10px; font-weight: 600; visibility: hidden; }
+    .group-count.show { visibility: visible; }
+    .row { display: grid; grid-template-columns: 14px 116px 1fr 64px 22px; align-items: center; gap: 8px; padding: 6px 0; }
+    .row .mod { width: 6px; height: 6px; border-radius: 50%; background: var(--warning); opacity: 0; transition: opacity var(--duration-fast) ease; }
+    .row.modded .mod { opacity: 1; }
+    .row .lbl { font-size: 12px; color: var(--foreground); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: help; }
+    .slider-cell { position: relative; height: 18px; display: flex; align-items: center; }
+    .default-tick { position: absolute; top: 50%; width: 2px; height: 10px; background: var(--subtle); opacity: .5; transform: translate(-1px, -50%); pointer-events: none; }
+    .row .value { font-family: Consolas, monospace; font-size: 11px; color: var(--muted-foreground); text-align: right; cursor: text; padding: 2px 4px; border-radius: 4px; border: 1px solid transparent; }
+    .row .value:hover { background: var(--secondary); }
+    .row .value.editing { border-color: var(--input); background: var(--background); color: var(--foreground); }
+    .row .reset { width: 22px; height: 22px; display: grid; place-items: center; border: 0; border-radius: 5px; background: transparent; color: var(--subtle); cursor: pointer; opacity: 0; transition: opacity var(--duration-fast) ease, color var(--duration-fast) ease; }
+    .row.modded .reset { opacity: 1; }
+    .row .reset:hover { color: var(--foreground); background: var(--secondary); }
+    .row .reset svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.6; }
+
+    .btn { min-height: 28px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 11px; border: 1px solid var(--primary); border-radius: var(--radius-sm); background: var(--primary); color: var(--primary-foreground); font-size: 11px; font-weight: 600; cursor: pointer; transition: transform var(--duration-fast) ease, background var(--duration-fast) ease, color var(--duration-fast) ease; }
+    .btn:hover { background: color-mix(in oklch, var(--primary) 85%, var(--background)); }
+    .btn:active { transform: scale(.98); }
+    .btn.secondary { border-color: var(--input); background: var(--secondary); color: var(--foreground); }
+    .btn.secondary:hover { background: var(--surface-hover); }
+    .btn.ghost { border-color: transparent; background: transparent; color: var(--muted-foreground); }
+    .btn.ghost:hover { background: var(--secondary); color: var(--foreground); }
+    .btn.ghost.active { background: color-mix(in oklch, var(--warning) 20%, transparent); color: var(--warning); }
+
+    input[type="range"] { -webkit-appearance: none; appearance: none; width: 100%; height: 18px; background: transparent; cursor: pointer; }
+    input[type="range"]::-webkit-slider-runnable-track { height: 4px; border-radius: 99px; background: linear-gradient(to right, var(--primary) 0%, var(--primary) var(--slider-progress, 0%), var(--secondary) var(--slider-progress, 0%), var(--secondary) 100%); }
+    input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 14px; height: 14px; margin-top: -5px; border-radius: 50%; background: var(--foreground); box-shadow: 0 0 0 2px var(--background), 0 1px 4px rgba(0,0,0,.45); transition: transform var(--duration-fast) ease; }
+    input[type="range"]:hover::-webkit-slider-thumb { transform: scale(1.12); }
+    input[type="range"]:focus-visible { outline: none; }
+    input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--ring); }
+
+    ::-webkit-scrollbar { width: 9px; height: 9px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { border: 3px solid transparent; border-radius: 99px; background: var(--muted-foreground); background-clip: padding-box; }
+    [data-caption-drag] { user-select: none; -webkit-user-select: none; cursor: default; }
+
+    .toast { position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 14px); padding: 9px 13px; border: 1px solid var(--input); border-radius: var(--radius-sm); background: var(--popover); color: var(--popover-foreground); font-size: 11px; opacity: 0; pointer-events: none; transition: opacity var(--duration-fast) ease, transform var(--duration-fast) ease; box-shadow: var(--shadow); }
+    .toast.show { opacity: 1; transform: translate(-50%, 0); }
+  </style>
+</head>
+<body>
+  <div class="window">
+    <header class="titlebar" data-caption-drag>
+      <div class="titles">
+        <h1>频谱调试</h1>
+        <p>实时调节，自动保存</p>
+      </div>
+      <div class="spacer"></div>
+      <div class="caption-controls">
+        <button class="caption-button" type="button" data-window-action="minimize" aria-label="最小化"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6h8"/></svg></button>
+        <button class="caption-button close" type="button" data-window-action="close" aria-label="关闭"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 3l6 6M9 3l-6 6"/></svg></button>
+      </div>
+    </header>
+
+    <div class="toolbar">
+      <span class="label">预设</span>
+      <div class="segmented" id="presets">
+        <button type="button" data-preset="default" class="active">默认</button>
+        <button type="button" data-preset="soft">柔和</button>
+        <button type="button" data-preset="dynamic">动感</button>
+        <button type="button" data-preset="minimal">极简</button>
+      </div>
+      <div class="right">
+        <button class="btn ghost" type="button" id="compareBtn">按住对比默认</button>
+        <button class="btn secondary" type="button" id="resetBtn">重置默认</button>
+      </div>
+    </div>
+
+    <div class="preview-wrap">
+      <div class="preview">
+        <canvas id="canvas" width="500" height="116"></canvas>
+        <span class="badge" id="previewBadge">实时预览</span>
+        <span class="meter" id="meter">24 柱 · 0 fps</span>
+      </div>
+    </div>
+
+    <div class="diag">
+      <div class="cell"><div class="k">播放/纯音乐</div><div class="v ok" id="dPlay">—</div></div>
+      <div class="cell"><div class="k">输入峰值</div><div class="v" id="dIn">—</div></div>
+      <div class="cell"><div class="k">输出峰值</div><div class="v" id="dOut">—</div></div>
+      <div class="cell"><div class="k">格式</div><div class="v" id="dFmt">—</div></div>
+    </div>
+
+    <section class="sliders" id="sliders"></section>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    const $ = s => document.querySelector(s);
+    const bridge = { post(m) { window.chrome?.webview?.postMessage(JSON.stringify(m)); } };
+    const canvas = $("#canvas"); const ctx = canvas.getContext("2d");
+
+    const defs = [
+      { key: "SampleWindow", label: "FFT 窗口", suffix: "", min: 512, max: 2048, step: 512, value: 2048, group: "采集", desc: "FFT 采样窗口大小，越大频率分辨率越高、响应越慢", snap: "fft" },
+      { key: "UpdateIntervalMs", label: "更新间隔", suffix: "ms", min: 16, max: 100, step: 1, value: 16, group: "采集", desc: "频谱采集与刷新间隔，越小越流畅、越耗 CPU" },
+      { key: "MinFrequency", label: "最低频率", suffix: "Hz", min: 20, max: 180, step: 1, value: 35, group: "频段", desc: "频谱最低频率，过滤超低频噪声" },
+      { key: "MaxFrequency", label: "最高频率", suffix: "Hz", min: 3000, max: 18000, step: 100, value: 7000, group: "频段", desc: "频谱最高频率，决定可显示的高频上限" },
+      { key: "PeakInitial", label: "峰值初始值", suffix: "", min: 0.004, max: 0.16, step: 0.001, value: 0.035, group: "峰值", desc: "峰值跟踪的起始参考值" },
+      { key: "PeakDecay", label: "峰值衰减", suffix: "", min: 0.85, max: 0.995, step: 0.001, value: 0.85, group: "峰值", desc: "峰值随时间衰减的速率，越大衰减越慢" },
+      { key: "PeakFloor", label: "峰值下限", suffix: "", min: 0.003, max: 0.08, step: 0.001, value: 0.012, group: "峰值", desc: "峰值下限，避免静音时柱子完全归零" },
+      { key: "PeakCeiling", label: "峰值上限", suffix: "", min: 0.04, max: 1.0, step: 0.01, value: 0.42, group: "峰值", desc: "峰值上限，限制最大幅度，防止爆顶" },
+      { key: "NoiseFloor", label: "噪声门", suffix: "", min: 0, max: 0.2, step: 0.001, value: 0.035, group: "峰值", desc: "噪声门限，低于此值的信号被忽略" },
+      { key: "OutputCurve", label: "输出曲线", suffix: "", min: 0.25, max: 1.5, step: 0.01, value: 1.0, group: "整形", desc: "输出 Gamma 曲线，<1 提亮弱信号、>1 拉开强弱差" },
+      { key: "LowBandGain", label: "低频增益", suffix: "", min: 0.2, max: 3.5, step: 0.01, value: 1.6, group: "整形", desc: "最低频段的增益，提升低频存在感" },
+      { key: "BandGainStep", label: "频段增益斜率", suffix: "", min: -0.04, max: 0.1, step: 0.001, value: 0.01, group: "整形", desc: "增益随频段升高而变化的斜率" },
+      { key: "FrequencyWeightBase", label: "频率权重基准", suffix: "", min: 0.2, max: 2.2, step: 0.01, value: 0.92, group: "整形", desc: "频率权重曲线的基准值" },
+      { key: "FrequencyWeightSlope", label: "频率权重斜率", suffix: "", min: -0.08, max: 0.16, step: 0.001, value: 0.01, group: "整形", desc: "频率权重随频率升高而变化的斜率" },
+      { key: "BackendAttack", label: "后端上升速度", suffix: "", min: 0.05, max: 1.0, step: 0.01, value: 0.86, group: "响应", desc: "后端峰值上升跟随速度，越大越跟手" },
+      { key: "BackendRelease", label: "后端下降速度", suffix: "", min: 0.02, max: 1.0, step: 0.01, value: 0.48, group: "响应", desc: "后端峰值下降速度，越大回落越快" },
+      { key: "FrontendRise", label: "前端上升速度", suffix: "", min: 0.02, max: 1.0, step: 0.01, value: 0.7, group: "响应", desc: "显示柱上升速度，越大起跳越快" },
+      { key: "FrontendFall", label: "前端下降速度", suffix: "", min: 0.02, max: 1.0, step: 0.01, value: 0.35, group: "响应", desc: "显示柱下降速度，越大消失越快" },
+      { key: "MinBarHeight", label: "最小柱高", suffix: "px", min: 1, max: 14, step: 0.5, value: 4, group: "外观", desc: "柱子最小高度，避免完全消失" },
+      { key: "BarHeightRange", label: "柱高范围", suffix: "px", min: 4, max: 36, step: 0.5, value: 24, group: "外观", desc: "柱子从最小到最大的高度跨度" },
+      { key: "BarOpacity", label: "柱子透明度", suffix: "", min: 0.2, max: 1.0, step: 0.01, value: 0.78, group: "外观", desc: "柱子不透明度" },
+    ];
+    const groupDesc = { "采集": "采集与刷新", "频段": "频率范围", "峰值": "峰值跟踪与噪声门", "整形": "增益与曲线", "响应": "升降速度", "外观": "柱子外观" };
+    const presets = {
+      default: {},
+      soft: { PeakCeiling: 0.3, OutputCurve: 0.7, LowBandGain: 1.2, FrontendFall: 0.2, BarOpacity: 0.9, BarHeightRange: 18 },
+      dynamic: { LowBandGain: 2.4, OutputCurve: 1.3, FrontendRise: 0.95, FrontendFall: 0.5, BarHeightRange: 30, MinBarHeight: 2 },
+      minimal: { MinBarHeight: 8, BarHeightRange: 12, BarOpacity: 0.6, PeakCeiling: 0.25, OutputCurve: 0.6 },
+    };
+    const defaultsMap = Object.fromEntries(defs.map(d => [d.key, d.value]));
+    let state = defs.map(d => ({ ...d }));
+    let compare = false;
+    const refs = {};
+
+    const fmt = v => Math.abs(v) >= 100 ? v.toFixed(0) : v.toFixed(3).replace(/\.?0+$/, "");
+    const fmtValue = d => d.suffix ? `${fmt(d.value)} ${d.suffix}` : fmt(d.value);
+    function syncProgress(input) { const min = Number(input.min), max = Number(input.max); input.style.setProperty("--slider-progress", `${max === min ? 0 : ((Number(input.value) - min) / (max - min)) * 100}%`); }
+    function coerceFft(v) { return v <= 768 ? 512 : v <= 1536 ? 1024 : 2048; }
+
+    function build() {
+      const wrap = $("#sliders"); wrap.innerHTML = "";
+      let lastGroup = null, groupHead = null, groupCount = 0;
+      const finalize = () => { if (groupHead) { const c = groupHead.querySelector(".group-count"); c.textContent = `已改 ${groupCount} 项`; c.classList.toggle("show", groupCount > 0); } };
+      state.forEach(d => {
+        if (d.group !== lastGroup) { finalize(); lastGroup = d.group; groupCount = 0; groupHead = document.createElement("div"); groupHead.className = "group-head"; groupHead.innerHTML = `<span class="group-title">${d.group}</span><span class="group-desc">${groupDesc[d.group] || ""}</span><span class="group-count"></span>`; wrap.appendChild(groupHead); }
+        const modded = Math.abs(d.value - defaultsMap[d.key]) > 1e-9;
+        if (modded) groupCount++;
+        const row = document.createElement("div"); row.className = `row${modded ? " modded" : ""}`;
+        row.innerHTML = `<span class="mod" title="已修改"></span><span class="lbl" title="${d.desc}\n范围 ${d.min}–${d.max} · 默认 ${defaultsMap[d.key]}">${d.label}</span>`;
+        const sc = document.createElement("div"); sc.className = "slider-cell";
+        const dp = (defaultsMap[d.key] - d.min) / (d.max - d.min) * 100;
+        sc.innerHTML = `<span class="default-tick" style="left:${dp}%" title="默认值"></span>`;
+        const input = document.createElement("input"); input.type = "range"; input.min = d.min; input.max = d.max; input.step = d.step; input.value = d.value; input.setAttribute("aria-label", d.label);
+        sc.appendChild(input); row.appendChild(sc);
+        const val = document.createElement("span"); val.className = "value"; val.textContent = fmtValue(d); val.title = "点击输入";
+        const reset = document.createElement("button"); reset.className = "reset"; reset.type = "button"; reset.title = "恢复该项默认"; reset.setAttribute("aria-label", `恢复${d.label}默认`); reset.innerHTML = `<svg viewBox="0 0 16 16"><path d="M3 8a5 5 0 1 0 1.5-3.5M3 3v3h3"/></svg>`;
+        const refresh = () => { val.textContent = fmtValue(d); syncProgress(input); const m = Math.abs(d.value - defaultsMap[d.key]) > 1e-9; row.classList.toggle("modded", m); recount(); };
+        input.addEventListener("input", () => { let v = Number(input.value); if (d.snap === "fft") { v = coerceFft(v); input.value = v; } d.value = v; refresh(); bridge.post({ type: "update", key: d.key, value: v }); clearPresetActive(); });
+        val.addEventListener("click", () => startEdit(val, input, d, refresh));
+        reset.addEventListener("click", () => { d.value = defaultsMap[d.key]; input.value = d.value; refresh(); bridge.post({ type: "update", key: d.key, value: d.value }); showToast(`${d.label} 已恢复默认`); });
+        row.appendChild(val); row.appendChild(reset);
+        wrap.appendChild(row); syncProgress(input);
+        refs[d.key] = { input, val, row, refresh, def: d };
+      });
+      finalize();
+    }
+    function recount() {
+      const groups = {};
+      state.forEach(d => { if (Math.abs(d.value - defaultsMap[d.key]) > 1e-9) groups[d.group] = (groups[d.group] || 0) + 1; });
+      document.querySelectorAll(".group-head").forEach(gh => { const name = gh.querySelector(".group-title").textContent; const c = gh.querySelector(".group-count"); const n = groups[name] || 0; c.textContent = `已改 ${n} 项`; c.classList.toggle("show", n > 0); });
+    }
+    function startEdit(val, input, d, refresh) {
+      const ed = document.createElement("input"); ed.type = "text"; ed.value = fmt(d.value); ed.className = "value editing"; ed.style.width = "64px";
+      val.replaceWith(ed); ed.focus(); ed.select();
+      const commit = () => { const v = Number(ed.value); if (!isNaN(v)) { let nv = Math.min(d.max, Math.max(d.min, v)); if (d.snap === "fft") nv = coerceFft(nv); d.value = nv; input.value = nv; bridge.post({ type: "update", key: d.key, value: nv }); clearPresetActive(); } ed.replaceWith(val); refresh(); };
+      ed.addEventListener("blur", commit); ed.addEventListener("keydown", e => { if (e.key === "Enter") ed.blur(); else if (e.key === "Escape") { ed.replaceWith(val); refresh(); } });
+    }
+    function clearPresetActive() { document.querySelectorAll("#presets button").forEach(b => b.classList.remove("active")); }
+
+    function setSettings(values) {
+      if (!values) return;
+      state.forEach(d => { if (values[d.key] !== undefined) d.value = values[d.key]; });
+      state.forEach(d => { const r = refs[d.key]; if (r) { r.input.value = d.value; r.refresh(); } });
+      // 预设高亮：若与某预设完全一致则点亮
+      const match = Object.keys(presets).find(name => state.every(d => !presets[name].hasOwnProperty(d.key) ? Math.abs(d.value - defaultsMap[d.key]) < 1e-9 : Math.abs(d.value - presets[name][d.key]) < 1e-9));
+      document.querySelectorAll("#presets button").forEach(b => b.classList.toggle("active", b.dataset.preset === (match || (state.every(d => Math.abs(d.value - defaultsMap[d.key]) < 1e-9) ? "default" : ""))));
+    }
+    function setDiagnostics(d) {
+      if (!d) return;
+      $("#dPlay").textContent = `${d.IsPlaying ? '是' : '否'} / ${d.IsPureMusicMode ? '是' : '否'}`;
+      $("#dPlay").className = `v ${d.IsPlaying ? 'ok' : 'warn'}`;
+      $("#dIn").textContent = (d.InputPeak ?? 0).toFixed(4);
+      $("#dOut").textContent = (d.OutputPeak ?? 0).toFixed(4);
+      $("#dFmt").textContent = d.Format || '—';
+    }
+
+    // ---- 预览合成 ----
+    const BARS = 24; const barVals = new Array(BARS).fill(0);
+    let frames = 0, fps = 0, lastFpsT = performance.now();
+    function getParam(key) { return compare ? defaultsMap[key] : (state.find(s => s.key === key)?.value ?? defaultsMap[key]); }
+    function loop(now) {
+      const time = now / 1000;
+      const LowBandGain = getParam("LowBandGain"), BandGainStep = getParam("BandGainStep");
+      const FrequencyWeightBase = getParam("FrequencyWeightBase"), FrequencyWeightSlope = getParam("FrequencyWeightSlope");
+      const OutputCurve = getParam("OutputCurve"), NoiseFloor = getParam("NoiseFloor");
+      const PeakFloor = getParam("PeakFloor"), PeakCeiling = getParam("PeakCeiling");
+      const FrontendRise = getParam("FrontendRise"), FrontendFall = getParam("FrontendFall");
+      const MinBarHeight = getParam("MinBarHeight"), BarHeightRange = getParam("BarHeightRange"), BarOpacity = getParam("BarOpacity");
+      for (let i = 0; i < BARS; i++) {
+        const norm = i / (BARS - 1);
+        const gain = LowBandGain * (1 + BandGainStep * 10 * norm);
+        const weight = FrequencyWeightBase + FrequencyWeightSlope * 10 * norm;
+        let e = 0;
+        e += 0.6 * Math.abs(Math.sin(time * 1.3 + i * 0.3)) * Math.exp(-i * 0.12);
+        e += 0.4 * Math.abs(Math.sin(time * 2.1 + i * 0.5 + 1)) * Math.exp(-Math.abs(i - 6) * 0.2);
+        e += 0.3 * Math.abs(Math.sin(time * 3.4 + i * 0.9 + 2)) * Math.exp(-Math.abs(i - 14) * 0.25);
+        e += 0.12 * Math.sin(time * 5 + i);
+        e = Math.max(0, e) * gain * weight;
+        e = Math.max(0, e - NoiseFloor);
+        e = Math.min(PeakCeiling, Math.max(PeakFloor, e));
+        e = Math.pow(Math.max(0, e) / PeakCeiling, OutputCurve);
+        const t = e * (i / BARS);
+        barVals[i] = t > barVals[i] ? barVals[i] + (t - barVals[i]) * FrontendRise : barVals[i] + (t - barVals[i]) * FrontendFall;
+      }
+      const w = canvas.width, h = canvas.height;
+      ctx.clearRect(0, 0, w, h);
+      const gap = 3; const bw = (w - gap * (BARS + 1)) / BARS;
+      let outPeak = 0;
+      for (let i = 0; i < BARS; i++) {
+        const v = Math.max(0, Math.min(1, barVals[i]));
+        outPeak = Math.max(outPeak, v);
+        const bh = MinBarHeight + v * BarHeightRange;
+        const x = gap + i * (bw + gap);
+        ctx.fillStyle = `oklch(0.985 0 0 / ${BarOpacity})`;
+        ctx.fillRect(x, h - 8 - bh, bw, bh);
+      }
+      frames++;
+      if (now - lastFpsT >= 500) { fps = Math.round(frames * 1000 / (now - lastFpsT)); frames = 0; lastFpsT = now; }
+      $("#meter").textContent = `${BARS} 柱 · ${fps} fps · 峰值 ${outPeak.toFixed(2)}`;
+      requestAnimationFrame(loop);
+    }
+
+    $("#presets").addEventListener("click", e => { const b = e.target.closest("button[data-preset]"); if (!b) return; applyPreset(b.dataset.preset); showToast(`已载入「${b.textContent}」`); });
+    function applyPreset(name) {
+      const p = presets[name];
+      state.forEach(d => { d.value = p.hasOwnProperty(d.key) ? p[d.key] : defaultsMap[d.key]; });
+      state.forEach(d => { const r = refs[d.key]; if (r) { r.input.value = d.value; r.refresh(); } });
+      document.querySelectorAll("#presets button").forEach(b => b.classList.toggle("active", b.dataset.preset === name));
+      bridge.post({ type: "updateAll", values: Object.fromEntries(state.map(s => [s.key, s.value])) });
+    }
+    $("#resetBtn").addEventListener("click", () => { bridge.post({ type: "reset" }); showToast("已重置为默认参数"); });
+    const cmpBtn = $("#compareBtn");
+    const setCompare = v => { compare = v; cmpBtn.classList.toggle("active", v); $("#previewBadge").className = `badge${v ? " compare" : ""}`; $("#previewBadge").textContent = v ? "对比默认中" : "实时预览"; };
+    cmpBtn.addEventListener("mousedown", () => setCompare(true)); cmpBtn.addEventListener("mouseup", () => setCompare(false)); cmpBtn.addEventListener("mouseleave", () => setCompare(false));
+    cmpBtn.addEventListener("touchstart", e => { e.preventDefault(); setCompare(true); }); cmpBtn.addEventListener("touchend", () => setCompare(false));
+
+    let toastTimer; function showToast(msg) { clearTimeout(toastTimer); const el = $("#toast"); el.textContent = msg; el.classList.add("show"); toastTimer = setTimeout(() => el.classList.remove("show"), 1500); }
+
+    document.addEventListener("pointerdown", e => { if (e.button !== 0) return; const d = e.target.closest("[data-caption-drag]"); if (!d || e.target.closest("button, input, select, textarea")) return; bridge.post({ type: "windowDrag" }); });
+    document.addEventListener("click", e => { const a = e.target.closest("[data-window-action]"); if (!a) return; const t = a.dataset.windowAction; bridge.post({ type: t === "minimize" ? "windowMinimize" : "windowClose" }); });
+
+    window.spectrumTuning = { setSettings, setDiagnostics };
+    bridge.post({ type: "ready" });
+    build(); requestAnimationFrame(loop);
+  </script>
+</body>
+</html>

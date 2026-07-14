@@ -63,7 +63,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
 
     private void SettingsWindow_StateChanged(object? sender, EventArgs e)
     {
-        UpdateMaximizeRestoreIcon();
+        _ = PushWindowStateToWebAsync();
     }
 
     private void SettingsWindow_Closed(object? sender, EventArgs e)
@@ -73,6 +73,8 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         {
             source.RemoveHook(WndProc);
         }
+
+        EdgeHitThrough.Detach(new WindowInteropHelper(this).Handle);
 
         if (SettingsWebView.CoreWebView2 is not null)
         {
@@ -109,6 +111,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         var htmlPath = Path.Combine(AppContext.BaseDirectory, "Web", "Settings", "settings.html");
         SettingsWebView.Source = new Uri(htmlPath);
         _isWebReady = true;
+        EdgeHitThrough.Attach(new WindowInteropHelper(this).Handle);
     }
 
     private async void SettingsWebView_WebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
@@ -129,6 +132,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         {
             case "ready":
                 await PushSettingsToWebAsync();
+                await PushWindowStateToWebAsync();
                 break;
             case "update":
                 ApplyWebSettingUpdate(message.Key, message.Value);
@@ -173,6 +177,18 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 OpenExternalLink(message.Value.HasValue
                     ? ReadString(message.Value.Value, UpdateChecker.RepositoryUrl)
                     : UpdateChecker.RepositoryUrl);
+                break;
+            case "windowDrag":
+                BeginNativeWindowDrag();
+                break;
+            case "windowMinimize":
+                WindowState = WindowState.Minimized;
+                break;
+            case "windowMaximize":
+                ToggleMaximizeRestore();
+                break;
+            case "windowClose":
+                Close();
                 break;
         }
     }
@@ -608,6 +624,17 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         await SettingsWebView.ExecuteScriptAsync($"window.settingsApp?.setUpdateStatus({json});");
     }
 
+    private async Task PushWindowStateToWebAsync()
+    {
+        if (!_isWebReady || SettingsWebView.CoreWebView2 is null)
+        {
+            return;
+        }
+
+        var state = WindowState == WindowState.Maximized ? "maximized" : "normal";
+        await SettingsWebView.ExecuteScriptAsync($"window.settingsApp?.setWindowState({JsonSerializer.Serialize(state, JsonOptions)});");
+    }
+
     private static void OpenExternalLink(string url)
     {
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) ||
@@ -795,20 +822,6 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         target.EnableSmtcTimelineMonitor = source.EnableSmtcTimelineMonitor;
     }
 
-    private void CaptionDragArea_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-    {
-        if (e.ClickCount == 2)
-        {
-            ToggleMaximizeRestore();
-            return;
-        }
-
-        if (e.ButtonState == MouseButtonState.Pressed)
-        {
-            BeginNativeWindowDrag();
-        }
-    }
-
     private void BeginNativeWindowDrag()
     {
         var hwnd = new WindowInteropHelper(this).Handle;
@@ -856,34 +869,11 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         return IntPtr.Zero;
     }
 
-    private void MinimizeButton_Click(object sender, RoutedEventArgs e)
-    {
-        WindowState = WindowState.Minimized;
-    }
-
-    private void MaximizeRestoreButton_Click(object sender, RoutedEventArgs e)
-    {
-        ToggleMaximizeRestore();
-    }
-
-    private void CloseButton_Click(object sender, RoutedEventArgs e)
-    {
-        Close();
-    }
-
     private void ToggleMaximizeRestore()
     {
         WindowState = WindowState == WindowState.Maximized
             ? WindowState.Normal
             : WindowState.Maximized;
-        UpdateMaximizeRestoreIcon();
-    }
-
-    private void UpdateMaximizeRestoreIcon()
-    {
-        MaximizeRestoreIcon.Text = WindowState == WindowState.Maximized
-            ? "\uE923"
-            : "\uE922";
     }
 
     private void ApplyWindowChromeAttributes()
@@ -896,7 +886,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
 
         if (HwndSource.FromHwnd(hwnd) is { CompositionTarget: { } compositionTarget })
         {
-            compositionTarget.BackgroundColor = System.Windows.Media.Color.FromRgb(7, 14, 29);
+            compositionTarget.BackgroundColor = System.Windows.Media.Color.FromRgb(10, 10, 10);
         }
 
         var darkMode = 1;

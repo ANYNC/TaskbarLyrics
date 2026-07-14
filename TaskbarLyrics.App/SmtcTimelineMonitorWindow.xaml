@@ -1,41 +1,31 @@
-<Window x:Class="TaskbarLyrics.App.SmtcTimelineMonitorWindow"
-        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Style="{x:Null}"
-        Title="SMTC Timeline Monitor"
-        Width="620"
-        Height="380"
-        MinWidth="480"
-        MinHeight="280"
-        Background="#202020"
-        Foreground="#F8FAFC"
-        WindowStartupLocation="CenterOwner">
-    <Grid Margin="10">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
-
-        <TextBox x:Name="TimelineTextBox"
-                 Grid.Row="0"
-                 Background="#2D2D2D"
+<ui:FluentWindow x:Class="TaskbarLyrics.App.SmtcTimelineMonitorWindow"
+                 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                 xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+                 xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+                 xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+                 Title="SMTC Timeline Monitor"
+                 Width="640"
+                 Height="460"
+                 MinWidth="520"
+                 MinHeight="380"
+                 WindowStartupLocation="Manual"
+                 WindowStyle="None"
+                 ResizeMode="CanResize"
+                 Background="#0A0A0A"
                  Foreground="#F8FAFC"
-                 BorderBrush="#3F3F3F"
-                 Padding="6"
-                 FontFamily="Consolas"
-                 FontSize="13"
-                 IsReadOnly="True"
-                 VerticalScrollBarVisibility="Auto"
-                 HorizontalScrollBarVisibility="Auto"
-                 TextWrapping="NoWrap"
-                 AcceptsReturn="True" />
+                 WindowCornerPreference="Round"
+                 ExtendsContentIntoTitleBar="True"
+                 UseLayoutRounding="True"
+                 SnapsToDevicePixels="True">
+    <shell:WindowChrome.WindowChrome>
+        <shell:WindowChrome CaptionHeight="0"
+                            CornerRadius="0"
+                            GlassFrameThickness="0"
+                            ResizeBorderThickness="8"
+                            UseAeroCaptionButtons="False" />
+    </shell:WindowChrome.WindowChrome>
 
-        <StackPanel Grid.Row="1"
-                    Orientation="Horizontal"
-                    HorizontalAlignment="Right"
-                    Margin="0,10,0,0">
-            <Button Width="110" Margin="0,0,8,0" Content="Copy" Click="CopyButton_Click" />
-            <Button Width="110" Content="Close" Click="CloseButton_Click" />
-        </StackPanel>
-    </Grid>
-</Window>
+    <wv2:WebView2 x:Name="MonitorWebView"
+                  DefaultBackgroundColor="#0A0A0A" />
+</ui:FluentWindow>

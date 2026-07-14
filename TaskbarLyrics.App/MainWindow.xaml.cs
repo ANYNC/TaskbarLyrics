@@ -302,11 +302,6 @@ public partial class MainWindow : Window
         }
 
         var monitorWindow = new SmtcTimelineMonitorWindow(smtcProvider);
-        if (IsLoaded && IsVisible)
-        {
-            monitorWindow.Owner = this;
-        }
-
         monitorWindow.Closed += OnSmtcTimelineMonitorClosed;
         _smtcTimelineMonitorWindow = monitorWindow;
         monitorWindow.Show();

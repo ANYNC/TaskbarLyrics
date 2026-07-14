@@ -42,10 +42,12 @@ if ([regex]::IsMatch($html, '<select\b', 'IgnoreCase')) { $errors.Add('native se
 if ([regex]::IsMatch($html, 'input[^>]+type="color"', 'IgnoreCase')) { $errors.Add('native color input remains') }
 
 $requiredScript = @(
-    'window.settingsApp = { setState, setUpdateStatus }', 'window.chrome?.webview?.postMessage',
+    'window.settingsApp = { setState, setUpdateStatus }', 'window.settingsApp.setWindowState = setWindowState',
+    'window.chrome?.webview?.postMessage',
     'type: "reorderSources"', 'type: "pickLocalFolder"', 'type: "showLyricsWindow"',
+    'type: "windowDrag"', 'type: "windowMinimize"', 'type: "windowMaximize"', 'type: "windowClose"',
     'function openSelect', 'function closeSelect', 'function rgbToHex', 'function toArgb',
-    'function activatePage', 'function renderSources', 'function renderPriority',
+    'function activatePage', 'function renderSources', 'function renderPriority', 'function setWindowState',
     'function positionPopover', 'function postSourceOrder', '"ArrowDown"', '"Home"', '"Escape"'
 )
 foreach ($marker in $requiredScript) {
@@ -60,7 +62,7 @@ foreach ($unsupported in @('AppleMusic', 'Foobar', 'MusicBee', 'AIMP', 'VLC', 'W
     if ($script.Contains($unsupported)) { $errors.Add("unsupported source exposed: $unsupported") }
 }
 
-foreach ($marker in @('case "pickLocalFolder":', 'case "showLyricsWindow":')) {
+foreach ($marker in @('case "pickLocalFolder":', 'case "showLyricsWindow":', 'case "windowDrag":', 'case "windowClose":')) {
     if (-not $settingsWindow.Contains($marker)) { $errors.Add("missing desktop message: $marker") }
 }
 if (-not $app.Contains('public void ShowLyricsWindow()')) { $errors.Add('missing App.ShowLyricsWindow') }

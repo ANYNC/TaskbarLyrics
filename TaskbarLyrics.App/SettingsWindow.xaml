@@ -6,13 +6,13 @@
                  xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
                  Title="TaskbarLyrics - 设置"
                  Width="1280"
-                 Height="860"
+                 Height="765"
                  MinWidth="1080"
                  MinHeight="720"
                  WindowStartupLocation="CenterScreen"
                  WindowStyle="None"
                  ResizeMode="CanResize"
-                 Background="#18181B"
+                 Background="#0A0A0A"
                  Foreground="#F8FAFC"
                  WindowCornerPreference="Round"
                  ExtendsContentIntoTitleBar="True"
@@ -26,105 +26,6 @@
                             UseAeroCaptionButtons="False" />
     </shell:WindowChrome.WindowChrome>
 
-    <ui:FluentWindow.Resources>
-        <Style TargetType="TextBlock">
-            <Setter Property="Foreground" Value="#F8FAFC" />
-            <Setter Property="FontFamily" Value="Segoe UI Variable Text, Segoe UI, Microsoft YaHei UI" />
-        </Style>
-
-        <Style x:Key="CaptionButtonStyle" TargetType="Button">
-            <Setter Property="Width" Value="46" />
-            <Setter Property="Height" Value="40" />
-            <Setter Property="Foreground" Value="#F8FAFC" />
-            <Setter Property="Background" Value="Transparent" />
-            <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="Padding" Value="0" />
-            <Setter Property="Cursor" Value="Arrow" />
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="{x:Type Button}">
-                        <Border x:Name="Chrome" Background="{TemplateBinding Background}">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Chrome" Property="Background" Value="#22FFFFFF" />
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Chrome" Property="Background" Value="#33FFFFFF" />
-                            </Trigger>
-                            <MultiTrigger>
-                                <MultiTrigger.Conditions>
-                                    <Condition Property="Tag" Value="Close" />
-                                    <Condition Property="IsMouseOver" Value="True" />
-                                </MultiTrigger.Conditions>
-                                <Setter TargetName="Chrome" Property="Background" Value="#E81123" />
-                                <Setter Property="Foreground" Value="White" />
-                            </MultiTrigger>
-                            <MultiTrigger>
-                                <MultiTrigger.Conditions>
-                                    <Condition Property="Tag" Value="Close" />
-                                    <Condition Property="IsPressed" Value="True" />
-                                </MultiTrigger.Conditions>
-                                <Setter TargetName="Chrome" Property="Background" Value="#C50F1F" />
-                                <Setter Property="Foreground" Value="White" />
-                            </MultiTrigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-    </ui:FluentWindow.Resources>
-
-    <Grid Background="#18181B">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="40" />
-            <RowDefinition Height="*" />
-            <RowDefinition Height="8" />
-        </Grid.RowDefinitions>
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="8" />
-            <ColumnDefinition Width="*" />
-            <ColumnDefinition Width="8" />
-        </Grid.ColumnDefinitions>
-
-        <Border Grid.Row="0"
-                Grid.ColumnSpan="3"
-                Background="#18181B"
-                MouseLeftButtonDown="CaptionDragArea_MouseLeftButtonDown">
-            <TextBlock Text="TaskbarLyrics - 设置"
-                       Margin="16,0,0,0"
-                       FontSize="12"
-                       Foreground="#7AFFFFFF"
-                       VerticalAlignment="Center" />
-        </Border>
-
-        <StackPanel Grid.Row="0"
-                    Grid.ColumnSpan="3"
-                    Orientation="Horizontal"
-                    HorizontalAlignment="Right"
-                    VerticalAlignment="Top">
-            <Button Style="{StaticResource CaptionButtonStyle}"
-                    WindowChrome.IsHitTestVisibleInChrome="True"
-                    Click="MinimizeButton_Click">
-                <TextBlock Text="&#xE921;" FontFamily="Segoe MDL2 Assets" FontSize="10" />
-            </Button>
-            <Button Style="{StaticResource CaptionButtonStyle}"
-                    WindowChrome.IsHitTestVisibleInChrome="True"
-                    Click="MaximizeRestoreButton_Click">
-                <TextBlock x:Name="MaximizeRestoreIcon" Text="&#xE922;" FontFamily="Segoe MDL2 Assets" FontSize="10" />
-            </Button>
-            <Button Style="{StaticResource CaptionButtonStyle}"
-                    WindowChrome.IsHitTestVisibleInChrome="True"
-                    Tag="Close"
-                    Click="CloseButton_Click">
-                <TextBlock Text="&#xE8BB;" FontFamily="Segoe MDL2 Assets" FontSize="10" />
-            </Button>
-        </StackPanel>
-
-        <wv2:WebView2 x:Name="SettingsWebView"
-                      Grid.Row="1"
-                      Grid.Column="1"
-                      DefaultBackgroundColor="#18181B" />
-    </Grid>
+    <wv2:WebView2 x:Name="SettingsWebView"
+                  DefaultBackgroundColor="#0A0A0A" />
 </ui:FluentWindow>

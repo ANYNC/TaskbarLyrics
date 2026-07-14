@@ -75,3 +75,16 @@ dotnet publish TaskbarLyrics.App/TaskbarLyrics.App.csproj -c Release -r win-x64 
 ```bash
 dotnet publish TaskbarLyrics.App/TaskbarLyrics.App.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -p:DebugType=None -p:DebugSymbols=false -o publish/single-compressed
 ```
+
+一键生成版本目录和 ZIP 发布包：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/publish-release.ps1
+```
+
+脚本会提示输入 `x.x.x` 格式的版本号，将版本同步写入 `TaskbarLyrics.App.csproj`，发布到 `publish/TaskbarLyrics-x.x.x/`，并生成同名 ZIP。也可以直接传入版本号；同版本产物已存在时，需显式使用 `-Force` 覆盖：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/publish-release.ps1 -Version 1.2.0
+powershell -ExecutionPolicy Bypass -File scripts/publish-release.ps1 -Version 1.2.0 -Force
+```

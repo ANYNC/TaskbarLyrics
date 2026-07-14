@@ -1,16 +1,24 @@
-using System.Globalization;
+using System.Collections.Generic;
+using System.IO;
+using System.Runtime.InteropServices;
+using System.Text.Json;
 using System.Windows;
-using System.Windows.Controls;
+using System.Windows.Interop;
 using System.Windows.Threading;
-using Media = System.Windows.Media;
+using Microsoft.Web.WebView2.Core;
 
 namespace TaskbarLyrics.App;
 
-public partial class SpectrumTuningWindow : Window
+public partial class SpectrumTuningWindow : Wpf.Ui.Controls.FluentWindow
 {
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
+
     private readonly Action<SpectrumTuningSettings> _apply;
     private readonly DispatcherTimer _diagnosticsTimer;
-    private bool _isLoading;
+    private bool _isWebReady;
 
     public SpectrumTuningSettings Settings { get; private set; }
 
@@ -20,165 +28,168 @@ public partial class SpectrumTuningWindow : Window
         AppIconProvider.ApplyWindowIcon(this);
         Settings = settings.Clone();
         _apply = apply;
-        BuildSliders();
-        ApplyCurrent();
-        _diagnosticsTimer = new DispatcherTimer
-        {
-            Interval = TimeSpan.FromMilliseconds(500)
-        };
-        _diagnosticsTimer.Tick += DiagnosticsTimer_Tick;
-        _diagnosticsTimer.Start();
-        UpdateDiagnosticsText();
+
+        _diagnosticsTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
+        _diagnosticsTimer.Tick += (_, _) => PushDiagnostics();
+
+        SourceInitialized += OnSourceInitialized;
+        Loaded += OnLoaded;
+        Closed += OnClosed;
     }
 
     public void ApplyExternalSettings(SpectrumTuningSettings settings)
     {
         Settings = settings.Clone();
-        BuildSliders();
+        PushSettings();
     }
 
-    protected override void OnClosed(EventArgs e)
+    private void OnSourceInitialized(object? sender, EventArgs e)
+    {
+        ApplyWindowChromeAttributes();
+        var hwnd = new WindowInteropHelper(this).Handle;
+        if (hwnd != IntPtr.Zero && HwndSource.FromHwnd(hwnd) is { } source)
+        {
+            source.AddHook(WndProc);
+        }
+    }
+
+    private async void OnLoaded(object? sender, RoutedEventArgs e)
+    {
+        await InitializeWebViewAsync();
+    }
+
+    private void OnClosed(object? sender, EventArgs e)
     {
         _diagnosticsTimer.Stop();
-        _diagnosticsTimer.Tick -= DiagnosticsTimer_Tick;
-        base.OnClosed(e);
-    }
+        _diagnosticsTimer.Tick -= (_, _) => { };
 
-    private void DiagnosticsTimer_Tick(object? sender, EventArgs e)
-    {
-        UpdateDiagnosticsText();
-    }
-
-    private void UpdateDiagnosticsText()
-    {
-        var snapshot = SpectrumDiagnosticsState.Current;
-        var lastAudio = snapshot.LastAudioUtc?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture) ?? "-";
-        DiagnosticsText.Text =
-            $"纯音乐模式: {FormatBool(snapshot.IsPureMusicMode)}    播放中: {FormatBool(snapshot.IsPlaying)}    采集可用: {FormatBool(snapshot.IsCaptureAvailable)}\n" +
-            $"输入峰值: {snapshot.InputPeak:0.0000}    输出峰值: {snapshot.OutputPeak:0.0000}    格式: {snapshot.Format}\n" +
-            $"最近音频: {lastAudio}    错误: {(string.IsNullOrWhiteSpace(snapshot.LastError) ? "-" : snapshot.LastError)}";
-    }
-
-    private static string FormatBool(bool value)
-    {
-        return value ? "是" : "否";
-    }
-
-    private void BuildSliders()
-    {
-        _isLoading = true;
-        SlidersPanel.Children.Clear();
-
-        AddSlider("FFT 窗口", "采样", 512, 2048, 512, Settings.SampleWindow, v => Settings.SampleWindow = CoerceSampleWindow(v));
-        AddSlider("更新间隔", "ms", 16, 100, 1, Settings.UpdateIntervalMs, v => Settings.UpdateIntervalMs = (int)Math.Round(v));
-        AddSlider("最低频率", "Hz", 20, 180, 1, Settings.MinFrequency, v => Settings.MinFrequency = v);
-        AddSlider("最高频率", "Hz", 3000, 18000, 100, Settings.MaxFrequency, v => Settings.MaxFrequency = v);
-        AddSlider("峰值初始值", "", 0.004, 0.16, 0.001, Settings.PeakInitial, v => Settings.PeakInitial = v);
-        AddSlider("峰值衰减", "", 0.85, 0.995, 0.001, Settings.PeakDecay, v => Settings.PeakDecay = v);
-        AddSlider("峰值下限", "", 0.003, 0.08, 0.001, Settings.PeakFloor, v => Settings.PeakFloor = v);
-        AddSlider("峰值上限", "", 0.04, 1.0, 0.01, Settings.PeakCeiling, v => Settings.PeakCeiling = v);
-        AddSlider("噪声门", "", 0, 0.2, 0.001, Settings.NoiseFloor, v => Settings.NoiseFloor = v);
-        AddSlider("输出曲线", "", 0.25, 1.5, 0.01, Settings.OutputCurve, v => Settings.OutputCurve = v);
-        AddSlider("低频增益", "", 0.2, 3.5, 0.01, Settings.LowBandGain, v => Settings.LowBandGain = v);
-        AddSlider("频段增益斜率", "", -0.04, 0.10, 0.001, Settings.BandGainStep, v => Settings.BandGainStep = v);
-        AddSlider("频率权重基准", "", 0.2, 2.2, 0.01, Settings.FrequencyWeightBase, v => Settings.FrequencyWeightBase = v);
-        AddSlider("频率权重斜率", "", -0.08, 0.16, 0.001, Settings.FrequencyWeightSlope, v => Settings.FrequencyWeightSlope = v);
-        AddSlider("后端上升速度", "", 0.05, 1.0, 0.01, Settings.BackendAttack, v => Settings.BackendAttack = v);
-        AddSlider("后端下降速度", "", 0.02, 1.0, 0.01, Settings.BackendRelease, v => Settings.BackendRelease = v);
-        AddSlider("前端上升速度", "", 0.02, 1.0, 0.01, Settings.FrontendRise, v => Settings.FrontendRise = v);
-        AddSlider("前端下降速度", "", 0.02, 1.0, 0.01, Settings.FrontendFall, v => Settings.FrontendFall = v);
-        AddSlider("最小柱高", "px", 1, 14, 0.5, Settings.MinBarHeight, v => Settings.MinBarHeight = v);
-        AddSlider("柱高范围", "px", 4, 36, 0.5, Settings.BarHeightRange, v => Settings.BarHeightRange = v);
-        AddSlider("柱子透明度", "", 0.2, 1.0, 0.01, Settings.BarOpacity, v => Settings.BarOpacity = v);
-
-        _isLoading = false;
-    }
-
-    private void AddSlider(
-        string label,
-        string suffix,
-        double minimum,
-        double maximum,
-        double tickFrequency,
-        double value,
-        Action<double> update)
-    {
-        var valueText = new TextBlock
+        var hwnd = new WindowInteropHelper(this).Handle;
+        if (hwnd != IntPtr.Zero && HwndSource.FromHwnd(hwnd) is { } source)
         {
-            Width = 82,
-            TextAlignment = TextAlignment.Right,
-            Foreground = new Media.SolidColorBrush(Media.Color.FromRgb(203, 213, 225)),
-            VerticalAlignment = VerticalAlignment.Center
-        };
-
-        var slider = new Slider
-        {
-            Minimum = minimum,
-            Maximum = maximum,
-            TickFrequency = tickFrequency,
-            Value = value,
-            IsSnapToTickEnabled = tickFrequency >= 1,
-            Tag = suffix
-        };
-
-        void RefreshValueText()
-        {
-            valueText.Text = FormatValue(slider.Value, suffix);
+            source.RemoveHook(WndProc);
         }
 
-        slider.ValueChanged += (_, _) =>
+        EdgeHitThrough.Detach(new WindowInteropHelper(this).Handle);
+
+        if (TuningWebView.CoreWebView2 is not null)
         {
-            var next = label == "FFT 窗口" ? CoerceSampleWindow(slider.Value) : slider.Value;
-            if (label == "FFT 窗口" && Math.Abs(slider.Value - next) > 0.1)
-            {
-                slider.Value = next;
-                return;
-            }
+            TuningWebView.CoreWebView2.WebMessageReceived -= WebMessageReceived;
+            TuningWebView.CoreWebView2.Navigate("about:blank");
+        }
 
-            update(next);
-            RefreshValueText();
-            if (!_isLoading)
-            {
-                ApplyCurrent();
-            }
-        };
-
-        var row = new Grid
-        {
-            Margin = new Thickness(0, 0, 0, 12)
-        };
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(132) });
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(90) });
-
-        var labelText = new TextBlock
-        {
-            Text = label,
-            FontSize = 12.5,
-            VerticalAlignment = VerticalAlignment.Center,
-            Foreground = new Media.SolidColorBrush(Media.Color.FromRgb(226, 232, 240))
-        };
-
-        Grid.SetColumn(labelText, 0);
-        Grid.SetColumn(slider, 1);
-        Grid.SetColumn(valueText, 2);
-        row.Children.Add(labelText);
-        row.Children.Add(slider);
-        row.Children.Add(valueText);
-        SlidersPanel.Children.Add(row);
-        RefreshValueText();
+        TuningWebView.Dispose();
     }
 
-    private void ApplyCurrent()
+    private async Task InitializeWebViewAsync()
     {
-        _apply(Settings.Clone());
+        if (_isWebReady)
+        {
+            return;
+        }
+
+        var userDataFolder = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "TaskbarLyrics",
+            "WebView2",
+            "SpectrumTuning");
+        var environment = await CoreWebView2Environment.CreateAsync(null, userDataFolder);
+        await TuningWebView.EnsureCoreWebView2Async(environment);
+
+        var core = TuningWebView.CoreWebView2;
+        core.Settings.IsStatusBarEnabled = false;
+        core.Settings.AreDefaultContextMenusEnabled = false;
+        core.Settings.AreDevToolsEnabled = false;
+        core.Settings.IsZoomControlEnabled = false;
+        core.Settings.IsBuiltInErrorPageEnabled = false;
+        core.WebMessageReceived += WebMessageReceived;
+
+        var htmlPath = Path.Combine(AppContext.BaseDirectory, "Web", "SpectrumTuning", "index.html");
+        TuningWebView.Source = new Uri(htmlPath);
+        _isWebReady = true;
+        EdgeHitThrough.Attach(new WindowInteropHelper(this).Handle);
     }
 
-    private void ResetButton_Click(object sender, RoutedEventArgs e)
+    private void WebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
     {
-        Settings = SpectrumTuningSettings.CreateDefault();
-        BuildSliders();
-        ApplyCurrent();
+        var messageJson = e.TryGetWebMessageAsString();
+        if (string.IsNullOrWhiteSpace(messageJson))
+        {
+            messageJson = e.WebMessageAsJson;
+        }
+
+        var message = JsonSerializer.Deserialize<SpectrumMessage>(messageJson, JsonOptions);
+        if (message?.Type is null)
+        {
+            return;
+        }
+
+        switch (message.Type)
+        {
+            case "ready":
+                PushSettings();
+                PushDiagnostics();
+                _diagnosticsTimer.Start();
+                break;
+            case "update":
+                if (message.Key is not null && message.Value is not null)
+                {
+                    SetParam(message.Key, message.Value.Value);
+                    _apply(Settings.Clone());
+                }
+                break;
+            case "updateAll":
+                if (message.Values is not null)
+                {
+                    foreach (var (key, value) in message.Values)
+                    {
+                        SetParam(key, value);
+                    }
+                    _apply(Settings.Clone());
+                }
+                break;
+            case "reset":
+                Settings = SpectrumTuningSettings.CreateDefault();
+                _apply(Settings.Clone());
+                PushSettings();
+                break;
+            case "windowDrag":
+                BeginNativeWindowDrag();
+                break;
+            case "windowMinimize":
+                WindowState = WindowState.Minimized;
+                break;
+            case "windowClose":
+                Close();
+                break;
+        }
+    }
+
+    private void SetParam(string key, double value)
+    {
+        switch (key)
+        {
+            case "SampleWindow": Settings.SampleWindow = CoerceSampleWindow((int)Math.Round(value)); break;
+            case "UpdateIntervalMs": Settings.UpdateIntervalMs = (int)Math.Round(value); break;
+            case "MinFrequency": Settings.MinFrequency = value; break;
+            case "MaxFrequency": Settings.MaxFrequency = value; break;
+            case "PeakInitial": Settings.PeakInitial = value; break;
+            case "PeakDecay": Settings.PeakDecay = value; break;
+            case "PeakFloor": Settings.PeakFloor = value; break;
+            case "PeakCeiling": Settings.PeakCeiling = value; break;
+            case "NoiseFloor": Settings.NoiseFloor = value; break;
+            case "OutputCurve": Settings.OutputCurve = value; break;
+            case "LowBandGain": Settings.LowBandGain = value; break;
+            case "BandGainStep": Settings.BandGainStep = value; break;
+            case "FrequencyWeightBase": Settings.FrequencyWeightBase = value; break;
+            case "FrequencyWeightSlope": Settings.FrequencyWeightSlope = value; break;
+            case "BackendAttack": Settings.BackendAttack = value; break;
+            case "BackendRelease": Settings.BackendRelease = value; break;
+            case "FrontendRise": Settings.FrontendRise = value; break;
+            case "FrontendFall": Settings.FrontendFall = value; break;
+            case "MinBarHeight": Settings.MinBarHeight = value; break;
+            case "BarHeightRange": Settings.BarHeightRange = value; break;
+            case "BarOpacity": Settings.BarOpacity = value; break;
+        }
     }
 
     private static int CoerceSampleWindow(double value)
@@ -191,11 +202,148 @@ public partial class SpectrumTuningWindow : Window
         };
     }
 
-    private static string FormatValue(double value, string suffix)
+    private void PushSettings()
     {
-        var text = Math.Abs(value) >= 100
-            ? value.ToString("0", CultureInfo.InvariantCulture)
-            : value.ToString("0.###", CultureInfo.InvariantCulture);
-        return string.IsNullOrEmpty(suffix) ? text : $"{text} {suffix}";
+        if (!_isWebReady || TuningWebView.CoreWebView2 is null)
+        {
+            return;
+        }
+
+        var json = JsonSerializer.Serialize(Settings, JsonOptions);
+        _ = TuningWebView.ExecuteScriptAsync($"window.spectrumTuning?.setSettings({json});");
+    }
+
+    private void PushDiagnostics()
+    {
+        if (!_isWebReady || TuningWebView.CoreWebView2 is null)
+        {
+            return;
+        }
+
+        var snap = SpectrumDiagnosticsState.Current;
+        var payload = new
+        {
+            snap.IsPlaying,
+            snap.IsPureMusicMode,
+            snap.InputPeak,
+            snap.OutputPeak,
+            snap.Format
+        };
+        var json = JsonSerializer.Serialize(payload, JsonOptions);
+        _ = TuningWebView.ExecuteScriptAsync($"window.spectrumTuning?.setDiagnostics({json});");
+    }
+
+    private void BeginNativeWindowDrag()
+    {
+        var hwnd = new WindowInteropHelper(this).Handle;
+        if (hwnd == IntPtr.Zero)
+        {
+            return;
+        }
+
+        _ = ReleaseCapture();
+        _ = SendMessage(hwnd, WindowMessageNonClientLeftButtonDown, HitTestCaption, 0);
+    }
+
+    private void ApplyWindowChromeAttributes()
+    {
+        var hwnd = new WindowInteropHelper(this).Handle;
+        if (hwnd == IntPtr.Zero)
+        {
+            return;
+        }
+
+        if (HwndSource.FromHwnd(hwnd) is { CompositionTarget: { } compositionTarget })
+        {
+            compositionTarget.BackgroundColor = System.Windows.Media.Color.FromRgb(10, 10, 10);
+        }
+
+        var darkMode = 1;
+        _ = DwmSetWindowAttribute(hwnd, DwmWindowAttributeUseImmersiveDarkMode, ref darkMode, Marshal.SizeOf<int>());
+
+        var cornerPreference = DwmWindowCornerPreferenceRound;
+        _ = DwmSetWindowAttribute(hwnd, DwmWindowAttributeWindowCornerPreference, ref cornerPreference, Marshal.SizeOf<int>());
+    }
+
+    private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if (msg != WindowMessageNonClientHitTest || WindowState == WindowState.Maximized)
+        {
+            return IntPtr.Zero;
+        }
+
+        if (!GetWindowRect(hwnd, out var rect))
+        {
+            return IntPtr.Zero;
+        }
+
+        var x = GetSignedLowWord(lParam);
+        var y = GetSignedHighWord(lParam);
+        const int border = 8;
+
+        var left = x >= rect.Left && x < rect.Left + border;
+        var right = x <= rect.Right && x > rect.Right - border;
+        var top = y >= rect.Top && y < rect.Top + border;
+        var bottom = y <= rect.Bottom && y > rect.Bottom - border;
+
+        handled = true;
+        if (top && left) return new IntPtr(HitTestTopLeft);
+        if (top && right) return new IntPtr(HitTestTopRight);
+        if (bottom && left) return new IntPtr(HitTestBottomLeft);
+        if (bottom && right) return new IntPtr(HitTestBottomRight);
+        if (left) return new IntPtr(HitTestLeft);
+        if (right) return new IntPtr(HitTestRight);
+        if (top) return new IntPtr(HitTestTop);
+        if (bottom) return new IntPtr(HitTestBottom);
+
+        handled = false;
+        return IntPtr.Zero;
+    }
+
+    private const int DwmWindowAttributeUseImmersiveDarkMode = 20;
+    private const int DwmWindowAttributeWindowCornerPreference = 33;
+    private const int DwmWindowCornerPreferenceRound = 2;
+    private const int WindowMessageNonClientLeftButtonDown = 0x00A1;
+    private const int HitTestCaption = 2;
+    private const int WindowMessageNonClientHitTest = 0x0084;
+    private const int HitTestLeft = 10;
+    private const int HitTestRight = 11;
+    private const int HitTestTop = 12;
+    private const int HitTestTopLeft = 13;
+    private const int HitTestTopRight = 14;
+    private const int HitTestBottom = 15;
+    private const int HitTestBottomLeft = 16;
+    private const int HitTestBottomRight = 17;
+
+    [DllImport("dwmapi.dll", PreserveSig = true)]
+    private static extern int DwmSetWindowAttribute(IntPtr hwnd, int dwAttribute, ref int pvAttribute, int cbAttribute);
+
+    [DllImport("user32.dll", PreserveSig = true)]
+    private static extern bool ReleaseCapture();
+
+    [DllImport("user32.dll", PreserveSig = true)]
+    private static extern IntPtr SendMessage(IntPtr hwnd, int message, int wParam, int lParam);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool GetWindowRect(IntPtr hwnd, out NativeRect rect);
+
+    private static int GetSignedLowWord(IntPtr value) => unchecked((short)((long)value & 0xFFFF));
+    private static int GetSignedHighWord(IntPtr value) => unchecked((short)(((long)value >> 16) & 0xFFFF));
+
+    [StructLayout(LayoutKind.Sequential)]
+    private readonly struct NativeRect
+    {
+        public readonly int Left;
+        public readonly int Top;
+        public readonly int Right;
+        public readonly int Bottom;
+    }
+
+    private sealed class SpectrumMessage
+    {
+        public string? Type { get; set; }
+        public string? Key { get; set; }
+        public double? Value { get; set; }
+        public Dictionary<string, double>? Values { get; set; }
     }
 }

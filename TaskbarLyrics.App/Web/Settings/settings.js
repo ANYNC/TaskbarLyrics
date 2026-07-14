@@ -102,11 +102,14 @@
       const currentIndex = currentPage ? pages.indexOf(currentPage) : 0;
       const nextIndex = pages.indexOf(nextPage);
       const heading = nextPage.querySelector('h2[tabindex="-1"]');
+      const titleBlock = $("#pageTitle").parentElement;
+      const updateTitleText = () => {
+        $("#pageTitle").textContent = pageMeta[pageId][0];
+        $("#pageSubtitle").textContent = pageMeta[pageId][1];
+      };
 
       if (state) state.page = pageId;
       $$('[data-nav]').forEach(button => button.classList.toggle("active", button.dataset.nav === pageId));
-      $("#pageTitle").textContent = pageMeta[pageId][0];
-      $("#pageSubtitle").textContent = pageMeta[pageId][1];
 
       pageTransitionToken += 1;
       const token = pageTransitionToken;
@@ -116,25 +119,40 @@
 
       if (!currentPage || currentPage === nextPage || reducedMotionQuery.matches || typeof nextPage.animate !== "function") {
         pages.forEach(page => page.classList.toggle("active", page === nextPage));
+        titleBlock.style.transitionDuration = "0ms";
+        titleBlock.style.opacity = "1";
+        updateTitleText();
         if (moveFocus) heading?.focus({ preventScroll: true });
         return;
       }
 
       const direction = nextIndex > currentIndex ? 1 : -1;
+      nextPage.style.transform = `translateX(${direction * 28}px)`;
       nextPage.classList.add("transitioning");
+
+      // 标题：先快速淡出，中点换文字再淡入，与正文同步
+      titleBlock.style.transitionDuration = "100ms";
+      titleBlock.style.opacity = "0";
+      setTimeout(() => {
+        if (token !== pageTransitionToken) return;
+        updateTitleText();
+        titleBlock.style.transitionDuration = "160ms";
+        titleBlock.style.opacity = "1";
+      }, 100);
+
       const outgoing = currentPage.animate(
         [
-          { backgroundOpacity: 1, transform: "translateX(0)" },
-          { backgroundOpacity: 0, transform: `translateX(${-direction * 6}px)` }
+          { transform: "translateX(0)" },
+          { transform: `translateX(${-direction * 28}px)` }
         ],
         { duration: 180, easing: "cubic-bezier(.4, 0, 1, 1)", fill: "both" }
       );
       const incoming = nextPage.animate(
         [
-          { backgroundOpacity: 0, transform: `translateX(${direction * 10}px)` },
-          { backgroundOpacity: 1, transform: "translateX(0)" }
+          { transform: `translateX(${direction * 28}px)` },
+          { transform: "translateX(0)" }
         ],
-        { duration: 220, easing: "cubic-bezier(.2, .8, .2, 1)", fill: "both" }
+        { duration: 220, easing: "cubic-bezier(.16, 1, .3, 1)", fill: "both" }
       );
       pageAnimations = [outgoing, incoming];
 
@@ -143,6 +161,8 @@
         currentPage.classList.remove("active");
         nextPage.classList.remove("transitioning");
         nextPage.classList.add("active");
+        currentPage.style.transform = "";
+        nextPage.style.transform = "";
         pageAnimations.forEach(animation => animation.cancel());
         pageAnimations = [];
         if (moveFocus) heading?.focus({ preventScroll: true });
@@ -163,10 +183,24 @@
       toastTimer = setTimeout(() => toast.classList.remove("show"), 1800);
     }
 
+    function closeDialogWithAnimation(dialog) {
+      if (!dialog.open || dialog.classList.contains("closing")) return;
+      const finish = () => { dialog.classList.remove("closing"); dialog.removeEventListener("animationend", finish); dialog.close(); };
+      dialog.addEventListener("animationend", finish);
+      dialog.classList.add("closing");
+      setTimeout(() => { if (dialog.classList.contains("closing")) { dialog.removeEventListener("animationend", finish); dialog.classList.remove("closing"); dialog.close(); } }, 400);
+    }
+
     function setControlValue(control, value) {
       if (control.type === "checkbox") control.checked = Boolean(value);
       else if (control.tagName === "TEXTAREA" && Array.isArray(value)) control.value = value.join("\n");
       else control.value = value;
+    }
+
+    function syncSliderProgress(control) {
+      const min = Number(control.min), max = Number(control.max);
+      const progress = max === min ? 0 : ((Number(control.value) - min) / (max - min)) * 100;
+      control.style.setProperty("--slider-progress", `${progress}%`);
     }
 
     function syncSelectTrigger(trigger) {
@@ -178,6 +212,7 @@
     function syncControls() {
       if (!state) return;
       $$('[data-setting]').forEach(control => control.classList.contains("select-trigger") ? syncSelectTrigger(control) : setControlValue(control, state[control.dataset.setting]));
+      $$('input[type="range"][data-setting]').forEach(syncSliderProgress);
       $$('[data-color-text="foregroundColor"]').forEach(control => { control.value = state.foregroundColor.toUpperCase(); control.classList.remove("invalid"); });
       $$('[data-color-swatch]').forEach(swatch => { swatch.style.backgroundColor = state.foregroundColor; });
     }
@@ -261,7 +296,7 @@
       activeSelectIndex = direction < 0 ? options.length - 1 : direction > 0 ? Math.max(0, selectedIndex) : Math.max(0, selectedIndex);
       trigger.setAttribute("aria-expanded", "true");
       trigger.setAttribute("aria-controls", "selectListbox");
-      $("#selectPopover").hidden = false;
+      $("#selectPopover").setAttribute("data-state", "open");
       renderSelectOptions();
       positionPopover($("#selectPopover"), trigger, 210);
       $("#selectListbox").focus({ preventScroll: true });
@@ -272,7 +307,7 @@
       const trigger = activeSelectTrigger;
       trigger.setAttribute("aria-expanded", "false");
       trigger.removeAttribute("aria-controls");
-      $("#selectPopover").hidden = true;
+      $("#selectPopover").removeAttribute("data-state");
       $("#selectListbox").removeAttribute("aria-activedescendant");
       activeSelectTrigger = null;
       activeSelectIndex = -1;
@@ -354,15 +389,15 @@
       if (!state) return;
       closeSelect(false);
       setColorDraftFromHex(state.customForegroundColor);
-      $("#colorPopover").hidden = false;
+      $("#colorPopover").setAttribute("data-state", "open");
       $("#colorPickerButton").setAttribute("aria-expanded", "true");
       positionPopover($("#colorPopover"), $("#colorPickerButton"), 264);
       $("#colorArea").focus({ preventScroll: true });
     }
 
     function closeColorPopover(returnFocus = true) {
-      if ($("#colorPopover").hidden) return;
-      $("#colorPopover").hidden = true;
+      if ($("#colorPopover").getAttribute("data-state") !== "open") return;
+      $("#colorPopover").removeAttribute("data-state");
       $("#colorPickerButton").setAttribute("aria-expanded", "false");
       colorPointerActive = false;
       if (returnFocus) $("#colorPickerButton").focus({ preventScroll: true });
@@ -405,6 +440,12 @@
       checkButton.innerHTML = status === "checking" ? '<span class="spinner" aria-hidden="true"></span>检查中' : status === "available" ? "重新检查" : "检查更新";
       releaseButton.hidden = status !== "available";
       updateReleaseUrl = payload.url ?? "";
+    }
+
+    function setWindowState(nextState) {
+      const maximized = nextState === "maximized";
+      $$(".caption-glyph-max").forEach(el => el.hidden = maximized);
+      $$(".caption-glyph-restore").forEach(el => el.hidden = !maximized);
     }
 
     function syncSizeBounds() {
@@ -468,7 +509,7 @@
       }
 
       const cancel = event.target.closest("[data-dialog-cancel]");
-      if (cancel) { document.getElementById(cancel.dataset.dialogCancel).close(); }
+      if (cancel) { closeDialogWithAnimation(document.getElementById(cancel.dataset.dialogCancel)); }
     });
 
     document.addEventListener("dragstart", event => {
@@ -558,20 +599,20 @@
         } else if (["Enter", " "].includes(event.key)) { event.preventDefault(); chooseSelectOption(activeSelectIndex); }
         else if (event.key === "Escape") { event.preventDefault(); closeSelect(true); }
         else if (event.key === "Tab") closeSelect(false);
-      } else if (event.key === "Escape" && !$("#colorPopover").hidden) {
+      } else if (event.key === "Escape" && $("#colorPopover").getAttribute("data-state") === "open") {
         event.preventDefault(); closeColorPopover(true);
       }
     });
 
     document.addEventListener("pointerdown", event => {
       if (activeSelectTrigger && !$("#selectPopover").contains(event.target) && !activeSelectTrigger.contains(event.target)) closeSelect(false);
-      if (!$("#colorPopover").hidden && !$("#colorPopover").contains(event.target) && !$("#colorPickerButton").contains(event.target)) closeColorPopover(false);
+      if ($("#colorPopover").getAttribute("data-state") === "open" && !$("#colorPopover").contains(event.target) && !$("#colorPickerButton").contains(event.target)) closeColorPopover(false);
     });
 
     window.addEventListener("resize", () => { closeSelect(false); closeColorPopover(false); });
-    document.querySelector(".content")?.addEventListener("scroll", () => { closeSelect(false); closeColorPopover(false); }, { passive: true });
+    $$(".page").forEach(page => page.addEventListener("scroll", () => { closeSelect(false); closeColorPopover(false); }, { passive: true }));
 
-    $("#colorPickerButton").addEventListener("click", () => $("#colorPopover").hidden ? openColorPopover() : closeColorPopover(true));
+    $("#colorPickerButton").addEventListener("click", () => $("#colorPopover").getAttribute("data-state") !== "open" ? openColorPopover() : closeColorPopover(true));
     $("#colorArea").addEventListener("pointerdown", event => {
       colorPointerActive = true;
       $("#colorArea").setPointerCapture(event.pointerId);
@@ -644,12 +685,12 @@
     $("#sidebarToggle").addEventListener("click", () => {
       const collapsed = $("#appShell").classList.toggle("sidebar-collapsed");
       $("#sidebarToggle").setAttribute("aria-label", collapsed ? "展开侧栏" : "折叠侧栏");
-      $("#sidebarToggle").title = collapsed ? "展开侧栏" : "折叠侧栏";
     });
+    $$("dialog").forEach(d => d.addEventListener("cancel", event => { event.preventDefault(); closeDialogWithAnimation(d); }));
     $("#restoreButton").addEventListener("click", () => $("#restoreDialog").showModal());
     $("#clearCacheButton").addEventListener("click", () => $("#clearDialog").showModal());
-    $("#confirmRestore").addEventListener("click", () => { $("#restoreDialog").close(); resetState(); });
-    $("#confirmClear").addEventListener("click", () => { $("#clearDialog").close(); bridge.post({ type: "clearCache" }); showToast("歌词与封面缓存已清理"); });
+    $("#confirmRestore").addEventListener("click", () => { closeDialogWithAnimation($("#restoreDialog")); resetState(); });
+    $("#confirmClear").addEventListener("click", () => { closeDialogWithAnimation($("#clearDialog")); bridge.post({ type: "clearCache" }); showToast("歌词与封面缓存已清理"); });
     $("#browseButton").addEventListener("click", () => bridge.post({ type: "pickLocalFolder" }));
     $$('[data-show-lyrics-window]').forEach(button => button.addEventListener("click", () => bridge.post({ type: "showLyricsWindow" })));
     $("#spectrumTuningButton").addEventListener("click", () => bridge.post({ type: "openSpectrumTuning" }));
@@ -662,6 +703,23 @@
     });
     $("#openReleaseButton").addEventListener("click", () => { if (updateReleaseUrl) bridge.post({ type: "openExternalLink", value: updateReleaseUrl }); });
 
+    document.addEventListener("pointerdown", event => {
+      if (event.button !== 0) return;
+      const dragArea = event.target.closest("[data-caption-drag]");
+      if (!dragArea || event.target.closest("button, input, select, textarea")) return;
+      bridge.post({ type: "windowDrag" });
+    });
+
+    document.addEventListener("click", event => {
+      const action = event.target.closest("[data-window-action]");
+      if (!action) return;
+      const actionType = action.dataset.windowAction;
+      if (actionType === "minimize") bridge.post({ type: "windowMinimize" });
+      else if (actionType === "maximize") bridge.post({ type: "windowMaximize" });
+      else if (actionType === "close") bridge.post({ type: "windowClose" });
+    });
+
     $("#colorPresets").innerHTML = presetColors.map(color => `<button class="color-preset" type="button" style="--preset:${color}" data-preset-color-value="${color}" aria-label="选择 ${color}"></button>`).join("");
     window.settingsApp = { setState, setUpdateStatus };
+    window.settingsApp.setWindowState = setWindowState;
     bridge.post({ type: "ready" });

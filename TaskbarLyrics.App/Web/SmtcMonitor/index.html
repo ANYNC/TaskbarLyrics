@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SMTC 时间轴监视器</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --background: oklch(0.145 0 0); --foreground: oklch(0.985 0 0);
+      --card: oklch(0.205 0 0); --card-foreground: oklch(0.985 0 0);
+      --popover: oklch(0.205 0 0); --popover-foreground: oklch(0.985 0 0);
+      --primary: oklch(0.922 0 0); --primary-foreground: oklch(0.205 0 0);
+      --secondary: oklch(0.269 0 0); --secondary-foreground: oklch(0.985 0 0);
+      --muted: oklch(0.269 0 0); --muted-foreground: oklch(0.708 0 0);
+      --border: oklch(1 0 0 / 10%); --input: oklch(1 0 0 / 15%);
+      --ring: var(--primary); --surface-hover: oklch(0.31 0 0); --subtle: oklch(0.62 0 0);
+      --success: oklch(0.765 0.177 157deg); --warning: oklch(0.78 0.16 70); --danger: oklch(0.704 0.191 22.216);
+      --radius: 0.625rem; --radius-sm: calc(var(--radius) - 3px); --radius-lg: calc(var(--radius) + 2px);
+      --duration-fast: 120ms; --duration: 180ms;
+      --shadow: 0 18px 60px rgba(0,0,0,.5); --shadow-sm: 0 1px 2px rgba(0,0,0,.28);
+      font-family: "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; background: var(--background); color: var(--foreground); overflow: hidden; }
+    button { font: inherit; color: inherit; }
+    .window { width: 100vw; height: 100vh; display: grid; grid-template-rows: auto auto 1fr auto; overflow: hidden; background: var(--background); }
+
+    .titlebar { display: flex; align-items: center; gap: 10px; padding: 10px 140px 10px 16px; border-bottom: 1px solid var(--border); }
+    .titlebar h1 { margin: 0; font-size: 13px; font-weight: 700; }
+    .titlebar .live { display: inline-flex; align-items: center; gap: 6px; color: var(--subtle); font-size: 11px; }
+    .titlebar .live::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--success); box-shadow: 0 0 0 3px rgba(118,213,163,.1); animation: pulse 1.6s ease-in-out infinite; }
+    .titlebar .live.paused::before { background: var(--warning); animation: none; }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+    .caption-controls { position: fixed; top: 0; right: 0; z-index: 300; display: flex; }
+    .caption-button { width: 40px; height: 32px; display: grid; place-items: center; border: 0; background: transparent; color: var(--muted-foreground); cursor: pointer; transition: background var(--duration-fast) ease, color var(--duration-fast) ease; }
+    .caption-button:hover { background: var(--surface-hover); color: var(--foreground); }
+    .caption-button.close:hover { background: var(--danger); color: #fff; }
+    .caption-button.pin.active { color: var(--primary); }
+    .caption-button.pin.active svg { fill: currentColor; }
+    .caption-button svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+
+    .status { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; padding: 12px 14px; }
+    .stat { border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); padding: 10px 12px; box-shadow: var(--shadow-sm); }
+    .stat .k { color: var(--subtle); font-size: 10px; letter-spacing: .3px; text-transform: uppercase; margin-bottom: 4px; }
+    .stat .v { font-size: 15px; font-weight: 700; color: var(--foreground); display: flex; align-items: center; gap: 6px; }
+    .stat .v.big { font-size: 22px; font-variant-numeric: tabular-nums; }
+    .stat .sub { color: var(--muted-foreground); font-size: 11px; margin-top: 2px; }
+    .badge { display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 99px; font-size: 11px; font-weight: 600; }
+    .badge.ok { background: color-mix(in oklch, var(--success) 22%, transparent); color: var(--success); }
+    .badge.warn { background: color-mix(in oklch, var(--warning) 22%, transparent); color: var(--warning); }
+    .badge.bad { background: color-mix(in oklch, var(--danger) 22%, transparent); color: var(--danger); }
+    .badge.muted { background: var(--secondary); color: var(--muted-foreground); }
+    .source-name { cursor: help; border-bottom: 1px dashed var(--subtle); }
+    .v.green { color: var(--success); } .v.amber { color: var(--warning); } .v.red { color: var(--danger); }
+    .info-tip { position: relative; display: inline-flex; align-items: center; margin-left: 4px; color: var(--subtle); cursor: help; }
+    .info-tip svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.6; }
+    .info-tip::after { content: attr(data-tip); position: absolute; right: 0; bottom: calc(100% + 8px); padding: 8px 10px; border-radius: var(--radius-sm); background: var(--popover); color: var(--popover-foreground); font-size: 11px; font-weight: 400; line-height: 1.7; white-space: pre; box-shadow: var(--shadow); pointer-events: none; opacity: 0; transform: translateY(4px); transition: opacity var(--duration-fast) ease, transform var(--duration-fast) ease; z-index: 200; }
+    .info-tip:hover::after, .info-tip:focus-visible::after { opacity: 1; transform: translateY(0); }
+
+    .details { min-height: 0; overflow: auto; padding: 0 14px 10px; }
+    .panel { border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); overflow: hidden; box-shadow: var(--shadow-sm); }
+    .mono { margin: 0; padding: 12px 14px; font-family: Consolas, "Cascadia Mono", monospace; font-size: 11.5px; line-height: 1.75; color: var(--muted-foreground); white-space: pre; }
+    .mono .k { color: var(--subtle); } .mono .v { color: var(--foreground); }
+    .mono .ok { color: var(--success); } .mono .warn { color: var(--warning); } .mono .bad { color: var(--danger); }
+
+    .footer { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-top: 1px solid var(--border); }
+    .status-line { min-width: 0; flex: 1; font-size: 11px; color: var(--subtle); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .status-line.warn { color: var(--warning); } .status-line.bad { color: var(--danger); }
+    .footer .actions { display: flex; gap: 8px; flex: 0 0 auto; }
+    .btn { min-height: 30px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 12px; border: 1px solid var(--primary); border-radius: var(--radius-sm); background: var(--primary); color: var(--primary-foreground); font-size: 12px; font-weight: 600; cursor: pointer; transition: transform var(--duration-fast) ease, background var(--duration-fast) ease, color var(--duration-fast) ease; }
+    .btn:hover { background: color-mix(in oklch, var(--primary) 85%, var(--background)); }
+    .btn:active { transform: scale(.98); }
+    .btn.secondary { border-color: var(--input); background: var(--secondary); color: var(--foreground); }
+    .btn.secondary:hover { background: var(--surface-hover); }
+    .btn svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.6; }
+
+    ::-webkit-scrollbar { width: 9px; height: 9px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { border: 3px solid transparent; border-radius: 99px; background: var(--muted-foreground); background-clip: padding-box; }
+    [data-caption-drag] { user-select: none; -webkit-user-select: none; cursor: default; }
+
+    .toast { position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 14px); padding: 9px 13px; border: 1px solid var(--input); border-radius: var(--radius-sm); background: var(--popover); color: var(--popover-foreground); font-size: 11px; opacity: 0; pointer-events: none; transition: opacity var(--duration-fast) ease, transform var(--duration-fast) ease; box-shadow: var(--shadow); }
+    .toast.show { opacity: 1; transform: translate(-50%, 0); }
+  </style>
+</head>
+<body>
+  <div class="window">
+    <header class="titlebar" data-caption-drag>
+      <h1>SMTC 时间轴监视器</h1>
+      <span class="live" id="live">实时 · 80ms</span>
+      <div class="caption-controls">
+        <button class="caption-button pin" type="button" data-window-action="pin" aria-label="置顶窗口" aria-pressed="false" title="置顶"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 17v5M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg></button>
+        <button class="caption-button" type="button" data-window-action="minimize" aria-label="最小化"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6h8"/></svg></button>
+        <button class="caption-button close" type="button" data-window-action="close" aria-label="关闭"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 3l6 6M9 3l-6 6"/></svg></button>
+      </div>
+    </header>
+
+    <section class="status">
+      <div class="stat">
+        <div class="k">播放状态</div>
+        <div class="v" id="playStat"><span class="badge muted">等待</span></div>
+        <div class="sub" id="playSub">策略：—</div>
+      </div>
+      <div class="stat">
+        <div class="k">当前播放源</div>
+        <div class="v"><span class="source-name" id="sourceName" title="">—</span></div>
+        <div class="sub" id="sourceSub">歌词源：—</div>
+      </div>
+      <div class="stat">
+        <div class="k">外推漂移<span class="info-tip" data-tip="外推漂移 = 外推位置 − 原始位置&#10;绿色 &lt; 0.2s　正常&#10;琥珀 0.2–0.5s　注意&#10;红色 &gt; 0.5s　歌词可能不同步" tabindex="0" aria-label="外推漂移状态说明"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.5"/><path d="M8 7.5v3"/><circle cx="8" cy="5.4" r=".7" fill="currentColor" stroke="none"/></svg></span></div>
+        <div class="v big" id="driftVal">—</div>
+        <div class="sub" id="driftSub">距上次上报 —</div>
+      </div>
+    </section>
+
+    <main class="details">
+      <section class="panel">
+        <pre class="mono" id="log">等待 SMTC 诊断数据…</pre>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span class="status-line" id="statusLine">观察外推漂移与上报间隔，定位歌词不同步</span>
+      <div class="actions">
+        <button class="btn secondary" type="button" id="pauseBtn"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3v10M11 3v10"/></svg><span id="pauseLabel">暂停</span></button>
+        <button class="btn secondary" type="button" id="copyBtn">复制</button>
+        <button class="btn" type="button" data-window-action="close">关闭</button>
+      </div>
+    </footer>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    const $ = s => document.querySelector(s);
+    const bridge = { post(m) { window.chrome?.webview?.postMessage(JSON.stringify(m)); } };
+    const TH_WARN = 200, TH_BAD = 500, STALE_MS = 2000;
+    const HINT = "观察外推漂移与上报间隔，定位歌词不同步";
+    let paused = false;
+
+    const pad = (n, w = 2) => String(n).padStart(w, "0");
+    function fmtMs(ms) { const sign = ms < 0 ? "-" : ""; const a = Math.abs(ms); const m = Math.floor(a / 60000); const s = Math.floor((a % 60000) / 1000); const f = Math.floor(a % 1000); return `${sign}${pad(m)}:${pad(s)}.${pad(f, 3)}`; }
+    function driftColor(ms) { if (ms > TH_BAD) return "red"; if (ms > TH_WARN) return "amber"; return "green"; }
+    const clsOf = c => c === "red" ? "bad" : c === "amber" ? "warn" : "v";
+
+    function setData(p) {
+      if (!p) { $("#log").textContent = "等待 SMTC 诊断数据…"; return; }
+      const drift = p.driftMs ?? 0;
+      const age = p.lastUpdateAgeMs ?? 0;
+      const dCol = p.isPlaying ? driftColor(drift) : "green";
+
+      $("#playStat").innerHTML = `<span class="badge ${p.isPlaying ? 'ok' : 'warn'}">${p.isPlaying ? '播放中' : '暂停'}</span>`;
+      $("#playSub").textContent = `策略：${p.strategy || '—'}${p.isFallback ? ' · 回退快照' : ''}`;
+
+      const src = p.resolvedSource || p.normalizedSource || p.sourceAppUserModelId || '—';
+      $("#sourceName").textContent = src;
+      $("#sourceName").title = `SourceAppId: ${p.sourceAppUserModelId || '—'}\nNormalizedSource: ${p.normalizedSource || '—'}\nResolvedSource: ${p.resolvedSource || '—'}\nLyricSource: ${p.lyricSource || '—'}`;
+      $("#sourceSub").textContent = `歌词源：${p.lyricSource || '—'}`;
+
+      const dv = $("#driftVal"); dv.textContent = (drift / 1000).toFixed(3); dv.className = `v big ${dCol}`;
+      $("#driftSub").textContent = `距上次上报 ${(age / 1000).toFixed(2)}s`;
+
+      const alerts = [];
+      if (p.isPlaying && drift > TH_BAD) alerts.push({ t: "bad", m: `外推漂移 ${(drift / 1000).toFixed(2)}s，播放器长时间未上报，歌词可能不同步` });
+      if (p.isFallback) alerts.push({ t: "warn", m: "当前为回退快照，时间轴数据不可信" });
+      if (p.isPlaying && age > STALE_MS) alerts.push({ t: "warn", m: "时间轴上报停滞" });
+      const sl = $("#statusLine");
+      if (alerts.length) { sl.textContent = alerts[0].m; sl.className = `status-line ${alerts[0].t}`; }
+      else { sl.textContent = HINT; sl.className = "status-line"; }
+
+      const rows = [
+        ["Captured(UTC):", p.capturedAtUtc || "—", "k"],
+        ["SourceAppId:", p.sourceAppUserModelId || "—", "v"],
+        ["NormalizedSource:", p.normalizedSource || "—", "v"],
+        ["ResolvedSource:", p.resolvedSource || "—", "v"],
+        ["LyricSource:", p.lyricSource || "—", "v"],
+        ["IsPlaying:", p.isPlaying ? "True" : "False", p.isPlaying ? "ok" : "warn"],
+        ["IsFallback:", p.isFallback ? "True" : "False", p.isFallback ? "bad" : "warn"],
+        ["", "", ""],
+        ["RawPosition:", fmtMs(p.rawMs ?? 0), "v"],
+        ["LastUpdatedTime:", p.lastUpdatedUtc || "—", "k"],
+        ["LastUpdateAge:", fmtMs(age), p.isPlaying && age > STALE_MS ? "bad" : "v"],
+        ["Extrapolated:", fmtMs(p.extrapolatedMs ?? 0), "v"],
+        ["Extrapolated-Raw:", fmtMs(drift), clsOf(dCol)],
+        ["SelectedPosition:", fmtMs(p.selectedMs ?? 0), "v"],
+        ["Strategy:", p.strategy || "—", "k"],
+        ["", "", ""],
+        ["Title:", p.title || "—", "v"],
+        ["Artist:", p.artist || "—", "v"],
+      ];
+      $("#log").innerHTML = rows.map(([k, v, c]) => k ? `<span class="k">${k.padEnd(20)}</span><span class="${c}">${v}</span>` : "").join("\n");
+    }
+
+    function setPaused(v) {
+      paused = v;
+      $("#pauseLabel").textContent = v ? "继续" : "暂停";
+      $("#pauseBtn").querySelector("svg").innerHTML = v ? '<path d="M4 3l9 5-9 5z"/>' : '<path d="M5 3v10M11 3v10"/>';
+      const live = $("#live"); live.textContent = v ? "已暂停" : "实时 · 80ms"; live.classList.toggle("paused", v);
+    }
+
+    function setTopmost(v) {
+      const btn = document.querySelector('.caption-button.pin');
+      btn.classList.toggle("active", v);
+      btn.setAttribute("aria-pressed", v ? "true" : "false");
+      btn.title = v ? "取消置顶" : "置顶窗口";
+    }
+
+    let toastTimer;
+    function showToast(msg) { clearTimeout(toastTimer); const el = $("#toast"); el.textContent = msg; el.classList.add("show"); toastTimer = setTimeout(() => el.classList.remove("show"), 1600); }
+
+    $("#pauseBtn").addEventListener("click", () => { const next = !paused; setPaused(next); bridge.post({ type: next ? "pause" : "resume" }); });
+    $("#copyBtn").addEventListener("click", () => { bridge.post({ type: "copy", text: $("#log").textContent }); showToast("已复制到剪贴板"); });
+
+    document.addEventListener("pointerdown", e => { if (e.button !== 0) return; const d = e.target.closest("[data-caption-drag]"); if (!d || e.target.closest("button, input, select, textarea")) return; bridge.post({ type: "windowDrag" }); });
+    document.addEventListener("click", e => {
+      const a = e.target.closest("[data-window-action]");
+      if (!a) return;
+      const t = a.dataset.windowAction;
+      if (t === "pin") bridge.post({ type: "toggleTopmost" });
+      else if (t === "minimize") bridge.post({ type: "windowMinimize" });
+      else if (t === "close") bridge.post({ type: "windowClose" });
+    });
+
+    window.smtcMonitor = { setData, setPaused, setTopmost };
+    bridge.post({ type: "ready" });
+  </script>
+</body>
+</html>
