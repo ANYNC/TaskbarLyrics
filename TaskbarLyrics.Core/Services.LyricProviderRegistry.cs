@@ -3,8 +3,6 @@ using TaskbarLyrics.Core.Database;
 using TaskbarLyrics.Core.Models;
 using TaskbarLyrics.Core.Utilities;
 
-#pragma warning disable CS0162
-
 namespace TaskbarLyrics.Core.Services;
 
 public sealed class LyricProviderRegistry : ILyricProviderRegistry
@@ -134,13 +132,6 @@ public sealed class LyricProviderRegistry : ILyricProviderRegistry
                     return BuildResults(new Dictionary<ILyricProvider, LyricDocument?>
                     {
                         [selectedProvider] = selectedDocument
-                    });
-
-                    stopwatch.Stop();
-                    Log.Info($"官方歌词源 [{officialSource}] 返回有效歌词，独占采用。总耗时: {stopwatch.ElapsedMilliseconds} ms");
-                    return BuildResults(new Dictionary<ILyricProvider, LyricDocument?>
-                    {
-                        [officialProvider] = officialResult.Document
                     });
                 }
 
@@ -429,7 +420,7 @@ public sealed class LyricProviderRegistry : ILyricProviderRegistry
         {
             if (providerTask is null || providerTask.IsCompleted)
             {
-                gate.Release();
+                TryReleaseGate(gate);
             }
             else
             {
@@ -437,7 +428,7 @@ public sealed class LyricProviderRegistry : ILyricProviderRegistry
                     completed =>
                     {
                         _ = completed.Exception;
-                        gate.Release();
+                        TryReleaseGate(gate);
                     },
                     CancellationToken.None,
                     TaskContinuationOptions.ExecuteSynchronously,
@@ -457,6 +448,18 @@ public sealed class LyricProviderRegistry : ILyricProviderRegistry
             .FirstOrDefault()?.Document;
     }
 
+    private static void TryReleaseGate(SemaphoreSlim gate)
+    {
+        try
+        {
+            gate.Release();
+        }
+        catch (ObjectDisposedException)
+        {
+            // Dispose 已先行释放，忽略
+        }
+    }
+
     private sealed record MappingResult(
         string Title,
         string Artist,
@@ -466,4 +469,12 @@ public sealed class LyricProviderRegistry : ILyricProviderRegistry
     private sealed record BatchResolveResult(
         IReadOnlyDictionary<ILyricProvider, LyricDocument?> Documents,
         bool HasUsableDocument);
+
+    public void Dispose()
+    {
+        foreach (var gate in _providerGates.Values)
+        {
+            gate.Dispose();
+        }
+    }
 }

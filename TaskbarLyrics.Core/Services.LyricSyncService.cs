@@ -252,6 +252,7 @@ public sealed class LyricSyncService : IDisposable
 
         _isDisposed = true;
         CancelPendingSearch();
+        _registry.Dispose();
     }
 
 }
