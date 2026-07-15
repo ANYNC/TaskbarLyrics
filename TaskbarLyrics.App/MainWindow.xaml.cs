@@ -176,20 +176,10 @@ public partial class MainWindow : Window
             providers.Add(new LocalLyricProvider(settings.LocalMusicFolders));
         }
 
-        if (settings?.EnableNetease != false)
-        {
-            providers.Add(new LyricifyLyricProvider("Netease", Lyricify.Lyrics.Searchers.Searchers.Netease));
-        }
-
-        if (settings?.EnableQQMusic != false)
-        {
-            providers.Add(new LyricifyLyricProvider("QQMusic", Lyricify.Lyrics.Searchers.Searchers.QQMusic));
-        }
-
-        if (settings?.EnableKugou != false)
-        {
-            providers.Add(new LyricifyLyricProvider("Kugou", Lyricify.Lyrics.Searchers.Searchers.Kugou));
-        }
+        // Player recognition switches must not disable fallback lyric providers.
+        providers.Add(new LyricifyLyricProvider("Netease", Lyricify.Lyrics.Searchers.Searchers.Netease));
+        providers.Add(new LyricifyLyricProvider("QQMusic", Lyricify.Lyrics.Searchers.Searchers.QQMusic));
+        providers.Add(new LyricifyLyricProvider("Kugou", Lyricify.Lyrics.Searchers.Searchers.Kugou));
         return new LyricSyncService(
             new LyricProviderRegistry(providers),
             _ => settings?.ShowLyricTranslation == true);

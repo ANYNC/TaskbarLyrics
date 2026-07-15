@@ -193,6 +193,9 @@
       $("#driftSub").textContent = `距上次上报 ${(age / 1000).toFixed(2)}s`;
 
       const rows = [
+        ["Title:", p.title || "—", "v"],
+        ["Artist:", p.artist || "—", "v"],
+        ["", "", ""],
         ["Captured(UTC):", p.capturedAtUtc || "—", "k"],
         ["SourceAppId:", p.sourceAppUserModelId || "—", "v"],
         ["NormalizedSource:", p.normalizedSource || "—", "v"],
@@ -208,9 +211,6 @@
         ["Extrapolated-Raw:", fmtMs(drift), clsOf(dCol)],
         ["SelectedPosition:", fmtMs(p.selectedMs ?? 0), "v"],
         ["Strategy:", p.strategy || "—", "k"],
-        ["", "", ""],
-        ["Title:", p.title || "—", "v"],
-        ["Artist:", p.artist || "—", "v"],
       ];
       $("#log").innerHTML = rows.map(([k, v, c]) => k ? `<span class="k">${k.padEnd(20)}</span><span class="${c}">${v}</span>` : "").join("\n");
     }
