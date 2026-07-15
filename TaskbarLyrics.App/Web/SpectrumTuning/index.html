@@ -16,10 +16,27 @@
       --border: oklch(1 0 0 / 10%); --input: oklch(1 0 0 / 15%);
       --ring: var(--primary); --surface-hover: oklch(0.31 0 0); --subtle: oklch(0.62 0 0);
       --success: oklch(0.765 0.177 157deg); --warning: oklch(0.78 0.16 70); --danger: oklch(0.704 0.191 22.216);
+      --spectrum-bar: oklch(0.985 0 0); --preview-badge: oklch(0 0 0 / 35%);
       --radius: 0.625rem; --radius-sm: calc(var(--radius) - 3px); --radius-lg: calc(var(--radius) + 2px);
       --duration-fast: 120ms; --duration: 180ms;
       --shadow: 0 18px 60px rgba(0,0,0,.5); --shadow-sm: 0 1px 2px rgba(0,0,0,.28);
       font-family: "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+    }
+    @media (prefers-color-scheme: light) {
+      :root {
+        color-scheme: light;
+        --background: oklch(0.985 0 0); --foreground: oklch(0.145 0 0);
+        --card: oklch(1 0 0); --card-foreground: oklch(0.145 0 0);
+        --popover: oklch(1 0 0); --popover-foreground: oklch(0.145 0 0);
+        --primary: oklch(0.205 0 0); --primary-foreground: oklch(0.985 0 0);
+        --secondary: oklch(0.955 0 0); --secondary-foreground: oklch(0.205 0 0);
+        --muted: oklch(0.955 0 0); --muted-foreground: oklch(0.46 0 0);
+        --border: oklch(0 0 0 / 10%); --input: oklch(0 0 0 / 15%);
+        --surface-hover: oklch(0.91 0 0); --subtle: oklch(0.48 0 0);
+        --success: oklch(0.49 0.145 157deg); --warning: oklch(0.55 0.145 70); --danger: oklch(0.58 0.205 24);
+        --spectrum-bar: oklch(0.205 0 0); --preview-badge: oklch(1 0 0 / 82%);
+        --shadow: 0 18px 60px rgba(0,0,0,.16); --shadow-sm: 0 1px 3px rgba(0,0,0,.1);
+      }
     }
     * { box-sizing: border-box; }
     html, body { margin: 0; height: 100%; background: var(--background); color: var(--foreground); overflow: hidden; }
@@ -47,8 +64,8 @@
 
     .preview-wrap { padding: 12px 14px 4px; }
     .preview { position: relative; border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); overflow: hidden; box-shadow: var(--shadow-sm); }
-    .preview canvas { display: block; width: 100%; height: 116px; }
-    .preview .badge { position: absolute; top: 8px; left: 10px; display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border-radius: 99px; background: oklch(0 0 0 / 35%); font-size: 10px; color: var(--muted-foreground); backdrop-filter: blur(4px); }
+    .preview canvas { display: block; width: 100%; height: 132px; }
+    .preview .badge { position: absolute; top: 8px; left: 10px; display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border: 1px solid var(--border); border-radius: 99px; background: var(--preview-badge); font-size: 10px; color: var(--muted-foreground); backdrop-filter: blur(4px); }
     .preview .badge.compare { background: color-mix(in oklch, var(--warning) 22%, transparent); color: var(--warning); }
     .preview .meter { position: absolute; top: 8px; right: 10px; font-family: Consolas, monospace; font-size: 10px; color: var(--subtle); }
 
@@ -87,6 +104,7 @@
     .btn.ghost { border-color: transparent; background: transparent; color: var(--muted-foreground); }
     .btn.ghost:hover { background: var(--secondary); color: var(--foreground); }
     .btn.ghost.active { background: color-mix(in oklch, var(--warning) 20%, transparent); color: var(--warning); }
+    .btn svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 
     input[type="range"] { -webkit-appearance: none; appearance: none; width: 100%; height: 18px; background: transparent; cursor: pointer; }
     input[type="range"]::-webkit-slider-runnable-track { height: 4px; border-radius: 99px; background: linear-gradient(to right, var(--primary) 0%, var(--primary) var(--slider-progress, 0%), var(--secondary) var(--slider-progress, 0%), var(--secondary) 100%); }
@@ -148,16 +166,17 @@
         <button type="button" data-preset="minimal">极简</button>
       </div>
       <div class="right">
-        <button class="btn ghost" type="button" id="compareBtn">按住对比默认</button>
+        <button class="btn ghost" type="button" id="previewPauseBtn" aria-pressed="false"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3v10M11 3v10"/></svg><span>暂停预览</span></button>
+        <button class="btn ghost" type="button" id="compareBtn" title="仅对比前端升降速度和柱子外观">按住对比默认外观</button>
         <button class="btn secondary" type="button" id="resetBtn">重置默认</button>
       </div>
     </div>
 
     <div class="preview-wrap">
       <div class="preview">
-        <canvas id="canvas" width="500" height="116"></canvas>
-        <span class="badge" id="previewBadge">实时预览</span>
-        <span class="meter" id="meter">24 柱 · 0 fps</span>
+        <canvas id="canvas" width="500" height="132"></canvas>
+        <span class="badge" id="previewBadge">等待实际输出</span>
+        <span class="meter" id="meter">21 柱 · 0 fps</span>
       </div>
     </div>
 
@@ -177,10 +196,25 @@
     const $ = s => document.querySelector(s);
     const bridge = { post(m) { window.chrome?.webview?.postMessage(JSON.stringify(m)); } };
     const canvas = $("#canvas"); const ctx = canvas.getContext("2d");
+    let spectrumBarColor = "oklch(0.985 0 0)";
+    let previewTrackColor = "oklch(0.269 0 0)";
+    let previewGuideColor = "oklch(1 0 0 / 10%)";
+    let previewTextColor = "oklch(0.62 0 0)";
+    const syncThemeColors = () => {
+      const styles = getComputedStyle(document.documentElement);
+      spectrumBarColor = styles.getPropertyValue("--spectrum-bar").trim() || spectrumBarColor;
+      previewTrackColor = styles.getPropertyValue("--secondary").trim() || previewTrackColor;
+      previewGuideColor = styles.getPropertyValue("--border").trim() || previewGuideColor;
+      previewTextColor = styles.getPropertyValue("--subtle").trim() || previewTextColor;
+    };
+    const colorScheme = matchMedia("(prefers-color-scheme: light)");
+    colorScheme.addEventListener("change", syncThemeColors);
+    syncThemeColors();
 
     const defs = [
       { key: "SampleWindow", label: "FFT 窗口", suffix: "", min: 512, max: 2048, step: 512, value: 2048, group: "采集", desc: "FFT 采样窗口大小，越大频率分辨率越高、响应越慢", snap: "fft" },
       { key: "UpdateIntervalMs", label: "更新间隔", suffix: "ms", min: 16, max: 100, step: 1, value: 16, group: "采集", desc: "频谱采集与刷新间隔，越小越流畅、越耗 CPU" },
+      { key: "BarCount", label: "柱数", suffix: "柱", min: 8, max: 32, step: 1, value: 21, group: "频段", desc: "频谱显示柱数；越多频段越细，越少整体越简洁" },
       { key: "MinFrequency", label: "最低频率", suffix: "Hz", min: 20, max: 180, step: 1, value: 35, group: "频段", desc: "频谱最低频率，过滤超低频噪声" },
       { key: "MaxFrequency", label: "最高频率", suffix: "Hz", min: 3000, max: 18000, step: 100, value: 7000, group: "频段", desc: "频谱最高频率，决定可显示的高频上限" },
       { key: "PeakInitial", label: "峰值初始值", suffix: "", min: 0.004, max: 0.16, step: 0.001, value: 0.035, group: "峰值", desc: "峰值跟踪的起始参考值" },
@@ -261,6 +295,7 @@
     function setSettings(values) {
       if (!values) return;
       state.forEach(d => { if (values[d.key] !== undefined) d.value = values[d.key]; });
+      ensurePreviewBarCount(currentParam("BarCount"));
       state.forEach(d => { const r = refs[d.key]; if (r) { r.input.value = d.value; r.refresh(); } });
       // 预设高亮：若与某预设完全一致则点亮
       const match = Object.keys(presets).find(name => state.every(d => !presets[name].hasOwnProperty(d.key) ? Math.abs(d.value - defaultsMap[d.key]) < 1e-9 : Math.abs(d.value - presets[name][d.key]) < 1e-9));
@@ -273,51 +308,83 @@
       $("#dIn").textContent = (d.InputPeak ?? 0).toFixed(4);
       $("#dOut").textContent = (d.OutputPeak ?? 0).toFixed(4);
       $("#dFmt").textContent = d.Format || '—';
+      captureAvailable = Boolean(d.IsCaptureAvailable);
+      if (!previewPaused) {
+        ensurePreviewBarCount(currentParam("BarCount"));
+        const bars = Array.isArray(d.Bars) ? d.Bars : [];
+        for (let i = 0; i < targetBars.length; i++) targetBars[i] = Math.max(0, Math.min(1, Number(bars[i]) || 0));
+      }
+      syncPreviewBadge();
     }
 
-    // ---- 预览合成 ----
-    const BARS = 24; const barVals = new Array(BARS).fill(0);
+    // ---- 真实输出预览 ----
+    let targetBars = new Array(21).fill(0), barVals = new Array(21).fill(0);
+    let previewPaused = false, captureAvailable = false;
     let frames = 0, fps = 0, lastFpsT = performance.now();
-    function getParam(key) { return compare ? defaultsMap[key] : (state.find(s => s.key === key)?.value ?? defaultsMap[key]); }
+    let canvasWidth = 500, canvasHeight = 132, canvasDpr = 1;
+    function currentParam(key) { return state.find(s => s.key === key)?.value ?? defaultsMap[key]; }
+    function getVisualParam(key) { return compare ? defaultsMap[key] : currentParam(key); }
+    function ensurePreviewBarCount(value) {
+      const count = Math.max(8, Math.min(32, Math.round(Number(value) || 21)));
+      if (targetBars.length === count) return;
+      targetBars = Array.from({ length: count }, (_, i) => targetBars[i] ?? 0);
+      barVals = Array.from({ length: count }, (_, i) => barVals[i] ?? 0);
+    }
+    function resizeCanvas() {
+      const rect = canvas.getBoundingClientRect();
+      canvasDpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+      canvasWidth = Math.max(1, rect.width);
+      canvasHeight = Math.max(1, rect.height);
+      const width = Math.round(canvasWidth * canvasDpr), height = Math.round(canvasHeight * canvasDpr);
+      if (canvas.width !== width || canvas.height !== height) { canvas.width = width; canvas.height = height; }
+      ctx.setTransform(canvasDpr, 0, 0, canvasDpr, 0, 0);
+    }
+    function formatFrequency(value) {
+      const frequency = Math.max(0, Number(value) || 0);
+      return frequency >= 1000 ? `${(frequency / 1000).toFixed(frequency >= 10000 ? 0 : 1).replace(/\.0$/, "")} kHz` : `${Math.round(frequency)} Hz`;
+    }
+    function syncPreviewBadge() {
+      const badge = $("#previewBadge");
+      badge.className = `badge${compare ? " compare" : ""}`;
+      badge.textContent = previewPaused ? "预览已暂停" : compare ? "默认外观对比" : captureAvailable ? "实际输出" : "等待实际输出";
+    }
+    new ResizeObserver(resizeCanvas).observe(canvas);
+    resizeCanvas();
     function loop(now) {
-      const time = now / 1000;
-      const LowBandGain = getParam("LowBandGain"), BandGainStep = getParam("BandGainStep");
-      const FrequencyWeightBase = getParam("FrequencyWeightBase"), FrequencyWeightSlope = getParam("FrequencyWeightSlope");
-      const OutputCurve = getParam("OutputCurve"), NoiseFloor = getParam("NoiseFloor");
-      const PeakFloor = getParam("PeakFloor"), PeakCeiling = getParam("PeakCeiling");
-      const FrontendRise = getParam("FrontendRise"), FrontendFall = getParam("FrontendFall");
-      const MinBarHeight = getParam("MinBarHeight"), BarHeightRange = getParam("BarHeightRange"), BarOpacity = getParam("BarOpacity");
-      for (let i = 0; i < BARS; i++) {
-        const norm = i / (BARS - 1);
-        const gain = LowBandGain * (1 + BandGainStep * 10 * norm);
-        const weight = FrequencyWeightBase + FrequencyWeightSlope * 10 * norm;
-        let e = 0;
-        e += 0.6 * Math.abs(Math.sin(time * 1.3 + i * 0.3)) * Math.exp(-i * 0.12);
-        e += 0.4 * Math.abs(Math.sin(time * 2.1 + i * 0.5 + 1)) * Math.exp(-Math.abs(i - 6) * 0.2);
-        e += 0.3 * Math.abs(Math.sin(time * 3.4 + i * 0.9 + 2)) * Math.exp(-Math.abs(i - 14) * 0.25);
-        e += 0.12 * Math.sin(time * 5 + i);
-        e = Math.max(0, e) * gain * weight;
-        e = Math.max(0, e - NoiseFloor);
-        e = Math.min(PeakCeiling, Math.max(PeakFloor, e));
-        e = Math.pow(Math.max(0, e) / PeakCeiling, OutputCurve);
-        const t = e * (i / BARS);
+      ensurePreviewBarCount(currentParam("BarCount"));
+      const FrontendRise = getVisualParam("FrontendRise"), FrontendFall = getVisualParam("FrontendFall");
+      const MinBarHeight = getVisualParam("MinBarHeight"), BarHeightRange = getVisualParam("BarHeightRange"), BarOpacity = getVisualParam("BarOpacity");
+      for (let i = 0; i < targetBars.length; i++) {
+        const t = targetBars[i] ?? 0;
         barVals[i] = t > barVals[i] ? barVals[i] + (t - barVals[i]) * FrontendRise : barVals[i] + (t - barVals[i]) * FrontendFall;
       }
-      const w = canvas.width, h = canvas.height;
+      const w = canvasWidth, h = canvasHeight;
       ctx.clearRect(0, 0, w, h);
-      const gap = 3; const bw = (w - gap * (BARS + 1)) / BARS;
+      const trackWidth = Math.min(210, Math.max(120, w - 56));
+      const trackHeight = 22, trackX = (w - trackWidth) / 2, trackY = 58;
+      ctx.fillStyle = previewTrackColor; ctx.fillRect(trackX, trackY, trackWidth, trackHeight);
+      ctx.strokeStyle = previewGuideColor; ctx.lineWidth = 1; ctx.strokeRect(trackX + .5, trackY + .5, trackWidth - 1, trackHeight - 1);
+      const gap = 3, barWidth = 3, centerY = trackY + (trackHeight / 2);
       let outPeak = 0;
-      for (let i = 0; i < BARS; i++) {
+      ctx.fillStyle = spectrumBarColor;
+      ctx.globalAlpha = BarOpacity;
+      for (let i = 0; i < barVals.length; i++) {
         const v = Math.max(0, Math.min(1, barVals[i]));
         outPeak = Math.max(outPeak, v);
         const bh = MinBarHeight + v * BarHeightRange;
-        const x = gap + i * (bw + gap);
-        ctx.fillStyle = `oklch(0.985 0 0 / ${BarOpacity})`;
-        ctx.fillRect(x, h - 8 - bh, bw, bh);
+        const x = trackX + i * (barWidth + gap);
+        ctx.fillRect(x, centerY - (bh / 2), barWidth, bh);
       }
+      ctx.globalAlpha = 1;
+      const minFrequency = currentParam("MinFrequency"), maxFrequency = currentParam("MaxFrequency");
+      const middleFrequency = Math.sqrt(Math.max(1, minFrequency) * Math.max(minFrequency, maxFrequency));
+      ctx.fillStyle = previewTextColor; ctx.font = '10px "Microsoft YaHei UI", sans-serif'; ctx.textBaseline = "top";
+      ctx.textAlign = "left"; ctx.fillText(formatFrequency(minFrequency), trackX, trackY + trackHeight + 10);
+      ctx.textAlign = "center"; ctx.fillText(formatFrequency(middleFrequency), trackX + (trackWidth / 2), trackY + trackHeight + 10);
+      ctx.textAlign = "right"; ctx.fillText(formatFrequency(maxFrequency), trackX + trackWidth, trackY + trackHeight + 10);
       frames++;
       if (now - lastFpsT >= 500) { fps = Math.round(frames * 1000 / (now - lastFpsT)); frames = 0; lastFpsT = now; }
-      $("#meter").textContent = `${BARS} 柱 · ${fps} fps · 峰值 ${outPeak.toFixed(2)}`;
+      $("#meter").textContent = `${barVals.length} 柱 · ${fps} fps · 峰值 ${outPeak.toFixed(2)}`;
       requestAnimationFrame(loop);
     }
 
@@ -331,9 +398,19 @@
     }
     $("#resetBtn").addEventListener("click", () => { bridge.post({ type: "reset" }); showToast("已重置为默认参数"); });
     const cmpBtn = $("#compareBtn");
-    const setCompare = v => { compare = v; cmpBtn.classList.toggle("active", v); $("#previewBadge").className = `badge${v ? " compare" : ""}`; $("#previewBadge").textContent = v ? "对比默认中" : "实时预览"; };
+    const setCompare = v => { compare = v; cmpBtn.classList.toggle("active", v); syncPreviewBadge(); };
     cmpBtn.addEventListener("mousedown", () => setCompare(true)); cmpBtn.addEventListener("mouseup", () => setCompare(false)); cmpBtn.addEventListener("mouseleave", () => setCompare(false));
     cmpBtn.addEventListener("touchstart", e => { e.preventDefault(); setCompare(true); }); cmpBtn.addEventListener("touchend", () => setCompare(false));
+    const pausePreviewBtn = $("#previewPauseBtn");
+    pausePreviewBtn.addEventListener("click", () => {
+      previewPaused = !previewPaused;
+      if (previewPaused) targetBars = barVals.slice();
+      pausePreviewBtn.classList.toggle("active", previewPaused);
+      pausePreviewBtn.setAttribute("aria-pressed", previewPaused.toString());
+      pausePreviewBtn.querySelector("span").textContent = previewPaused ? "继续预览" : "暂停预览";
+      pausePreviewBtn.querySelector("path").setAttribute("d", previewPaused ? "M4 3l8 5-8 5z" : "M5 3v10M11 3v10");
+      syncPreviewBadge();
+    });
 
     let toastTimer; function showToast(msg) { clearTimeout(toastTimer); const el = $("#toast"); el.textContent = msg; el.classList.add("show"); toastTimer = setTimeout(() => el.classList.remove("show"), 1500); }
 

@@ -2,8 +2,13 @@ namespace TaskbarLyrics.App;
 
 public sealed class SpectrumTuningSettings
 {
+    public const int MinBarCount = 8;
+    public const int MaxBarCount = 32;
+    public const int DefaultBarCount = 21;
+
     public int SampleWindow { get; set; } = 2048;
     public int UpdateIntervalMs { get; set; } = 16;
+    public int BarCount { get; set; } = DefaultBarCount;
     public double MinFrequency { get; set; } = 35;
     public double MaxFrequency { get; set; } = 7000;
     public double PeakInitial { get; set; } = 0.035;
@@ -32,6 +37,7 @@ public sealed class SpectrumTuningSettings
         {
             SampleWindow = SampleWindow,
             UpdateIntervalMs = UpdateIntervalMs,
+            BarCount = BarCount,
             MinFrequency = MinFrequency,
             MaxFrequency = MaxFrequency,
             PeakInitial = PeakInitial,

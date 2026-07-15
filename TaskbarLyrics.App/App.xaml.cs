@@ -49,6 +49,7 @@ public partial class App : System.Windows.Application
 
         _settingsStore = new SettingsStore(settingsPath);
         Settings = _settingsStore.Load();
+        Settings.FontFamily = AppSettings.NormalizeFontFamily(Settings.FontFamily);
         Settings.SpectrumTuning ??= SpectrumTuningSettings.CreateDefault();
         _spectrumTuningSettings = Settings.SpectrumTuning.Clone();
         ApplyStartupForegroundColor(Settings);
@@ -64,7 +65,15 @@ public partial class App : System.Windows.Application
         UserWantsLyricsVisible = Settings.ShowLyricsOnStartup;
 
         _lyricsWindowHost.ApplySpectrumTuning(_spectrumTuningSettings);
-        _trayService = new TrayService(ToggleLyricsWindow, OpenSettingsWindow, ExitApplication);
+        _trayService = new TrayService(
+            ToggleLyricsWindow,
+            SetSpectrumDisplayMode,
+            () => Settings.EnableSpectrum,
+            () => Settings.SpectrumDisplayMode,
+            OpenSettingsWindow,
+            OpenSmtcTimelineMonitorWindow,
+            OpenSpectrumTuningWindow,
+            ExitApplication);
         StartActivationServer();
         SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
         _ = RunAutomaticUpdateCheckAsync();
@@ -231,6 +240,24 @@ public partial class App : System.Windows.Application
         }
     }
 
+    private void SetSpectrumDisplayMode(bool enabled, SpectrumDisplayMode mode)
+    {
+        Settings.EnableSpectrum = enabled;
+        if (enabled)
+        {
+            Settings.SpectrumDisplayMode = mode;
+        }
+
+        _settingsStore?.Save(Settings);
+        _lyricsWindowHost?.SetSpectrumDisplayMode(enabled, mode);
+        _settingsWindow?.ApplyExternalSettings(Settings.Clone());
+    }
+
+    public void OpenSmtcTimelineMonitorWindow()
+    {
+        _lyricsWindowHost?.OpenSmtcTimelineMonitorWindow();
+    }
+
     public void ShowLyricsWindow()
     {
         if (_lyricsWindowHost is null)
@@ -291,10 +318,17 @@ public partial class App : System.Windows.Application
     {
         if (_spectrumTuningWindow is { IsVisible: true })
         {
+            _lyricsWindowHost?.SetSpectrumPreviewEnabled(true);
+            if (_spectrumTuningWindow.WindowState == WindowState.Minimized)
+            {
+                _spectrumTuningWindow.WindowState = WindowState.Normal;
+            }
+
             _spectrumTuningWindow.Activate();
             return;
         }
 
+        _lyricsWindowHost?.SetSpectrumPreviewEnabled(true);
         _spectrumTuningWindow = new SpectrumTuningWindow(_spectrumTuningSettings, ApplySpectrumTuning);
         _spectrumTuningWindow.Closed += SpectrumTuningWindow_Closed;
         _spectrumTuningWindow.Show();
@@ -310,6 +344,7 @@ public partial class App : System.Windows.Application
 
     private void SpectrumTuningWindow_Closed(object? sender, EventArgs e)
     {
+        _lyricsWindowHost?.SetSpectrumPreviewEnabled(false);
         if (_spectrumTuningWindow is not null)
         {
             _spectrumTuningWindow.Closed -= SpectrumTuningWindow_Closed;

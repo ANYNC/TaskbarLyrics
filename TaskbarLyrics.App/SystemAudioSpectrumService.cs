@@ -5,7 +5,6 @@ namespace TaskbarLyrics.App;
 
 public sealed class SystemAudioSpectrumService : IDisposable
 {
-    private const int BarCount = 21;
     private const int RingBufferSize = 8192;
     private const int ClsctxAll = 23;
     private const int AudclntSharemodeShared = 0;
@@ -21,7 +20,7 @@ public sealed class SystemAudioSpectrumService : IDisposable
 
     private readonly object _sync = new();
     private readonly float[] _ringBuffer = new float[RingBufferSize];
-    private readonly float[] _smoothedBars = new float[BarCount];
+    private float[] _smoothedBars = new float[SpectrumTuningSettings.DefaultBarCount];
     private readonly CancellationTokenSource _cts = new();
     private Thread? _captureThread;
     private int _writeIndex;
@@ -36,8 +35,6 @@ public sealed class SystemAudioSpectrumService : IDisposable
     private DateTimeOffset? _lastAudioUtc;
     private string _diagnosticFormat = "Waiting";
     private string _lastError = string.Empty;
-
-    public static IReadOnlyList<float> Silence { get; } = new float[BarCount];
 
     public bool IsAvailable => _isAvailable;
 
@@ -61,6 +58,10 @@ public sealed class SystemAudioSpectrumService : IDisposable
         var snapshot = settings.Clone();
         snapshot.SampleWindow = CoerceSampleWindow(snapshot.SampleWindow);
         snapshot.UpdateIntervalMs = Math.Clamp(snapshot.UpdateIntervalMs, 16, 100);
+        snapshot.BarCount = Math.Clamp(
+            snapshot.BarCount,
+            SpectrumTuningSettings.MinBarCount,
+            SpectrumTuningSettings.MaxBarCount);
         snapshot.MinFrequency = Math.Clamp(snapshot.MinFrequency, 20, 300);
         snapshot.MaxFrequency = Math.Clamp(snapshot.MaxFrequency, 2000, 20000);
         if (snapshot.MaxFrequency <= snapshot.MinFrequency)
@@ -84,6 +85,10 @@ public sealed class SystemAudioSpectrumService : IDisposable
         lock (_sync)
         {
             _tuningSettings = snapshot;
+            if (_smoothedBars.Length != snapshot.BarCount)
+            {
+                _smoothedBars = new float[snapshot.BarCount];
+            }
             _adaptivePeak = Math.Clamp(_adaptivePeak, (float)snapshot.PeakFloor, (float)snapshot.PeakCeiling);
         }
     }
@@ -130,7 +135,12 @@ public sealed class SystemAudioSpectrumService : IDisposable
         var bars = CalculateBars(samples, sampleRate, settings);
         lock (_sync)
         {
-            for (var i = 0; i < BarCount; i++)
+            if (_smoothedBars.Length != bars.Length)
+            {
+                _smoothedBars = new float[bars.Length];
+            }
+
+            for (var i = 0; i < bars.Length; i++)
             {
                 var attack = bars[i] > _smoothedBars[i]
                     ? (float)settings.BackendAttack
@@ -346,7 +356,11 @@ public sealed class SystemAudioSpectrumService : IDisposable
 
     private float[] CalculateBars(float[] samples, int sampleRate, SpectrumTuningSettings settings)
     {
-        var bars = new float[BarCount];
+        var barCount = Math.Clamp(
+            settings.BarCount,
+            SpectrumTuningSettings.MinBarCount,
+            SpectrumTuningSettings.MaxBarCount);
+        var bars = new float[barCount];
         var magnitudes = CalculateFftMagnitudes(samples);
         var nyquist = Math.Max(1000, sampleRate / 2);
         var minFrequency = Math.Clamp(settings.MinFrequency, 20, 300);
@@ -358,10 +372,10 @@ public sealed class SystemAudioSpectrumService : IDisposable
 
         var peak = 0f;
 
-        for (var band = 0; band < BarCount; band++)
+        for (var band = 0; band < barCount; band++)
         {
-            var startRatio = band / (double)BarCount;
-            var endRatio = (band + 1) / (double)BarCount;
+            var startRatio = band / (double)barCount;
+            var endRatio = (band + 1) / (double)barCount;
             var startFrequency = minFrequency * Math.Pow(maxFrequency / minFrequency, startRatio);
             var endFrequency = minFrequency * Math.Pow(maxFrequency / minFrequency, endRatio);
             var startBin = Math.Max(1, (int)Math.Floor(startFrequency * samples.Length / sampleRate));
@@ -388,7 +402,7 @@ public sealed class SystemAudioSpectrumService : IDisposable
             Math.Max(peak, _adaptivePeak * (float)settings.PeakDecay),
             (float)settings.PeakFloor,
             (float)settings.PeakCeiling);
-        for (var band = 0; band < BarCount; band++)
+        for (var band = 0; band < barCount; band++)
         {
             var normalized = Math.Clamp(bars[band] / _adaptivePeak, 0f, 1.35f);
             var noiseFloor = (float)settings.NoiseFloor;

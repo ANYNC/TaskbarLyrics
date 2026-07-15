@@ -10,7 +10,15 @@ public sealed class TrayService : IDisposable
     private readonly Forms.NotifyIcon _notifyIcon;
     private TrayMenuWindow? _menuWindow;
 
-    public TrayService(Action toggleLyricsWindow, Action openSettings, Action exitApp)
+    public TrayService(
+        Action toggleLyricsWindow,
+        Action<bool, SpectrumDisplayMode> setSpectrumDisplayMode,
+        Func<bool> isSpectrumEnabled,
+        Func<SpectrumDisplayMode> getSpectrumDisplayMode,
+        Action openSettings,
+        Action openSmtcMonitor,
+        Action openSpectrumTuning,
+        Action exitApp)
     {
         _icon = AppIconProvider.LoadTrayIcon();
         _notifyIcon = new Forms.NotifyIcon
@@ -26,7 +34,15 @@ public sealed class TrayService : IDisposable
             if (e.Button == Forms.MouseButtons.Right)
             {
                 System.Windows.Application.Current.Dispatcher.BeginInvoke(() =>
-                    ShowMenu(toggleLyricsWindow, openSettings, exitApp));
+                    ShowMenu(
+                        toggleLyricsWindow,
+                        setSpectrumDisplayMode,
+                        isSpectrumEnabled(),
+                        getSpectrumDisplayMode(),
+                        openSettings,
+                        openSmtcMonitor,
+                        openSpectrumTuning,
+                        exitApp));
             }
         };
     }
@@ -52,10 +68,26 @@ public sealed class TrayService : IDisposable
         _notifyIcon.ShowBalloonTip(7000);
     }
 
-    private void ShowMenu(Action toggleLyricsWindow, Action openSettings, Action exitApp)
+    private void ShowMenu(
+        Action toggleLyricsWindow,
+        Action<bool, SpectrumDisplayMode> setSpectrumDisplayMode,
+        bool isSpectrumEnabled,
+        SpectrumDisplayMode spectrumDisplayMode,
+        Action openSettings,
+        Action openSmtcMonitor,
+        Action openSpectrumTuning,
+        Action exitApp)
     {
         _menuWindow?.Close();
-        _menuWindow = new TrayMenuWindow(toggleLyricsWindow, openSettings, exitApp);
+        _menuWindow = new TrayMenuWindow(
+            toggleLyricsWindow,
+            setSpectrumDisplayMode,
+            isSpectrumEnabled,
+            spectrumDisplayMode,
+            openSettings,
+            openSmtcMonitor,
+            openSpectrumTuning,
+            exitApp);
         _menuWindow.Closed += (_, _) => _menuWindow = null;
         _menuWindow.ShowAtCursor();
     }

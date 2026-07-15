@@ -1,10 +1,9 @@
 using System.IO;
-using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Windows;
-using System.Windows.Interop;
 using System.Windows.Threading;
+using Microsoft.Win32;
 using Microsoft.Web.WebView2.Core;
 
 namespace TaskbarLyrics.App;
@@ -26,6 +25,7 @@ public partial class SmtcTimelineMonitorWindow : Wpf.Ui.Controls.FluentWindow
         InitializeComponent();
         AppIconProvider.ApplyWindowIcon(this);
         _provider = provider;
+        ApplyWindowTheme();
 
         WindowStartupLocation = WindowStartupLocation.Manual;
         var work = SystemParameters.WorkArea;
@@ -41,11 +41,12 @@ public partial class SmtcTimelineMonitorWindow : Wpf.Ui.Controls.FluentWindow
         SourceInitialized += OnSourceInitialized;
         Loaded += OnLoaded;
         Closed += OnClosed;
+        SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
     }
 
     private void OnSourceInitialized(object? sender, EventArgs e)
     {
-        ApplyWindowChromeAttributes();
+        ApplyWindowTheme();
     }
 
     private async void OnLoaded(object? sender, RoutedEventArgs e)
@@ -56,6 +57,7 @@ public partial class SmtcTimelineMonitorWindow : Wpf.Ui.Controls.FluentWindow
 
     private void OnClosed(object? sender, EventArgs e)
     {
+        SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
         _timer.Stop();
 
         if (MonitorWebView.CoreWebView2 is not null)
@@ -81,6 +83,7 @@ public partial class SmtcTimelineMonitorWindow : Wpf.Ui.Controls.FluentWindow
             "SmtcMonitor");
         var environment = await CoreWebView2Environment.CreateAsync(null, userDataFolder);
         await MonitorWebView.EnsureCoreWebView2Async(environment);
+        ApplyWindowTheme();
 
         var core = MonitorWebView.CoreWebView2;
         core.Settings.IsStatusBarEnabled = false;
@@ -187,31 +190,20 @@ public partial class SmtcTimelineMonitorWindow : Wpf.Ui.Controls.FluentWindow
         }
     }
 
-    private void ApplyWindowChromeAttributes()
+    private void OnUserPreferenceChanged(object sender, UserPreferenceChangedEventArgs e)
     {
-        var hwnd = new WindowInteropHelper(this).Handle;
-        if (hwnd == IntPtr.Zero)
+        if (e.Category is not (UserPreferenceCategory.Color or UserPreferenceCategory.General or UserPreferenceCategory.VisualStyle))
         {
             return;
         }
 
-        if (HwndSource.FromHwnd(hwnd) is { CompositionTarget: { } compositionTarget })
-        {
-            compositionTarget.BackgroundColor = System.Windows.Media.Color.FromRgb(10, 10, 10);
-        }
-
-        var darkMode = 1;
-        _ = DwmSetWindowAttribute(hwnd, DwmWindowAttributeUseImmersiveDarkMode, ref darkMode, Marshal.SizeOf<int>());
-
-        var cornerPreference = DwmWindowCornerPreferenceRound;
-        _ = DwmSetWindowAttribute(hwnd, DwmWindowAttributeWindowCornerPreference, ref cornerPreference, Marshal.SizeOf<int>());
+        Dispatcher.BeginInvoke(ApplyWindowTheme);
     }
 
-    private const int DwmWindowAttributeUseImmersiveDarkMode = 20;
-    private const int DwmWindowAttributeWindowCornerPreference = 33;
-    private const int DwmWindowCornerPreferenceRound = 2;
-    [DllImport("dwmapi.dll", PreserveSig = true)]
-    private static extern int DwmSetWindowAttribute(IntPtr hwnd, int dwAttribute, ref int pvAttribute, int cbAttribute);
+    private void ApplyWindowTheme()
+    {
+        NativeWindowTheme.Apply(this, MonitorWebView);
+    }
 
     private sealed class MonitorMessage
     {

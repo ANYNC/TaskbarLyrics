@@ -41,9 +41,10 @@ public partial class MainWindow : Window
     private string _currentCoverFallbackColorCss = "rgba(67, 160, 71, 1)";
     private string? _lastLocalCoverLookupTrackId;
     private DateTimeOffset _nextLocalCoverLookupUtc;
-    private bool _enableSmtcTimelineMonitor;
     private bool _enableSpectrum = true;
     private SpectrumDisplayMode _spectrumDisplayMode = SpectrumDisplayMode.PureMusicOrNoLyrics;
+    private IReadOnlyList<float> _spectrumSilence = new float[SpectrumTuningSettings.DefaultBarCount];
+    private bool _spectrumPreviewEnabled;
     private SmtcTimelineMonitorWindow? _smtcTimelineMonitorWindow;
     private bool _isWebViewReady;
     private bool _isWebViewInitializing;
@@ -104,8 +105,6 @@ public partial class MainWindow : Window
 
     public void ApplySettings(AppSettings settings)
     {
-        Log.SetVerboseEnabled(settings.EnableSmtcTimelineMonitor);
-
         if (_musicSessionProvider is SmtcMusicSessionProvider smtcProvider)
         {
             smtcProvider.SetRecognitionOrder(
@@ -153,11 +152,6 @@ public partial class MainWindow : Window
         AttachToTaskbarHost();
         PushStyleToWebView(settings);
         PushLyricsToWebView(_currentLine, _nextLine, 0, _lastWebCurrentLineIndex, _lastWebTrackId, false, false);
-        _enableSmtcTimelineMonitor = settings.EnableSmtcTimelineMonitor;
-        if (IsLoaded)
-        {
-            UpdateSmtcTimelineMonitorWindow();
-        }
     }
 
     private static IReadOnlyCollection<string> BuildEnabledPlayerSources(AppSettings settings)
@@ -209,7 +203,6 @@ public partial class MainWindow : Window
         _audioSpectrumService.Start();
         ApplySpectrumTuning(_spectrumTuningSettings);
         PushLyricsToWebView(_currentLine, _nextLine, 0, _lastWebCurrentLineIndex, _lastWebTrackId, false, false);
-        UpdateSmtcTimelineMonitorWindow();
         _timer.Start();
         _spectrumTimer.Start();
     }
@@ -246,7 +239,7 @@ public partial class MainWindow : Window
             {
                 _timer.Stop();
             }
-            if (_spectrumTimer.IsEnabled)
+            if (_spectrumTimer.IsEnabled && !_spectrumPreviewEnabled)
             {
                 _spectrumTimer.Stop();
             }
@@ -288,19 +281,25 @@ public partial class MainWindow : Window
         _audioSpectrumService.Dispose();
     }
 
-    private void UpdateSmtcTimelineMonitorWindow()
+    public void OpenSmtcTimelineMonitorWindow()
     {
-        if (_musicSessionProvider is not SmtcMusicSessionProvider smtcProvider || !_enableSmtcTimelineMonitor)
+        if (_musicSessionProvider is not SmtcMusicSessionProvider smtcProvider)
         {
-            CloseSmtcTimelineMonitorWindow();
             return;
         }
 
         if (_smtcTimelineMonitorWindow is { IsVisible: true })
         {
+            if (_smtcTimelineMonitorWindow.WindowState == WindowState.Minimized)
+            {
+                _smtcTimelineMonitorWindow.WindowState = WindowState.Normal;
+            }
+
+            _smtcTimelineMonitorWindow.Activate();
             return;
         }
 
+        Log.SetVerboseEnabled(true);
         var monitorWindow = new SmtcTimelineMonitorWindow(smtcProvider);
         monitorWindow.Closed += OnSmtcTimelineMonitorClosed;
         _smtcTimelineMonitorWindow = monitorWindow;
@@ -317,6 +316,7 @@ public partial class MainWindow : Window
         _smtcTimelineMonitorWindow.Closed -= OnSmtcTimelineMonitorClosed;
         _smtcTimelineMonitorWindow.Close();
         _smtcTimelineMonitorWindow = null;
+        Log.SetVerboseEnabled(false);
     }
 
     private void OnSmtcTimelineMonitorClosed(object? sender, EventArgs e)
@@ -327,6 +327,7 @@ public partial class MainWindow : Window
         }
 
         _smtcTimelineMonitorWindow = null;
+        Log.SetVerboseEnabled(false);
     }
 
     private void OnDisplaySettingsChanged(object? sender, EventArgs e)
@@ -405,10 +406,44 @@ public partial class MainWindow : Window
     public void ApplySpectrumTuning(SpectrumTuningSettings settings)
     {
         var snapshot = settings.Clone();
+        snapshot.BarCount = Math.Clamp(
+            snapshot.BarCount,
+            SpectrumTuningSettings.MinBarCount,
+            SpectrumTuningSettings.MaxBarCount);
         _spectrumTuningSettings = snapshot;
+        if (_spectrumSilence.Count != snapshot.BarCount)
+        {
+            _spectrumSilence = new float[snapshot.BarCount];
+        }
         _audioSpectrumService.ApplyTuning(snapshot);
         _spectrumTimer.Interval = TimeSpan.FromMilliseconds(Math.Clamp(snapshot.UpdateIntervalMs, 16, 100));
         PushSpectrumTuningToWebView(snapshot);
+    }
+
+    public void SetSpectrumPreviewEnabled(bool enabled)
+    {
+        _spectrumPreviewEnabled = enabled;
+        if (enabled)
+        {
+            _audioSpectrumService.Start();
+            if (!_spectrumTimer.IsEnabled)
+            {
+                _spectrumTimer.Start();
+            }
+        }
+        else if (!IsVisible && _spectrumTimer.IsEnabled)
+        {
+            _spectrumTimer.Stop();
+        }
+    }
+
+    public void SetSpectrumDisplayMode(bool enabled, SpectrumDisplayMode mode)
+    {
+        _enableSpectrum = enabled;
+        if (enabled)
+        {
+            _spectrumDisplayMode = mode;
+        }
     }
 
     private bool ShouldShowSpectrum(LyricDisplayFrame frame)
@@ -434,19 +469,23 @@ public partial class MainWindow : Window
 
     private void OnSpectrumTimerTick(object? sender, EventArgs e)
     {
-        if (!_isCurrentFramePureMusic)
+        var shouldRenderLyricsSpectrum = _isCurrentFramePureMusic;
+        if (!shouldRenderLyricsSpectrum && !_spectrumPreviewEnabled)
         {
-            PublishSpectrumDiagnostics(SystemAudioSpectrumService.Silence, _audioSpectrumService.GetDiagnostics());
+            PublishSpectrumDiagnostics(_spectrumSilence, _audioSpectrumService.GetDiagnostics());
             return;
         }
 
         var captureDiagnostics = _audioSpectrumService.GetDiagnostics();
-        var bars = _isCurrentPlaybackPlaying && captureDiagnostics.IsAvailable
+        var bars = captureDiagnostics.IsAvailable && (_isCurrentPlaybackPlaying || _spectrumPreviewEnabled)
             ? _audioSpectrumService.GetSpectrum()
-            : SystemAudioSpectrumService.Silence;
+            : _spectrumSilence;
 
         PublishSpectrumDiagnostics(bars, captureDiagnostics);
-        PushSpectrumToWebView(bars);
+        if (shouldRenderLyricsSpectrum)
+        {
+            PushSpectrumToWebView(bars);
+        }
     }
 
     private void PublishSpectrumDiagnostics(IReadOnlyList<float> bars, SpectrumCaptureDiagnostics capture)
@@ -462,6 +501,7 @@ public partial class MainWindow : Window
             capture.Format,
             capture.InputPeak,
             outputPeak,
+            bars,
             capture.LastAudioUtc,
             capture.LastError);
 
@@ -503,7 +543,7 @@ public partial class MainWindow : Window
 
     private void LogTickDiagnostics(PlaybackSnapshot snapshot, LyricDisplayFrame frame)
     {
-        if (!_enableSmtcTimelineMonitor)
+        if (_smtcTimelineMonitorWindow is not { IsVisible: true })
         {
             return;
         }
@@ -747,7 +787,8 @@ public partial class MainWindow : Window
             fall = settings.FrontendFall,
             minHeight = settings.MinBarHeight,
             heightRange = settings.BarHeightRange,
-            opacity = settings.BarOpacity
+            opacity = settings.BarOpacity,
+            barCount = settings.BarCount
         };
         var payloadJson = JsonSerializer.Serialize(payload);
         var script = $"window.taskbarLyrics?.setSpectrumTuning({payloadJson});";
@@ -869,9 +910,7 @@ public partial class MainWindow : Window
 
         var stylePayload = new
         {
-            fontFamily = string.IsNullOrWhiteSpace(settings.FontFamily)
-                ? AppSettings.DefaultFontFamily
-                : settings.FontFamily,
+            fontFamily = AppSettings.NormalizeFontFamily(settings.FontFamily),
             fontSize = AppSettings.ClampFontSize(settings.FontSize, settings.UseSafeFontSizeRange),
             coverSize = AppSettings.ClampCoverSize(settings.CoverSize, settings.UseSafeCoverSizeRange),
             coverGap = AppSettings.ClampCoverGap(settings.CoverGap),

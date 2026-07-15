@@ -19,6 +19,7 @@ public sealed record SpectrumDiagnosticsSnapshot(
     string Format,
     float InputPeak,
     float OutputPeak,
+    IReadOnlyList<float> Bars,
     DateTimeOffset? LastAudioUtc,
     string LastError)
 {
@@ -32,6 +33,7 @@ public sealed record SpectrumDiagnosticsSnapshot(
         "Waiting",
         0,
         0,
+        Array.Empty<float>(),
         null,
         string.Empty);
 }

@@ -7,6 +7,8 @@ $css = [IO.File]::ReadAllText((Join-Path $settingsRoot 'settings.css'), [Text.UT
 $script = [IO.File]::ReadAllText((Join-Path $settingsRoot 'settings.js'), [Text.UTF8Encoding]::new($false, $true))
 $settingsWindow = [IO.File]::ReadAllText((Join-Path $appRoot 'SettingsWindow.xaml.cs'), [Text.UTF8Encoding]::new($false, $true))
 $app = [IO.File]::ReadAllText((Join-Path $appRoot 'App.xaml.cs'), [Text.UTF8Encoding]::new($false, $true))
+$appSettings = [IO.File]::ReadAllText((Join-Path $appRoot 'AppSettings.cs'), [Text.UTF8Encoding]::new($false, $true))
+$lyricsWindow = [IO.File]::ReadAllText((Join-Path $appRoot 'MainWindow.xaml.cs'), [Text.UTF8Encoding]::new($false, $true))
 
 $errors = [Collections.Generic.List[string]]::new()
 
@@ -18,12 +20,11 @@ foreach ($page in $pages) {
 
 $settings = @(
     'enableLocalLyrics', 'localMusicFolders', 'showLyricsOnStartup', 'showLyricTranslation',
-    'enableSpectrum', 'spectrumDisplayMode', 'useSafeFontSizeRange', 'fontSize',
+    'spectrumDisplayMode', 'useSafeFontSizeRange', 'fontSize',
     'useSafeCoverSizeRange', 'coverSize', 'coverGap', 'coverCornerRadius', 'fontFamily',
     'fontWeight', 'foregroundColorMode', 'showTextShadow', 'showBackground',
     'backgroundOpacity', 'showBorder', 'windowWidth', 'horizontalAnchor', 'xOffset',
-    'yOffset', 'forceAlwaysOnTop', 'startWithWindows', 'autoCheckUpdates',
-    'enableSmtcTimelineMonitor'
+    'yOffset', 'forceAlwaysOnTop', 'startWithWindows', 'autoCheckUpdates'
 )
 foreach ($key in $settings) {
     if (-not $html.Contains("data-setting=`"$key`"")) { $errors.Add("missing setting control: $key") }
@@ -45,6 +46,7 @@ $requiredScript = @(
     'window.settingsApp = { setState, setUpdateStatus }', 'window.settingsApp.setWindowState = setWindowState',
     'window.chrome?.webview?.postMessage',
     'type: "reorderSources"', 'type: "pickLocalFolder"', 'type: "showLyricsWindow"',
+    'type: "openSmtcMonitor"', 'type: "openSpectrumTuning"',
     'type: "windowDrag"', 'type: "windowResizeStart"', 'type: "windowMinimize"', 'type: "windowMaximize"', 'type: "windowClose"',
     'function openSelect', 'function closeSelect', 'function rgbToHex', 'function toArgb',
     'function activatePage', 'function renderSources', 'function renderPriority', 'function setWindowState',
@@ -62,16 +64,22 @@ foreach ($unsupported in @('AppleMusic', 'Foobar', 'MusicBee', 'AIMP', 'VLC', 'W
     if ($script.Contains($unsupported)) { $errors.Add("unsupported source exposed: $unsupported") }
 }
 
-foreach ($marker in @('case "pickLocalFolder":', 'case "showLyricsWindow":', 'case "windowDrag":', 'case "windowResizeStart":', 'case "windowClose":')) {
+foreach ($marker in @('case "pickLocalFolder":', 'case "showLyricsWindow":', 'case "openSmtcMonitor":', 'case "openSpectrumTuning":', 'case "windowDrag":', 'case "windowResizeStart":', 'case "windowClose":')) {
     if (-not $settingsWindow.Contains($marker)) { $errors.Add("missing desktop message: $marker") }
 }
 if (-not $app.Contains('public void ShowLyricsWindow()')) { $errors.Add('missing App.ShowLyricsWindow') }
+if (-not $appSettings.Contains('public const string DefaultFontFamily = BundledFontFamily;')) { $errors.Add('bundled font is not the default') }
+if (-not $app.Contains('Settings.FontFamily = AppSettings.NormalizeFontFamily(Settings.FontFamily);')) { $errors.Add('startup font normalization missing') }
+if (-not $lyricsWindow.Contains('fontFamily = AppSettings.NormalizeFontFamily(settings.FontFamily)')) { $errors.Add('lyrics font normalization missing') }
 
 if (-not $css.Contains('--background: oklch(0.145 0 0)')) { $errors.Add('neutral palette missing') }
 if ($css.Contains('Settings prototype integration: neutral Shadcn-inspired control layer.')) { $errors.Add('legacy override layer remains') }
 foreach ($marker in @('.sidebar-collapsed', '.page.transitioning', '.setting-row.child', '.about-layout', '.color-popover')) {
     if (-not $css.Contains($marker)) { $errors.Add("missing prototype style: $marker") }
 }
+if (-not $script.Contains('{ value: "Disabled"')) { $errors.Add('spectrum disabled option missing') }
+if ($html.Contains('data-setting="enableSpectrum"')) { $errors.Add('legacy spectrum switch remains') }
+if ($html.Contains('data-setting="enableSmtcTimelineMonitor"')) { $errors.Add('legacy SMTC monitor switch remains') }
 foreach ($demoMarker in @('settingsPrototype', 'demoFonts')) {
     if ($html.Contains($demoMarker) -or $script.Contains($demoMarker)) { $errors.Add("demo marker remains: $demoMarker") }
 }

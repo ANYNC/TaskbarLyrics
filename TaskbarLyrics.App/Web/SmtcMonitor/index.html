@@ -21,6 +21,21 @@
       --shadow: 0 18px 60px rgba(0,0,0,.5); --shadow-sm: 0 1px 2px rgba(0,0,0,.28);
       font-family: "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
     }
+    @media (prefers-color-scheme: light) {
+      :root {
+        color-scheme: light;
+        --background: oklch(0.985 0 0); --foreground: oklch(0.145 0 0);
+        --card: oklch(1 0 0); --card-foreground: oklch(0.145 0 0);
+        --popover: oklch(1 0 0); --popover-foreground: oklch(0.145 0 0);
+        --primary: oklch(0.205 0 0); --primary-foreground: oklch(0.985 0 0);
+        --secondary: oklch(0.955 0 0); --secondary-foreground: oklch(0.205 0 0);
+        --muted: oklch(0.955 0 0); --muted-foreground: oklch(0.46 0 0);
+        --border: oklch(0 0 0 / 10%); --input: oklch(0 0 0 / 15%);
+        --surface-hover: oklch(0.91 0 0); --subtle: oklch(0.48 0 0);
+        --success: oklch(0.49 0.145 157deg); --warning: oklch(0.55 0.145 70); --danger: oklch(0.58 0.205 24);
+        --shadow: 0 18px 60px rgba(0,0,0,.16); --shadow-sm: 0 1px 3px rgba(0,0,0,.1);
+      }
+    }
     * { box-sizing: border-box; }
     html, body { margin: 0; height: 100%; background: var(--background); color: var(--foreground); overflow: hidden; }
     button { font: inherit; color: inherit; }
@@ -51,11 +66,11 @@
     .badge.warn { background: color-mix(in oklch, var(--warning) 22%, transparent); color: var(--warning); }
     .badge.bad { background: color-mix(in oklch, var(--danger) 22%, transparent); color: var(--danger); }
     .badge.muted { background: var(--secondary); color: var(--muted-foreground); }
-    .source-name { cursor: help; border-bottom: 1px dashed var(--subtle); }
     .v.green { color: var(--success); } .v.amber { color: var(--warning); } .v.red { color: var(--danger); }
-    .info-tip { position: relative; display: inline-flex; align-items: center; margin-left: 4px; color: var(--subtle); cursor: help; }
-    .info-tip svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.6; }
-    .info-tip::after { content: attr(data-tip); position: absolute; right: 0; bottom: calc(100% + 8px); padding: 8px 10px; border-radius: var(--radius-sm); background: var(--popover); color: var(--popover-foreground); font-size: 11px; font-weight: 400; line-height: 1.7; white-space: pre; box-shadow: var(--shadow); pointer-events: none; opacity: 0; transform: translateY(4px); transition: opacity var(--duration-fast) ease, transform var(--duration-fast) ease; z-index: 200; }
+    .info-tip { position: relative; display: inline-grid; width: 12px; height: 12px; place-items: center; margin-left: 3px; color: var(--subtle); cursor: help; vertical-align: -2px; opacity: .72; transition: color var(--duration-fast) ease, opacity var(--duration-fast) ease; }
+    .info-tip:hover, .info-tip:focus-visible { color: var(--foreground); opacity: 1; }
+    .info-tip svg { width: 11px; height: 11px; fill: none; stroke: currentColor; stroke-width: 1.6; }
+    .info-tip::after { content: attr(data-tip); position: absolute; top: calc(100% + 8px); right: -6px; width: max-content; max-width: 260px; padding: 9px 11px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--popover); color: var(--popover-foreground); font-size: 11px; font-weight: 400; line-height: 1.7; white-space: pre-line; box-shadow: var(--shadow); pointer-events: none; opacity: 0; transform: translateY(-4px); transition: opacity var(--duration-fast) ease, transform var(--duration-fast) ease; z-index: 200; }
     .info-tip:hover::after, .info-tip:focus-visible::after { opacity: 1; transform: translateY(0); }
 
     .details { min-height: 0; overflow: auto; padding: 0 14px 10px; }
@@ -64,9 +79,7 @@
     .mono .k { color: var(--subtle); } .mono .v { color: var(--foreground); }
     .mono .ok { color: var(--success); } .mono .warn { color: var(--warning); } .mono .bad { color: var(--danger); }
 
-    .footer { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-top: 1px solid var(--border); }
-    .status-line { min-width: 0; flex: 1; font-size: 11px; color: var(--subtle); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .status-line.warn { color: var(--warning); } .status-line.bad { color: var(--danger); }
+    .footer { display: flex; align-items: center; justify-content: flex-end; padding: 10px 14px; border-top: 1px solid var(--border); }
     .footer .actions { display: flex; gap: 8px; flex: 0 0 auto; }
     .btn { min-height: 30px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 12px; border: 1px solid var(--primary); border-radius: var(--radius-sm); background: var(--primary); color: var(--primary-foreground); font-size: 12px; font-weight: 600; cursor: pointer; transition: transform var(--duration-fast) ease, background var(--duration-fast) ease, color var(--duration-fast) ease; }
     .btn:hover { background: color-mix(in oklch, var(--primary) 85%, var(--background)); }
@@ -125,11 +138,11 @@
       </div>
       <div class="stat">
         <div class="k">当前播放源</div>
-        <div class="v"><span class="source-name" id="sourceName" title="">—</span></div>
+        <div class="v"><span id="sourceName">—</span></div>
         <div class="sub" id="sourceSub">歌词源：—</div>
       </div>
       <div class="stat">
-        <div class="k">外推漂移<span class="info-tip" data-tip="外推漂移 = 外推位置 − 原始位置&#10;绿色 &lt; 0.2s　正常&#10;琥珀 0.2–0.5s　注意&#10;红色 &gt; 0.5s　歌词可能不同步" tabindex="0" aria-label="外推漂移状态说明"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.5"/><path d="M8 7.5v3"/><circle cx="8" cy="5.4" r=".7" fill="currentColor" stroke="none"/></svg></span></div>
+        <div class="k">外推漂移<span class="info-tip" data-tip="结合外推漂移与上报间隔，可用于定位歌词不同步。&#10;外推漂移 = 外推位置 − 原始位置&#10;绿色 &lt; 0.2s：正常&#10;琥珀 0.2–0.5s：注意&#10;红色 &gt; 0.5s：歌词可能不同步" tabindex="0" aria-label="外推漂移状态说明"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.5"/><path d="M8 7.5v3"/><circle cx="8" cy="5.4" r=".7" fill="currentColor" stroke="none"/></svg></span></div>
         <div class="v big" id="driftVal">—</div>
         <div class="sub" id="driftSub">距上次上报 —</div>
       </div>
@@ -142,7 +155,6 @@
     </main>
 
     <footer class="footer">
-      <span class="status-line" id="statusLine">观察外推漂移与上报间隔，定位歌词不同步</span>
       <div class="actions">
         <button class="btn secondary" type="button" id="pauseBtn"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3v10M11 3v10"/></svg><span id="pauseLabel">暂停</span></button>
         <button class="btn secondary" type="button" id="copyBtn">复制</button>
@@ -157,7 +169,6 @@
     const $ = s => document.querySelector(s);
     const bridge = { post(m) { window.chrome?.webview?.postMessage(JSON.stringify(m)); } };
     const TH_WARN = 200, TH_BAD = 500, STALE_MS = 2000;
-    const HINT = "观察外推漂移与上报间隔，定位歌词不同步";
     let paused = false;
 
     const pad = (n, w = 2) => String(n).padStart(w, "0");
@@ -176,19 +187,10 @@
 
       const src = p.resolvedSource || p.normalizedSource || p.sourceAppUserModelId || '—';
       $("#sourceName").textContent = src;
-      $("#sourceName").title = `SourceAppId: ${p.sourceAppUserModelId || '—'}\nNormalizedSource: ${p.normalizedSource || '—'}\nResolvedSource: ${p.resolvedSource || '—'}\nLyricSource: ${p.lyricSource || '—'}`;
       $("#sourceSub").textContent = `歌词源：${p.lyricSource || '—'}`;
 
       const dv = $("#driftVal"); dv.textContent = (drift / 1000).toFixed(3); dv.className = `v big ${dCol}`;
       $("#driftSub").textContent = `距上次上报 ${(age / 1000).toFixed(2)}s`;
-
-      const alerts = [];
-      if (p.isPlaying && drift > TH_BAD) alerts.push({ t: "bad", m: `外推漂移 ${(drift / 1000).toFixed(2)}s，播放器长时间未上报，歌词可能不同步` });
-      if (p.isFallback) alerts.push({ t: "warn", m: "当前为回退快照，时间轴数据不可信" });
-      if (p.isPlaying && age > STALE_MS) alerts.push({ t: "warn", m: "时间轴上报停滞" });
-      const sl = $("#statusLine");
-      if (alerts.length) { sl.textContent = alerts[0].m; sl.className = `status-line ${alerts[0].t}`; }
-      else { sl.textContent = HINT; sl.className = "status-line"; }
 
       const rows = [
         ["Captured(UTC):", p.capturedAtUtc || "—", "k"],

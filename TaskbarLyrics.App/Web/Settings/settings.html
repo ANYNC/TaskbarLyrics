@@ -79,14 +79,13 @@
               <div class="panel-head"><div><h2 id="lyricsHeading" tabindex="-1">显示行为</h2><p>控制歌词何时出现，以及是否显示翻译。</p></div></div>
               <div class="settings">
                 <div class="setting-row compact"><div class="setting-label"><strong>启动时显示歌词</strong><small>应用启动后自动显示任务栏歌词窗口。</small></div><label class="switch"><input type="checkbox" data-setting="showLyricsOnStartup" aria-label="启动时显示歌词"><span class="switch-track"></span></label></div>
-                <div class="setting-row compact"><div class="setting-label"><strong>显示歌词翻译</strong><small>当歌词源包含翻译时显示第二行内容。</small></div><label class="switch"><input type="checkbox" data-setting="showLyricTranslation" aria-label="显示歌词翻译"><span class="switch-track"></span></label></div>
+                <div class="setting-row compact"><div class="setting-label"><strong>显示歌词翻译</strong><small>当歌词源提供翻译时，将翻译内容追加在原歌词后方。受接口支持不完整影响，部分歌曲可能无法获取翻译，当前暂不保证此功能始终可用。</small></div><label class="switch"><input type="checkbox" data-setting="showLyricTranslation" aria-label="显示歌词翻译"><span class="switch-track"></span></label></div>
               </div>
             </section>
             <section class="panel">
               <div class="panel-head"><div><h2>频谱</h2><p>在纯音乐或无歌词时显示实时音频频谱。</p></div></div>
               <div class="settings">
-                <div class="setting-row compact"><div class="setting-label"><strong>显示频谱</strong><small>关闭后保留当前显示模式。</small></div><label class="switch"><input type="checkbox" data-setting="enableSpectrum" aria-label="显示频谱"><span class="switch-track"></span></label></div>
-                <div class="setting-row child" data-depends="enableSpectrum"><div class="setting-label"><strong>频谱显示模式</strong><small>选择哪些播放状态下显示。</small></div><button class="control select-trigger" type="button" data-setting="spectrumDisplayMode" aria-label="频谱显示模式" aria-haspopup="listbox" aria-expanded="false"><span class="select-trigger-value"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+                <div class="setting-row"><div class="setting-label"><strong>显示频谱</strong><small>选择频谱的显示时机，或将其完全关闭。</small></div><button class="control select-trigger" type="button" data-setting="spectrumDisplayMode" aria-label="显示频谱" aria-haspopup="listbox" aria-expanded="false"><span class="select-trigger-value"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
               </div>
             </section>
           </div>
@@ -141,7 +140,7 @@
         <section class="page" data-page="advanced" aria-labelledby="advancedHeading">
           <div class="page-inner">
             <section class="panel"><div class="panel-head"><div><h2 id="advancedHeading" tabindex="-1">诊断工具</h2><p>这些选项仅用于定位播放同步和频谱问题。</p></div></div><div class="settings">
-              <div class="setting-row compact"><div class="setting-label"><strong>SMTC 时间轴监视器</strong><small>观察播放器时间轴数据，不建议日常开启。</small></div><label class="switch"><input type="checkbox" data-setting="enableSmtcTimelineMonitor" aria-label="SMTC 时间轴监视器"><span class="switch-track"></span></label></div>
+              <div class="setting-row compact"><div class="setting-label"><strong>SMTC 时间轴监视器</strong><small>打开一次性监视窗口，关闭后不会在后台继续运行。</small></div><button id="smtcMonitorButton" class="btn secondary" type="button">打开监视</button></div>
               <div class="setting-row compact"><div class="setting-label"><strong>频谱调试</strong><small>打开滑块面板，实时调节频谱参数（自动保存）。</small></div><button id="spectrumTuningButton" class="btn secondary" type="button">打开调试</button></div>
             </div></section>
             <section class="panel"><div class="panel-head"><div><h2>数据维护</h2><p>清理缓存不会删除应用设置。</p></div></div><div class="settings"><div class="setting-row compact"><div class="setting-label"><strong>歌词与封面缓存</strong><small>清理后首次重新匹配可能稍慢。</small></div><button id="clearCacheButton" class="btn destructive" type="button">清除缓存</button></div></div></section>

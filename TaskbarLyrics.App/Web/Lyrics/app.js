@@ -12,7 +12,8 @@ const coverImageEl = document.getElementById("coverImage");
 const coverImageNextEl = document.getElementById("coverImageNext");
 const coverFallbackEl = document.getElementById("coverFallback");
 const root = document.documentElement;
-const spectrumBarEls = Array.from(document.querySelectorAll(".spectrum span"));
+const spectrumEl = document.querySelector(".spectrum");
+let spectrumBarEls = Array.from(document.querySelectorAll(".spectrum span"));
 
 let displayedCurrent = currentLineTextEl?.textContent || "";
 let displayedNext = nextLineTextEl?.textContent || "";
@@ -53,9 +54,9 @@ let isSpectrumMode = false;
 let hasAudioDrivenSpectrum = false;
 let spectrumAnimationFrame = 0;
 let lastSpectrumFrameTime = 0;
-const spectrumTargets = spectrumBarEls.map(() => 0);
-const spectrumVisuals = spectrumBarEls.map(() => 0);
-const spectrumSilence = spectrumBarEls.map(() => 0);
+let spectrumTargets = spectrumBarEls.map(() => 0);
+let spectrumVisuals = spectrumBarEls.map(() => 0);
+let spectrumSilence = spectrumBarEls.map(() => 0);
 const spectrumTuning = {
   rise: 0.56,
   fall: 0.24,
@@ -176,6 +177,30 @@ function setDisplayMode(showSpectrum) {
 
   isSpectrumMode = shouldShowSpectrum;
   layoutEl.classList.toggle("spectrum-mode", shouldShowSpectrum);
+}
+
+function ensureSpectrumBarCount(value) {
+  const count = Math.max(8, Math.min(32, Math.round(Number(value) || spectrumBarEls.length || 21)));
+  if (!spectrumEl || spectrumBarEls.length === count) {
+    return;
+  }
+
+  stopSpectrumRenderer();
+  const fragment = document.createDocumentFragment();
+  for (let index = 0; index < count; index++) {
+    const bar = document.createElement("span");
+    bar.style.setProperty("--i", index.toString());
+    fragment.appendChild(bar);
+  }
+
+  spectrumEl.replaceChildren(fragment);
+  spectrumBarEls = Array.from(spectrumEl.querySelectorAll("span"));
+  spectrumTargets = spectrumBarEls.map(() => 0);
+  spectrumVisuals = spectrumBarEls.map(() => 0);
+  spectrumSilence = spectrumBarEls.map(() => 0);
+  if (isSpectrumMode) {
+    startSpectrumRenderer();
+  }
 }
 
 function setSpectrumTargetValues(values) {
@@ -753,6 +778,9 @@ window.taskbarLyrics = {
       return;
     }
 
+    if (Array.isArray(values) && values.length > 0) {
+      ensureSpectrumBarCount(values.length);
+    }
     setAudioDrivenSpectrum(values);
   },
 
@@ -761,6 +789,7 @@ window.taskbarLyrics = {
       return;
     }
 
+    ensureSpectrumBarCount(payload.barCount);
     spectrumTuning.rise = Math.max(0.02, Math.min(1, Number(payload.rise) || spectrumTuning.rise));
     spectrumTuning.fall = Math.max(0.02, Math.min(1, Number(payload.fall) || spectrumTuning.fall));
     spectrumTuning.minHeight = Math.max(1, Math.min(18, Number(payload.minHeight) || spectrumTuning.minHeight));

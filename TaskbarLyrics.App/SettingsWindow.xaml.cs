@@ -1,13 +1,12 @@
 using System.Globalization;
 using System.IO;
 using System.Net.Http;
-using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Windows;
-using System.Windows.Interop;
 using System.Windows.Markup;
 using System.Windows.Media;
+using Microsoft.Win32;
 using Microsoft.Web.WebView2.Core;
 using TaskbarLyrics.Core.Services;
 using TaskbarLyrics.Core.Utilities;
@@ -18,6 +17,8 @@ namespace TaskbarLyrics.App;
 
 public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
 {
+    private const string DisabledSpectrumDisplayMode = "Disabled";
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -32,17 +33,19 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         InitializeComponent();
         AppIconProvider.ApplyWindowIcon(this);
         _settings = settings;
+        ApplyWindowTheme();
 
         SourceInitialized += SettingsWindow_SourceInitialized;
         Loaded += SettingsWindow_Loaded;
         Activated += SettingsWindow_Activated;
         StateChanged += SettingsWindow_StateChanged;
         Closed += SettingsWindow_Closed;
+        SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
     }
 
     private void SettingsWindow_SourceInitialized(object? sender, EventArgs e)
     {
-        ApplyWindowChromeAttributes();
+        ApplyWindowTheme();
     }
 
     private async void SettingsWindow_Loaded(object? sender, RoutedEventArgs e)
@@ -52,7 +55,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
 
     private void SettingsWindow_Activated(object? sender, EventArgs e)
     {
-        ApplyWindowChromeAttributes();
+        ApplyWindowTheme();
     }
 
     private void SettingsWindow_StateChanged(object? sender, EventArgs e)
@@ -62,6 +65,8 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
 
     private void SettingsWindow_Closed(object? sender, EventArgs e)
     {
+        SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
+
         if (SettingsWebView.CoreWebView2 is not null)
         {
             SettingsWebView.CoreWebView2.WebMessageReceived -= SettingsWebView_WebMessageReceived;
@@ -85,6 +90,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             "Settings");
         var environment = await CoreWebView2Environment.CreateAsync(null, userDataFolder);
         await SettingsWebView.EnsureCoreWebView2Async(environment);
+        ApplyWindowTheme();
 
         var core = SettingsWebView.CoreWebView2;
         core.Settings.IsStatusBarEnabled = false;
@@ -136,6 +142,12 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 break;
             case "clearCache":
                 ClearLyricCache();
+                break;
+            case "openSmtcMonitor":
+                if (System.Windows.Application.Current is App smtcApp)
+                {
+                    smtcApp.OpenSmtcTimelineMonitorWindow();
+                }
                 break;
             case "openSpectrumTuning":
                 if (System.Windows.Application.Current is App app)
@@ -217,8 +229,9 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             StartWithWindows = _settings.StartWithWindows,
             AutoCheckUpdates = _settings.AutoCheckUpdates,
             ShowLyricTranslation = _settings.ShowLyricTranslation,
-            EnableSpectrum = _settings.EnableSpectrum,
-            SpectrumDisplayMode = _settings.SpectrumDisplayMode,
+            SpectrumDisplayMode = _settings.EnableSpectrum
+                ? _settings.SpectrumDisplayMode.ToString()
+                : DisabledSpectrumDisplayMode,
             EnablePureMusicSpectrum = _settings.EnablePureMusicSpectrum,
             ShowSpectrumWhenLyricsNotFound = _settings.ShowSpectrumWhenLyricsNotFound,
             UseSafeFontSizeRange = _settings.UseSafeFontSizeRange,
@@ -227,7 +240,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             CoverSize = _settings.CoverSize,
             CoverGap = _settings.CoverGap,
             CoverCornerRadius = _settings.CoverCornerRadius,
-            FontFamily = ResolveInstalledFontFamily(_settings.FontFamily) ?? ResolveInstalledFontFamily(AppSettings.DefaultFontFamily) ?? "Microsoft YaHei UI",
+            FontFamily = ResolveInstalledFontFamily(AppSettings.NormalizeFontFamily(_settings.FontFamily)) ?? AppSettings.BundledFontFamily,
             FontWeight = NormalizeFontWeight(_settings.FontWeight),
             ForegroundColorMode = _settings.ForegroundColorMode,
             ForegroundColor = _settings.ForegroundColor,
@@ -240,7 +253,6 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             XOffset = _settings.XOffset,
             YOffset = _settings.YOffset,
             ForceAlwaysOnTop = _settings.ForceAlwaysOnTop,
-            EnableSmtcTimelineMonitor = _settings.EnableSmtcTimelineMonitor,
             AppVersion = UpdateChecker.GetCurrentVersion(),
             RepositoryUrl = UpdateChecker.RepositoryUrl
         };
@@ -400,11 +412,17 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             case "showLyricTranslation":
                 _settings.ShowLyricTranslation = ReadBool(element, _settings.ShowLyricTranslation);
                 break;
-            case "enableSpectrum":
-                _settings.EnableSpectrum = ReadBool(element, _settings.EnableSpectrum);
-                break;
             case "spectrumDisplayMode":
-                _settings.SpectrumDisplayMode = ReadEnum(element, _settings.SpectrumDisplayMode);
+                var spectrumDisplayMode = ReadString(element, DisabledSpectrumDisplayMode);
+                if (string.Equals(spectrumDisplayMode, DisabledSpectrumDisplayMode, StringComparison.OrdinalIgnoreCase))
+                {
+                    _settings.EnableSpectrum = false;
+                }
+                else if (Enum.TryParse<SpectrumDisplayMode>(spectrumDisplayMode, true, out var parsedSpectrumDisplayMode))
+                {
+                    _settings.EnableSpectrum = true;
+                    _settings.SpectrumDisplayMode = parsedSpectrumDisplayMode;
+                }
                 break;
             case "enablePureMusicSpectrum":
                 _settings.EnablePureMusicSpectrum = ReadBool(element, _settings.EnablePureMusicSpectrum);
@@ -423,9 +441,6 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 break;
             case "forceAlwaysOnTop":
                 _settings.ForceAlwaysOnTop = ReadBool(element, _settings.ForceAlwaysOnTop);
-                break;
-            case "enableSmtcTimelineMonitor":
-                _settings.EnableSmtcTimelineMonitor = ReadBool(element, _settings.EnableSmtcTimelineMonitor);
                 break;
             case "useSafeFontSizeRange":
                 _settings.UseSafeFontSizeRange = ReadBool(element, _settings.UseSafeFontSizeRange);
@@ -450,7 +465,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 _settings.CoverCornerRadius = AppSettings.ClampCoverCornerRadius(ReadDouble(element, _settings.CoverCornerRadius), _settings.CoverSize);
                 break;
             case "fontFamily":
-                _settings.FontFamily = ReadString(element, _settings.FontFamily);
+                _settings.FontFamily = AppSettings.NormalizeFontFamily(ReadString(element, _settings.FontFamily));
                 break;
             case "fontWeight":
                 _settings.FontWeight = NormalizeFontWeight(ReadString(element, _settings.FontWeight));
@@ -809,7 +824,6 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         target.XOffset = source.XOffset;
         target.YOffset = source.YOffset;
         target.ForceAlwaysOnTop = source.ForceAlwaysOnTop;
-        target.EnableSmtcTimelineMonitor = source.EnableSmtcTimelineMonitor;
     }
 
     private void ToggleMaximizeRestore()
@@ -819,31 +833,20 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             : WindowState.Maximized;
     }
 
-    private void ApplyWindowChromeAttributes()
+    private void OnUserPreferenceChanged(object sender, UserPreferenceChangedEventArgs e)
     {
-        var hwnd = new WindowInteropHelper(this).Handle;
-        if (hwnd == IntPtr.Zero)
+        if (e.Category is not (UserPreferenceCategory.Color or UserPreferenceCategory.General or UserPreferenceCategory.VisualStyle))
         {
             return;
         }
 
-        if (HwndSource.FromHwnd(hwnd) is { CompositionTarget: { } compositionTarget })
-        {
-            compositionTarget.BackgroundColor = System.Windows.Media.Color.FromRgb(10, 10, 10);
-        }
-
-        var darkMode = 1;
-        _ = DwmSetWindowAttribute(hwnd, DwmWindowAttributeUseImmersiveDarkMode, ref darkMode, Marshal.SizeOf<int>());
-
-        var cornerPreference = DwmWindowCornerPreferenceRound;
-        _ = DwmSetWindowAttribute(hwnd, DwmWindowAttributeWindowCornerPreference, ref cornerPreference, Marshal.SizeOf<int>());
+        Dispatcher.BeginInvoke(ApplyWindowTheme);
     }
 
-    private const int DwmWindowAttributeUseImmersiveDarkMode = 20;
-    private const int DwmWindowAttributeWindowCornerPreference = 33;
-    private const int DwmWindowCornerPreferenceRound = 2;
-    [DllImport("dwmapi.dll", PreserveSig = true)]
-    private static extern int DwmSetWindowAttribute(IntPtr hwnd, int dwAttribute, ref int pvAttribute, int cbAttribute);
+    private void ApplyWindowTheme()
+    {
+        NativeWindowTheme.Apply(this, SettingsWebView);
+    }
 
     private sealed class WebSettingsMessage
     {
@@ -867,8 +870,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         public bool StartWithWindows { get; set; }
         public bool AutoCheckUpdates { get; set; }
         public bool ShowLyricTranslation { get; set; }
-        public bool EnableSpectrum { get; set; }
-        public SpectrumDisplayMode SpectrumDisplayMode { get; set; }
+        public string SpectrumDisplayMode { get; set; } = DisabledSpectrumDisplayMode;
         public bool EnablePureMusicSpectrum { get; set; }
         public bool ShowSpectrumWhenLyricsNotFound { get; set; }
         public bool UseSafeFontSizeRange { get; set; }
@@ -890,7 +892,6 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         public double XOffset { get; set; }
         public double YOffset { get; set; }
         public bool ForceAlwaysOnTop { get; set; }
-        public bool EnableSmtcTimelineMonitor { get; set; }
         public string AppVersion { get; set; } = "";
         public string RepositoryUrl { get; set; } = "";
     }

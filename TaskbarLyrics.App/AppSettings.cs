@@ -39,7 +39,9 @@ public sealed class AppSettings
 
     public const string BundledFontFamily = "Source Han Sans SC";
 
-    public const string DefaultFontFamily = "Source Han Sans SC, Source Han Sans CN, 思源黑体 CN, Microsoft YaHei UI, Microsoft YaHei";
+    public const string DefaultFontFamily = BundledFontFamily;
+
+    private const string LegacyDefaultFontFamily = "Source Han Sans SC, Source Han Sans CN, 思源黑体 CN, Microsoft YaHei UI, Microsoft YaHei";
 
     public const string DefaultFontWeight = "Bold";
 
@@ -127,8 +129,26 @@ public sealed class AppSettings
 
     public bool ForceAlwaysOnTop { get; set; } = true;
 
-    // Debug only: show real-time SMTC timeline diagnostics window.
-    public bool EnableSmtcTimelineMonitor { get; set; } = false;
+    public static string NormalizeFontFamily(string? fontFamily)
+    {
+        if (string.IsNullOrWhiteSpace(fontFamily))
+        {
+            return DefaultFontFamily;
+        }
+
+        var trimmed = fontFamily.Trim();
+        if (string.Equals(trimmed, LegacyDefaultFontFamily, StringComparison.OrdinalIgnoreCase))
+        {
+            return BundledFontFamily;
+        }
+
+        var firstFamily = trimmed
+            .Split(',', 2, StringSplitOptions.TrimEntries)[0]
+            .Trim('"', '\'');
+        return string.Equals(firstFamily, BundledFontFamily, StringComparison.OrdinalIgnoreCase)
+            ? BundledFontFamily
+            : trimmed;
+    }
 
     public AppSettings Clone()
     {
