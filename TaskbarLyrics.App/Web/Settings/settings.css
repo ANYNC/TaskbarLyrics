@@ -1,4 +1,12 @@
 
+    @font-face {
+      font-family: "TaskbarLyrics Source Han Sans SC";
+      src: url("../../Assets/Fonts/SourceHanSansSC-Regular.otf") format("opentype");
+      font-weight: 400;
+      font-style: normal;
+      font-display: swap;
+    }
+
     :root {
       color-scheme: dark;
       --background: oklch(0.145 0 0);
@@ -39,7 +47,7 @@
       --popover-shadow: 0 12px 32px rgba(0, 0, 0, .32), 0 2px 8px rgba(0, 0, 0, .18);
       --dialog-shadow: 0 28px 80px rgba(0, 0, 0, .6);
       --backdrop: rgba(0, 0, 0, .62);
-      font-family: "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+      font-family: "TaskbarLyrics Source Han Sans SC", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
     }
 
     @media (prefers-color-scheme: light) {
