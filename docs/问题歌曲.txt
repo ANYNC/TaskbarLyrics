@@ -1,26 +1,4 @@
 1.
-Captured(UTC):     2026-06-12 13:20:08.961
-SourceAppId:       cloudmusic.exe
-NormalizedSource:  Netease
-ResolvedSource:    Netease
-LyricSource:       
-IsPlaying:         True
-IsFallback:        False
-
-RawPosition:       00:05.100
-LastUpdatedTime:   2026-06-12 21:20:07.977
-LastUpdateAge:     00:00.984
-Extrapolated:      00:06.084
-Extrapolated-Raw:  00:00.984
-SelectedPosition:  00:06.084
-Strategy:          CommonExtrapolated
-
-Title:             Story of Rainy
-Artist:            Woodkid
-
-
-
-2.
 Captured(UTC):     2026-06-12 13:20:56.246
 SourceAppId:       cloudmusic.exe
 NormalizedSource:  Netease

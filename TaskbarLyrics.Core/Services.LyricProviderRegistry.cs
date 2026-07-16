@@ -32,9 +32,12 @@ public sealed class LyricProviderRegistry : ILyricProviderRegistry
         var mapping = ResolveMapping(track);
         if (mapping.PureMusicDocument is not null)
         {
-            return BuildResults(_providers.ToDictionary<ILyricProvider, ILyricProvider, LyricDocument?>(
+            return BuildResults(_providers.ToDictionary(
                 provider => provider,
-                _ => mapping.PureMusicDocument));
+                _ => new LyricFetchResult(
+                    mapping.PureMusicDocument,
+                    LyricAcquisitionKind.SongMapping,
+                    stopwatch.ElapsedMilliseconds)));
         }
 
         var overriddenTrack = track with
@@ -58,11 +61,11 @@ public sealed class LyricProviderRegistry : ILyricProviderRegistry
                 overriddenTrack,
                 LyricMatchingPolicy.OfficialSourceTimeout,
                 cancellationToken);
-            return preferredResult.Document is null
+            return preferredResult.Result.Document is null
                 ? BuildResults()
-                : BuildResults(new Dictionary<ILyricProvider, LyricDocument?>
+                : BuildResults(new Dictionary<ILyricProvider, LyricFetchResult>
                 {
-                    [preferred] = preferredResult.Document
+                    [preferred] = preferredResult.Result
                 });
         }
 
@@ -75,13 +78,13 @@ public sealed class LyricProviderRegistry : ILyricProviderRegistry
                 overriddenTrack,
                 LyricMatchingPolicy.LocalProviderTimeout,
                 cancellationToken);
-            if (localResult.Document is not null)
+            if (localResult.Result.Document is not null)
             {
                 stopwatch.Stop();
                 Log.Info($"Local lyric source returned a valid document. Total elapsed: {stopwatch.ElapsedMilliseconds} ms");
-                return BuildResults(new Dictionary<ILyricProvider, LyricDocument?>
+                return BuildResults(new Dictionary<ILyricProvider, LyricFetchResult>
                 {
-                    [localProvider] = ApplyQualityWeight(localProvider, localResult.Document)
+                    [localProvider] = ApplyQualityWeight(localProvider, localResult.Result)
                 });
             }
         }
@@ -97,41 +100,41 @@ public sealed class LyricProviderRegistry : ILyricProviderRegistry
                     overriddenTrack,
                     LyricMatchingPolicy.OfficialSourceTimeout,
                     cancellationToken);
-                if (officialResult.Document is not null)
+                if (officialResult.Result.Document is not null)
                 {
-                    var weightedOfficial = ApplyQualityWeight(officialProvider, officialResult.Document);
-                    if (weightedOfficial.BestScore >= LyricMatchingPolicy.OfficialImmediateAcceptScore)
+                    var weightedOfficial = ApplyQualityWeight(officialProvider, officialResult.Result);
+                    if (weightedOfficial.Document!.BestScore >= LyricMatchingPolicy.OfficialImmediateAcceptScore)
                     {
                         stopwatch.Stop();
-                        Log.Info($"Official lyric source [{officialSource}] returned high confidence score {weightedOfficial.BestScore}, accepting exclusively. Elapsed: {stopwatch.ElapsedMilliseconds} ms");
-                        return BuildResults(new Dictionary<ILyricProvider, LyricDocument?>
+                        Log.Info($"Official lyric source [{officialSource}] returned high confidence score {weightedOfficial.Document.BestScore}, accepting exclusively. Elapsed: {stopwatch.ElapsedMilliseconds} ms");
+                        return BuildResults(new Dictionary<ILyricProvider, LyricFetchResult>
                         {
                             [officialProvider] = weightedOfficial
                         });
                     }
 
-                    Log.Info($"Official lyric source [{officialSource}] returned medium confidence score {weightedOfficial.BestScore}, running fallback competition.");
+                    Log.Info($"Official lyric source [{officialSource}] returned medium confidence score {weightedOfficial.Document.BestScore}, running fallback competition.");
                     var competitionResults = await ResolveFallbackAsync(overriddenTrack, cancellationToken);
                     var bestFallback = competitionResults
-                        .Where(pair => pair.Value is not null)
-                        .OrderByDescending(pair => pair.Value!.BestScore)
+                        .Where(pair => pair.Value.Document is not null)
+                        .OrderByDescending(pair => pair.Value.Document!.BestScore)
                         .FirstOrDefault();
 
                     var selectedProvider = officialProvider;
-                    var selectedDocument = weightedOfficial;
+                    var selectedResult = weightedOfficial;
                     if (bestFallback.Key is not null &&
-                        bestFallback.Value!.BestScore >= weightedOfficial.BestScore + LyricMatchingPolicy.FallbackOverrideMargin)
+                        bestFallback.Value.Document!.BestScore >= weightedOfficial.Document.BestScore + LyricMatchingPolicy.FallbackOverrideMargin)
                     {
                         selectedProvider = bestFallback.Key;
-                        selectedDocument = bestFallback.Value;
-                        Log.Info($"Fallback lyric source [{selectedProvider.SourceApp}] overrides official [{officialSource}]: {selectedDocument.BestScore} vs {weightedOfficial.BestScore}");
+                        selectedResult = bestFallback.Value;
+                        Log.Info($"Fallback lyric source [{selectedProvider.SourceApp}] overrides official [{officialSource}]: {selectedResult.Document.BestScore} vs {weightedOfficial.Document.BestScore}");
                     }
 
                     stopwatch.Stop();
-                    Log.Info($"Official/fallback competition completed. Selected source: [{selectedProvider.SourceApp}], score: {selectedDocument.BestScore}, elapsed: {stopwatch.ElapsedMilliseconds} ms");
-                    return BuildResults(new Dictionary<ILyricProvider, LyricDocument?>
+                    Log.Info($"Official/fallback competition completed. Selected source: [{selectedProvider.SourceApp}], score: {selectedResult.Document!.BestScore}, elapsed: {stopwatch.ElapsedMilliseconds} ms");
+                    return BuildResults(new Dictionary<ILyricProvider, LyricFetchResult>
                     {
-                        [selectedProvider] = selectedDocument
+                        [selectedProvider] = selectedResult
                     });
                 }
 
@@ -142,10 +145,10 @@ public sealed class LyricProviderRegistry : ILyricProviderRegistry
         var fallbackResults = await ResolveFallbackAsync(overriddenTrack, cancellationToken);
         stopwatch.Stop();
         var best = fallbackResults
-            .Where(pair => pair.Value is not null)
-            .OrderByDescending(pair => pair.Value!.BestScore)
+            .Where(pair => pair.Value.Document is not null)
+            .OrderByDescending(pair => pair.Value.Document!.BestScore)
             .FirstOrDefault();
-        Log.Info($"ResolveLyricsAsync 回退检索结束，总耗时: {stopwatch.ElapsedMilliseconds} ms，最佳歌词源: [{best.Key?.SourceApp ?? "None"}]，最终分: {best.Value?.BestScore ?? 0}");
+        Log.Info($"ResolveLyricsAsync 回退检索结束，总耗时: {stopwatch.ElapsedMilliseconds} ms，最佳歌词源: [{best.Key?.SourceApp ?? "None"}]，最终分: {best.Value?.Document?.BestScore ?? 0}");
         if (best.Key is null)
         {
             LogNoLyricsSummary(overriddenTrack, track.SourceApp, fallbackResults, stopwatch.Elapsed);
@@ -157,7 +160,7 @@ public sealed class LyricProviderRegistry : ILyricProviderRegistry
     private void LogNoLyricsSummary(
         TrackInfo track,
         string sourceApp,
-        IReadOnlyDictionary<ILyricProvider, LyricDocument?> fallbackResults,
+        IReadOnlyDictionary<ILyricProvider, LyricFetchResult> fallbackResults,
         TimeSpan elapsed)
     {
         var official = LyricSourceRoutingPolicy.TryGetOfficialProvider(sourceApp, out var officialSource)
@@ -167,7 +170,7 @@ public sealed class LyricProviderRegistry : ILyricProviderRegistry
             ? "None"
             : string.Join(", ", fallbackResults
                 .OrderBy(pair => pair.Key.SourceApp, StringComparer.OrdinalIgnoreCase)
-                .Select(pair => $"{pair.Key.SourceApp}:{FormatDocumentSummary(pair.Value)}"));
+                .Select(pair => $"{pair.Key.SourceApp}:{FormatDocumentSummary(pair.Value.Document)}"));
 
         Log.Warn(
             "No lyrics resolved. " +
@@ -185,11 +188,11 @@ public sealed class LyricProviderRegistry : ILyricProviderRegistry
         return $"score={document.BestScore},lines={document.Lines.Count}";
     }
 
-    private async Task<Dictionary<ILyricProvider, LyricDocument?>> ResolveFallbackAsync(
+    private async Task<Dictionary<ILyricProvider, LyricFetchResult>> ResolveFallbackAsync(
         TrackInfo track,
         CancellationToken cancellationToken)
     {
-        var resolvedResults = new Dictionary<ILyricProvider, LyricDocument?>();
+        var resolvedResults = new Dictionary<ILyricProvider, LyricFetchResult>();
         foreach (var batchSources in LyricSourceRoutingPolicy.BuildFallbackBatches(track))
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -204,9 +207,9 @@ public sealed class LyricProviderRegistry : ILyricProviderRegistry
 
             Log.Info($"启动跨平台回退批次: {string.Join(", ", batchProviders.Select(provider => provider.SourceApp))}");
             var batchResults = await ResolveFallbackBatchAsync(batchProviders, track, cancellationToken);
-            foreach (var (provider, document) in batchResults.Documents)
+            foreach (var (provider, result) in batchResults.Results)
             {
-                resolvedResults[provider] = document;
+                resolvedResults[provider] = result;
             }
 
             if (batchResults.HasUsableDocument)
@@ -227,7 +230,7 @@ public sealed class LyricProviderRegistry : ILyricProviderRegistry
         var pendingTasks = providers
             .Select(provider => RunProviderAsync(provider, track, LyricMatchingPolicy.FallbackProviderTimeout, batchCts.Token))
             .ToList();
-        var documents = new Dictionary<ILyricProvider, LyricDocument?>();
+        var results = new Dictionary<ILyricProvider, LyricFetchResult>();
         var bestScore = 0;
         DateTimeOffset? weakWaitDeadline = null;
 
@@ -258,18 +261,18 @@ public sealed class LyricProviderRegistry : ILyricProviderRegistry
                 completedTask = await Task.WhenAny(pendingTasks);
             }
 
-            var providerTask = (Task<(ILyricProvider Provider, LyricDocument? Document)>)completedTask;
+            var providerTask = (Task<(ILyricProvider Provider, LyricFetchResult Result)>)completedTask;
             pendingTasks.Remove(providerTask);
-            var (provider, document) = await providerTask;
-            documents[provider] = document;
-            if (document is null)
+            var (provider, result) = await providerTask;
+            results[provider] = result;
+            if (result.Document is null)
             {
                 continue;
             }
 
-            var weightedDocument = ApplyQualityWeight(provider, document);
-            documents[provider] = weightedDocument;
-            bestScore = Math.Max(bestScore, weightedDocument.BestScore);
+            var weightedResult = ApplyQualityWeight(provider, result);
+            results[provider] = weightedResult;
+            bestScore = Math.Max(bestScore, weightedResult.Document!.BestScore);
             if (bestScore >= LyricMatchingPolicy.FallbackImmediateExitScore &&
                 weakWaitDeadline is null &&
                 pendingTasks.Count > 0)
@@ -279,17 +282,21 @@ public sealed class LyricProviderRegistry : ILyricProviderRegistry
             }
         }
 
-        return new BatchResolveResult(documents, documents.Values.Any(document => document is not null));
+        return new BatchResolveResult(results, results.Values.Any(result => result.Document is not null));
     }
 
-    private static LyricDocument ApplyQualityWeight(ILyricProvider provider, LyricDocument document)
+    private static LyricFetchResult ApplyQualityWeight(ILyricProvider provider, LyricFetchResult result)
     {
+        var document = result.Document!;
         var qualityWeight = LyricMatchingPolicy.SourceQualityWeights.TryGetValue(provider.SourceApp, out var configuredWeight)
             ? configuredWeight
             : 0;
         var weightedScore = document.BestScore + qualityWeight;
         Log.Info($"回退歌词源 [{provider.SourceApp}] 基础分: {document.BestScore}，质量权重: +{qualityWeight}，最终分: {weightedScore}");
-        return new LyricDocument(document.Lines, weightedScore, document.IsPureMusic);
+        return result with
+        {
+            Document = new LyricDocument(document.Lines, weightedScore, document.IsPureMusic)
+        };
     }
 
     private MappingResult ResolveMapping(TrackInfo track)
@@ -343,14 +350,22 @@ public sealed class LyricProviderRegistry : ILyricProviderRegistry
     }
 
     private List<LyricResolveResult> BuildResults(
-        IReadOnlyDictionary<ILyricProvider, LyricDocument?>? documents = null)
+        IReadOnlyDictionary<ILyricProvider, LyricFetchResult>? results = null)
     {
         return _providers
-            .Select(provider => new LyricResolveResult(
-                provider.SourceApp,
-                documents is not null && documents.TryGetValue(provider, out var document)
-                    ? document
-                    : null))
+            .Select(provider =>
+            {
+                if (results is not null && results.TryGetValue(provider, out var result))
+                {
+                    return new LyricResolveResult(
+                        provider.SourceApp,
+                        result.Document,
+                        result.Acquisition,
+                        result.ElapsedMilliseconds);
+                }
+
+                return new LyricResolveResult(provider.SourceApp, null);
+            })
             .ToList();
     }
 
@@ -360,7 +375,7 @@ public sealed class LyricProviderRegistry : ILyricProviderRegistry
                string.Equals(title, "Unknown Title", StringComparison.OrdinalIgnoreCase);
     }
 
-    private async Task<(ILyricProvider Provider, LyricDocument? Document)> RunProviderAsync(
+    private async Task<(ILyricProvider Provider, LyricFetchResult Result)> RunProviderAsync(
         ILyricProvider provider,
         TrackInfo track,
         TimeSpan timeout,
@@ -368,7 +383,7 @@ public sealed class LyricProviderRegistry : ILyricProviderRegistry
     {
         if (!_providerGates.TryGetValue(provider, out var gate))
         {
-            return (provider, null);
+            return (provider, NotFound());
         }
 
         try
@@ -376,19 +391,19 @@ public sealed class LyricProviderRegistry : ILyricProviderRegistry
             if (!await gate.WaitAsync(0, cancellationToken))
             {
                 Log.Warn($"音源 [{provider.SourceApp}] 上一次请求仍未结束，跳过本次检索以避免任务堆积。");
-                return (provider, null);
+                return (provider, NotFound());
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            return (provider, null);
+            return (provider, NotFound());
         }
 
-        Task<LyricDocument?>? providerTask = null;
+        Task<LyricFetchResult>? providerTask = null;
         try
         {
             using var providerCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            providerTask = provider.GetLyricsAsync(track, providerCts.Token);
+            providerTask = provider.GetLyricsWithDiagnosticsAsync(track, providerCts.Token);
             var timeoutTask = Task.Delay(timeout);
             var cancellationTask = Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
             var completedTask = await Task.WhenAny(providerTask, timeoutTask, cancellationTask);
@@ -396,25 +411,25 @@ public sealed class LyricProviderRegistry : ILyricProviderRegistry
             {
                 providerCts.Cancel();
                 Log.Warn($"音源 [{provider.SourceApp}] 超过 {timeout.TotalSeconds:F0} 秒未返回，已跳过。");
-                return (provider, null);
+                return (provider, NotFound());
             }
 
             if (completedTask == cancellationTask)
             {
                 providerCts.Cancel();
-                return (provider, null);
+                return (provider, NotFound());
             }
 
             return (provider, await providerTask);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            return (provider, null);
+            return (provider, NotFound());
         }
         catch (Exception ex)
         {
             Log.Warn($"音源 [{provider.SourceApp}] 执行异常: {ex.Message}");
-            return (provider, null);
+            return (provider, NotFound());
         }
         finally
         {
@@ -434,6 +449,11 @@ public sealed class LyricProviderRegistry : ILyricProviderRegistry
                     TaskContinuationOptions.ExecuteSynchronously,
                     TaskScheduler.Default);
             }
+        }
+
+        static LyricFetchResult NotFound()
+        {
+            return new LyricFetchResult(null, LyricAcquisitionKind.NotFound, 0);
         }
     }
 
@@ -467,7 +487,7 @@ public sealed class LyricProviderRegistry : ILyricProviderRegistry
         LyricDocument? PureMusicDocument);
 
     private sealed record BatchResolveResult(
-        IReadOnlyDictionary<ILyricProvider, LyricDocument?> Documents,
+        IReadOnlyDictionary<ILyricProvider, LyricFetchResult> Results,
         bool HasUsableDocument);
 
     public void Dispose()

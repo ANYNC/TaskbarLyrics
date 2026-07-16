@@ -64,6 +64,7 @@ public sealed class SystemAudioSpectrumService : IDisposable
             SpectrumTuningSettings.MaxBarCount);
         snapshot.MinFrequency = Math.Clamp(snapshot.MinFrequency, 20, 300);
         snapshot.MaxFrequency = Math.Clamp(snapshot.MaxFrequency, 2000, 20000);
+        snapshot.FrequencyDistributionBias = Math.Clamp(snapshot.FrequencyDistributionBias, -1, 1);
         if (snapshot.MaxFrequency <= snapshot.MinFrequency)
         {
             snapshot.MaxFrequency = snapshot.MinFrequency + 1000;
@@ -371,13 +372,16 @@ public sealed class SystemAudioSpectrumService : IDisposable
         }
 
         var peak = 0f;
+        var distributionExponent = Math.Pow(2.0, Math.Clamp(settings.FrequencyDistributionBias, -1, 1));
 
         for (var band = 0; band < barCount; band++)
         {
             var startRatio = band / (double)barCount;
             var endRatio = (band + 1) / (double)barCount;
-            var startFrequency = minFrequency * Math.Pow(maxFrequency / minFrequency, startRatio);
-            var endFrequency = minFrequency * Math.Pow(maxFrequency / minFrequency, endRatio);
+            var mappedStartRatio = Math.Pow(startRatio, distributionExponent);
+            var mappedEndRatio = Math.Pow(endRatio, distributionExponent);
+            var startFrequency = minFrequency * Math.Pow(maxFrequency / minFrequency, mappedStartRatio);
+            var endFrequency = minFrequency * Math.Pow(maxFrequency / minFrequency, mappedEndRatio);
             var startBin = Math.Max(1, (int)Math.Floor(startFrequency * samples.Length / sampleRate));
             var endBin = Math.Min(magnitudes.Length - 1, (int)Math.Ceiling(endFrequency * samples.Length / sampleRate));
             var weightedSum = 0.0;

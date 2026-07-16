@@ -16,6 +16,9 @@ public sealed class LyricSyncService : IDisposable
     private string? _currentTrackId;
     private LyricDocument? _currentDocument;
     private string? _currentLyricSourceApp;
+    private LyricAcquisitionKind _currentLyricAcquisition = LyricAcquisitionKind.Unknown;
+    private long _currentLyricFetchElapsedMilliseconds;
+    private DateTimeOffset? _currentLyricResolvedAtUtc;
     private bool _isUpdating;
     private CancellationTokenSource? _searchCts;
     private bool _isDisposed;
@@ -23,6 +26,9 @@ public sealed class LyricSyncService : IDisposable
     private long _documentLoadedTicks;
 
     public string? CurrentLyricSourceApp => _currentLyricSourceApp;
+    public LyricAcquisitionKind CurrentLyricAcquisition => _currentLyricAcquisition;
+    public long CurrentLyricFetchElapsedMilliseconds => _currentLyricFetchElapsedMilliseconds;
+    public DateTimeOffset? CurrentLyricResolvedAtUtc => _currentLyricResolvedAtUtc;
 
     public LyricSyncService(ILyricProviderRegistry registry, Func<string?, bool>? shouldShowTranslation = null)
     {
@@ -39,6 +45,9 @@ public sealed class LyricSyncService : IDisposable
             _currentTrackId = null;
             _currentDocument = null;
             _currentLyricSourceApp = null;
+            _currentLyricAcquisition = LyricAcquisitionKind.Unknown;
+            _currentLyricFetchElapsedMilliseconds = 0;
+            _currentLyricResolvedAtUtc = null;
             _lastEmittedLineIndex = -1;
             return Task.FromResult(new LyricDisplayFrame("", "", "", 0, -1));
         }
@@ -50,6 +59,9 @@ public sealed class LyricSyncService : IDisposable
             _currentTrackId = trackId;
             _currentDocument = null;
             _currentLyricSourceApp = null;
+            _currentLyricAcquisition = LyricAcquisitionKind.Searching;
+            _currentLyricFetchElapsedMilliseconds = 0;
+            _currentLyricResolvedAtUtc = null;
             _lastEmittedLineIndex = -1;
             _ = UpdateLyricsAsync(snapshot.Track, trackId);
         }
@@ -173,8 +185,17 @@ public sealed class LyricSyncService : IDisposable
             {
                 _currentDocument = bestResult.Document;
                 _currentLyricSourceApp = bestResult.SourceApp;
+                _currentLyricAcquisition = bestResult.Acquisition;
+                _currentLyricFetchElapsedMilliseconds = bestResult.ElapsedMilliseconds;
+                _currentLyricResolvedAtUtc = DateTimeOffset.UtcNow;
                 _documentLoadedTicks = Environment.TickCount64;
                 _lastEmittedLineIndex = -1;
+            }
+            else if (_currentTrackId == trackId)
+            {
+                _currentLyricAcquisition = LyricAcquisitionKind.NotFound;
+                _currentLyricFetchElapsedMilliseconds = 0;
+                _currentLyricResolvedAtUtc = DateTimeOffset.UtcNow;
             }
         }
         catch (OperationCanceledException) when (cts.IsCancellationRequested)

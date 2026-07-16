@@ -36,14 +36,22 @@ public abstract class LrcLibSmtcLyricProviderBase : ILyricProvider
 
     public async Task<LyricDocument?> GetLyricsAsync(TrackInfo track, CancellationToken cancellationToken = default)
     {
+        return (await GetLyricsWithDiagnosticsAsync(track, cancellationToken)).Document;
+    }
+
+    public async Task<LyricFetchResult> GetLyricsWithDiagnosticsAsync(
+        TrackInfo track,
+        CancellationToken cancellationToken = default)
+    {
+        var stopwatch = Stopwatch.StartNew();
         if (!CanHandleTrack(track))
         {
-            return null;
+            return NotFound();
         }
 
         if (string.Equals(track.Title, "Unknown Title", StringComparison.OrdinalIgnoreCase))
         {
-            return null;
+            return NotFound();
         }
 
         var payload = await FetchLyricsPayloadAsync(
@@ -54,22 +62,32 @@ public abstract class LrcLibSmtcLyricProviderBase : ILyricProvider
             cancellationToken);
         if (payload is null)
         {
-            return null;
+            return NotFound();
         }
 
-        var timed = ParseLrc(payload.Value.SyncedLyrics);
+        var timed = ParseLrc(payload.SyncedLyrics);
         if (timed.Count > 0)
         {
-            return new LyricDocument(LyricLineNormalizer.MergeStandaloneSpeakerLabels(timed));
+            return Success(new LyricDocument(LyricLineNormalizer.MergeStandaloneSpeakerLabels(timed)));
         }
 
-        var plain = ParsePlainLyrics(payload.Value.PlainLyrics);
+        var plain = ParsePlainLyrics(payload.PlainLyrics);
         if (plain.Count > 0)
         {
-            return new LyricDocument(LyricLineNormalizer.MergeStandaloneSpeakerLabels(plain));
+            return Success(new LyricDocument(LyricLineNormalizer.MergeStandaloneSpeakerLabels(plain)));
         }
 
-        return null;
+        return NotFound();
+
+        LyricFetchResult Success(LyricDocument document)
+        {
+            return new LyricFetchResult(document, payload.Acquisition, stopwatch.ElapsedMilliseconds);
+        }
+
+        LyricFetchResult NotFound()
+        {
+            return new LyricFetchResult(null, LyricAcquisitionKind.NotFound, stopwatch.ElapsedMilliseconds);
+        }
     }
 
     protected static void ClearCacheFile(string cacheFileName)
@@ -105,7 +123,7 @@ public abstract class LrcLibSmtcLyricProviderBase : ILyricProvider
         return string.Equals(track.SourceApp, SourceApp, StringComparison.OrdinalIgnoreCase);
     }
 
-    private async Task<(string? SyncedLyrics, string? PlainLyrics)?> FetchLyricsPayloadAsync(
+    private async Task<PayloadFetchResult?> FetchLyricsPayloadAsync(
         string sourceApp,
         string title,
         string artist,
@@ -113,9 +131,9 @@ public abstract class LrcLibSmtcLyricProviderBase : ILyricProvider
         CancellationToken cancellationToken)
     {
         var cacheKey = BuildCacheKey(sourceApp, title, artist, duration);
-        if (TryGetCachedPayload(cacheKey, out var cached) && HasAnyLyrics(cached))
+        if (TryGetCachedPayload(cacheKey, out var cached, out var acquisition) && HasAnyLyrics(cached))
         {
-            return cached;
+            return new PayloadFetchResult(cached.SyncedLyrics, cached.PlainLyrics, acquisition);
         }
 
         var structured = await SearchStructuredCandidatesAsync(
@@ -126,7 +144,10 @@ public abstract class LrcLibSmtcLyricProviderBase : ILyricProvider
         if (structured is not null)
         {
             StoreCachedPayload(cacheKey, structured.Payload);
-            return structured.Payload;
+            return new PayloadFetchResult(
+                structured.Payload.SyncedLyrics,
+                structured.Payload.PlainLyrics,
+                LyricAcquisitionKind.Remote);
         }
 
         var searched = await SearchPayloadAsync(title, artist, duration, cancellationToken);
@@ -135,7 +156,12 @@ public abstract class LrcLibSmtcLyricProviderBase : ILyricProvider
             StoreCachedPayload(cacheKey, searched.Payload);
         }
 
-        return searched?.Payload;
+        return searched is null
+            ? null
+            : new PayloadFetchResult(
+                searched.Payload.SyncedLyrics,
+                searched.Payload.PlainLyrics,
+                LyricAcquisitionKind.Remote);
     }
 
     private static async Task<SearchResult?> SearchStructuredCandidatesAsync(
@@ -545,11 +571,15 @@ public abstract class LrcLibSmtcLyricProviderBase : ILyricProvider
         return $"{sourceKey}|{titleKey}|{artistKey}|{durationKey}";
     }
 
-    private bool TryGetCachedPayload(string cacheKey, out (string? SyncedLyrics, string? PlainLyrics) payload)
+    private bool TryGetCachedPayload(
+        string cacheKey,
+        out (string? SyncedLyrics, string? PlainLyrics) payload,
+        out LyricAcquisitionKind acquisition)
     {
         var cacheState = GetOrCreateCacheState();
         if (cacheState.MemoryCache.TryGetValue(cacheKey, out payload))
         {
+            acquisition = LyricAcquisitionKind.MemoryCache;
             return true;
         }
 
@@ -560,11 +590,13 @@ public abstract class LrcLibSmtcLyricProviderBase : ILyricProvider
             {
                 payload = (cached.SyncedLyrics, cached.PlainLyrics);
                 cacheState.MemoryCache[cacheKey] = payload;
+                acquisition = LyricAcquisitionKind.DiskCache;
                 return true;
             }
         }
 
         payload = default;
+        acquisition = LyricAcquisitionKind.Unknown;
         return false;
     }
 
@@ -805,6 +837,11 @@ public abstract class LrcLibSmtcLyricProviderBase : ILyricProvider
     }
 
     private sealed record SearchResult(int Score, (string? SyncedLyrics, string? PlainLyrics) Payload);
+
+    private sealed record PayloadFetchResult(
+        string? SyncedLyrics,
+        string? PlainLyrics,
+        LyricAcquisitionKind Acquisition);
 
     private sealed class CachedLyrics
     {

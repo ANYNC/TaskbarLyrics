@@ -1,12 +1,12 @@
-using System.Diagnostics;
+using System.Text;
 using System.Windows;
 using System.Windows.Controls.Primitives;
 using System.Windows.Interop;
+using System.Windows.Media.Animation;
 using System.Windows.Threading;
 using System.Runtime.InteropServices;
 using Media = System.Windows.Media;
 using Controls = System.Windows.Controls;
-using Forms = System.Windows.Forms;
 
 namespace TaskbarLyrics.App;
 
@@ -24,6 +24,14 @@ public partial class TrayMenuWindow : Window
     private const uint MonitorDefaultToNearest = 0x00000002;
     private const int MonitorDpiTypeEffective = 0;
     private const int VkEscape = 0x1B;
+    private const uint GetAncestorRoot = 2;
+    private const uint PopupRightAlign = 0x0008;
+    private const uint PopupBottomAlign = 0x0020;
+    private const uint PopupVertical = 0x0040;
+    private const uint PopupWorkArea = 0x00010000;
+    private const uint SetWindowPositionNoActivate = 0x0010;
+    private const uint SetWindowPositionNoOwnerZOrder = 0x0200;
+    private static readonly IntPtr TopMostWindow = new(-1);
 
     private readonly Action _toggleLyricsWindow;
     private readonly Action<bool, SpectrumDisplayMode> _setSpectrumDisplayMode;
@@ -35,6 +43,8 @@ public partial class TrayMenuWindow : Window
     private readonly DispatcherTimer _spectrumPopupCloseTimer;
     private readonly LowLevelMouseProc _mouseHookCallback;
     private IntPtr _mouseHook;
+    private IntPtr _trayOverflowWindow;
+    private IntPtr _trayOverflowInputWindow;
 
     public TrayMenuWindow(
         Action toggleLyricsWindow,
@@ -90,41 +100,159 @@ public partial class TrayMenuWindow : Window
         Resources["TrayMenuSeparatorBrush"] = new Media.SolidColorBrush(light
             ? Media.Color.FromRgb(218, 226, 237)
             : Media.Color.FromRgb(74, 74, 74));
+        if (!SystemParameters.ClientAreaAnimation || SystemParameters.HighContrast)
+        {
+            SpectrumModePopup.PopupAnimation = PopupAnimation.None;
+        }
     }
 
-    public void ShowAtCursor()
+    public void ShowAt(System.Drawing.Point invocationPoint)
     {
-        var cursorPhysical = Forms.Cursor.Position;
-        var dpi = GetDpiScaleForPoint(cursorPhysical);
-        var cursorX = cursorPhysical.X / dpi.X;
-        var cursorY = cursorPhysical.Y / dpi.Y;
-        var screenPhysical = Forms.Screen.FromPoint(cursorPhysical).WorkingArea;
-        var screenLeft = screenPhysical.Left / dpi.X;
-        var screenTop = screenPhysical.Top / dpi.Y;
-        var screenRight = screenPhysical.Right / dpi.X;
-        var screenBottom = screenPhysical.Bottom / dpi.Y;
-        const int gap = 8;
-        var left = cursorX - Width + 22;
-        var top = cursorY - Height - gap;
-
-        if (left < screenLeft + gap)
-        {
-            left = cursorX - 22;
-        }
-
-        if (top < screenTop + gap)
-        {
-            top = cursorY + gap;
-        }
-
-        Left = Math.Clamp(left, screenLeft + gap, screenRight - Width - gap);
-        Top = Math.Clamp(top, screenTop + gap, screenBottom - Height - gap);
+        _trayOverflowWindow = FindTrayOverflowWindow(invocationPoint);
+        _trayOverflowInputWindow = FindTrayOverflowInputWindow(_trayOverflowWindow);
+        var placement = CalculatePlacement(invocationPoint);
         const double popupWidth = 210;
         const double popupGap = 1;
-        var openPopupRight = Left + Width + popupGap + popupWidth <= screenRight - gap;
+        var popupPhysicalWidth = ScaleToPhysical(popupWidth, placement.Dpi);
+        var rightSpace = placement.WorkArea.Right - placement.Bounds.Right;
+        var leftSpace = placement.Bounds.Left - placement.WorkArea.Left;
+        var openPopupRight = rightSpace >= popupPhysicalWidth || rightSpace >= leftSpace;
         SpectrumModePopup.Placement = openPopupRight ? PlacementMode.Right : PlacementMode.Left;
         SpectrumModePopup.HorizontalOffset = openPopupRight ? popupGap : -popupGap;
+
+        var hwnd = new WindowInteropHelper(this).EnsureHandle();
+        PositionWindow(hwnd, placement.Bounds);
+        var animateOpening = SystemParameters.ClientAreaAnimation && !SystemParameters.HighContrast;
+        MenuSurface.Opacity = animateOpening ? 0 : 1;
         Show();
+        PositionWindow(hwnd, placement.Bounds);
+        if (animateOpening)
+        {
+            var animation = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(120))
+            {
+                EasingFunction = new QuadraticEase
+                {
+                    EasingMode = EasingMode.EaseOut
+                }
+            };
+            MenuSurface.BeginAnimation(OpacityProperty, animation, HandoffBehavior.SnapshotAndReplace);
+        }
+    }
+
+    private PopupPlacement CalculatePlacement(System.Drawing.Point invocationPoint)
+    {
+        var anchor = new NativePoint(invocationPoint.X, invocationPoint.Y);
+        var excludeBounds = new NativeRect(anchor.X, anchor.Y, anchor.X + 1, anchor.Y + 1);
+        var monitor = MonitorFromPoint(anchor, MonitorDefaultToNearest);
+        var monitorInfo = GetMonitorInformation(monitor);
+        var dpi = GetEffectiveDpi(monitor);
+        var size = new NativeSize(
+            ScaleToPhysical(Width, dpi),
+            ScaleToPhysical(Height, dpi));
+        var edge = ResolveTaskbarEdge(monitorInfo, anchor);
+        var flags = GetPlacementFlags(edge);
+
+        if (!CalculatePopupWindowPosition(
+                ref anchor,
+                ref size,
+                flags,
+                ref excludeBounds,
+                out var popupBounds))
+        {
+            popupBounds = ClampToWorkArea(anchor, size, monitorInfo.WorkArea);
+        }
+
+        return new PopupPlacement(popupBounds, monitorInfo.WorkArea, dpi);
+    }
+
+    private static MonitorInfo GetMonitorInformation(IntPtr monitor)
+    {
+        var info = new MonitorInfo
+        {
+            Size = Marshal.SizeOf<MonitorInfo>()
+        };
+        if (monitor == IntPtr.Zero || !GetMonitorInfo(monitor, ref info))
+        {
+            throw new InvalidOperationException("无法获取托盘菜单所在显示器的信息。");
+        }
+
+        return info;
+    }
+
+    private static uint GetEffectiveDpi(IntPtr monitor)
+    {
+        return monitor != IntPtr.Zero &&
+            GetDpiForMonitor(monitor, MonitorDpiTypeEffective, out var dpiX, out _) == 0 &&
+            dpiX > 0
+                ? dpiX
+                : 96;
+    }
+
+    private static int ScaleToPhysical(double value, uint dpi)
+    {
+        return Math.Max(1, (int)Math.Ceiling(value * dpi / 96.0));
+    }
+
+    private static TaskbarEdge ResolveTaskbarEdge(MonitorInfo monitor, NativePoint anchor)
+    {
+        if (monitor.WorkArea.Bottom < monitor.MonitorArea.Bottom)
+        {
+            return TaskbarEdge.Bottom;
+        }
+
+        if (monitor.WorkArea.Top > monitor.MonitorArea.Top)
+        {
+            return TaskbarEdge.Top;
+        }
+
+        if (monitor.WorkArea.Left > monitor.MonitorArea.Left)
+        {
+            return TaskbarEdge.Left;
+        }
+
+        if (monitor.WorkArea.Right < monitor.MonitorArea.Right)
+        {
+            return TaskbarEdge.Right;
+        }
+
+        var distances = new (TaskbarEdge Edge, int Distance)[]
+        {
+            (TaskbarEdge.Left, Math.Abs(anchor.X - monitor.MonitorArea.Left)),
+            (TaskbarEdge.Right, Math.Abs(monitor.MonitorArea.Right - anchor.X)),
+            (TaskbarEdge.Top, Math.Abs(anchor.Y - monitor.MonitorArea.Top)),
+            (TaskbarEdge.Bottom, Math.Abs(monitor.MonitorArea.Bottom - anchor.Y))
+        };
+        return distances.MinBy(entry => entry.Distance).Edge;
+    }
+
+    private static uint GetPlacementFlags(TaskbarEdge edge)
+    {
+        return edge switch
+        {
+            TaskbarEdge.Top => PopupRightAlign | PopupVertical | PopupWorkArea,
+            TaskbarEdge.Left => PopupVertical | PopupWorkArea,
+            TaskbarEdge.Right => PopupRightAlign | PopupVertical | PopupWorkArea,
+            _ => PopupRightAlign | PopupBottomAlign | PopupVertical | PopupWorkArea
+        };
+    }
+
+    private static NativeRect ClampToWorkArea(NativePoint anchor, NativeSize size, NativeRect workArea)
+    {
+        var left = Math.Clamp(anchor.X - size.Width, workArea.Left, workArea.Right - size.Width);
+        var top = Math.Clamp(anchor.Y - size.Height, workArea.Top, workArea.Bottom - size.Height);
+        return new NativeRect(left, top, left + size.Width, top + size.Height);
+    }
+
+    private static void PositionWindow(IntPtr hwnd, NativeRect bounds)
+    {
+        _ = SetWindowPos(
+            hwnd,
+            TopMostWindow,
+            bounds.Left,
+            bounds.Top,
+            bounds.Right - bounds.Left,
+            bounds.Bottom - bounds.Top,
+            SetWindowPositionNoActivate | SetWindowPositionNoOwnerZOrder);
     }
 
     private void OnSourceInitialized(object? sender, EventArgs e)
@@ -274,9 +402,11 @@ public partial class TrayMenuWindow : Window
 
     private void InvokeCommand(Action command)
     {
+        var trayOverflowWindow = _trayOverflowWindow;
+        var trayOverflowInputWindow = _trayOverflowInputWindow;
         SpectrumModePopup.IsOpen = false;
         Close();
-        DismissTrayOverflow();
+        DismissTrayOverflow(trayOverflowWindow, trayOverflowInputWindow);
         command();
     }
 
@@ -312,52 +442,84 @@ public partial class TrayMenuWindow : Window
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern IntPtr GetModuleHandle(string? moduleName);
 
-    [DllImport("user32.dll")]
-    private static extern IntPtr GetForegroundWindow();
-
-    [DllImport("user32.dll")]
-    private static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint processId);
-
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool PostMessage(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam);
 
-    private static void DismissTrayOverflow()
+    private static IntPtr FindTrayOverflowWindow(System.Drawing.Point invocationPoint)
     {
-        var foreground = GetForegroundWindow();
-        if (foreground == IntPtr.Zero)
+        var point = new NativePoint(invocationPoint.X, invocationPoint.Y);
+        var root = GetAncestor(WindowFromPoint(point), GetAncestorRoot);
+        if (IsTrayOverflowWindow(root))
         {
-            return;
+            return root;
         }
 
-        _ = GetWindowThreadProcessId(foreground, out var processId);
-        if (processId == 0)
+        var result = IntPtr.Zero;
+        _ = EnumWindows((hwnd, _) =>
         {
-            return;
-        }
-
-        try
-        {
-            using var process = Process.GetProcessById((int)processId);
-            if (!string.Equals(process.ProcessName, "explorer", StringComparison.OrdinalIgnoreCase))
+            if (IsWindowVisible(hwnd) &&
+                IsTrayOverflowWindow(hwnd) &&
+                GetWindowRect(hwnd, out var bounds) &&
+                bounds.Contains(point))
             {
-                return;
+                result = hwnd;
+                return false;
             }
 
-            _ = PostMessage(foreground, WmKeyDown, (IntPtr)VkEscape, IntPtr.Zero);
-            _ = PostMessage(foreground, WmKeyUp, (IntPtr)VkEscape, IntPtr.Zero);
-        }
-        catch (ArgumentException)
+            return true;
+        }, IntPtr.Zero);
+        return result;
+    }
+
+    private static bool IsTrayOverflowWindow(IntPtr hwnd)
+    {
+        if (hwnd == IntPtr.Zero)
         {
-            // The foreground process may exit between querying and sending the message.
+            return false;
         }
-        catch (InvalidOperationException)
+
+        var className = new StringBuilder(128);
+        return GetClassName(hwnd, className, className.Capacity) > 0 &&
+            className.ToString() is "TopLevelWindowForOverflowXamlIsland" or "NotifyIconOverflowWindow";
+    }
+
+    private static IntPtr FindTrayOverflowInputWindow(IntPtr trayOverflowWindow)
+    {
+        if (trayOverflowWindow == IntPtr.Zero)
         {
-            // Ignore transient shell process access failures.
+            return IntPtr.Zero;
         }
-        catch (System.ComponentModel.Win32Exception)
+
+        var threadId = GetWindowThreadProcessId(trayOverflowWindow, out _);
+        var info = new GuiThreadInfo
         {
-            // Ignore protected or short-lived foreground processes.
+            Size = Marshal.SizeOf<GuiThreadInfo>()
+        };
+        if (threadId == 0 ||
+            !GetGUIThreadInfo(threadId, ref info) ||
+            info.Focus == IntPtr.Zero ||
+            GetAncestor(info.Focus, GetAncestorRoot) != trayOverflowWindow)
+        {
+            return trayOverflowWindow;
         }
+
+        return info.Focus;
+    }
+
+    private static void DismissTrayOverflow(
+        IntPtr trayOverflowWindow,
+        IntPtr trayOverflowInputWindow)
+    {
+        if (trayOverflowWindow == IntPtr.Zero || !IsWindow(trayOverflowWindow))
+        {
+            return;
+        }
+
+        var inputWindow = trayOverflowInputWindow != IntPtr.Zero && IsWindow(trayOverflowInputWindow)
+            ? trayOverflowInputWindow
+            : trayOverflowWindow;
+        _ = PostMessage(inputWindow, WmKeyDown, (IntPtr)VkEscape, IntPtr.Zero);
+        _ = PostMessage(inputWindow, WmKeyUp, (IntPtr)VkEscape, IntPtr.Zero);
     }
 
     private void UninstallMouseHook()
@@ -371,25 +533,67 @@ public partial class TrayMenuWindow : Window
         _mouseHook = IntPtr.Zero;
     }
 
-    private static DpiScale GetDpiScaleForPoint(System.Drawing.Point point)
-    {
-        var monitor = MonitorFromPoint(new NativePoint(point.X, point.Y), MonitorDefaultToNearest);
-        if (monitor != IntPtr.Zero &&
-            GetDpiForMonitor(monitor, MonitorDpiTypeEffective, out var dpiX, out var dpiY) == 0 &&
-            dpiX > 0 &&
-            dpiY > 0)
-        {
-            return new DpiScale(dpiX / 96.0, dpiY / 96.0);
-        }
-
-        return new DpiScale(1.0, 1.0);
-    }
-
     [DllImport("user32.dll")]
     private static extern IntPtr MonitorFromPoint(NativePoint point, uint flags);
 
+    [DllImport("user32.dll")]
+    private static extern IntPtr WindowFromPoint(NativePoint point);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetAncestor(IntPtr hwnd, uint flags);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool EnumWindows(EnumWindowsProc callback, IntPtr parameter);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool IsWindowVisible(IntPtr hwnd);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool IsWindow(IntPtr hwnd);
+
+    [DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint processId);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetGUIThreadInfo(uint threadId, ref GuiThreadInfo info);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetWindowRect(IntPtr hwnd, out NativeRect rect);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern int GetClassName(IntPtr hwnd, StringBuilder className, int maximumCount);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetMonitorInfo(IntPtr monitor, ref MonitorInfo monitorInfo);
+
     [DllImport("shcore.dll")]
     private static extern int GetDpiForMonitor(IntPtr monitor, int dpiType, out uint dpiX, out uint dpiY);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool CalculatePopupWindowPosition(
+        ref NativePoint anchorPoint,
+        ref NativeSize windowSize,
+        uint flags,
+        ref NativeRect excludeRect,
+        out NativeRect popupWindowPosition);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetWindowPos(
+        IntPtr hwnd,
+        IntPtr insertAfter,
+        int x,
+        int y,
+        int width,
+        int height,
+        uint flags);
 
     [StructLayout(LayoutKind.Sequential)]
     private struct NativePoint
@@ -405,6 +609,64 @@ public partial class TrayMenuWindow : Window
     }
 
     [StructLayout(LayoutKind.Sequential)]
+    private struct NativeSize
+    {
+        public NativeSize(int width, int height)
+        {
+            Width = width;
+            Height = height;
+        }
+
+        public int Width;
+        public int Height;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativeRect
+    {
+        public NativeRect(int left, int top, int right, int bottom)
+        {
+            Left = left;
+            Top = top;
+            Right = right;
+            Bottom = bottom;
+        }
+
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+
+        public readonly bool Contains(NativePoint point)
+        {
+            return point.X >= Left && point.X < Right && point.Y >= Top && point.Y < Bottom;
+        }
+    }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct MonitorInfo
+    {
+        public int Size;
+        public NativeRect MonitorArea;
+        public NativeRect WorkArea;
+        public uint Flags;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct GuiThreadInfo
+    {
+        public int Size;
+        public uint Flags;
+        public IntPtr Active;
+        public IntPtr Focus;
+        public IntPtr Capture;
+        public IntPtr MenuOwner;
+        public IntPtr MoveSize;
+        public IntPtr Caret;
+        public NativeRect CaretBounds;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
     private struct LowLevelMouseHookData
     {
         public NativePoint Point;
@@ -416,5 +678,15 @@ public partial class TrayMenuWindow : Window
 
     private delegate IntPtr LowLevelMouseProc(int code, IntPtr message, IntPtr data);
 
-    private readonly record struct DpiScale(double X, double Y);
+    private delegate bool EnumWindowsProc(IntPtr hwnd, IntPtr parameter);
+
+    private readonly record struct PopupPlacement(NativeRect Bounds, NativeRect WorkArea, uint Dpi);
+
+    private enum TaskbarEdge
+    {
+        Left,
+        Top,
+        Right,
+        Bottom
+    }
 }

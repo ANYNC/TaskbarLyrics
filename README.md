@@ -88,3 +88,16 @@ powershell -ExecutionPolicy Bypass -File scripts/publish-release.ps1
 powershell -ExecutionPolicy Bypass -File scripts/publish-release.ps1 -Version 1.2.0
 powershell -ExecutionPolicy Bypass -File scripts/publish-release.ps1 -Version 1.2.0 -Force
 ```
+
+## 项目支持
+如果这个项目对你有所帮助，欢迎通过以下方式支持它：
+
+⭐ Star 项目
+
+🐞 提交 Issue 或功能建议
+
+☕ 赞助支持项目持续开发
+
+<img src="doc/images/weixin-payment-code.png" alt="微信赞赏码" width="200">
+
+感谢你的支持！❤️
