@@ -217,6 +217,7 @@
       { key: "BarCount", label: "柱数", suffix: "柱", min: 8, max: 32, step: 1, value: 21, group: "频段", desc: "频谱显示柱数；越多频段越细，越少整体越简洁" },
       { key: "MinFrequency", label: "最低频率", suffix: "Hz", min: 20, max: 180, step: 1, value: 35, group: "频段", desc: "频谱最低频率，过滤超低频噪声" },
       { key: "MaxFrequency", label: "最高频率", suffix: "Hz", min: 3000, max: 18000, step: 100, value: 7000, group: "频段", desc: "频谱最高频率，决定可显示的高频上限" },
+      { key: "FrequencyDistributionBias", label: "频段分布偏移", suffix: "", min: -1, max: 1, step: 0.05, value: 0, group: "频段", desc: "改变柱子在频率范围内的分配；负值偏向高频，0 保持当前分布，正值给低频分配更多柱子" },
       { key: "PeakInitial", label: "峰值初始值", suffix: "", min: 0.004, max: 0.16, step: 0.001, value: 0.035, group: "峰值", desc: "峰值跟踪的起始参考值" },
       { key: "PeakDecay", label: "峰值衰减", suffix: "", min: 0.85, max: 0.995, step: 0.001, value: 0.85, group: "峰值", desc: "峰值随时间衰减的速率，越大衰减越慢" },
       { key: "PeakFloor", label: "峰值下限", suffix: "", min: 0.003, max: 0.08, step: 0.001, value: 0.012, group: "峰值", desc: "峰值下限，避免静音时柱子完全归零" },
@@ -235,7 +236,7 @@
       { key: "BarHeightRange", label: "柱高范围", suffix: "px", min: 4, max: 36, step: 0.5, value: 24, group: "外观", desc: "柱子从最小到最大的高度跨度" },
       { key: "BarOpacity", label: "柱子透明度", suffix: "", min: 0.2, max: 1.0, step: 0.01, value: 0.78, group: "外观", desc: "柱子不透明度" },
     ];
-    const groupDesc = { "采集": "采集与刷新", "频段": "频率范围", "峰值": "峰值跟踪与噪声门", "整形": "增益与曲线", "响应": "升降速度", "外观": "柱子外观" };
+    const groupDesc = { "采集": "采集与刷新", "频段": "频率范围与分布", "峰值": "峰值跟踪与噪声门", "整形": "增益与曲线", "响应": "升降速度", "外观": "柱子外观" };
     const presets = {
       default: {},
       soft: { PeakCeiling: 0.3, OutputCurve: 0.7, LowBandGain: 1.2, FrontendFall: 0.2, BarOpacity: 0.9, BarHeightRange: 18 },

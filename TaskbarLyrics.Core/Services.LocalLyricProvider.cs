@@ -64,36 +64,55 @@ public sealed class LocalLyricProvider : ILyricProvider
 
     public string SourceApp => "Local";
 
-    public Task<LyricDocument?> GetLyricsAsync(TrackInfo track, CancellationToken cancellationToken = default)
+    public async Task<LyricDocument?> GetLyricsAsync(TrackInfo track, CancellationToken cancellationToken = default)
     {
+        return (await GetLyricsWithDiagnosticsAsync(track, cancellationToken)).Document;
+    }
+
+    public Task<LyricFetchResult> GetLyricsWithDiagnosticsAsync(
+        TrackInfo track,
+        CancellationToken cancellationToken = default)
+    {
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
         if (_rootFolders.Count == 0 ||
             string.IsNullOrWhiteSpace(track.Title) ||
             string.Equals(track.Title, "Unknown Title", StringComparison.OrdinalIgnoreCase))
         {
-            return Task.FromResult<LyricDocument?>(null);
+            return NotFound();
         }
 
         var index = SnapshotIndex();
         if (index.Count == 0)
         {
-            return Task.FromResult<LyricDocument?>(null);
+            return NotFound();
         }
 
         var best = FindBestMatch(track, index);
         if (best is null)
         {
-            return Task.FromResult<LyricDocument?>(null);
+            return NotFound();
         }
 
         var lines = ParseLyricFile(best.Entry.LyricPath);
         if (lines.Count == 0)
         {
             Log.Info($"Local lyrics matched but parsed no timed lines: {best.Entry.LyricPath}");
-            return Task.FromResult<LyricDocument?>(null);
+            return NotFound();
         }
 
         Log.Info($"Local lyrics matched: {track.Title} - {track.Artist} => {best.Entry.LyricPath} ({best.Score})");
-        return Task.FromResult<LyricDocument?>(new LyricDocument(EnsureSyllables(lines), best.Score));
+        return Task.FromResult(new LyricFetchResult(
+            new LyricDocument(EnsureSyllables(lines), best.Score),
+            LyricAcquisitionKind.LocalFile,
+            stopwatch.ElapsedMilliseconds));
+
+        Task<LyricFetchResult> NotFound()
+        {
+            return Task.FromResult(new LyricFetchResult(
+                null,
+                LyricAcquisitionKind.NotFound,
+                stopwatch.ElapsedMilliseconds));
+        }
     }
 
     private IReadOnlyList<LocalLyricEntry> SnapshotIndex()

@@ -11,6 +11,7 @@ public sealed class SpectrumTuningSettings
     public int BarCount { get; set; } = DefaultBarCount;
     public double MinFrequency { get; set; } = 35;
     public double MaxFrequency { get; set; } = 7000;
+    public double FrequencyDistributionBias { get; set; }
     public double PeakInitial { get; set; } = 0.035;
     public double PeakDecay { get; set; } = 0.85;
     public double PeakFloor { get; set; } = 0.012;
@@ -40,6 +41,7 @@ public sealed class SpectrumTuningSettings
             BarCount = BarCount,
             MinFrequency = MinFrequency,
             MaxFrequency = MaxFrequency,
+            FrequencyDistributionBias = FrequencyDistributionBias,
             PeakInitial = PeakInitial,
             PeakDecay = PeakDecay,
             PeakFloor = PeakFloor,

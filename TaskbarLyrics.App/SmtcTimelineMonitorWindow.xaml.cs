@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Threading;
 using Microsoft.Win32;
 using Microsoft.Web.WebView2.Core;
+using TaskbarLyrics.Core.Services;
 
 namespace TaskbarLyrics.App;
 
@@ -17,14 +18,18 @@ public partial class SmtcTimelineMonitorWindow : Wpf.Ui.Controls.FluentWindow
     };
 
     private readonly SmtcMusicSessionProvider _provider;
+    private readonly LyricSyncService _lyricSyncService;
     private readonly DispatcherTimer _timer;
     private bool _isWebReady;
 
-    public SmtcTimelineMonitorWindow(SmtcMusicSessionProvider provider)
+    public SmtcTimelineMonitorWindow(
+        SmtcMusicSessionProvider provider,
+        LyricSyncService lyricSyncService)
     {
         InitializeComponent();
         AppIconProvider.ApplyWindowIcon(this);
         _provider = provider;
+        _lyricSyncService = lyricSyncService;
         ApplyWindowTheme();
 
         WindowStartupLocation = WindowStartupLocation.Manual;
@@ -120,6 +125,9 @@ public partial class SmtcTimelineMonitorWindow : Wpf.Ui.Controls.FluentWindow
             normalizedSource = diagnostics.NormalizedSource,
             resolvedSource = diagnostics.ResolvedSource,
             lyricSource = _provider.GetCurrentLyricSource(),
+            lyricAcquisition = _lyricSyncService.CurrentLyricAcquisition,
+            lyricFetchElapsedMs = _lyricSyncService.CurrentLyricFetchElapsedMilliseconds,
+            lyricResolvedAtUtc = _lyricSyncService.CurrentLyricResolvedAtUtc?.ToString("yyyy-MM-dd HH:mm:ss.fff"),
             isPlaying = diagnostics.IsPlaying,
             isFallback = diagnostics.IsFallbackSnapshot,
             rawMs = diagnostics.RawPosition.TotalMilliseconds,

@@ -290,7 +290,7 @@ public partial class MainWindow : Window
         }
 
         Log.SetVerboseEnabled(true);
-        var monitorWindow = new SmtcTimelineMonitorWindow(smtcProvider);
+        var monitorWindow = new SmtcTimelineMonitorWindow(smtcProvider, _lyricSyncService);
         monitorWindow.Closed += OnSmtcTimelineMonitorClosed;
         _smtcTimelineMonitorWindow = monitorWindow;
         monitorWindow.Show();

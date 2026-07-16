@@ -167,6 +167,7 @@ public partial class SpectrumTuningWindow : Wpf.Ui.Controls.FluentWindow
                 SpectrumTuningSettings.MaxBarCount); break;
             case "MinFrequency": Settings.MinFrequency = value; break;
             case "MaxFrequency": Settings.MaxFrequency = value; break;
+            case "FrequencyDistributionBias": Settings.FrequencyDistributionBias = Math.Clamp(value, -1, 1); break;
             case "PeakInitial": Settings.PeakInitial = value; break;
             case "PeakDecay": Settings.PeakDecay = value; break;
             case "PeakFloor": Settings.PeakFloor = value; break;

@@ -6,7 +6,7 @@
                  xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
                  Title="SMTC Timeline Monitor"
                  Width="640"
-                 Height="600"
+                 Height="660"
                  MinWidth="520"
                  MinHeight="500"
                  WindowStartupLocation="Manual"

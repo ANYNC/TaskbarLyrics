@@ -61,7 +61,10 @@
     .stat .v { font-size: 15px; font-weight: 700; color: var(--foreground); display: flex; align-items: center; gap: 6px; }
     .stat .v.big { font-size: 22px; font-variant-numeric: tabular-nums; }
     .stat .sub { color: var(--muted-foreground); font-size: 11px; margin-top: 2px; }
+    .stat .sub.source-detail { min-width: 0; display: flex; align-items: center; gap: 6px; }
+    .stat .sub.source-detail > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .badge { display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 99px; font-size: 11px; font-weight: 600; }
+    .badge.compact { flex: 0 0 auto; height: 17px; padding: 0 6px; font-size: 10px; }
     .badge.ok { background: color-mix(in oklch, var(--success) 22%, transparent); color: var(--success); }
     .badge.warn { background: color-mix(in oklch, var(--warning) 22%, transparent); color: var(--warning); }
     .badge.bad { background: color-mix(in oklch, var(--danger) 22%, transparent); color: var(--danger); }
@@ -139,7 +142,7 @@
       <div class="stat">
         <div class="k">当前播放源</div>
         <div class="v"><span id="sourceName">—</span></div>
-        <div class="sub" id="sourceSub">歌词源：—</div>
+        <div class="sub source-detail"><span id="sourceSub">歌词源：—</span><span class="badge compact muted" id="cacheBadge">等待</span></div>
       </div>
       <div class="stat">
         <div class="k">外推漂移<span class="info-tip" data-tip="结合外推漂移与上报间隔，可用于定位歌词不同步。&#10;外推漂移 = 外推位置 − 原始位置&#10;绿色 &lt; 0.2s：正常&#10;琥珀 0.2–0.5s：注意&#10;红色 &gt; 0.5s：歌词可能不同步" tabindex="0" aria-label="外推漂移状态说明"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.5"/><path d="M8 7.5v3"/><circle cx="8" cy="5.4" r=".7" fill="currentColor" stroke="none"/></svg></span></div>
@@ -175,6 +178,18 @@
     function fmtMs(ms) { const sign = ms < 0 ? "-" : ""; const a = Math.abs(ms); const m = Math.floor(a / 60000); const s = Math.floor((a % 60000) / 1000); const f = Math.floor(a % 1000); return `${sign}${pad(m)}:${pad(s)}.${pad(f, 3)}`; }
     function driftColor(ms) { if (ms > TH_BAD) return "red"; if (ms > TH_WARN) return "amber"; return "green"; }
     const clsOf = c => c === "red" ? "bad" : c === "amber" ? "warn" : "v";
+    function acquisitionMeta(kind) {
+      switch (kind) {
+        case "MemoryCache": return { label: "内存命中", cls: "ok" };
+        case "DiskCache": return { label: "磁盘命中", cls: "ok" };
+        case "Remote": return { label: "在线获取", cls: "muted" };
+        case "LocalFile": return { label: "本地文件", cls: "ok" };
+        case "SongMapping": return { label: "规则映射", cls: "muted" };
+        case "Searching": return { label: "检索中", cls: "warn" };
+        case "NotFound": return { label: "未找到", cls: "bad" };
+        default: return { label: "等待", cls: "muted" };
+      }
+    }
 
     function setData(p) {
       if (!p) { $("#log").textContent = "等待 SMTC 诊断数据…"; return; }
@@ -188,6 +203,10 @@
       const src = p.resolvedSource || p.normalizedSource || p.sourceAppUserModelId || '—';
       $("#sourceName").textContent = src;
       $("#sourceSub").textContent = `歌词源：${p.lyricSource || '—'}`;
+      const acquisition = acquisitionMeta(p.lyricAcquisition);
+      const cacheBadge = $("#cacheBadge");
+      cacheBadge.textContent = acquisition.label;
+      cacheBadge.className = `badge compact ${acquisition.cls}`;
 
       const dv = $("#driftVal"); dv.textContent = (drift / 1000).toFixed(3); dv.className = `v big ${dCol}`;
       $("#driftSub").textContent = `距上次上报 ${(age / 1000).toFixed(2)}s`;
@@ -201,6 +220,9 @@
         ["NormalizedSource:", p.normalizedSource || "—", "v"],
         ["ResolvedSource:", p.resolvedSource || "—", "v"],
         ["LyricSource:", p.lyricSource || "—", "v"],
+        ["LyricAcquisition:", acquisition.label, "v"],
+        ["LyricFetchTime:", p.lyricAcquisition === "Searching" || p.lyricAcquisition === "Unknown" ? "—" : `${p.lyricFetchElapsedMs ?? 0} ms`, "v"],
+        ["LyricResolvedAt:", p.lyricResolvedAtUtc || "—", "k"],
         ["IsPlaying:", p.isPlaying ? "True" : "False", p.isPlaying ? "ok" : "warn"],
         ["IsFallback:", p.isFallback ? "True" : "False", p.isFallback ? "bad" : "warn"],
         ["", "", ""],

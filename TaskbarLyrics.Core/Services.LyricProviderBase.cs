@@ -50,8 +50,19 @@ public abstract class LyricProviderBase : ILyricProvider
 
     public async Task<LyricDocument?> GetLyricsAsync(TrackInfo track, CancellationToken cancellationToken)
     {
+        return (await GetLyricsWithDiagnosticsAsync(track, cancellationToken)).Document;
+    }
+
+    public async Task<LyricFetchResult> GetLyricsWithDiagnosticsAsync(
+        TrackInfo track,
+        CancellationToken cancellationToken = default)
+    {
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
         var cacheKey = BuildCacheKey(track);
-        if (MemoryCache.TryGetValue(cacheKey, out var cachedDoc)) return cachedDoc;
+        if (MemoryCache.TryGetValue(cacheKey, out var cachedDoc))
+        {
+            return new LyricFetchResult(cachedDoc, LyricAcquisitionKind.MemoryCache, stopwatch.ElapsedMilliseconds);
+        }
 
         lock (DiskCacheLock)
         {
@@ -60,7 +71,7 @@ public abstract class LyricProviderBase : ILyricProvider
             {
                 var processedDiskDoc = ProcessDocument(diskDoc);
                 MemoryCache[cacheKey] = processedDiskDoc;
-                return processedDiskDoc;
+                return new LyricFetchResult(processedDiskDoc, LyricAcquisitionKind.DiskCache, stopwatch.ElapsedMilliseconds);
             }
         }
 
@@ -71,7 +82,10 @@ public abstract class LyricProviderBase : ILyricProvider
             MemoryCache[cacheKey] = result;
             lock (DiskCacheLock) { EnsureDiskCacheLoaded(); _diskCache![cacheKey] = result; SaveDiskCache(); }
         }
-        return result;
+        return new LyricFetchResult(
+            result,
+            result is null ? LyricAcquisitionKind.NotFound : LyricAcquisitionKind.Remote,
+            stopwatch.ElapsedMilliseconds);
     }
 
     protected abstract Task<LyricDocument?> ResolveRemoteAsync(TrackInfo track, CancellationToken cancellationToken);
