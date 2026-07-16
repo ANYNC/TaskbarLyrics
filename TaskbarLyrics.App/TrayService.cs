@@ -33,6 +33,7 @@ public sealed class TrayService : IDisposable
         {
             if (e.Button == Forms.MouseButtons.Right)
             {
+                var invocationPoint = Forms.Cursor.Position;
                 System.Windows.Application.Current.Dispatcher.BeginInvoke(() =>
                     ShowMenu(
                         toggleLyricsWindow,
@@ -42,7 +43,8 @@ public sealed class TrayService : IDisposable
                         openSettings,
                         openSmtcMonitor,
                         openSpectrumTuning,
-                        exitApp));
+                        exitApp,
+                        invocationPoint));
             }
         };
     }
@@ -76,7 +78,8 @@ public sealed class TrayService : IDisposable
         Action openSettings,
         Action openSmtcMonitor,
         Action openSpectrumTuning,
-        Action exitApp)
+        Action exitApp,
+        System.Drawing.Point invocationPoint)
     {
         _menuWindow?.Close();
         _menuWindow = new TrayMenuWindow(
@@ -89,6 +92,6 @@ public sealed class TrayService : IDisposable
             openSpectrumTuning,
             exitApp);
         _menuWindow.Closed += (_, _) => _menuWindow = null;
-        _menuWindow.ShowAtCursor();
+        _menuWindow.ShowAt(invocationPoint);
     }
 }
