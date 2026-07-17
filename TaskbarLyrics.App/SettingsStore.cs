@@ -22,7 +22,9 @@ public sealed class SettingsStore
             }
 
             var json = File.ReadAllText(_filePath);
-            return JsonSerializer.Deserialize<AppSettings>(json) ?? new AppSettings();
+            var settings = JsonSerializer.Deserialize<AppSettings>(json) ?? new AppSettings();
+            settings.NormalizePlayerSources();
+            return settings;
         }
         catch
         {
@@ -32,6 +34,7 @@ public sealed class SettingsStore
 
     public void Save(AppSettings settings)
     {
+        settings.NormalizePlayerSources();
         var dir = Path.GetDirectoryName(_filePath);
         if (!string.IsNullOrWhiteSpace(dir))
         {

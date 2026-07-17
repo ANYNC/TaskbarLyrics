@@ -12,6 +12,7 @@ public sealed class LyricSyncService : IDisposable
 
     private readonly ILyricProviderRegistry _registry;
     private readonly Func<string?, bool> _shouldShowTranslation;
+    private readonly Func<string?, TimeSpan> _getPlayerLeadTime;
     private TrackInfo? _currentTrack;
     private string? _currentTrackId;
     private LyricDocument? _currentDocument;
@@ -30,10 +31,14 @@ public sealed class LyricSyncService : IDisposable
     public long CurrentLyricFetchElapsedMilliseconds => _currentLyricFetchElapsedMilliseconds;
     public DateTimeOffset? CurrentLyricResolvedAtUtc => _currentLyricResolvedAtUtc;
 
-    public LyricSyncService(ILyricProviderRegistry registry, Func<string?, bool>? shouldShowTranslation = null)
+    public LyricSyncService(
+        ILyricProviderRegistry registry,
+        Func<string?, bool>? shouldShowTranslation = null,
+        Func<string?, TimeSpan>? getPlayerLeadTime = null)
     {
         _registry = registry;
         _shouldShowTranslation = shouldShowTranslation ?? (_ => true);
+        _getPlayerLeadTime = getPlayerLeadTime ?? (_ => TimeSpan.Zero);
     }
 
     public Task<LyricDisplayFrame> GetDisplayFrameAsync(PlaybackSnapshot snapshot)
@@ -76,7 +81,7 @@ public sealed class LyricSyncService : IDisposable
         }
 
         // Apply player-specific compensation
-        var sourceLead = LyricMatchingPolicy.GetPlayerLeadTime(_currentTrack?.SourceApp);
+        var sourceLead = _getPlayerLeadTime(_currentTrack?.SourceApp);
         var position = snapshot.Position + sourceLead;
 
         var lines = _currentDocument.Lines;

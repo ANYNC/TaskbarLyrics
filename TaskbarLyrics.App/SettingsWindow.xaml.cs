@@ -216,6 +216,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
 
     private WebSettingsPayload CreateSettingsPayload()
     {
+        _settings.NormalizePlayerSources();
         return new WebSettingsPayload
         {
             SourceRecognitionOrder = NormalizeSourceOrder(_settings.SourceRecognitionOrder),
@@ -223,6 +224,14 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             EnableQQMusic = _settings.EnableQQMusic,
             EnableKugou = _settings.EnableKugou,
             EnableSpotify = _settings.EnableSpotify,
+            PlayerLyricOffsets = _settings.PlayerSources.ToDictionary(
+                pair => pair.Key,
+                pair => pair.Value.LyricOffsetMilliseconds,
+                StringComparer.OrdinalIgnoreCase),
+            DefaultPlayerLyricOffsets = _settings.PlayerSources.Keys.ToDictionary(
+                source => source,
+                AppSettings.GetDefaultPlayerLyricOffsetMilliseconds,
+                StringComparer.OrdinalIgnoreCase),
             EnableLocalLyrics = _settings.EnableLocalLyrics,
             LocalMusicFolders = NormalizeLocalMusicFolders(_settings.LocalMusicFolders),
             ShowLyricsOnStartup = _settings.ShowLyricsOnStartup,
@@ -379,6 +388,17 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         }
 
         var element = value.Value;
+        const string playerLyricOffsetPrefix = "playerLyricOffset:";
+        if (key.StartsWith(playerLyricOffsetPrefix, StringComparison.Ordinal))
+        {
+            var sourceApp = key[playerLyricOffsetPrefix.Length..];
+            var offset = (int)Math.Round(ReadDouble(
+                element,
+                _settings.GetPlayerLyricOffsetMilliseconds(sourceApp)));
+            _settings.SetPlayerLyricOffsetMilliseconds(sourceApp, offset);
+            return;
+        }
+
         switch (key)
         {
             case "enableQQMusic":
@@ -793,6 +813,11 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         target.EnableQQMusic = source.EnableQQMusic;
         target.EnableKugou = source.EnableKugou;
         target.EnableSpotify = source.EnableSpotify;
+        source.NormalizePlayerSources();
+        target.PlayerSources = source.PlayerSources.ToDictionary(
+            pair => pair.Key,
+            pair => pair.Value.Clone(),
+            StringComparer.OrdinalIgnoreCase);
         target.EnableLocalLyrics = source.EnableLocalLyrics;
         target.LocalMusicFolders = NormalizeLocalMusicFolders(source.LocalMusicFolders);
         target.ShowLyricsOnStartup = source.ShowLyricsOnStartup;
@@ -864,6 +889,8 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         public bool EnableQQMusic { get; set; }
         public bool EnableKugou { get; set; }
         public bool EnableSpotify { get; set; }
+        public Dictionary<string, int> PlayerLyricOffsets { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+        public Dictionary<string, int> DefaultPlayerLyricOffsets { get; set; } = new(StringComparer.OrdinalIgnoreCase);
         public bool EnableLocalLyrics { get; set; }
         public List<string> LocalMusicFolders { get; set; } = new();
         public bool ShowLyricsOnStartup { get; set; }

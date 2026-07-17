@@ -182,7 +182,8 @@ public partial class MainWindow : Window
         providers.Add(new LyricifyLyricProvider("Kugou", Lyricify.Lyrics.Searchers.Searchers.Kugou));
         return new LyricSyncService(
             new LyricProviderRegistry(providers),
-            _ => settings?.ShowLyricTranslation == true);
+            _ => settings?.ShowLyricTranslation == true,
+            sourceApp => TimeSpan.FromMilliseconds(settings?.GetPlayerLyricOffsetMilliseconds(sourceApp) ?? 0));
     }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)

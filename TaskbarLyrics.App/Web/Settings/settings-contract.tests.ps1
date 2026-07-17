@@ -33,6 +33,7 @@ foreach ($key in $settings) {
 $requiredHtml = @(
     'id="sourceGrid"', 'id="priorityList"', 'id="selectPopover"', 'role="listbox"',
     'id="colorPopover"', 'id="colorArea"', 'id="restoreDialog"', 'id="clearDialog"',
+    'id="playerSettingsDialog"', 'id="playerRecognitionToggle"', 'id="playerOffsetInput"',
     'id="browseButton"', 'id="showLyricsWindowButton"', 'data-window-resize="top"'
 )
 foreach ($marker in $requiredHtml) {
@@ -50,6 +51,7 @@ $requiredScript = @(
     'type: "windowDrag"', 'type: "windowResizeStart"', 'type: "windowMinimize"', 'type: "windowMaximize"', 'type: "windowClose"',
     'function openSelect', 'function closeSelect', 'function rgbToHex', 'function toArgb',
     'function activatePage', 'function renderSources', 'function renderPriority', 'function setWindowState',
+    'function openPlayerSettings', 'function commitPlayerOffset', 'playerLyricOffset:',
     'function positionPopover', 'function postSourceOrder', '"ArrowDown"', '"Home"', '"Escape"'
 )
 foreach ($marker in $requiredScript) {

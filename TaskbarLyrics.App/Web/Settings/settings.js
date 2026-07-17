@@ -44,6 +44,7 @@
     const reducedMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
     let repositoryUrl = "";
     let updateReleaseUrl = "";
+    let activePlayerSourceId = null;
 
     const $ = selector => document.querySelector(selector);
     const $$ = selector => Array.from(document.querySelectorAll(selector));
@@ -53,13 +54,59 @@
     function renderSources() {
       const grid = $("#sourceGrid");
       grid.innerHTML = sourceCatalog.map(source => `
-        <label class="source-card ${source.enabled ? "enabled" : ""}">
+        <article class="source-card ${source.enabled ? "enabled" : ""}">
           <span class="source-logo" aria-hidden="true"><img src="${escapeHtml(source.icon)}" alt=""></span>
-          <span class="source-info"><strong>${escapeHtml(source.name)}</strong><small>${escapeHtml(source.adapter)}</small></span>
-          <input class="source-check" type="checkbox" data-source-id="${escapeHtml(source.id)}" ${source.enabled ? "checked" : ""} aria-label="启用 ${escapeHtml(source.name)}">
-        </label>`).join("");
+          <span class="source-info"><strong>${escapeHtml(source.name)}</strong><small>${source.enabled ? "已启用" : "已停用"} · ${formatPlayerOffset(getPlayerOffset(source))}</small></span>
+          <button class="source-settings-button" type="button" data-player-settings="${escapeHtml(source.id)}" aria-label="打开 ${escapeHtml(source.name)} 设置"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.25A3.25 3.25 0 1 0 12 8.75a3.25 3.25 0 0 0 0 6.5Z" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M19.1 13.3a7.5 7.5 0 0 0 0-2.6l2-1.55-2-3.46-2.5 1a7.6 7.6 0 0 0-2.25-1.3L14 2.75h-4l-.35 2.64A7.6 7.6 0 0 0 7.4 6.7l-2.5-1-2 3.46 2 1.55a7.5 7.5 0 0 0 0 2.6l-2 1.55 2 3.46 2.5-1a7.6 7.6 0 0 0 2.25 1.3l.35 2.64h4l.35-2.64a7.6 7.6 0 0 0 2.25-1.3l2.5 1 2-3.46-2-1.55Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></button>
+        </article>`).join("");
       const enabled = sourceCatalog.filter(source => source.enabled).length;
       $("#sourceCount").textContent = `${enabled} / ${sourceCatalog.length} 个已启用`;
+    }
+
+    function getPlayerOffset(source) {
+      const value = Number(state?.playerLyricOffsets?.[source.adapter]);
+      return Number.isFinite(value) ? Math.max(-5000, Math.min(5000, Math.round(value))) : source.defaultOffset;
+    }
+
+    function formatPlayerOffset(value) {
+      if (value > 0) return `提前 ${value} ms`;
+      if (value < 0) return `延后 ${Math.abs(value)} ms`;
+      return "同步";
+    }
+
+    function renderPlayerSettings() {
+      const source = sourceCatalog.find(item => item.id === activePlayerSourceId);
+      if (!source) return;
+      $("#playerSettingsTitle").textContent = source.name;
+      $("#playerSettingsAdapter").textContent = source.adapter;
+      $("#playerSettingsLogo").innerHTML = `<img src="${escapeHtml(source.icon)}" alt="">`;
+      $("#playerRecognitionToggle").checked = source.enabled;
+      const offset = getPlayerOffset(source);
+      $("#playerOffsetInput").value = offset;
+      $("#playerOffsetStatus").textContent = formatPlayerOffset(offset);
+      $("#resetPlayerOffsetButton").disabled = offset === source.defaultOffset;
+    }
+
+    function openPlayerSettings(sourceId) {
+      const source = sourceCatalog.find(item => item.id === sourceId);
+      if (!source) return;
+      closeSelect(false);
+      closeColorPopover(false);
+      activePlayerSourceId = source.id;
+      renderPlayerSettings();
+      $("#playerSettingsDialog").showModal();
+    }
+
+    function commitPlayerOffset(value) {
+      const source = sourceCatalog.find(item => item.id === activePlayerSourceId);
+      if (!source || !state) return;
+      const numeric = Number(value);
+      const offset = Number.isFinite(numeric) ? Math.max(-5000, Math.min(5000, Math.round(numeric))) : getPlayerOffset(source);
+      state.playerLyricOffsets[source.adapter] = offset;
+      bridge.post({ type: "update", key: `playerLyricOffset:${source.adapter}`, value: offset });
+      renderSources();
+      renderPlayerSettings();
+      markSaved();
     }
 
     function renderPriority() {
@@ -244,11 +291,21 @@
       const previousCustom = state?.customForegroundColor;
       const foregroundColor = fromArgb(nextState.foregroundColor);
       state = { ...nextState, page: previousPage, foregroundColor };
+      const incomingOffsets = nextState.playerLyricOffsets ?? {};
+      const incomingDefaults = nextState.defaultPlayerLyricOffsets ?? {};
+      const defaultOffsetFor = source => {
+        const value = Number(incomingDefaults[source.adapter]);
+        return Number.isFinite(value) ? Math.max(-5000, Math.min(5000, Math.round(value))) : 0;
+      };
+      state.playerLyricOffsets = Object.fromEntries(sourceCatalogDefaults.map(source => {
+        const value = Number(incomingOffsets[source.adapter]);
+        return [source.adapter, Number.isFinite(value) ? Math.max(-5000, Math.min(5000, Math.round(value))) : defaultOffsetFor(source)];
+      }));
       state.customForegroundColor = nextState.foregroundColorMode === "Custom"
         ? foregroundColor
         : previousCustom ?? foregroundColor;
       repositoryUrl = nextState.repositoryUrl ?? "";
-      sourceCatalog = sourceCatalogDefaults.map(source => ({ ...source, enabled: Boolean(nextState[source.settingKey]) }));
+      sourceCatalog = sourceCatalogDefaults.map(source => ({ ...source, defaultOffset: defaultOffsetFor(source), enabled: Boolean(nextState[source.settingKey]) }));
       const order = Array.isArray(nextState.sourceRecognitionOrder) ? nextState.sourceRecognitionOrder : [];
       sourceCatalog.sort((a, b) => {
         const aIndex = order.indexOf(a.adapter);
@@ -481,6 +538,7 @@
     function refresh() {
       renderSources();
       renderPriority();
+      if ($("#playerSettingsDialog").open) renderPlayerSettings();
       syncSizeBounds();
       syncColorMode();
       syncControls();
@@ -497,6 +555,16 @@
     document.addEventListener("click", event => {
       const nav = event.target.closest("[data-nav]");
       if (nav) { activatePage(nav.dataset.nav); return; }
+
+      const playerSettings = event.target.closest("[data-player-settings]");
+      if (playerSettings) { openPlayerSettings(playerSettings.dataset.playerSettings); return; }
+
+      const offsetStep = event.target.closest("[data-player-offset-delta]");
+      if (offsetStep) {
+        const source = sourceCatalog.find(item => item.id === activePlayerSourceId);
+        if (source) commitPlayerOffset(getPlayerOffset(source) + Number(offsetStep.dataset.playerOffsetDelta));
+        return;
+      }
 
       const step = event.target.closest("[data-step-target]");
       if (step) {
@@ -651,16 +719,17 @@
     });
 
     document.addEventListener("change", event => {
-      const sourceInput = event.target.closest("[data-source-id]");
-      if (sourceInput) {
-        const source = sourceCatalog.find(item => item.id === sourceInput.dataset.sourceId);
+      if (event.target === $("#playerRecognitionToggle")) {
+        const source = sourceCatalog.find(item => item.id === activePlayerSourceId);
         if (source) {
-          source.enabled = sourceInput.checked;
+          source.enabled = event.target.checked;
           state[source.settingKey] = source.enabled;
           bridge.post({ type: "update", key: source.settingKey, value: source.enabled });
         }
-        renderSources(); renderPriority(); markSaved(); return;
+        renderSources(); renderPriority(); renderPlayerSettings(); markSaved(); return;
       }
+
+      if (event.target === $("#playerOffsetInput")) { commitPlayerOffset(event.target.value); return; }
 
       const control = event.target.closest("[data-setting]");
       if (!control) return;
@@ -692,6 +761,18 @@
     $("#clearCacheButton").addEventListener("click", () => $("#clearDialog").showModal());
     $("#confirmRestore").addEventListener("click", () => { closeDialogWithAnimation($("#restoreDialog")); resetState(); });
     $("#confirmClear").addEventListener("click", () => { closeDialogWithAnimation($("#clearDialog")); bridge.post({ type: "clearCache" }); showToast("歌词与封面缓存已清理"); });
+    $("#resetPlayerOffsetButton").addEventListener("click", () => {
+      const source = sourceCatalog.find(item => item.id === activePlayerSourceId);
+      if (source) commitPlayerOffset(source.defaultOffset);
+    });
+    $("#playerSettingsDialog").addEventListener("click", event => {
+      if (event.target === $("#playerSettingsDialog")) closeDialogWithAnimation($("#playerSettingsDialog"));
+    });
+    $("#playerSettingsDialog").addEventListener("close", () => {
+      const sourceId = activePlayerSourceId;
+      activePlayerSourceId = null;
+      document.querySelector(`[data-player-settings="${sourceId}"]`)?.focus({ preventScroll: true });
+    });
     $("#browseButton").addEventListener("click", () => bridge.post({ type: "pickLocalFolder" }));
     $$('[data-show-lyrics-window]').forEach(button => button.addEventListener("click", () => bridge.post({ type: "showLyricsWindow" })));
     $("#smtcMonitorButton").addEventListener("click", () => bridge.post({ type: "openSmtcMonitor" }));

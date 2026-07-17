@@ -23,6 +23,8 @@ public enum SpectrumDisplayMode
 
 public sealed class AppSettings
 {
+    public const int MinimumPlayerLyricOffsetMilliseconds = -5000;
+    public const int MaximumPlayerLyricOffsetMilliseconds = 5000;
     public const double SafeFontSizeMin = 10;
     public const double SafeFontSizeMax = 24;
     public const double ExtendedFontSizeMin = 6;
@@ -64,6 +66,8 @@ public sealed class AppSettings
     public bool EnableKugou { get; set; } = true;
 
     public bool EnableSpotify { get; set; } = true;
+
+    public Dictionary<string, PlayerSourceSettings> PlayerSources { get; set; } = CreateDefaultPlayerSources();
 
     public bool EnableLocalLyrics { get; set; } = true;
 
@@ -152,11 +156,101 @@ public sealed class AppSettings
 
     public AppSettings Clone()
     {
+        NormalizePlayerSources();
         var cloned = (AppSettings)MemberwiseClone();
         cloned.SourceRecognitionOrder = SourceRecognitionOrder.ToList();
+        cloned.PlayerSources = PlayerSources.ToDictionary(
+            pair => pair.Key,
+            pair => pair.Value.Clone(),
+            StringComparer.OrdinalIgnoreCase);
         cloned.LocalMusicFolders = LocalMusicFolders.ToList();
         cloned.SpectrumTuning = SpectrumTuning.Clone();
         return cloned;
+    }
+
+    public void NormalizePlayerSources()
+    {
+        var current = PlayerSources ?? new Dictionary<string, PlayerSourceSettings>();
+        var normalized = CreateDefaultPlayerSources();
+        foreach (var source in normalized.Keys.ToList())
+        {
+            if (current.TryGetValue(source, out var sourceSettings) && sourceSettings is not null)
+            {
+                normalized[source] = new PlayerSourceSettings
+                {
+                    LyricOffsetMilliseconds = ClampPlayerLyricOffset(sourceSettings.LyricOffsetMilliseconds)
+                };
+            }
+        }
+
+        PlayerSources = normalized;
+    }
+
+    public int GetPlayerLyricOffsetMilliseconds(string? sourceApp)
+    {
+        var source = NormalizePlayerSourceName(sourceApp);
+        if (source is null)
+        {
+            return 0;
+        }
+
+        return PlayerSources is not null &&
+            PlayerSources.TryGetValue(source, out var sourceSettings) &&
+            sourceSettings is not null
+                ? ClampPlayerLyricOffset(sourceSettings.LyricOffsetMilliseconds)
+                : GetDefaultPlayerLyricOffsetMilliseconds(source);
+    }
+
+    public void SetPlayerLyricOffsetMilliseconds(string? sourceApp, int value)
+    {
+        var source = NormalizePlayerSourceName(sourceApp);
+        if (source is null)
+        {
+            return;
+        }
+
+        NormalizePlayerSources();
+        PlayerSources[source].LyricOffsetMilliseconds = ClampPlayerLyricOffset(value);
+    }
+
+    public static int GetDefaultPlayerLyricOffsetMilliseconds(string? sourceApp)
+    {
+        return NormalizePlayerSourceName(sourceApp) switch
+        {
+            "QQMusic" => 100,
+            "Netease" => -130,
+            "Kugou" => 100,
+            "Spotify" => 120,
+            _ => 0
+        };
+    }
+
+    public static int ClampPlayerLyricOffset(int value)
+    {
+        return Math.Clamp(value, MinimumPlayerLyricOffsetMilliseconds, MaximumPlayerLyricOffsetMilliseconds);
+    }
+
+    private static Dictionary<string, PlayerSourceSettings> CreateDefaultPlayerSources()
+    {
+        return new Dictionary<string, PlayerSourceSettings>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["QQMusic"] = new() { LyricOffsetMilliseconds = GetDefaultPlayerLyricOffsetMilliseconds("QQMusic") },
+            ["Netease"] = new() { LyricOffsetMilliseconds = GetDefaultPlayerLyricOffsetMilliseconds("Netease") },
+            ["Kugou"] = new() { LyricOffsetMilliseconds = GetDefaultPlayerLyricOffsetMilliseconds("Kugou") },
+            ["Spotify"] = new() { LyricOffsetMilliseconds = GetDefaultPlayerLyricOffsetMilliseconds("Spotify") }
+        };
+    }
+
+    private static string? NormalizePlayerSourceName(string? sourceApp)
+    {
+        return sourceApp?.Trim().ToLowerInvariant() switch
+        {
+            "qqmusic" => "QQMusic",
+            "netease" or "neteasemusic" => "Netease",
+            "kugou" => "Kugou",
+            "spotify" => "Spotify",
+            _ => null
+        };
     }
 
     public static double ClampFontSize(double value, bool useSafeRange)
@@ -182,5 +276,15 @@ public sealed class AppSettings
     {
         var maxRadius = Math.Max(0, coverSize / 2);
         return Math.Clamp(value, 0, maxRadius);
+    }
+}
+
+public sealed class PlayerSourceSettings
+{
+    public int LyricOffsetMilliseconds { get; set; }
+
+    public PlayerSourceSettings Clone()
+    {
+        return (PlayerSourceSettings)MemberwiseClone();
     }
 }

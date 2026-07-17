@@ -56,7 +56,7 @@
         <section class="page active" data-page="sources" aria-labelledby="sourcesHeading">
           <div class="page-inner">
             <section class="panel">
-              <div class="panel-head"><div><h2 id="sourcesHeading" tabindex="-1">已启用的播放源</h2><p>开关仅控制播放器识别，所有歌词源始终参与歌词检索。</p></div><span id="sourceCount" class="source-count"></span></div>
+              <div class="panel-head"><div><h2 id="sourcesHeading" tabindex="-1">播放器</h2><p>通过齿轮管理播放器识别与歌词同步偏移；所有歌词源始终参与歌词检索。</p></div><span id="sourceCount" class="source-count"></span></div>
               <div class="panel-body"><div id="sourceGrid" class="source-grid"></div></div>
             </section>
             <section class="panel">
@@ -177,6 +177,31 @@
 
   <dialog id="restoreDialog"><div class="dialog-body"><h2>恢复默认设置？</h2><p>所有设置和播放源顺序都会恢复为默认值，并立即应用到歌词窗口。</p></div><div class="dialog-actions"><button class="btn ghost" type="button" data-dialog-cancel="restoreDialog">取消</button><button id="confirmRestore" class="btn" type="button">恢复默认</button></div></dialog>
   <dialog id="clearDialog"><div class="dialog-body"><h2>清除歌词与封面缓存？</h2><p>清理后首次重新匹配歌词和封面可能稍慢，应用设置不会受到影响。</p></div><div class="dialog-actions"><button class="btn ghost" type="button" data-dialog-cancel="clearDialog">取消</button><button id="confirmClear" class="btn destructive" type="button">清除缓存</button></div></dialog>
+  <dialog id="playerSettingsDialog" class="player-settings-dialog" aria-labelledby="playerSettingsTitle">
+    <div class="player-drawer-header">
+      <span id="playerSettingsLogo" class="source-logo" aria-hidden="true"></span>
+      <div class="player-drawer-heading"><h2 id="playerSettingsTitle">播放器设置</h2><p id="playerSettingsAdapter"></p></div>
+      <button class="icon-button" type="button" data-dialog-cancel="playerSettingsDialog" aria-label="关闭播放器设置"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+    </div>
+    <div class="player-drawer-body">
+      <section class="player-setting-section">
+        <div class="setting-row compact"><div class="setting-label"><strong>播放器识别</strong><small>关闭后不再监听此播放器，已有偏移设置会保留。</small></div><label class="switch"><input id="playerRecognitionToggle" type="checkbox" aria-label="启用播放器识别"><span class="switch-track"></span></label></div>
+      </section>
+      <section class="player-setting-section">
+        <div class="player-offset-copy"><div><strong>歌词同步偏移</strong><small>正值让歌词提前，负值让歌词延后。</small></div><output id="playerOffsetStatus" class="player-offset-status">同步</output></div>
+        <div class="player-offset-control">
+          <div class="stepper player-offset-stepper">
+            <button type="button" data-player-offset-delta="-100" aria-label="延后 100 毫秒">−</button>
+            <input id="playerOffsetInput" class="control" type="number" min="-5000" max="5000" step="10" inputmode="numeric" aria-label="歌词同步偏移毫秒">
+            <button type="button" data-player-offset-delta="100" aria-label="提前 100 毫秒">+</button>
+          </div>
+          <span class="player-offset-unit">ms</span>
+        </div>
+        <div class="player-setting-actions"><button id="resetPlayerOffsetButton" class="btn ghost small" type="button">恢复推荐偏移</button></div>
+      </section>
+      <p class="player-settings-note">此入口后续还会承载该播放器的其他专属设置。</p>
+    </div>
+  </dialog>
   <div id="selectPopover" class="select-popover"><div id="selectListbox" class="select-listbox" role="listbox" tabindex="-1" aria-label="选项"></div></div>
   <div id="colorPopover" class="color-popover" role="dialog" aria-label="选择自定义颜色">
     <div id="colorArea" class="color-area" tabindex="0" aria-label="饱和度和明度"><span id="colorCursor" class="color-cursor"></span></div>

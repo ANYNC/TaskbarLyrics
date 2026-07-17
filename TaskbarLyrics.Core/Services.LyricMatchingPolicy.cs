@@ -26,20 +26,4 @@ public static class LyricMatchingPolicy
             ["LRCLIB"] = 1
         };
 
-    public static TimeSpan GetPlayerLeadTime(string? sourceApp)
-    {
-        if (string.IsNullOrEmpty(sourceApp))
-        {
-            return TimeSpan.Zero;
-        }
-
-        return sourceApp.ToLowerInvariant() switch
-        {
-            "spotify" => TimeSpan.FromMilliseconds(150),
-            "neteasemusic" or "netease" => TimeSpan.FromMilliseconds(50),
-            "qqmusic" => TimeSpan.FromMilliseconds(100),
-            "kugou" => TimeSpan.FromMilliseconds(100),
-            _ => TimeSpan.Zero
-        };
-    }
 }
