@@ -10,6 +10,7 @@ public sealed class SystemAudioSpectrumService : IDisposable
     private const int AudclntSharemodeShared = 0;
     private const int AudclntStreamflagsLoopback = 0x00020000;
     private const int AudclntBufferflagsSilent = 0x00000002;
+    private const int DefaultDeviceCheckIntervalMs = 500;
     private const short WaveFormatPcm = 1;
     private const short WaveFormatIeeeFloat = 3;
     private const short WaveFormatExtensibleTag = -2;
@@ -189,7 +190,8 @@ public sealed class SystemAudioSpectrumService : IDisposable
         try
         {
             enumerator = (IMMDeviceEnumerator)(object)new MMDeviceEnumerator();
-            Marshal.ThrowExceptionForHR(enumerator.GetDefaultAudioEndpoint(EDataFlow.Render, ERole.Multimedia, out device));
+            Marshal.ThrowExceptionForHR(enumerator.GetDefaultAudioEndpoint(EDataFlow.Render, ERole.Console, out device));
+            var activeDeviceId = GetDeviceId(device);
             var audioClientId = IAudioClientId;
             Marshal.ThrowExceptionForHR(device.Activate(ref audioClientId, ClsctxAll, IntPtr.Zero, out var audioClientObject));
             audioClient = (IAudioClient)audioClientObject;
@@ -222,9 +224,20 @@ public sealed class SystemAudioSpectrumService : IDisposable
                 _lastError = string.Empty;
             }
 
+            var nextDefaultDeviceCheck = Environment.TickCount64 + DefaultDeviceCheckIntervalMs;
             while (!_cts.IsCancellationRequested)
             {
                 DrainCaptureClient(captureClient, format);
+                var now = Environment.TickCount64;
+                if (now >= nextDefaultDeviceCheck)
+                {
+                    nextDefaultDeviceCheck = now + DefaultDeviceCheckIntervalMs;
+                    if (HasDefaultRenderDeviceChanged(enumerator, activeDeviceId))
+                    {
+                        break;
+                    }
+                }
+
                 _cts.Token.WaitHandle.WaitOne(15);
             }
         }
@@ -248,6 +261,42 @@ public sealed class SystemAudioSpectrumService : IDisposable
             ReleaseCom(audioClient);
             ReleaseCom(device);
             ReleaseCom(enumerator);
+        }
+    }
+
+    private static bool HasDefaultRenderDeviceChanged(
+        IMMDeviceEnumerator enumerator,
+        string activeDeviceId)
+    {
+        IMMDevice? defaultDevice = null;
+        try
+        {
+            Marshal.ThrowExceptionForHR(enumerator.GetDefaultAudioEndpoint(
+                EDataFlow.Render,
+                ERole.Console,
+                out defaultDevice));
+            var defaultDeviceId = GetDeviceId(defaultDevice);
+            return !string.Equals(defaultDeviceId, activeDeviceId, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            ReleaseCom(defaultDevice);
+        }
+    }
+
+    private static string GetDeviceId(IMMDevice device)
+    {
+        Marshal.ThrowExceptionForHR(device.GetId(out var idPointer));
+        try
+        {
+            return Marshal.PtrToStringUni(idPointer) ?? string.Empty;
+        }
+        finally
+        {
+            if (idPointer != IntPtr.Zero)
+            {
+                Marshal.FreeCoTaskMem(idPointer);
+            }
         }
     }
 
