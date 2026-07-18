@@ -1,5 +1,6 @@
 using System.Threading;
 using System.Windows.Threading;
+using TaskbarLyrics.Core.Services;
 
 namespace TaskbarLyrics.App;
 
@@ -12,10 +13,10 @@ internal sealed class LyricsWindowHost : IDisposable
     private bool _disposed;
     private volatile bool _isVisible;
 
-    public LyricsWindowHost(AppSettings initialSettings)
+    public LyricsWindowHost(AppSettings initialSettings, TrackLyricOffsetStore trackLyricOffsetStore)
     {
         var settings = initialSettings.Clone();
-        _thread = new Thread(() => Run(settings))
+        _thread = new Thread(() => Run(settings, trackLyricOffsetStore))
         {
             IsBackground = true,
             Name = "TaskbarLyrics Lyrics UI"
@@ -76,6 +77,18 @@ internal sealed class LyricsWindowHost : IDisposable
         InvokeAsync(() => _window?.OpenSmtcTimelineMonitorWindow());
     }
 
+    public Task<CurrentTrackLyricsContext?> GetCurrentTrackLyricsContextAsync()
+    {
+        if (_disposed || _dispatcher is null)
+        {
+            return Task.FromResult<CurrentTrackLyricsContext?>(null);
+        }
+
+        return _dispatcher.InvokeAsync(
+            () => _window?.GetCurrentTrackLyricsContextSnapshot(),
+            DispatcherPriority.Normal).Task;
+    }
+
     public void Close()
     {
         if (_disposed)
@@ -83,12 +96,12 @@ internal sealed class LyricsWindowHost : IDisposable
             return;
         }
 
-        _disposed = true;
         InvokeAsync(() =>
         {
             _window?.Close();
             Dispatcher.CurrentDispatcher.BeginInvokeShutdown(DispatcherPriority.Normal);
         });
+        _disposed = true;
 
         if (!_thread.Join(TimeSpan.FromMilliseconds(200)))
         {
@@ -102,10 +115,10 @@ internal sealed class LyricsWindowHost : IDisposable
         _ready.Dispose();
     }
 
-    private void Run(AppSettings initialSettings)
+    private void Run(AppSettings initialSettings, TrackLyricOffsetStore trackLyricOffsetStore)
     {
         _dispatcher = Dispatcher.CurrentDispatcher;
-        _window = new MainWindow();
+        _window = new MainWindow(trackLyricOffsetStore);
         _window.ApplySettings(initialSettings);
         _window.IsVisibleChanged += (_, _) => _isVisible = _window.IsVisible;
         _window.Closed += (_, _) =>

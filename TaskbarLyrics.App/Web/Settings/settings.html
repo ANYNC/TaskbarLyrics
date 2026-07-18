@@ -29,6 +29,7 @@
       <nav class="nav">
         <button class="nav-item active" data-nav="sources" data-tooltip="播放源" type="button"><svg viewBox="0 0 24 24"><path d="M6 4v16M10 7h8M10 12h8M10 17h5"/></svg><span>播放源</span></button>
         <button class="nav-item" data-nav="lyrics" data-tooltip="歌词" type="button"><svg viewBox="0 0 24 24"><path d="M4 7h10M4 12h16M4 17h12"/></svg><span>歌词</span></button>
+        <button class="nav-item" data-nav="trackOffsets" data-tooltip="单曲偏移" type="button"><svg viewBox="0 0 24 24"><path d="M4 7h10M4 12h16M4 17h9"/><path d="M18 15v6M15 18h6"/></svg><span>单曲偏移</span></button>
         <button class="nav-item" data-nav="appearance" data-tooltip="外观" type="button"><svg viewBox="0 0 24 24"><path d="M4 19 10 5h4l6 14M7 14h10"/></svg><span>外观</span></button>
         <button class="nav-item" data-nav="window" data-tooltip="窗口" type="button"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="M3.5 9h17"/></svg><span>窗口</span></button>
         <button class="nav-item" data-nav="general" data-tooltip="常规" type="button"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1l2-1.5-2-3.4-2.4 1A8 8 0 0 0 15 6l-.3-2.6h-4L10.4 6A8 8 0 0 0 9 7.1l-2.4-1-2 3.4L6.7 11a7 7 0 0 0 0 2l-2.1 1.5 2 3.4 2.4-1a8 8 0 0 0 1.4.8l.3 2.9h4l.3-2.9a8 8 0 0 0 1.4-.8l2.4 1 2-3.4-2-1.5c.1-.3.2-.7.2-1Z"/></svg><span>常规</span></button>
@@ -91,11 +92,44 @@
           </div>
         </section>
 
+        <section class="page" data-page="trackOffsets" aria-labelledby="trackOffsetsHeading">
+          <div class="page-inner">
+            <section class="panel">
+              <div class="panel-head"><div><h2 id="trackOffsetsHeading" tabindex="-1">当前歌曲</h2><p>偏移按歌曲和歌词源分别保存，修改后会立即应用。</p></div><span id="currentTrackOffsetBadge" class="source-count">等待播放</span></div>
+              <div id="currentTrackOffset" class="current-track-offset"></div>
+            </section>
+            <section class="panel">
+              <div class="panel-head"><div><h2>已配置歌曲</h2><p>搜索、调整或删除已经保存的单曲歌词偏移。</p></div><span id="trackOffsetCount" class="source-count">0 首</span></div>
+              <div class="track-offset-toolbar">
+                <div class="track-offset-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m16 16 4 4"/></svg><input id="trackOffsetSearch" class="control" type="search" placeholder="搜索歌曲或歌手" aria-label="搜索歌曲或歌手"></div>
+                <button class="control select-trigger compact-select" type="button" data-setting="trackOffsetSourceFilter" aria-label="筛选歌词源" aria-haspopup="listbox" aria-expanded="false"><span class="select-trigger-value"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+                <button class="control select-trigger compact-select" type="button" data-setting="trackOffsetSort" aria-label="单曲偏移排序方式" aria-haspopup="listbox" aria-expanded="false"><span class="select-trigger-value"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              </div>
+              <div id="trackOffsetList" class="track-offset-list"></div>
+              <div class="track-offset-footer">
+                <p>单曲偏移属于用户数据，不会随恢复默认设置或清理歌词缓存被删除。</p>
+                <nav id="trackOffsetPagination" class="track-offset-pagination" aria-label="已配置歌曲分页" hidden>
+                  <button id="trackOffsetPreviousPage" class="track-offset-page-button" type="button" aria-label="上一页"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button>
+                  <span id="trackOffsetPageStatus" aria-live="polite">1 / 1</span>
+                  <button id="trackOffsetNextPage" class="track-offset-page-button" type="button" aria-label="下一页"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+                </nav>
+                <button id="clearTrackOffsetsButton" class="btn destructive small" type="button" disabled>清除全部偏移</button>
+              </div>
+            </section>
+          </div>
+        </section>
+
         <section class="page" data-page="appearance" aria-labelledby="appearanceHeading">
           <div class="page-inner">
+            <div class="panel">
+              <div class="panel-head"><div><h2 id="appearanceHeading" tabindex="-1">应用界面</h2><p>统一应用工具界面的显示主题。</p></div></div>
+              <div class="settings">
+                <div class="setting-row"><div class="setting-label"><strong>界面主题</strong><small>统一控制设置页、SMTC 监视器、频谱调试和托盘菜单的显示主题。</small></div><div class="theme-segmented" data-setting="toolWindowTheme" role="radiogroup" aria-label="界面主题"><button type="button" role="radio" data-theme-value="System" aria-checked="false"><svg viewBox="0 0 24 24" aria-hidden="true"><rect width="20" height="14" x="2" y="3" rx="2"/><path d="M8 21h8m-4-4v4"/></svg><span>跟随系统</span></button><button type="button" role="radio" data-theme-value="Light" aria-checked="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></svg><span>浅色</span></button><button type="button" role="radio" data-theme-value="Dark" aria-checked="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"/></svg><span>深色</span></button></div></div>
+              </div>
+            </div>
             <div class="live-note"><div class="live-note-copy"><strong>设置即时生效</strong><small>请直接查看任务栏歌词窗口，真实效果会随参数同步更新。</small></div><button id="showLyricsWindowButton" class="btn ghost" type="button" data-show-lyrics-window>显示歌词窗口</button></div>
             <div class="panel">
-              <div class="panel-head"><div><h2 id="appearanceHeading" tabindex="-1">文字与封面</h2><p>修改会实时应用到任务栏歌词窗口。</p></div></div>
+              <div class="panel-head"><div><h2>文字与封面</h2><p>修改会实时应用到任务栏歌词窗口。</p></div></div>
               <div class="settings">
                 <div class="setting-row"><div class="setting-label"><strong>字号</strong><small>控制歌词文字大小。</small></div><div class="size-control"><div class="stepper"><button type="button" data-step-target="fontSize" data-delta="-1" aria-label="减小字号">−</button><input class="control" type="number" min="10" max="24" data-setting="fontSize" aria-label="字号"><button type="button" data-step-target="fontSize" data-delta="1" aria-label="增大字号">+</button></div><label class="safe-range-option"><span data-safe-copy="fontSize">安全范围 10–24 px</span><span class="switch small"><input type="checkbox" data-setting="useSafeFontSizeRange" aria-label="字号使用安全范围"><span class="switch-track"></span></span></label></div></div>
                 <div class="setting-row"><div class="setting-label"><strong>字体</strong><small>正式应用会注入当前系统已安装字体。</small></div><button id="fontFamilySelect" class="control select-trigger" type="button" data-setting="fontFamily" aria-label="字体" aria-haspopup="listbox" aria-expanded="false"><span class="select-trigger-value"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
@@ -177,6 +211,8 @@
 
   <dialog id="restoreDialog"><div class="dialog-body"><h2>恢复默认设置？</h2><p>所有设置和播放源顺序都会恢复为默认值，并立即应用到歌词窗口。</p></div><div class="dialog-actions"><button class="btn ghost" type="button" data-dialog-cancel="restoreDialog">取消</button><button id="confirmRestore" class="btn" type="button">恢复默认</button></div></dialog>
   <dialog id="clearDialog"><div class="dialog-body"><h2>清除歌词与封面缓存？</h2><p>清理后首次重新匹配歌词和封面可能稍慢，应用设置不会受到影响。</p></div><div class="dialog-actions"><button class="btn ghost" type="button" data-dialog-cancel="clearDialog">取消</button><button id="confirmClear" class="btn destructive" type="button">清除缓存</button></div></dialog>
+  <dialog id="deleteTrackOffsetDialog"><div class="dialog-body"><h2>删除这条单曲偏移？</h2><p>删除后，这首歌曲在对应歌词源下将恢复为仅使用播放器偏移。</p></div><div class="dialog-actions"><button class="btn ghost" type="button" data-dialog-cancel="deleteTrackOffsetDialog">取消</button><button id="confirmDeleteTrackOffset" class="btn destructive" type="button">删除偏移</button></div></dialog>
+  <dialog id="clearTrackOffsetsDialog"><div class="dialog-body"><h2>清除全部单曲偏移？</h2><p>所有歌曲和歌词源的单独修正都会被删除，此操作不会影响播放器偏移。</p></div><div class="dialog-actions"><button class="btn ghost" type="button" data-dialog-cancel="clearTrackOffsetsDialog">取消</button><button id="confirmClearTrackOffsets" class="btn destructive" type="button">全部清除</button></div></dialog>
   <dialog id="playerSettingsDialog" class="player-settings-dialog" aria-labelledby="playerSettingsTitle">
     <div class="player-drawer-header">
       <span id="playerSettingsLogo" class="source-logo" aria-hidden="true"></span>

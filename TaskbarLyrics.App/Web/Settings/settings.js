@@ -10,13 +10,16 @@
       fontFamily: [],
       fontWeight: [{ value: "Light", label: "细体" }, { value: "Normal", label: "常规" }, { value: "Medium", label: "中等" }, { value: "SemiBold", label: "半粗体" }, { value: "Bold", label: "粗体" }],
       foregroundColorMode: [{ value: "Dark", label: "深色" }, { value: "Light", label: "浅色" }, { value: "Custom", label: "自定义" }],
-      horizontalAnchor: [{ value: "Left", label: "左侧" }, { value: "Center", label: "居中" }, { value: "Right", label: "右侧" }]
+      horizontalAnchor: [{ value: "Left", label: "左侧" }, { value: "Center", label: "居中" }, { value: "Right", label: "右侧" }],
+      trackOffsetSourceFilter: [{ value: "All", label: "全部歌词源" }],
+      trackOffsetSort: [{ value: "updated", label: "最近修改" }, { value: "title", label: "歌曲名称" }, { value: "offset", label: "偏移量" }]
     };
     const presetColors = ["#FFFFFF", "#A1A1AA", "#18181B", "#EF4444", "#F97316", "#EAB308", "#22C55E", "#06B6D4", "#3B82F6", "#A855F7"];
 
     const pageMeta = {
       sources: ["播放源", "选择需要监听的音乐软件，并调整识别优先级。"],
       lyrics: ["歌词", "控制歌词显示、翻译和频谱策略。"],
+      trackOffsets: ["单曲偏移", "调整当前歌曲同步，并管理按歌词源保存的偏移。"],
       appearance: ["外观", "调整文字与封面，并在任务栏预览中即时检查效果。"],
       window: ["窗口", "设置歌词窗口背景、宽度、位置与置顶行为。"],
       general: ["常规", "管理启动、后台运行和更新行为。"],
@@ -45,6 +48,16 @@
     let repositoryUrl = "";
     let updateReleaseUrl = "";
     let activePlayerSourceId = null;
+    const TRACK_OFFSET_PAGE_SIZE = 50;
+    const TRACK_OFFSET_SEARCH_DEBOUNCE_MS = 200;
+    let trackOffsetData = { currentTrack: null, entries: [], page: 1, pageCount: 1, totalCount: 0, unfilteredCount: 0 };
+    let visibleTrackOffsetEntries = [];
+    let trackOffsetPage = 1;
+    let trackOffsetRequestId = 0;
+    let trackOffsetSearchTimer;
+    let expandedTrackOffsetKey = null;
+    let pendingDeleteTrackOffsetKey = null;
+    let focusCurrentTrackOnNextRender = false;
 
     const $ = selector => document.querySelector(selector);
     const $$ = selector => Array.from(document.querySelectorAll(selector));
@@ -72,6 +85,232 @@
       if (value > 0) return `提前 ${value} ms`;
       if (value < 0) return `延后 ${Math.abs(value)} ms`;
       return "同步";
+    }
+
+    function normalizeTrackOffset(value, fallback = 0) {
+      const numeric = Number(value);
+      if (!Number.isFinite(numeric)) return fallback;
+      return Math.max(-5000, Math.min(5000, Math.round(numeric / 10) * 10));
+    }
+
+    function sourceDisplayName(source) {
+      const known = sourceCatalogDefaults.find(item => item.adapter.toLowerCase() === String(source ?? "").toLowerCase());
+      if (known) return known.name;
+      if (String(source).toLowerCase() === "local") return "本地歌词";
+      return source || "未知来源";
+    }
+
+    function formatTrackDuration(seconds) {
+      const value = Math.max(0, Number(seconds) || 0);
+      if (!value) return "时长未知";
+      const minutes = Math.floor(value / 60);
+      return `${String(minutes).padStart(2, "0")}:${String(Math.round(value % 60)).padStart(2, "0")}`;
+    }
+
+    function formatTrackOffsetDate(value) {
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return "--";
+      return new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(date);
+    }
+
+    function trackOffsetKeyId(key) {
+      return JSON.stringify([
+        key?.normalizedTitle ?? "",
+        key?.normalizedArtist ?? "",
+        key?.normalizedLyricSource ?? "",
+        Number(key?.durationBucketSeconds) || 0
+      ]);
+    }
+
+    function renderCurrentTrackOffset() {
+      const container = $("#currentTrackOffset");
+      const badge = $("#currentTrackOffsetBadge");
+      const current = trackOffsetData.currentTrack;
+      if (!current) {
+        badge.textContent = "等待播放";
+        container.innerHTML = `<div class="track-offset-empty"><div><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5l10-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="16" cy="16" r="3"/></svg><strong>当前没有可调整的歌曲</strong><small>开始播放并成功获取歌词后，可以在这里调整对应歌词源的同步偏移。</small></div></div>`;
+        return;
+      }
+
+      const ready = Boolean(current.lyricSourceReady);
+      badge.textContent = ready ? sourceDisplayName(current.lyricSource) : "正在检索歌词";
+      if (!ready) {
+        container.innerHTML = `<div class="track-offset-empty"><div><span class="spinner" aria-hidden="true"></span><strong>${escapeHtml(current.title || "当前歌曲")}</strong><small>歌词源确定后即可调整单曲偏移。</small></div></div>`;
+        return;
+      }
+
+      const playerOffset = Number(current.playerOffsetMilliseconds) || 0;
+      const trackOffset = Number(current.trackOffsetMilliseconds) || 0;
+      const effectiveOffset = Number(current.effectiveOffsetMilliseconds) || 0;
+      container.innerHTML = `
+        <div class="current-track-layout">
+          <div class="current-track-identity">
+            <strong title="${escapeHtml(current.title)}">${escapeHtml(current.title || "未知歌曲")}</strong>
+            <small title="${escapeHtml(current.artist)}">${escapeHtml(current.artist || "未知歌手")} · ${formatTrackDuration(current.durationSeconds)}</small>
+            <div class="current-track-source"><span class="track-offset-badge">${escapeHtml(sourceDisplayName(current.sourceApp))}</span><span class="track-offset-badge">歌词源 · ${escapeHtml(sourceDisplayName(current.lyricSource))}</span></div>
+          </div>
+          <div class="current-track-controls">
+            <div class="offset-summary">
+              <div class="offset-summary-item"><span>播放器偏移</span><strong>${formatPlayerOffset(playerOffset)}</strong></div>
+              <div class="offset-summary-item"><span>单曲偏移</span><strong>${formatPlayerOffset(trackOffset)}</strong></div>
+              <div class="offset-summary-item"><span>最终效果</span><strong>${formatPlayerOffset(effectiveOffset)}</strong></div>
+            </div>
+            <div class="current-track-editor">
+              <div class="stepper track-offset-stepper">
+                <button type="button" data-current-track-offset-delta="-100" aria-label="当前歌曲歌词延后 100 毫秒">−</button>
+                <input id="currentTrackOffsetInput" class="control" type="number" min="-5000" max="5000" step="10" inputmode="numeric" value="${trackOffset}" aria-label="当前歌曲单曲偏移毫秒">
+                <button type="button" data-current-track-offset-delta="100" aria-label="当前歌曲歌词提前 100 毫秒">+</button>
+              </div>
+              <button class="btn ghost small" type="button" data-reset-current-track-offset ${trackOffset === 0 ? "disabled" : ""}>恢复为 0</button>
+            </div>
+          </div>
+        </div>`;
+
+      if (focusCurrentTrackOnNextRender) {
+        focusCurrentTrackOnNextRender = false;
+        requestAnimationFrame(() => $("#currentTrackOffsetInput")?.focus({ preventScroll: true }));
+      }
+    }
+
+    function renderTrackOffsetList() {
+      const container = $("#trackOffsetList");
+      visibleTrackOffsetEntries = trackOffsetData.entries ?? [];
+      const totalCount = Number(trackOffsetData.totalCount) || 0;
+      const unfilteredCount = Number(trackOffsetData.unfilteredCount) || 0;
+      const pageCount = Math.max(1, Number(trackOffsetData.pageCount) || 1);
+      trackOffsetPage = Math.min(pageCount, Math.max(1, Number(trackOffsetData.page) || 1));
+      $("#trackOffsetCount").textContent = totalCount === unfilteredCount
+        ? `${unfilteredCount} 首`
+        : `${totalCount} / ${unfilteredCount} 首`;
+      $("#clearTrackOffsetsButton").disabled = unfilteredCount === 0;
+      const pagination = $("#trackOffsetPagination");
+      pagination.hidden = false;
+      $("#trackOffsetPageStatus").textContent = `${trackOffsetPage} / ${pageCount}`;
+      $("#trackOffsetPreviousPage").disabled = trackOffsetPage <= 1;
+      $("#trackOffsetNextPage").disabled = trackOffsetPage >= pageCount;
+      container.removeAttribute("aria-busy");
+
+      if (!visibleTrackOffsetEntries.length) {
+        const hasRecords = unfilteredCount > 0;
+        container.innerHTML = `<div class="track-offset-empty"><div><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/></svg><strong>${hasRecords ? "没有找到匹配的歌曲" : "还没有配置过单曲偏移"}</strong><small>${hasRecords ? "请调整搜索内容或歌词源筛选条件。" : "通过上方当前歌曲区域或托盘入口完成第一次调整。"}</small></div></div>`;
+        return;
+      }
+
+      container.innerHTML = `
+        <div class="track-offset-table-head"><span>歌曲</span><span>歌词源</span><span>单曲偏移</span><span>最近修改</span><span></span></div>
+        ${visibleTrackOffsetEntries.map((entry, index) => {
+          const isExpanded = expandedTrackOffsetKey === trackOffsetKeyId(entry.key);
+          const offset = Number(entry.offsetMilliseconds) || 0;
+          return `<div class="track-offset-item">
+            <div class="track-offset-row">
+              <div class="track-offset-song"><strong title="${escapeHtml(entry.title)}">${escapeHtml(entry.title || "未知歌曲")}</strong><small title="${escapeHtml(entry.artist)}">${escapeHtml(entry.artist || "未知歌手")} · ${escapeHtml(sourceDisplayName(entry.sourceApp))} · ${formatTrackDuration(entry.durationSeconds)}</small></div>
+              <span class="track-offset-meta">${escapeHtml(sourceDisplayName(entry.lyricSource))}</span>
+              <span class="track-offset-value">${formatPlayerOffset(offset)}</span>
+              <span class="track-offset-meta">${formatTrackOffsetDate(entry.updatedAtUtc)}</span>
+              <div class="track-offset-actions">
+                <button class="track-offset-action" type="button" data-edit-track-offset="${index}" aria-label="调整 ${escapeHtml(entry.title)} 的偏移" aria-expanded="${isExpanded}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M4 17h16M18 4v6M14 14v6"/><circle cx="18" cy="13" r="0"/><path d="M18 4v6M15 7h6M14 14v6M11 17h6"/></svg></button>
+                <button class="track-offset-action destructive" type="button" data-delete-track-offset="${index}" aria-label="删除 ${escapeHtml(entry.title)} 的偏移"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg></button>
+              </div>
+            </div>
+            ${isExpanded ? `<div class="track-offset-inline-editor"><span>正值让歌词提前，负值让歌词延后。</span><div class="stepper track-offset-stepper"><button type="button" data-stored-track-offset-delta="-100" data-track-offset-index="${index}" aria-label="歌词延后 100 毫秒">−</button><input class="control" type="number" min="-5000" max="5000" step="10" inputmode="numeric" value="${offset}" data-stored-track-offset-input="${index}" aria-label="${escapeHtml(entry.title)} 单曲偏移毫秒"><button type="button" data-stored-track-offset-delta="100" data-track-offset-index="${index}" aria-label="歌词提前 100 毫秒">+</button></div><span class="track-offset-editor-unit">ms</span></div>` : ""}
+          </div>`;
+        }).join("")}`;
+    }
+
+    function renderTrackOffsets() {
+      renderCurrentTrackOffset();
+      renderTrackOffsetList();
+    }
+
+    function changeTrackOffsetPage(delta) {
+      const pageCount = Math.max(1, Number(trackOffsetData.pageCount) || 1);
+      const nextPage = Math.min(pageCount, Math.max(1, trackOffsetPage + delta));
+      if (nextPage === trackOffsetPage) return;
+      expandedTrackOffsetKey = null;
+      requestTrackOffsetPage(nextPage);
+      $("#trackOffsetList").scrollIntoView({ block: "start", behavior: reducedMotionQuery.matches ? "auto" : "smooth" });
+    }
+
+    function requestTrackOffsetPage(page = 1) {
+      trackOffsetRequestId += 1;
+      $("#trackOffsetList").setAttribute("aria-busy", "true");
+      bridge.post({
+        type: "queryTrackOffsets",
+        value: {
+          requestId: trackOffsetRequestId,
+          page: Math.max(1, Number(page) || 1),
+          pageSize: TRACK_OFFSET_PAGE_SIZE,
+          search: $("#trackOffsetSearch")?.value.trim() ?? "",
+          lyricSource: state?.trackOffsetSourceFilter ?? "All",
+          sort: state?.trackOffsetSort ?? "updated"
+        }
+      });
+    }
+
+    function commitCurrentTrackOffset(value) {
+      const current = trackOffsetData.currentTrack;
+      if (!current?.lyricSourceReady) return;
+      const offset = normalizeTrackOffset(value, Number(current.trackOffsetMilliseconds) || 0);
+      current.trackOffsetMilliseconds = offset;
+      current.effectiveOffsetMilliseconds = (Number(current.playerOffsetMilliseconds) || 0) + offset;
+      renderCurrentTrackOffset();
+      bridge.post({ type: "setCurrentTrackOffset", value: offset });
+    }
+
+    function commitStoredTrackOffset(entry, value) {
+      if (!entry) return;
+      const offset = normalizeTrackOffset(value, Number(entry.offsetMilliseconds) || 0);
+      entry.offsetMilliseconds = offset;
+      renderTrackOffsetList();
+      bridge.post({ type: "setStoredTrackOffset", value: { key: entry.key, offsetMilliseconds: offset } });
+    }
+
+    function setCurrentTrackOffsetData(currentTrack) {
+      trackOffsetData.currentTrack = currentTrack ?? null;
+      renderCurrentTrackOffset();
+    }
+
+    function setTrackOffsetEntries(payload) {
+      if (!payload || Number(payload.requestId) !== trackOffsetRequestId) return;
+      trackOffsetData.entries = Array.isArray(payload.entries) ? payload.entries : [];
+      trackOffsetData.page = Number(payload.page) || 1;
+      trackOffsetData.pageCount = Number(payload.pageCount) || 1;
+      trackOffsetData.totalCount = Number(payload.totalCount) || 0;
+      trackOffsetData.unfilteredCount = Number(payload.unfilteredCount) || 0;
+      const sources = [...new Set((payload.lyricSources ?? []).filter(Boolean))]
+        .sort((a, b) => sourceDisplayName(a).localeCompare(sourceDisplayName(b), "zh-CN"));
+      selectOptions.trackOffsetSourceFilter = [
+        { value: "All", label: "全部歌词源" },
+        ...sources.map(source => ({ value: source, label: sourceDisplayName(source) }))
+      ];
+      if (state && !selectOptions.trackOffsetSourceFilter.some(option => option.value === state.trackOffsetSourceFilter)) {
+        state.trackOffsetSourceFilter = "All";
+        syncSelectTrigger(document.querySelector('[data-setting="trackOffsetSourceFilter"]'));
+        requestTrackOffsetPage(1);
+        return;
+      }
+      syncSelectTrigger(document.querySelector('[data-setting="trackOffsetSourceFilter"]'));
+      expandedTrackOffsetKey = null;
+      renderTrackOffsetList();
+    }
+
+    function setTrackOffsetSaveStatus(status) {
+      if (!status?.message) return;
+      showToast(status.message);
+    }
+
+    function navigateToPage(pageId, focusCurrentTrack = false) {
+      if (!pageMeta[pageId]) return;
+      const isCurrentPage = state?.page === pageId;
+      if (pageId === "trackOffsets") {
+        focusCurrentTrackOnNextRender = focusCurrentTrack;
+      }
+      activatePage(pageId, !focusCurrentTrack);
+      if (pageId === "trackOffsets") {
+        bridge.post({ type: "trackOffsetsPageActivated" });
+        requestTrackOffsetPage(isCurrentPage ? trackOffsetPage : 1);
+      }
+      renderTrackOffsets();
     }
 
     function renderPlayerSettings() {
@@ -143,6 +382,7 @@
 
     function activatePage(pageId, moveFocus = true) {
       if (!pageMeta[pageId]) return;
+      const previousPageId = state?.page;
       const pages = $$('[data-page]');
       const nextPage = pages.find(page => page.dataset.page === pageId);
       const currentPage = pages.find(page => page.classList.contains("active"));
@@ -156,6 +396,7 @@
       };
 
       if (state) state.page = pageId;
+      if (previousPageId !== pageId) bridge.post({ type: "settingsPageChanged", value: pageId });
       $$('[data-nav]').forEach(button => button.classList.toggle("active", button.dataset.nav === pageId));
 
       pageTransitionToken += 1;
@@ -239,7 +480,15 @@
     }
 
     function setControlValue(control, value) {
-      if (control.type === "checkbox") control.checked = Boolean(value);
+      if (control.classList.contains("theme-segmented")) {
+        control.value = value;
+        control.querySelectorAll("[data-theme-value]").forEach(option => {
+          const selected = option.dataset.themeValue === value;
+          option.setAttribute("aria-checked", String(selected));
+          option.tabIndex = selected ? 0 : -1;
+        });
+      }
+      else if (control.type === "checkbox") control.checked = Boolean(value);
       else if (control.tagName === "TEXTAREA" && Array.isArray(value)) control.value = value.join("\n");
       else control.value = value;
     }
@@ -289,8 +538,16 @@
     function setState(nextState, fonts = []) {
       const previousPage = state?.page ?? "sources";
       const previousCustom = state?.customForegroundColor;
+      const previousTrackOffsetSourceFilter = state?.trackOffsetSourceFilter ?? "All";
+      const previousTrackOffsetSort = state?.trackOffsetSort ?? "updated";
       const foregroundColor = fromArgb(nextState.foregroundColor);
-      state = { ...nextState, page: previousPage, foregroundColor };
+      state = {
+        ...nextState,
+        page: previousPage,
+        foregroundColor,
+        trackOffsetSourceFilter: previousTrackOffsetSourceFilter,
+        trackOffsetSort: previousTrackOffsetSort
+      };
       const incomingOffsets = nextState.playerLyricOffsets ?? {};
       const incomingDefaults = nextState.defaultPlayerLyricOffsets ?? {};
       const defaultOffsetFor = source => {
@@ -373,6 +630,13 @@
 
     function commitSetting(key, value) {
       if (!state) return;
+      if (key === "trackOffsetSourceFilter" || key === "trackOffsetSort") {
+        state[key] = value;
+        expandedTrackOffsetKey = null;
+        syncControls();
+        requestTrackOffsetPage(1);
+        return;
+      }
       const previousCornerRadius = state.coverCornerRadius;
       state[key] = value;
       if (key === "foregroundColor") {
@@ -538,6 +802,7 @@
     function refresh() {
       renderSources();
       renderPriority();
+      renderTrackOffsets();
       if ($("#playerSettingsDialog").open) renderPlayerSettings();
       syncSizeBounds();
       syncColorMode();
@@ -553,8 +818,50 @@
     }
 
     document.addEventListener("click", event => {
+      const themeOption = event.target.closest("[data-theme-value]");
+      if (themeOption) { commitSetting("toolWindowTheme", themeOption.dataset.themeValue); return; }
+
       const nav = event.target.closest("[data-nav]");
-      if (nav) { activatePage(nav.dataset.nav); return; }
+      if (nav) { navigateToPage(nav.dataset.nav); return; }
+
+      const currentTrackDelta = event.target.closest("[data-current-track-offset-delta]");
+      if (currentTrackDelta) {
+        commitCurrentTrackOffset((Number(trackOffsetData.currentTrack?.trackOffsetMilliseconds) || 0) + Number(currentTrackDelta.dataset.currentTrackOffsetDelta));
+        return;
+      }
+
+      if (event.target.closest("[data-reset-current-track-offset]")) {
+        commitCurrentTrackOffset(0);
+        return;
+      }
+
+      const editTrackOffset = event.target.closest("[data-edit-track-offset]");
+      if (editTrackOffset) {
+        const entry = visibleTrackOffsetEntries[Number(editTrackOffset.dataset.editTrackOffset)];
+        if (entry) {
+          const key = trackOffsetKeyId(entry.key);
+          expandedTrackOffsetKey = expandedTrackOffsetKey === key ? null : key;
+          renderTrackOffsetList();
+        }
+        return;
+      }
+
+      const storedTrackDelta = event.target.closest("[data-stored-track-offset-delta]");
+      if (storedTrackDelta) {
+        const entry = visibleTrackOffsetEntries[Number(storedTrackDelta.dataset.trackOffsetIndex)];
+        if (entry) commitStoredTrackOffset(entry, (Number(entry.offsetMilliseconds) || 0) + Number(storedTrackDelta.dataset.storedTrackOffsetDelta));
+        return;
+      }
+
+      const deleteTrackOffset = event.target.closest("[data-delete-track-offset]");
+      if (deleteTrackOffset) {
+        const entry = visibleTrackOffsetEntries[Number(deleteTrackOffset.dataset.deleteTrackOffset)];
+        if (entry) {
+          pendingDeleteTrackOffsetKey = entry.key;
+          $("#deleteTrackOffsetDialog").showModal();
+        }
+        return;
+      }
 
       const playerSettings = event.target.closest("[data-player-settings]");
       if (playerSettings) { openPlayerSettings(playerSettings.dataset.playerSettings); return; }
@@ -719,6 +1026,18 @@
     });
 
     document.addEventListener("change", event => {
+      if (event.target === $("#currentTrackOffsetInput")) {
+        commitCurrentTrackOffset(event.target.value);
+        return;
+      }
+
+      const storedTrackOffsetInput = event.target.closest("[data-stored-track-offset-input]");
+      if (storedTrackOffsetInput) {
+        const entry = visibleTrackOffsetEntries[Number(storedTrackOffsetInput.dataset.storedTrackOffsetInput)];
+        if (entry) commitStoredTrackOffset(entry, storedTrackOffsetInput.value);
+        return;
+      }
+
       if (event.target === $("#playerRecognitionToggle")) {
         const source = sourceCatalog.find(item => item.id === activePlayerSourceId);
         if (source) {
@@ -740,6 +1059,14 @@
     });
 
     document.addEventListener("input", event => {
+      if (event.target === $("#trackOffsetSearch")) {
+        clearTimeout(trackOffsetSearchTimer);
+        trackOffsetSearchTimer = setTimeout(() => {
+          expandedTrackOffsetKey = null;
+          requestTrackOffsetPage(1);
+        }, TRACK_OFFSET_SEARCH_DEBOUNCE_MS);
+        return;
+      }
       const control = event.target.closest('input[type="range"][data-setting]');
       if (!control) return;
       commitSetting(control.dataset.setting, Number(control.value));
@@ -761,6 +1088,20 @@
     $("#clearCacheButton").addEventListener("click", () => $("#clearDialog").showModal());
     $("#confirmRestore").addEventListener("click", () => { closeDialogWithAnimation($("#restoreDialog")); resetState(); });
     $("#confirmClear").addEventListener("click", () => { closeDialogWithAnimation($("#clearDialog")); bridge.post({ type: "clearCache" }); showToast("歌词与封面缓存已清理"); });
+    $("#trackOffsetPreviousPage").addEventListener("click", () => changeTrackOffsetPage(-1));
+    $("#trackOffsetNextPage").addEventListener("click", () => changeTrackOffsetPage(1));
+    $("#clearTrackOffsetsButton").addEventListener("click", () => $("#clearTrackOffsetsDialog").showModal());
+    $("#confirmDeleteTrackOffset").addEventListener("click", () => {
+      closeDialogWithAnimation($("#deleteTrackOffsetDialog"));
+      if (pendingDeleteTrackOffsetKey) {
+        bridge.post({ type: "deleteTrackOffset", value: pendingDeleteTrackOffsetKey });
+        pendingDeleteTrackOffsetKey = null;
+      }
+    });
+    $("#confirmClearTrackOffsets").addEventListener("click", () => {
+      closeDialogWithAnimation($("#clearTrackOffsetsDialog"));
+      bridge.post({ type: "clearTrackOffsets" });
+    });
     $("#resetPlayerOffsetButton").addEventListener("click", () => {
       const source = sourceCatalog.find(item => item.id === activePlayerSourceId);
       if (source) commitPlayerOffset(source.defaultOffset);
@@ -812,6 +1153,6 @@
     });
 
     $("#colorPresets").innerHTML = presetColors.map(color => `<button class="color-preset" type="button" style="--preset:${color}" data-preset-color-value="${color}" aria-label="选择 ${color}"></button>`).join("");
-    window.settingsApp = { setState, setUpdateStatus };
+    window.settingsApp = { setState, setUpdateStatus, setCurrentTrackOffsetData, setTrackOffsetEntries, setTrackOffsetSaveStatus, navigateToPage };
     window.settingsApp.setWindowState = setWindowState;
     bridge.post({ type: "ready" });

@@ -36,6 +36,7 @@ public partial class TrayMenuWindow : Window
     private readonly Action _toggleLyricsWindow;
     private readonly Action<bool, SpectrumDisplayMode> _setSpectrumDisplayMode;
     private readonly SpectrumDisplayMode _spectrumDisplayMode;
+    private readonly Action _openCurrentTrackOffsetSettings;
     private readonly Action _openSettings;
     private readonly Action _openSmtcMonitor;
     private readonly Action _openSpectrumTuning;
@@ -51,6 +52,7 @@ public partial class TrayMenuWindow : Window
         Action<bool, SpectrumDisplayMode> setSpectrumDisplayMode,
         bool isSpectrumEnabled,
         SpectrumDisplayMode spectrumDisplayMode,
+        Action openCurrentTrackOffsetSettings,
         Action openSettings,
         Action openSmtcMonitor,
         Action openSpectrumTuning,
@@ -62,6 +64,7 @@ public partial class TrayMenuWindow : Window
         _toggleLyricsWindow = toggleLyricsWindow;
         _setSpectrumDisplayMode = setSpectrumDisplayMode;
         _spectrumDisplayMode = spectrumDisplayMode;
+        _openCurrentTrackOffsetSettings = openCurrentTrackOffsetSettings;
         _openSettings = openSettings;
         _openSmtcMonitor = openSmtcMonitor;
         _openSpectrumTuning = openSpectrumTuning;
@@ -69,6 +72,7 @@ public partial class TrayMenuWindow : Window
         _mouseHookCallback = OnLowLevelMouseEvent;
         SyncSpectrumModeChecks(isSpectrumEnabled, spectrumDisplayMode);
         SourceInitialized += OnSourceInitialized;
+        NativeWindowTheme.ThemeChanged += OnWindowThemeChanged;
         _spectrumPopupCloseTimer = new DispatcherTimer
         {
             Interval = TimeSpan.FromMilliseconds(140)
@@ -76,6 +80,7 @@ public partial class TrayMenuWindow : Window
         _spectrumPopupCloseTimer.Tick += OnSpectrumPopupCloseTimerTick;
         Closed += (_, _) =>
         {
+            NativeWindowTheme.ThemeChanged -= OnWindowThemeChanged;
             UninstallMouseHook();
             _spectrumPopupCloseTimer.Stop();
             SpectrumModePopup.IsOpen = false;
@@ -84,7 +89,7 @@ public partial class TrayMenuWindow : Window
 
     private void ApplyTheme()
     {
-        var light = App.IsSystemUsingLightTheme();
+        var light = NativeWindowTheme.IsLight;
         Resources["TrayMenuBackgroundBrush"] = new Media.SolidColorBrush(light
             ? Media.Color.FromRgb(248, 250, 252)
             : Media.Color.FromRgb(30, 30, 30));
@@ -103,6 +108,14 @@ public partial class TrayMenuWindow : Window
         if (!SystemParameters.ClientAreaAnimation || SystemParameters.HighContrast)
         {
             SpectrumModePopup.PopupAnimation = PopupAnimation.None;
+        }
+    }
+
+    private void OnWindowThemeChanged(object? sender, EventArgs e)
+    {
+        if (!Dispatcher.HasShutdownStarted)
+        {
+            Dispatcher.BeginInvoke(ApplyTheme);
         }
     }
 
@@ -383,6 +396,11 @@ public partial class TrayMenuWindow : Window
     private void SettingsButton_Click(object sender, RoutedEventArgs e)
     {
         InvokeCommand(_openSettings);
+    }
+
+    private void TrackOffsetButton_Click(object sender, RoutedEventArgs e)
+    {
+        InvokeCommand(_openCurrentTrackOffsetSettings);
     }
 
     private void SmtcMonitorButton_Click(object sender, RoutedEventArgs e)

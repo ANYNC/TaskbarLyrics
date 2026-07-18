@@ -3,7 +3,6 @@ using System.IO;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Threading;
-using Microsoft.Win32;
 using Microsoft.Web.WebView2.Core;
 
 namespace TaskbarLyrics.App;
@@ -35,7 +34,7 @@ public partial class SpectrumTuningWindow : Wpf.Ui.Controls.FluentWindow
         SourceInitialized += OnSourceInitialized;
         Loaded += OnLoaded;
         Closed += OnClosed;
-        SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
+        NativeWindowTheme.ThemeChanged += OnWindowThemeChanged;
     }
 
     public void ApplyExternalSettings(SpectrumTuningSettings settings)
@@ -56,7 +55,7 @@ public partial class SpectrumTuningWindow : Wpf.Ui.Controls.FluentWindow
 
     private void OnClosed(object? sender, EventArgs e)
     {
-        SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
+        NativeWindowTheme.ThemeChanged -= OnWindowThemeChanged;
         _diagnosticsTimer.Stop();
 
         if (TuningWebView.CoreWebView2 is not null)
@@ -231,9 +230,9 @@ public partial class SpectrumTuningWindow : Wpf.Ui.Controls.FluentWindow
         _ = TuningWebView.ExecuteScriptAsync($"window.spectrumTuning?.setDiagnostics({json});");
     }
 
-    private void OnUserPreferenceChanged(object sender, UserPreferenceChangedEventArgs e)
+    private void OnWindowThemeChanged(object? sender, EventArgs e)
     {
-        if (e.Category is not (UserPreferenceCategory.Color or UserPreferenceCategory.General or UserPreferenceCategory.VisualStyle))
+        if (Dispatcher.HasShutdownStarted)
         {
             return;
         }

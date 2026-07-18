@@ -13,6 +13,7 @@ public sealed class LyricSyncService : IDisposable
     private readonly ILyricProviderRegistry _registry;
     private readonly Func<string?, bool> _shouldShowTranslation;
     private readonly Func<string?, TimeSpan> _getPlayerLeadTime;
+    private readonly Func<TrackInfo?, string?, TimeSpan> _getTrackLeadTime;
     private TrackInfo? _currentTrack;
     private string? _currentTrackId;
     private LyricDocument? _currentDocument;
@@ -34,11 +35,13 @@ public sealed class LyricSyncService : IDisposable
     public LyricSyncService(
         ILyricProviderRegistry registry,
         Func<string?, bool>? shouldShowTranslation = null,
-        Func<string?, TimeSpan>? getPlayerLeadTime = null)
+        Func<string?, TimeSpan>? getPlayerLeadTime = null,
+        Func<TrackInfo?, string?, TimeSpan>? getTrackLeadTime = null)
     {
         _registry = registry;
         _shouldShowTranslation = shouldShowTranslation ?? (_ => true);
         _getPlayerLeadTime = getPlayerLeadTime ?? (_ => TimeSpan.Zero);
+        _getTrackLeadTime = getTrackLeadTime ?? ((_, _) => TimeSpan.Zero);
     }
 
     public Task<LyricDisplayFrame> GetDisplayFrameAsync(PlaybackSnapshot snapshot)
@@ -80,9 +83,10 @@ public sealed class LyricSyncService : IDisposable
                 0, -1));
         }
 
-        // Apply player-specific compensation
+        // Both offsets shift the playback position; lyric timestamps stay immutable.
         var sourceLead = _getPlayerLeadTime(_currentTrack?.SourceApp);
-        var position = snapshot.Position + sourceLead;
+        var trackLead = _getTrackLeadTime(_currentTrack, _currentLyricSourceApp);
+        var position = snapshot.Position + sourceLead + trackLead;
 
         var lines = _currentDocument.Lines;
         var currentIdx = FindCurrentLineIndex(lines, position);

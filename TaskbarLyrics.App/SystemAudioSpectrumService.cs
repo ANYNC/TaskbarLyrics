@@ -63,12 +63,18 @@ public sealed class SystemAudioSpectrumService : IDisposable
             snapshot.BarCount,
             SpectrumTuningSettings.MinBarCount,
             SpectrumTuningSettings.MaxBarCount);
-        snapshot.MinFrequency = Math.Clamp(snapshot.MinFrequency, 20, 300);
-        snapshot.MaxFrequency = Math.Clamp(snapshot.MaxFrequency, 2000, 20000);
+        snapshot.MinFrequency = Math.Clamp(
+            snapshot.MinFrequency,
+            SpectrumTuningSettings.MinimumFrequency,
+            SpectrumTuningSettings.MaximumFrequency - SpectrumTuningSettings.MinimumFrequencySpan);
+        snapshot.MaxFrequency = Math.Clamp(
+            snapshot.MaxFrequency,
+            SpectrumTuningSettings.MinimumFrequency + SpectrumTuningSettings.MinimumFrequencySpan,
+            SpectrumTuningSettings.MaximumFrequency);
         snapshot.FrequencyDistributionBias = Math.Clamp(snapshot.FrequencyDistributionBias, -1, 1);
-        if (snapshot.MaxFrequency <= snapshot.MinFrequency)
+        if (snapshot.MaxFrequency < snapshot.MinFrequency + SpectrumTuningSettings.MinimumFrequencySpan)
         {
-            snapshot.MaxFrequency = snapshot.MinFrequency + 1000;
+            snapshot.MaxFrequency = snapshot.MinFrequency + SpectrumTuningSettings.MinimumFrequencySpan;
         }
 
         snapshot.PeakInitial = Math.Clamp(snapshot.PeakInitial, 0.004, 0.2);
@@ -413,12 +419,15 @@ public sealed class SystemAudioSpectrumService : IDisposable
         var bars = new float[barCount];
         var magnitudes = CalculateFftMagnitudes(samples);
         var nyquist = Math.Max(1000, sampleRate / 2);
-        var minFrequency = Math.Clamp(settings.MinFrequency, 20, 300);
-        var maxFrequency = Math.Min(Math.Clamp(settings.MaxFrequency, 2000, 20000), nyquist * 0.92);
-        if (maxFrequency <= minFrequency)
-        {
-            maxFrequency = Math.Min(nyquist * 0.92, minFrequency + 1000);
-        }
+        var maximumAvailableFrequency = Math.Min(SpectrumTuningSettings.MaximumFrequency, nyquist * 0.92);
+        var maxFrequency = Math.Clamp(
+            settings.MaxFrequency,
+            SpectrumTuningSettings.MinimumFrequency + SpectrumTuningSettings.MinimumFrequencySpan,
+            maximumAvailableFrequency);
+        var minFrequency = Math.Clamp(
+            settings.MinFrequency,
+            SpectrumTuningSettings.MinimumFrequency,
+            maxFrequency - SpectrumTuningSettings.MinimumFrequencySpan);
 
         var peak = 0f;
         var distributionExponent = Math.Pow(2.0, Math.Clamp(settings.FrequencyDistributionBias, -1, 1));

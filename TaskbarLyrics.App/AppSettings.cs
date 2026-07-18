@@ -21,6 +21,13 @@ public enum SpectrumDisplayMode
     Always
 }
 
+public enum ToolWindowTheme
+{
+    System,
+    Light,
+    Dark
+}
+
 public sealed class AppSettings
 {
     public const int MinimumPlayerLyricOffsetMilliseconds = -5000;
@@ -84,6 +91,8 @@ public sealed class AppSettings
     public string LastNotifiedUpdateVersion { get; set; } = "";
 
     public bool ShowLyricTranslation { get; set; } = false;
+
+    public ToolWindowTheme ToolWindowTheme { get; set; } = ToolWindowTheme.System;
 
     public bool EnableSpectrum { get; set; } = true;
 
@@ -217,10 +226,10 @@ public sealed class AppSettings
     {
         return NormalizePlayerSourceName(sourceApp) switch
         {
-            "QQMusic" => 100,
-            "Netease" => -130,
+            "QQMusic" => 350,
+            "Netease" => -100,
             "Kugou" => 100,
-            "Spotify" => 120,
+            "Spotify" => 300,
             _ => 0
         };
     }

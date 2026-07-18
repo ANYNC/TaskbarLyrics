@@ -1,5 +1,10 @@
 namespace TaskbarLyrics.App;
 
+public readonly record struct LyricOffsetDiagnostics(
+    int PlayerOffsetMilliseconds,
+    int TrackOffsetMilliseconds,
+    int EffectiveOffsetMilliseconds);
+
 public sealed record SmtcTimelineDiagnostics(
     DateTimeOffset CapturedAtUtc,
     string SourceAppUserModelId,

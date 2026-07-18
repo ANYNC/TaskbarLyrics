@@ -22,6 +22,8 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider
     private GlobalSystemMediaTransportControlsSessionManager? _manager;
     private SmtcTimelineDiagnostics? _lastTimelineDiagnostics;
     private string? _currentLyricSourceApp;
+    private int _currentPlayerLyricOffsetMilliseconds;
+    private int _currentTrackLyricOffsetMilliseconds;
     private string[] _recognitionOrder = DefaultRecognitionOrder;
     private HashSet<string> _enabledSources = new(DefaultRecognitionOrder, StringComparer.OrdinalIgnoreCase);
     private string _lastCoverMetadataKey = string.Empty;
@@ -56,6 +58,19 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider
     public string GetCurrentLyricSource()
     {
         return _currentLyricSourceApp ?? string.Empty;
+    }
+
+    public void SetCurrentLyricOffsets(int playerOffsetMilliseconds, int trackOffsetMilliseconds)
+    {
+        Volatile.Write(ref _currentPlayerLyricOffsetMilliseconds, playerOffsetMilliseconds);
+        Volatile.Write(ref _currentTrackLyricOffsetMilliseconds, trackOffsetMilliseconds);
+    }
+
+    public LyricOffsetDiagnostics GetCurrentLyricOffsets()
+    {
+        var playerOffset = Volatile.Read(ref _currentPlayerLyricOffsetMilliseconds);
+        var trackOffset = Volatile.Read(ref _currentTrackLyricOffsetMilliseconds);
+        return new LyricOffsetDiagnostics(playerOffset, trackOffset, playerOffset + trackOffset);
     }
 
     public async Task<PlaybackSnapshot> GetCurrentAsync(CancellationToken cancellationToken = default)

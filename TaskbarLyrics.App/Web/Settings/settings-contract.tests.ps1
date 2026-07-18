@@ -12,7 +12,7 @@ $lyricsWindow = [IO.File]::ReadAllText((Join-Path $appRoot 'MainWindow.xaml.cs')
 
 $errors = [Collections.Generic.List[string]]::new()
 
-$pages = @('sources', 'lyrics', 'appearance', 'window', 'general', 'advanced', 'about')
+$pages = @('sources', 'lyrics', 'trackOffsets', 'appearance', 'window', 'general', 'advanced', 'about')
 foreach ($page in $pages) {
     if (-not $html.Contains("data-nav=`"$page`"")) { $errors.Add("missing nav: $page") }
     if (-not $html.Contains("data-page=`"$page`"")) { $errors.Add("missing page: $page") }
@@ -22,7 +22,7 @@ $settings = @(
     'enableLocalLyrics', 'localMusicFolders', 'showLyricsOnStartup', 'showLyricTranslation',
     'spectrumDisplayMode', 'useSafeFontSizeRange', 'fontSize',
     'useSafeCoverSizeRange', 'coverSize', 'coverGap', 'coverCornerRadius', 'fontFamily',
-    'fontWeight', 'foregroundColorMode', 'showTextShadow', 'showBackground',
+    'fontWeight', 'foregroundColorMode', 'showTextShadow', 'toolWindowTheme', 'showBackground',
     'backgroundOpacity', 'showBorder', 'windowWidth', 'horizontalAnchor', 'xOffset',
     'yOffset', 'forceAlwaysOnTop', 'startWithWindows', 'autoCheckUpdates'
 )
@@ -34,6 +34,7 @@ $requiredHtml = @(
     'id="sourceGrid"', 'id="priorityList"', 'id="selectPopover"', 'role="listbox"',
     'id="colorPopover"', 'id="colorArea"', 'id="restoreDialog"', 'id="clearDialog"',
     'id="playerSettingsDialog"', 'id="playerRecognitionToggle"', 'id="playerOffsetInput"',
+    'id="currentTrackOffset"', 'id="trackOffsetList"', 'id="trackOffsetPagination"', 'id="clearTrackOffsetsDialog"',
     'id="browseButton"', 'id="showLyricsWindowButton"', 'data-window-resize="top"'
 )
 foreach ($marker in $requiredHtml) {
@@ -44,7 +45,7 @@ if ([regex]::IsMatch($html, '<select\b', 'IgnoreCase')) { $errors.Add('native se
 if ([regex]::IsMatch($html, 'input[^>]+type="color"', 'IgnoreCase')) { $errors.Add('native color input remains') }
 
 $requiredScript = @(
-    'window.settingsApp = { setState, setUpdateStatus }', 'window.settingsApp.setWindowState = setWindowState',
+    'window.settingsApp = { setState, setUpdateStatus, setCurrentTrackOffsetData, setTrackOffsetEntries, setTrackOffsetSaveStatus, navigateToPage }', 'window.settingsApp.setWindowState = setWindowState',
     'window.chrome?.webview?.postMessage',
     'type: "reorderSources"', 'type: "pickLocalFolder"', 'type: "showLyricsWindow"',
     'type: "openSmtcMonitor"', 'type: "openSpectrumTuning"',
@@ -52,6 +53,10 @@ $requiredScript = @(
     'function openSelect', 'function closeSelect', 'function rgbToHex', 'function toArgb',
     'function activatePage', 'function renderSources', 'function renderPriority', 'function setWindowState',
     'function openPlayerSettings', 'function commitPlayerOffset', 'playerLyricOffset:',
+    'function renderTrackOffsets', 'function commitCurrentTrackOffset', 'function setCurrentTrackOffsetData',
+    'function setTrackOffsetEntries', 'function requestTrackOffsetPage', 'function changeTrackOffsetPage',
+    'type: "queryTrackOffsets"',
+    'type: "setCurrentTrackOffset"', 'type: "setStoredTrackOffset"', 'type: "deleteTrackOffset"',
     'function positionPopover', 'function postSourceOrder', '"ArrowDown"', '"Home"', '"Escape"'
 )
 foreach ($marker in $requiredScript) {
@@ -66,7 +71,7 @@ foreach ($unsupported in @('AppleMusic', 'Foobar', 'MusicBee', 'AIMP', 'VLC', 'W
     if ($script.Contains($unsupported)) { $errors.Add("unsupported source exposed: $unsupported") }
 }
 
-foreach ($marker in @('case "pickLocalFolder":', 'case "showLyricsWindow":', 'case "openSmtcMonitor":', 'case "openSpectrumTuning":', 'case "windowDrag":', 'case "windowResizeStart":', 'case "windowClose":')) {
+foreach ($marker in @('case "pickLocalFolder":', 'case "showLyricsWindow":', 'case "openSmtcMonitor":', 'case "openSpectrumTuning":', 'case "settingsPageChanged":', 'case "queryTrackOffsets":', 'case "setCurrentTrackOffset":', 'case "setStoredTrackOffset":', 'case "deleteTrackOffset":', 'case "clearTrackOffsets":', 'case "windowDrag":', 'case "windowResizeStart":', 'case "windowClose":')) {
     if (-not $settingsWindow.Contains($marker)) { $errors.Add("missing desktop message: $marker") }
 }
 if (-not $app.Contains('public void ShowLyricsWindow()')) { $errors.Add('missing App.ShowLyricsWindow') }
@@ -76,7 +81,7 @@ if (-not $lyricsWindow.Contains('fontFamily = AppSettings.NormalizeFontFamily(se
 
 if (-not $css.Contains('--background: oklch(0.145 0 0)')) { $errors.Add('neutral palette missing') }
 if ($css.Contains('Settings prototype integration: neutral Shadcn-inspired control layer.')) { $errors.Add('legacy override layer remains') }
-foreach ($marker in @('.sidebar-collapsed', '.page.transitioning', '.setting-row.child', '.about-layout', '.color-popover')) {
+foreach ($marker in @('.sidebar-collapsed', '.page.transitioning', '.setting-row.child', '.theme-segmented', '.about-layout', '.color-popover')) {
     if (-not $css.Contains($marker)) { $errors.Add("missing prototype style: $marker") }
 }
 if (-not $script.Contains('{ value: "Disabled"')) { $errors.Add('spectrum disabled option missing') }

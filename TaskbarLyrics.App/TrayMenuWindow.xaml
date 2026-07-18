@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:primitives="clr-namespace:System.Windows.Controls.Primitives;assembly=PresentationFramework"
         Width="170"
-        Height="194"
+        Height="226"
         WindowStyle="None"
         ResizeMode="NoResize"
         ShowInTaskbar="False"
@@ -103,6 +103,7 @@
                     <RowDefinition Height="32" />
                     <RowDefinition Height="32" />
                     <RowDefinition Height="32" />
+                    <RowDefinition Height="32" />
                     <RowDefinition Height="1" />
                     <RowDefinition Height="32" />
                 </Grid.RowDefinitions>
@@ -166,6 +167,16 @@
 
                 <Button Grid.Row="5"
                         Style="{StaticResource TrayMenuButtonStyle}"
+                        Click="TrackOffsetButton_Click">
+                    <TextBlock Text="调整当前歌曲偏移"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource TrayMenuTextBrush}"
+                               FontFamily="Microsoft YaHei UI"
+                               FontSize="12.5" />
+                </Button>
+
+                <Button Grid.Row="6"
+                        Style="{StaticResource TrayMenuButtonStyle}"
                         Click="SettingsButton_Click">
                     <TextBlock Text="设置"
                                VerticalAlignment="Center"
@@ -174,12 +185,12 @@
                                FontSize="12.5" />
                 </Button>
 
-                <Border Grid.Row="6"
+                <Border Grid.Row="7"
                         Height="1"
                         VerticalAlignment="Center"
                         Background="{DynamicResource TrayMenuSeparatorBrush}" />
 
-                <Button Grid.Row="7"
+                <Button Grid.Row="8"
                         Style="{StaticResource TrayMenuButtonStyle}"
                         Tag="Bottom"
                         Click="ExitButton_Click">

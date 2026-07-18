@@ -16,9 +16,44 @@ internal static class NativeWindowTheme
     private static readonly WpfColor LightBackground = WpfColor.FromRgb(250, 250, 250);
     private static readonly WpfColor LightForeground = WpfColor.FromRgb(24, 24, 27);
 
+    private static ToolWindowTheme _mode = ToolWindowTheme.System;
+
+    public static event EventHandler? ThemeChanged;
+
+    public static bool FollowsSystem => _mode == ToolWindowTheme.System;
+
+    public static bool IsLight => _mode switch
+    {
+        ToolWindowTheme.Light => true,
+        ToolWindowTheme.Dark => false,
+        _ => App.IsSystemUsingLightTheme()
+    };
+
+    public static void SetMode(ToolWindowTheme mode)
+    {
+        var normalized = Enum.IsDefined(typeof(ToolWindowTheme), mode)
+            ? mode
+            : ToolWindowTheme.System;
+        if (_mode == normalized)
+        {
+            return;
+        }
+
+        _mode = normalized;
+        ThemeChanged?.Invoke(null, EventArgs.Empty);
+    }
+
+    public static void RefreshSystemTheme()
+    {
+        if (FollowsSystem)
+        {
+            ThemeChanged?.Invoke(null, EventArgs.Empty);
+        }
+    }
+
     public static void Apply(Window window, WebView2 webView)
     {
-        var isLight = App.IsSystemUsingLightTheme();
+        var isLight = IsLight;
         var background = isLight ? LightBackground : DarkBackground;
         var foreground = isLight ? LightForeground : DarkForeground;
 

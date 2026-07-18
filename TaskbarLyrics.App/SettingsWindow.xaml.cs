@@ -6,7 +6,7 @@ using System.Text.Json.Serialization;
 using System.Windows;
 using System.Windows.Markup;
 using System.Windows.Media;
-using Microsoft.Win32;
+using System.Windows.Threading;
 using Microsoft.Web.WebView2.Core;
 using TaskbarLyrics.Core.Services;
 using TaskbarLyrics.Core.Utilities;
@@ -26,13 +26,32 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
     };
 
     private readonly AppSettings _settings;
+    private readonly TrackLyricOffsetStore _trackLyricOffsetStore;
+    private readonly Func<Task<CurrentTrackLyricsContext?>> _getCurrentTrackLyricsContext;
+    private readonly DispatcherTimer _trackOffsetRefreshTimer;
     private bool _isWebReady;
+    private bool _isTrackOffsetRefreshRunning;
+    private bool _isTrackOffsetsPageActive;
+    private string _lastCurrentTrackOffsetPayloadJson = string.Empty;
+    private TrackOffsetQueryPayload _trackOffsetQuery = new();
+    private string? _pendingPage;
+    private bool _pendingFocusCurrentTrack;
 
-    public SettingsWindow(AppSettings settings)
+    internal SettingsWindow(
+        AppSettings settings,
+        TrackLyricOffsetStore trackLyricOffsetStore,
+        Func<Task<CurrentTrackLyricsContext?>> getCurrentTrackLyricsContext)
     {
         InitializeComponent();
         AppIconProvider.ApplyWindowIcon(this);
         _settings = settings;
+        _trackLyricOffsetStore = trackLyricOffsetStore;
+        _getCurrentTrackLyricsContext = getCurrentTrackLyricsContext;
+        _trackOffsetRefreshTimer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = TimeSpan.FromMilliseconds(600)
+        };
+        _trackOffsetRefreshTimer.Tick += TrackOffsetRefreshTimer_Tick;
         ApplyWindowTheme();
 
         SourceInitialized += SettingsWindow_SourceInitialized;
@@ -40,7 +59,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         Activated += SettingsWindow_Activated;
         StateChanged += SettingsWindow_StateChanged;
         Closed += SettingsWindow_Closed;
-        SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
+        NativeWindowTheme.ThemeChanged += OnWindowThemeChanged;
     }
 
     private void SettingsWindow_SourceInitialized(object? sender, EventArgs e)
@@ -51,6 +70,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
     private async void SettingsWindow_Loaded(object? sender, RoutedEventArgs e)
     {
         await InitializeSettingsWebViewAsync();
+        _trackOffsetRefreshTimer.Start();
     }
 
     private void SettingsWindow_Activated(object? sender, EventArgs e)
@@ -65,7 +85,9 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
 
     private void SettingsWindow_Closed(object? sender, EventArgs e)
     {
-        SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
+        NativeWindowTheme.ThemeChanged -= OnWindowThemeChanged;
+        _trackOffsetRefreshTimer.Stop();
+        _trackOffsetRefreshTimer.Tick -= TrackOffsetRefreshTimer_Tick;
 
         if (SettingsWebView.CoreWebView2 is not null)
         {
@@ -124,6 +146,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             case "ready":
                 await PushSettingsToWebAsync();
                 await PushWindowStateToWebAsync();
+                await PushPendingNavigationAsync();
                 break;
             case "update":
                 ApplyWebSettingUpdate(message.Key, message.Value);
@@ -154,6 +177,33 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 {
                     app.OpenSpectrumTuningWindow();
                 }
+                break;
+            case "trackOffsetsPageActivated":
+                _isTrackOffsetsPageActive = true;
+                await PushCurrentTrackOffsetDataToWebAsync(force: true);
+                break;
+            case "queryTrackOffsets":
+                _trackOffsetQuery = DeserializeTrackOffsetQuery(message.Value) ?? new TrackOffsetQueryPayload();
+                await PushTrackOffsetEntriesToWebAsync(_trackOffsetQuery);
+                break;
+            case "settingsPageChanged":
+                _isTrackOffsetsPageActive = message.Value.HasValue &&
+                    string.Equals(
+                        ReadString(message.Value.Value, string.Empty),
+                        "trackOffsets",
+                        StringComparison.Ordinal);
+                break;
+            case "setCurrentTrackOffset":
+                await SetCurrentTrackOffsetAsync(message.Value);
+                break;
+            case "setStoredTrackOffset":
+                await SetStoredTrackOffsetAsync(message.Value);
+                break;
+            case "deleteTrackOffset":
+                await DeleteTrackOffsetAsync(message.Value);
+                break;
+            case "clearTrackOffsets":
+                await ClearTrackOffsetsAsync();
                 break;
             case "pickColor":
                 await PickForegroundColorAsync();
@@ -214,6 +264,248 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         await PushSettingsToWebAsync();
     }
 
+    public async Task NavigateToPageAsync(string pageId, bool focusCurrentTrack = false)
+    {
+        _pendingPage = pageId;
+        _pendingFocusCurrentTrack = focusCurrentTrack;
+        await PushPendingNavigationAsync();
+    }
+
+    private async void TrackOffsetRefreshTimer_Tick(object? sender, EventArgs e)
+    {
+        if (!_isTrackOffsetsPageActive || _isTrackOffsetRefreshRunning)
+        {
+            return;
+        }
+
+        _isTrackOffsetRefreshRunning = true;
+        try
+        {
+            await PushCurrentTrackOffsetDataToWebAsync();
+        }
+        finally
+        {
+            _isTrackOffsetRefreshRunning = false;
+        }
+    }
+
+    private async Task PushCurrentTrackOffsetDataToWebAsync(bool force = false)
+    {
+        if (!_isWebReady || SettingsWebView.CoreWebView2 is null)
+        {
+            return;
+        }
+
+        var context = await _getCurrentTrackLyricsContext();
+        CurrentTrackOffsetPayload? current = null;
+        if (context is not null)
+        {
+            var playerOffset = _settings.GetPlayerLyricOffsetMilliseconds(context.Track.SourceApp);
+            var lyricSourceReady = !string.IsNullOrWhiteSpace(context.LyricSource);
+            var trackOffset = lyricSourceReady
+                ? _trackLyricOffsetStore.GetOffsetMilliseconds(context.Track, context.LyricSource)
+                : 0;
+            current = new CurrentTrackOffsetPayload
+            {
+                Title = context.Track.Title,
+                Artist = context.Track.Artist,
+                SourceApp = context.Track.SourceApp,
+                LyricSource = context.LyricSource,
+                DurationSeconds = Math.Max(0, (int)Math.Round(context.Track.Duration.TotalSeconds)),
+                LyricSourceReady = lyricSourceReady,
+                PlayerOffsetMilliseconds = playerOffset,
+                TrackOffsetMilliseconds = trackOffset,
+                EffectiveOffsetMilliseconds = playerOffset + trackOffset
+            };
+        }
+
+        var json = JsonSerializer.Serialize(current, JsonOptions);
+        if (!force && string.Equals(json, _lastCurrentTrackOffsetPayloadJson, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _lastCurrentTrackOffsetPayloadJson = json;
+        await SettingsWebView.ExecuteScriptAsync($"window.settingsApp?.setCurrentTrackOffsetData({json});");
+    }
+
+    private async Task PushTrackOffsetEntriesToWebAsync(TrackOffsetQueryPayload query)
+    {
+        if (!_isWebReady || SettingsWebView.CoreWebView2 is null)
+        {
+            return;
+        }
+
+        var page = await _trackLyricOffsetStore.QueryEntriesAsync(
+            query.Page,
+            query.PageSize,
+            query.Search,
+            string.Equals(query.LyricSource, "All", StringComparison.OrdinalIgnoreCase)
+                ? null
+                : query.LyricSource,
+            ParseTrackOffsetSort(query.Sort));
+        var payload = new TrackOffsetEntriesPagePayload
+        {
+            RequestId = query.RequestId,
+            Page = page.Page,
+            PageSize = page.PageSize,
+            PageCount = page.PageCount,
+            TotalCount = page.TotalCount,
+            UnfilteredCount = page.UnfilteredCount,
+            LyricSources = page.LyricSources.ToList(),
+            Entries = page.Entries.Select(entry => new TrackOffsetEntryPayload
+            {
+                Key = entry.Key,
+                Title = entry.DisplayTitle,
+                Artist = entry.DisplayArtist,
+                SourceApp = entry.SourceApp,
+                LyricSource = entry.LyricSource,
+                DurationSeconds = entry.Key.DurationBucketSeconds,
+                OffsetMilliseconds = entry.OffsetMilliseconds,
+                UpdatedAtUtc = entry.UpdatedAtUtc
+            })
+            .ToList()
+        };
+        var json = JsonSerializer.Serialize(payload, JsonOptions);
+
+        await SettingsWebView.ExecuteScriptAsync($"window.settingsApp?.setTrackOffsetEntries({json});");
+    }
+
+    private async Task SetCurrentTrackOffsetAsync(JsonElement? value)
+    {
+        var context = await _getCurrentTrackLyricsContext();
+        if (context is null || string.IsNullOrWhiteSpace(context.LyricSource))
+        {
+            await PushTrackOffsetSaveStatusAsync(false, "歌词源尚未确定，暂时无法保存单曲偏移。");
+            return;
+        }
+
+        var offset = ReadOffsetMilliseconds(value, 0);
+        var result = await _trackLyricOffsetStore.SetOffsetAsync(
+            context.Track,
+            context.LyricSource,
+            offset);
+        await CompleteTrackOffsetMutationAsync(result);
+    }
+
+    private async Task SetStoredTrackOffsetAsync(JsonElement? value)
+    {
+        var mutation = DeserializeTrackOffsetMutation(value);
+        if (mutation?.Key is null)
+        {
+            await PushTrackOffsetSaveStatusAsync(false, "偏移记录无效。");
+            return;
+        }
+
+        var result = await _trackLyricOffsetStore.SetOffsetAsync(
+            mutation.Key.Value,
+            mutation.OffsetMilliseconds);
+        await CompleteTrackOffsetMutationAsync(result);
+    }
+
+    private async Task DeleteTrackOffsetAsync(JsonElement? value)
+    {
+        var key = DeserializeTrackOffsetKey(value);
+        if (key is null)
+        {
+            await PushTrackOffsetSaveStatusAsync(false, "偏移记录无效。");
+            return;
+        }
+
+        var result = await _trackLyricOffsetStore.DeleteAsync(key.Value);
+        await CompleteTrackOffsetMutationAsync(result);
+    }
+
+    private async Task ClearTrackOffsetsAsync()
+    {
+        var result = await _trackLyricOffsetStore.ClearAsync();
+        await CompleteTrackOffsetMutationAsync(result);
+    }
+
+    private async Task CompleteTrackOffsetMutationAsync(TrackLyricOffsetSaveResult result)
+    {
+        _lastCurrentTrackOffsetPayloadJson = string.Empty;
+        await PushCurrentTrackOffsetDataToWebAsync(force: true);
+        await PushTrackOffsetEntriesToWebAsync(_trackOffsetQuery);
+        await PushTrackOffsetSaveStatusAsync(
+            result.IsSaved,
+            result.IsSaved ? "单曲偏移已保存" : "单曲偏移保存失败，请稍后重试。");
+    }
+
+    private async Task PushTrackOffsetSaveStatusAsync(bool isSaved, string message)
+    {
+        if (!_isWebReady || SettingsWebView.CoreWebView2 is null)
+        {
+            return;
+        }
+
+        var payload = JsonSerializer.Serialize(new
+        {
+            state = isSaved ? "saved" : "error",
+            message
+        }, JsonOptions);
+        await SettingsWebView.ExecuteScriptAsync($"window.settingsApp?.setTrackOffsetSaveStatus({payload});");
+    }
+
+    private async Task PushPendingNavigationAsync()
+    {
+        if (!_isWebReady || SettingsWebView.CoreWebView2 is null || string.IsNullOrWhiteSpace(_pendingPage))
+        {
+            return;
+        }
+
+        var page = _pendingPage;
+        var focusCurrentTrack = _pendingFocusCurrentTrack;
+        _pendingPage = null;
+        _pendingFocusCurrentTrack = false;
+        await SettingsWebView.ExecuteScriptAsync(
+            $"window.settingsApp?.navigateToPage({JsonSerializer.Serialize(page, JsonOptions)}, {(focusCurrentTrack ? "true" : "false")});");
+    }
+
+    private static int ReadOffsetMilliseconds(JsonElement? value, int fallback)
+    {
+        if (value is null)
+        {
+            return fallback;
+        }
+
+        return (int)Math.Round(Math.Clamp(
+            ReadDouble(value.Value, fallback),
+            TrackLyricOffsetStore.MinimumOffsetMilliseconds,
+            TrackLyricOffsetStore.MaximumOffsetMilliseconds));
+    }
+
+    private static TrackOffsetMutationPayload? DeserializeTrackOffsetMutation(JsonElement? value)
+    {
+        return value is null
+            ? null
+            : JsonSerializer.Deserialize<TrackOffsetMutationPayload>(value.Value.GetRawText(), JsonOptions);
+    }
+
+    private static TrackOffsetQueryPayload? DeserializeTrackOffsetQuery(JsonElement? value)
+    {
+        return value is null
+            ? null
+            : JsonSerializer.Deserialize<TrackOffsetQueryPayload>(value.Value.GetRawText(), JsonOptions);
+    }
+
+    private static TrackLyricOffsetSort ParseTrackOffsetSort(string? value)
+    {
+        return value switch
+        {
+            "title" => TrackLyricOffsetSort.Title,
+            "offset" => TrackLyricOffsetSort.OffsetMagnitude,
+            _ => TrackLyricOffsetSort.Updated
+        };
+    }
+
+    private static TrackLyricOffsetRecordKey? DeserializeTrackOffsetKey(JsonElement? value)
+    {
+        return value is null
+            ? null
+            : JsonSerializer.Deserialize<TrackLyricOffsetRecordKey>(value.Value.GetRawText(), JsonOptions);
+    }
+
     private WebSettingsPayload CreateSettingsPayload()
     {
         _settings.NormalizePlayerSources();
@@ -238,6 +530,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             StartWithWindows = _settings.StartWithWindows,
             AutoCheckUpdates = _settings.AutoCheckUpdates,
             ShowLyricTranslation = _settings.ShowLyricTranslation,
+            ToolWindowTheme = _settings.ToolWindowTheme,
             SpectrumDisplayMode = _settings.EnableSpectrum
                 ? _settings.SpectrumDisplayMode.ToString()
                 : DisabledSpectrumDisplayMode,
@@ -431,6 +724,12 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 break;
             case "showLyricTranslation":
                 _settings.ShowLyricTranslation = ReadBool(element, _settings.ShowLyricTranslation);
+                break;
+            case "toolWindowTheme":
+                if (Enum.TryParse<ToolWindowTheme>(ReadString(element, _settings.ToolWindowTheme.ToString()), true, out var toolWindowTheme))
+                {
+                    _settings.ToolWindowTheme = toolWindowTheme;
+                }
                 break;
             case "spectrumDisplayMode":
                 var spectrumDisplayMode = ReadString(element, DisabledSpectrumDisplayMode);
@@ -826,6 +1125,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         target.LastUpdateCheckUtc = source.LastUpdateCheckUtc;
         target.LastNotifiedUpdateVersion = source.LastNotifiedUpdateVersion;
         target.ShowLyricTranslation = source.ShowLyricTranslation;
+        target.ToolWindowTheme = source.ToolWindowTheme;
         target.EnableSpectrum = source.EnableSpectrum;
         target.SpectrumDisplayMode = source.SpectrumDisplayMode;
         target.EnablePureMusicSpectrum = source.EnablePureMusicSpectrum;
@@ -858,9 +1158,9 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             : WindowState.Maximized;
     }
 
-    private void OnUserPreferenceChanged(object sender, UserPreferenceChangedEventArgs e)
+    private void OnWindowThemeChanged(object? sender, EventArgs e)
     {
-        if (e.Category is not (UserPreferenceCategory.Color or UserPreferenceCategory.General or UserPreferenceCategory.VisualStyle))
+        if (Dispatcher.HasShutdownStarted)
         {
             return;
         }
@@ -882,6 +1182,59 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         public JsonElement? Value { get; set; }
     }
 
+    private sealed class CurrentTrackOffsetPayload
+    {
+        public string Title { get; set; } = string.Empty;
+        public string Artist { get; set; } = string.Empty;
+        public string SourceApp { get; set; } = string.Empty;
+        public string LyricSource { get; set; } = string.Empty;
+        public int DurationSeconds { get; set; }
+        public bool LyricSourceReady { get; set; }
+        public int PlayerOffsetMilliseconds { get; set; }
+        public int TrackOffsetMilliseconds { get; set; }
+        public int EffectiveOffsetMilliseconds { get; set; }
+    }
+
+    private sealed class TrackOffsetQueryPayload
+    {
+        public int RequestId { get; set; }
+        public int Page { get; set; } = 1;
+        public int PageSize { get; set; } = 50;
+        public string Search { get; set; } = string.Empty;
+        public string LyricSource { get; set; } = "All";
+        public string Sort { get; set; } = "updated";
+    }
+
+    private sealed class TrackOffsetEntriesPagePayload
+    {
+        public int RequestId { get; set; }
+        public int Page { get; set; }
+        public int PageSize { get; set; }
+        public int PageCount { get; set; }
+        public int TotalCount { get; set; }
+        public int UnfilteredCount { get; set; }
+        public List<string> LyricSources { get; set; } = new();
+        public List<TrackOffsetEntryPayload> Entries { get; set; } = new();
+    }
+
+    private sealed class TrackOffsetEntryPayload
+    {
+        public TrackLyricOffsetRecordKey Key { get; set; }
+        public string Title { get; set; } = string.Empty;
+        public string Artist { get; set; } = string.Empty;
+        public string SourceApp { get; set; } = string.Empty;
+        public string LyricSource { get; set; } = string.Empty;
+        public int DurationSeconds { get; set; }
+        public int OffsetMilliseconds { get; set; }
+        public DateTimeOffset UpdatedAtUtc { get; set; }
+    }
+
+    private sealed class TrackOffsetMutationPayload
+    {
+        public TrackLyricOffsetRecordKey? Key { get; set; }
+        public int OffsetMilliseconds { get; set; }
+    }
+
     private sealed class WebSettingsPayload
     {
         public List<string> SourceRecognitionOrder { get; set; } = new();
@@ -897,6 +1250,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         public bool StartWithWindows { get; set; }
         public bool AutoCheckUpdates { get; set; }
         public bool ShowLyricTranslation { get; set; }
+        public ToolWindowTheme ToolWindowTheme { get; set; }
         public string SpectrumDisplayMode { get; set; } = DisabledSpectrumDisplayMode;
         public bool EnablePureMusicSpectrum { get; set; }
         public bool ShowSpectrumWhenLyricsNotFound { get; set; }

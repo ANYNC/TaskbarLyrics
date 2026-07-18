@@ -3,6 +3,7 @@ using System.Net.Http;
 using System.Text.Json;
 using System.Windows;
 using Microsoft.Win32;
+using TaskbarLyrics.Core.Services;
 using TaskbarLyrics.Core.Utilities;
 
 namespace TaskbarLyrics.App;
@@ -17,6 +18,7 @@ public partial class App : System.Windows.Application
     private SettingsWindow? _settingsWindow;
     private SpectrumTuningWindow? _spectrumTuningWindow;
     private LyricsWindowHost? _lyricsWindowHost;
+    private TrackLyricOffsetStore? _trackLyricOffsetStore;
     private CancellationTokenSource? _activationServerCancellation;
     private SpectrumTuningSettings _spectrumTuningSettings = SpectrumTuningSettings.CreateDefault();
 
@@ -51,12 +53,14 @@ public partial class App : System.Windows.Application
         Settings = _settingsStore.Load();
         Settings.FontFamily = AppSettings.NormalizeFontFamily(Settings.FontFamily);
         Settings.SpectrumTuning ??= SpectrumTuningSettings.CreateDefault();
+        NativeWindowTheme.SetMode(Settings.ToolWindowTheme);
         _spectrumTuningSettings = Settings.SpectrumTuning.Clone();
         ApplyStartupForegroundColor(Settings);
         Settings.StartWithWindows = Settings.StartWithWindows || StartupService.IsEnabled();
         StartupService.SetEnabled(Settings.StartWithWindows);
 
-        _lyricsWindowHost = new LyricsWindowHost(Settings);
+        _trackLyricOffsetStore = new TrackLyricOffsetStore();
+        _lyricsWindowHost = new LyricsWindowHost(Settings, _trackLyricOffsetStore);
 
         if (Settings.ShowLyricsOnStartup)
         {
@@ -70,6 +74,7 @@ public partial class App : System.Windows.Application
             SetSpectrumDisplayMode,
             () => Settings.EnableSpectrum,
             () => Settings.SpectrumDisplayMode,
+            OpenCurrentTrackOffsetSettings,
             OpenSettingsWindow,
             OpenSmtcTimelineMonitorWindow,
             OpenSpectrumTuningWindow,
@@ -88,6 +93,7 @@ public partial class App : System.Windows.Application
         _spectrumTuningWindow?.Close();
         _lyricsWindowHost?.Dispose();
         _trayService?.Dispose();
+        _trackLyricOffsetStore?.Dispose();
         SingleInstanceService.Release();
         base.OnExit(e);
     }
@@ -96,6 +102,7 @@ public partial class App : System.Windows.Application
     {
         var nextSettings = settings.Clone();
         nextSettings.SpectrumTuning = Settings.SpectrumTuning.Clone();
+        NativeWindowTheme.SetMode(nextSettings.ToolWindowTheme);
         Settings = nextSettings;
         _settingsStore?.Save(Settings);
         _lyricsWindowHost?.ApplySettings(Settings);
@@ -210,6 +217,8 @@ public partial class App : System.Windows.Application
             return;
         }
 
+        NativeWindowTheme.RefreshSystemTheme();
+
         Dispatcher.BeginInvoke(() =>
         {
             if (ApplySystemThemeForegroundColor(Settings))
@@ -281,6 +290,11 @@ public partial class App : System.Windows.Application
 
     private void OpenSettingsWindow()
     {
+        OpenSettingsWindow(pageId: null, focusCurrentTrack: false);
+    }
+
+    private void OpenSettingsWindow(string? pageId, bool focusCurrentTrack)
+    {
         if (_settingsWindow is { IsVisible: true })
         {
             if (_settingsWindow.WindowState == WindowState.Minimized)
@@ -289,12 +303,51 @@ public partial class App : System.Windows.Application
             }
 
             _settingsWindow.Activate();
+            if (!string.IsNullOrWhiteSpace(pageId))
+            {
+                _ = _settingsWindow.NavigateToPageAsync(pageId, focusCurrentTrack);
+            }
             return;
         }
 
-        _settingsWindow = new SettingsWindow(Settings.Clone());
+        if (_trackLyricOffsetStore is null)
+        {
+            return;
+        }
+
+        _settingsWindow = new SettingsWindow(
+            Settings.Clone(),
+            _trackLyricOffsetStore,
+            () => _lyricsWindowHost?.GetCurrentTrackLyricsContextAsync()
+                ?? Task.FromResult<CurrentTrackLyricsContext?>(null));
         _settingsWindow.Closed += SettingsWindow_Closed;
         _settingsWindow.Show();
+        if (!string.IsNullOrWhiteSpace(pageId))
+        {
+            _ = _settingsWindow.NavigateToPageAsync(pageId, focusCurrentTrack);
+        }
+    }
+
+    private async void OpenCurrentTrackOffsetSettings()
+    {
+        var context = _lyricsWindowHost is null
+            ? null
+            : await _lyricsWindowHost.GetCurrentTrackLyricsContextAsync();
+        if (context is null ||
+            string.IsNullOrWhiteSpace(context.Track.Title) ||
+            string.Equals(context.Track.Title, "Unknown Title", StringComparison.OrdinalIgnoreCase))
+        {
+            _trayService?.ShowNotification("无法调整单曲偏移", "当前没有可调整的歌曲。");
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(context.LyricSource))
+        {
+            _trayService?.ShowNotification("歌词仍在检索", "歌词源确定后再调整单曲偏移。");
+            return;
+        }
+
+        OpenSettingsWindow("trackOffsets", focusCurrentTrack: true);
     }
 
     private void StartActivationServer()

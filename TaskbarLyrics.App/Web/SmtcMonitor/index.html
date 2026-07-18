@@ -176,8 +176,8 @@
 
     const pad = (n, w = 2) => String(n).padStart(w, "0");
     function fmtMs(ms) { const sign = ms < 0 ? "-" : ""; const a = Math.abs(ms); const m = Math.floor(a / 60000); const s = Math.floor((a % 60000) / 1000); const f = Math.floor(a % 1000); return `${sign}${pad(m)}:${pad(s)}.${pad(f, 3)}`; }
+    function escapeHtml(value) { return String(value).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]); }
     function driftColor(ms) { if (ms > TH_BAD) return "red"; if (ms > TH_WARN) return "amber"; return "green"; }
-    const clsOf = c => c === "red" ? "bad" : c === "amber" ? "warn" : "v";
     function acquisitionMeta(kind) {
       switch (kind) {
         case "MemoryCache": return { label: "内存命中", cls: "ok" };
@@ -211,30 +211,26 @@
       const dv = $("#driftVal"); dv.textContent = (drift / 1000).toFixed(3); dv.className = `v big ${dCol}`;
       $("#driftSub").textContent = `距上次上报 ${(age / 1000).toFixed(2)}s`;
 
+      const driftClass = dCol === "red" ? "bad" : dCol === "amber" ? "warn" : "ok";
+      const ageClass = p.isPlaying && age > STALE_MS ? "bad" : "v";
       const rows = [
         ["Title:", p.title || "—", "v"],
         ["Artist:", p.artist || "—", "v"],
         ["", "", ""],
-        ["Captured(UTC):", p.capturedAtUtc || "—", "k"],
         ["SourceAppId:", p.sourceAppUserModelId || "—", "v"],
-        ["NormalizedSource:", p.normalizedSource || "—", "v"],
         ["ResolvedSource:", p.resolvedSource || "—", "v"],
         ["LyricSource:", p.lyricSource || "—", "v"],
         ["LyricAcquisition:", acquisition.label, "v"],
         ["LyricFetchTime:", p.lyricAcquisition === "Searching" || p.lyricAcquisition === "Unknown" ? "—" : `${p.lyricFetchElapsedMs ?? 0} ms`, "v"],
-        ["LyricResolvedAt:", p.lyricResolvedAtUtc || "—", "k"],
-        ["IsPlaying:", p.isPlaying ? "True" : "False", p.isPlaying ? "ok" : "warn"],
-        ["IsFallback:", p.isFallback ? "True" : "False", p.isFallback ? "bad" : "warn"],
         ["", "", ""],
         ["RawPosition:", fmtMs(p.rawMs ?? 0), "v"],
-        ["LastUpdatedTime:", p.lastUpdatedUtc || "—", "k"],
-        ["LastUpdateAge:", fmtMs(age), p.isPlaying && age > STALE_MS ? "bad" : "v"],
+        ["LastUpdateAge:", fmtMs(age), ageClass],
         ["Extrapolated:", fmtMs(p.extrapolatedMs ?? 0), "v"],
-        ["Extrapolated-Raw:", fmtMs(drift), clsOf(dCol)],
+        ["Extrapolated-Raw:", fmtMs(drift), driftClass],
         ["SelectedPosition:", fmtMs(p.selectedMs ?? 0), "v"],
         ["Strategy:", p.strategy || "—", "k"],
       ];
-      $("#log").innerHTML = rows.map(([k, v, c]) => k ? `<span class="k">${k.padEnd(20)}</span><span class="${c}">${v}</span>` : "").join("\n");
+      $("#log").innerHTML = rows.map(([key, value, cls]) => key ? `<span class="k">${escapeHtml(key.padEnd(20))}</span><span class="${cls}">${escapeHtml(value)}</span>` : "").join("\n");
     }
 
     function setPaused(v) {

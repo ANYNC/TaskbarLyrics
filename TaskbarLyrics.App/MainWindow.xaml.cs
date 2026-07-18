@@ -24,6 +24,7 @@ public partial class MainWindow : Window
 {
     private const int WmShowWindow = 0x0018;
     private readonly IMusicSessionProvider _musicSessionProvider;
+    private readonly TrackLyricOffsetStore _trackLyricOffsetStore;
     private readonly SystemAudioSpectrumService _audioSpectrumService = new();
     private readonly DispatcherTimer _timer;
     private readonly DispatcherTimer _spectrumTimer;
@@ -68,11 +69,14 @@ public partial class MainWindow : Window
     private string? _lastDiagnosticsLyricSource;
     private DateTimeOffset _nextSpectrumDiagnosticsLogUtc;
     private string _lastSpectrumDiagnosticsKey = string.Empty;
+    private AppSettings _currentSettings = new();
+    private TrackInfo? _currentTrack;
 
-    public MainWindow()
+    public MainWindow(TrackLyricOffsetStore trackLyricOffsetStore)
     {
         InitializeComponent();
 
+        _trackLyricOffsetStore = trackLyricOffsetStore;
         _musicSessionProvider = new SmtcMusicSessionProvider();
         _lyricSyncService = BuildLyricSyncService();
         _taskbarCreatedMessage = NativeMethods.RegisterWindowMessage("TaskbarCreated");
@@ -105,6 +109,7 @@ public partial class MainWindow : Window
 
     public void ApplySettings(AppSettings settings)
     {
+        _currentSettings = settings.Clone();
         if (_musicSessionProvider is SmtcMusicSessionProvider smtcProvider)
         {
             smtcProvider.SetRecognitionOrder(
@@ -183,7 +188,17 @@ public partial class MainWindow : Window
         return new LyricSyncService(
             new LyricProviderRegistry(providers),
             _ => settings?.ShowLyricTranslation == true,
-            sourceApp => TimeSpan.FromMilliseconds(settings?.GetPlayerLyricOffsetMilliseconds(sourceApp) ?? 0));
+            sourceApp => TimeSpan.FromMilliseconds(settings?.GetPlayerLyricOffsetMilliseconds(sourceApp) ?? 0),
+            (track, lyricSource) => TimeSpan.FromMilliseconds(
+                _trackLyricOffsetStore.GetOffsetMilliseconds(track, lyricSource)));
+    }
+
+    internal CurrentTrackLyricsContext? GetCurrentTrackLyricsContextSnapshot()
+    {
+        var lyricSource = _lyricSyncService.CurrentLyricSourceApp;
+        return _currentTrack is null
+            ? null
+            : new CurrentTrackLyricsContext(_currentTrack, lyricSource ?? string.Empty);
     }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
@@ -353,6 +368,7 @@ public partial class MainWindow : Window
             EnsureVisibleIfExpected();
 
             var snapshot = await _musicSessionProvider.GetCurrentAsync();
+            _currentTrack = snapshot.Track;
             UpdateCover(snapshot);
 
             var frame = await _lyricSyncService.GetDisplayFrameAsync(snapshot);
@@ -361,6 +377,11 @@ public partial class MainWindow : Window
             if (_musicSessionProvider is SmtcMusicSessionProvider smtcProvider)
             {
                 smtcProvider.SetCurrentLyricSource(_lyricSyncService.CurrentLyricSourceApp);
+                var playerOffset = _currentSettings.GetPlayerLyricOffsetMilliseconds(snapshot.Track?.SourceApp);
+                var trackOffset = _trackLyricOffsetStore.GetOffsetMilliseconds(
+                    snapshot.Track,
+                    _lyricSyncService.CurrentLyricSourceApp);
+                smtcProvider.SetCurrentLyricOffsets(playerOffset, trackOffset);
             }
 
             var current = string.IsNullOrWhiteSpace(frame.CurrentLine)
