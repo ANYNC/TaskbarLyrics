@@ -10,6 +10,7 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $projectPath = Join-Path $repoRoot "TaskbarLyrics.App\TaskbarLyrics.App.csproj"
 $publishRoot = Join-Path $repoRoot "publish"
 $executableName = "TaskbarLyrics"
+$projectExecutableName = "TaskbarLyrics.App.exe"
 
 if ([string]::IsNullOrWhiteSpace($Version)) {
     $Version = Read-Host "Release version (for example 1.2.0)"
@@ -44,7 +45,6 @@ try {
         -p:EnableCompressionInSingleFile=true `
         -p:DebugType=None `
         -p:DebugSymbols=false `
-        -p:AssemblyName=$executableName `
         -p:Version=$Version `
         -o $stagingPackage
 
@@ -52,9 +52,15 @@ try {
         throw "dotnet publish failed with exit code $LASTEXITCODE."
     }
 
+    $projectExecutablePath = Join-Path $stagingPackage $projectExecutableName
+    if (-not (Test-Path $projectExecutablePath)) {
+        throw "Published executable was not found: $projectExecutablePath"
+    }
+
     $executablePath = Join-Path $stagingPackage "$executableName.exe"
+    Rename-Item -LiteralPath $projectExecutablePath -NewName "$executableName.exe"
     if (-not (Test-Path $executablePath)) {
-        throw "Published executable was not found: $executablePath"
+        throw "Failed to rename published executable to: $executablePath"
     }
 
     Write-Host "Creating ZIP archive..." -ForegroundColor Cyan
