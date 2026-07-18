@@ -4,7 +4,7 @@ TaskbarLyrics 是一款 Windows 任务栏歌词工具。播放音乐时，它会
 
 无需为每个播放器分别配置歌词插件。程序会自动从多个歌词来源中寻找合适结果，也支持读取本地歌词。
 
-# TaskbarLyrics-Light
+## TaskbarLyrics-Light
 由 [sorawithcat](https://github.com/sorawithcat) 维护的原生 WPF 轻量版本，不依赖 WebView2 / Chromium，牺牲部分视觉效果，换取较少的进程数、内存占用和发布体积。
 - [Light 版 README](https://github.com/sorawithcat/TaskbarLyrics/blob/main/TaskbarLyrics.Light/README.md)
 
