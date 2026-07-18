@@ -9,6 +9,7 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $projectPath = Join-Path $repoRoot "TaskbarLyrics.App\TaskbarLyrics.App.csproj"
 $publishRoot = Join-Path $repoRoot "publish"
+$executableName = "TaskbarLyrics"
 
 if ([string]::IsNullOrWhiteSpace($Version)) {
     $Version = Read-Host "Release version (for example 1.2.0)"
@@ -43,11 +44,17 @@ try {
         -p:EnableCompressionInSingleFile=true `
         -p:DebugType=None `
         -p:DebugSymbols=false `
+        -p:AssemblyName=$executableName `
         -p:Version=$Version `
         -o $stagingPackage
 
     if ($LASTEXITCODE -ne 0) {
         throw "dotnet publish failed with exit code $LASTEXITCODE."
+    }
+
+    $executablePath = Join-Path $stagingPackage "$executableName.exe"
+    if (-not (Test-Path $executablePath)) {
+        throw "Published executable was not found: $executablePath"
     }
 
     Write-Host "Creating ZIP archive..." -ForegroundColor Cyan

@@ -206,6 +206,8 @@ dotnet publish TaskbarLyrics.App/TaskbarLyrics.App.csproj -c Release -r win-x64 
 powershell -ExecutionPolicy Bypass -File scripts/publish-release.ps1
 ```
 
+该脚本生成的主程序名为 `TaskbarLyrics.exe`，版本目录和 ZIP 包名为 `TaskbarLyrics-版本号`。
+
 也可以直接传入版本号；同版本产物已存在时，需要显式使用 `-Force` 覆盖：
 
 ```powershell
