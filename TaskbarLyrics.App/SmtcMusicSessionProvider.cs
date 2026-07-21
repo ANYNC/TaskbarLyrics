@@ -33,6 +33,10 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider
     private readonly object _coverLock = new();
     private Task? _coverReadTask;
     private string _coverReadMetadataKey = string.Empty;
+    private int _coverReadSequence;
+    private string _lastCoverThumbnailDiagnosticsKey = string.Empty;
+    private string _lastMediaPropertiesErrorKey = string.Empty;
+    private DateTimeOffset _nextMediaPropertiesErrorLogUtc;
 
     public void SetRecognitionOrder(
         IReadOnlyList<string>? order,
@@ -147,9 +151,20 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider
                 }
             }
         }
-        catch
+        catch (Exception ex)
         {
             // Keep fallback chain alive.
+            var errorKey = $"{sourceApp}|{ex.GetType().FullName}|{ex.HResult:X8}|{ex.Message}";
+            if (!string.Equals(errorKey, _lastMediaPropertiesErrorKey, StringComparison.Ordinal) ||
+                nowUtc >= _nextMediaPropertiesErrorLogUtc)
+            {
+                _lastMediaPropertiesErrorKey = errorKey;
+                _nextMediaPropertiesErrorLogUtc = nowUtc.AddSeconds(30);
+                Log.Diagnostic(
+                    "COVER-SMTC",
+                    $"MediaPropertiesFailed Source='{ToLogValue(sourceApp)}' Exception='{ex.GetType().Name}' " +
+                    $"HResult=0x{ex.HResult:X8} Message='{ToLogValue(ex.Message)}'");
+            }
         }
 
         if (sourceApp.Equals("Netease", StringComparison.OrdinalIgnoreCase) &&
@@ -756,29 +771,52 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider
         return false;
     }
 
-    private static async Task<byte[]?> ReadCoverBytesAsync(
+    private static async Task<CoverReadResult> ReadCoverBytesAsync(
         IRandomAccessStreamReference? thumbnail,
         CancellationToken cancellationToken)
     {
         if (thumbnail is null)
         {
-            return null;
+            return new CoverReadResult(null, string.Empty, "Thumbnail reference is null", null, 0, 0);
         }
 
+        var stopwatch = Stopwatch.StartNew();
         try
         {
             using var stream = await thumbnail.OpenReadAsync().AsTask(cancellationToken);
+            var contentType = stream.ContentType ?? string.Empty;
+            if (stream.Size == 0)
+            {
+                return new CoverReadResult(null, contentType, "Thumbnail stream is empty", null, 0, stopwatch.ElapsedMilliseconds);
+            }
+
+            if (stream.Size > uint.MaxValue)
+            {
+                return new CoverReadResult(null, contentType, $"Thumbnail stream is too large ({stream.Size} bytes)", null, 0, stopwatch.ElapsedMilliseconds);
+            }
+
             using var input = stream.GetInputStreamAt(0);
             using var dataReader = new DataReader(input);
             var size = (uint)stream.Size;
-            await dataReader.LoadAsync(size).AsTask(cancellationToken);
+            var loadedSize = await dataReader.LoadAsync(size).AsTask(cancellationToken);
+            if (loadedSize != size)
+            {
+                return new CoverReadResult(
+                    null,
+                    contentType,
+                    $"Thumbnail stream was only partially loaded ({loadedSize}/{size} bytes)",
+                    null,
+                    loadedSize,
+                    stopwatch.ElapsedMilliseconds);
+            }
+
             var bytes = new byte[size];
             dataReader.ReadBytes(bytes);
-            return bytes.Length == 0 ? null : bytes;
+            return new CoverReadResult(bytes, contentType, string.Empty, null, loadedSize, stopwatch.ElapsedMilliseconds);
         }
-        catch
+        catch (Exception ex)
         {
-            return null;
+            return new CoverReadResult(null, string.Empty, ex.Message, ex, 0, stopwatch.ElapsedMilliseconds);
         }
     }
 
@@ -792,6 +830,8 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider
         var metadataKey = $"{sourceApp}|{title}|{artist}";
         byte[]? cachedCover;
         var isLoading = false;
+        var thumbnailStateChanged = false;
+        var thumbnailState = thumbnail is null ? "Missing" : "Provided";
 
         lock (_coverLock)
         {
@@ -803,6 +843,13 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider
                 _nextMissingCoverRetryUtc = nowUtc;
             }
 
+            var thumbnailDiagnosticsKey = $"{metadataKey}|{thumbnailState}";
+            if (!string.Equals(thumbnailDiagnosticsKey, _lastCoverThumbnailDiagnosticsKey, StringComparison.Ordinal))
+            {
+                _lastCoverThumbnailDiagnosticsKey = thumbnailDiagnosticsKey;
+                thumbnailStateChanged = true;
+            }
+
             cachedCover = _lastCoverImageBytes;
             var shouldRetryMissingCover = cachedCover is null && nowUtc >= _nextMissingCoverRetryUtc;
             var isReadingCurrentCover =
@@ -811,8 +858,9 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider
 
             if (thumbnail is not null && shouldRetryMissingCover && !isReadingCurrentCover)
             {
+                var readSequence = Interlocked.Increment(ref _coverReadSequence);
                 _coverReadMetadataKey = metadataKey;
-                _coverReadTask = ReadCoverBytesInBackgroundAsync(metadataKey, thumbnail);
+                _coverReadTask = ReadCoverBytesInBackgroundAsync(metadataKey, thumbnail, readSequence);
                 _nextMissingCoverRetryUtc = DateTimeOffset.MaxValue;
                 isLoading = true;
             }
@@ -822,28 +870,94 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider
             }
         }
 
+        if (thumbnailStateChanged)
+        {
+            Log.Diagnostic(
+                "COVER-SMTC",
+                $"Thumbnail{thumbnailState} Track='{ToLogValue(metadataKey)}'");
+        }
+
         return (cachedCover, isLoading);
     }
 
     private async Task ReadCoverBytesInBackgroundAsync(
         string metadataKey,
-        IRandomAccessStreamReference thumbnail)
+        IRandomAccessStreamReference thumbnail,
+        int readSequence)
     {
-        var coverBytes = await ReadCoverBytesAsync(thumbnail, CancellationToken.None);
+        Log.Diagnostic(
+            "COVER-SMTC",
+            $"ReadStarted Sequence={readSequence} Track='{ToLogValue(metadataKey)}'");
+
+        var result = await ReadCoverBytesAsync(thumbnail, CancellationToken.None);
         var nowUtc = DateTimeOffset.UtcNow;
+        var isStale = false;
 
         lock (_coverLock)
         {
             if (!string.Equals(metadataKey, _lastCoverMetadataKey, StringComparison.Ordinal))
             {
-                return;
+                isStale = true;
             }
-
-            _lastCoverImageBytes = coverBytes;
-            _nextMissingCoverRetryUtc = coverBytes is null
-                ? nowUtc + MissingCoverRetryInterval
-                : DateTimeOffset.MaxValue;
+            else
+            {
+                _lastCoverImageBytes = result.Bytes;
+                _nextMissingCoverRetryUtc = result.Bytes is null
+                    ? nowUtc + MissingCoverRetryInterval
+                    : DateTimeOffset.MaxValue;
+            }
         }
+
+        if (isStale)
+        {
+            Log.Diagnostic(
+                "COVER-SMTC",
+                $"ReadDiscarded Sequence={readSequence} Reason='Track changed' Track='{ToLogValue(metadataKey)}' " +
+                $"ElapsedMs={result.ElapsedMilliseconds}");
+            return;
+        }
+
+        if (result.Bytes is { Length: > 0 } bytes)
+        {
+            Log.Diagnostic(
+                "COVER-SMTC",
+                $"ReadSucceeded Sequence={readSequence} Track='{ToLogValue(metadataKey)}' Bytes={bytes.Length} " +
+                $"ContentType='{ToLogValue(result.ContentType)}' Signature='{GetByteSignature(bytes)}' " +
+                $"ElapsedMs={result.ElapsedMilliseconds}");
+            return;
+        }
+
+        var exceptionText = result.Exception is null
+            ? string.Empty
+            : $" Exception='{result.Exception.GetType().Name}' HResult=0x{result.Exception.HResult:X8}";
+        Log.Diagnostic(
+            "COVER-SMTC",
+            $"ReadFailed Sequence={readSequence} Track='{ToLogValue(metadataKey)}' " +
+            $"ContentType='{ToLogValue(result.ContentType)}' LoadedBytes={result.LoadedBytes} " +
+            $"Reason='{ToLogValue(result.FailureReason)}'{exceptionText} ElapsedMs={result.ElapsedMilliseconds} " +
+            $"RetryAfterMs={(int)MissingCoverRetryInterval.TotalMilliseconds}");
     }
+
+    private static string GetByteSignature(byte[] bytes)
+    {
+        return Convert.ToHexString(bytes.AsSpan(0, Math.Min(bytes.Length, 12)));
+    }
+
+    private static string ToLogValue(string? value)
+    {
+        var normalized = (value ?? string.Empty)
+            .Replace('\r', ' ')
+            .Replace('\n', ' ')
+            .Trim();
+        return normalized.Length <= 240 ? normalized : normalized[..240];
+    }
+
+    private sealed record CoverReadResult(
+        byte[]? Bytes,
+        string ContentType,
+        string FailureReason,
+        Exception? Exception,
+        uint LoadedBytes,
+        long ElapsedMilliseconds);
 
 }

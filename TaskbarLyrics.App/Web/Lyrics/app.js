@@ -800,9 +800,10 @@ window.taskbarLyrics = {
     }
   },
 
-  setCover(dataUri, fallbackText, fallbackColor) {
+  setCover(dataUri, fallbackText, fallbackColor, diagnosticTrackId) {
     const uri = (dataUri ?? "").toString().trim();
     const text = toDisplayLine(fallbackText, "N").slice(0, 1).toUpperCase();
+    const trackId = (diagnosticTrackId ?? "").toString();
     const generation = ++coverGeneration;
     clearCoverUpdateTimer();
 
@@ -825,6 +826,22 @@ window.taskbarLyrics = {
       preloader.onerror = () => {
         if (generation !== coverGeneration) {
           return;
+        }
+
+        const mimeSeparatorIndex = uri.indexOf(";");
+        const mime = uri.startsWith("data:") && mimeSeparatorIndex > 5
+          ? uri.slice(5, mimeSeparatorIndex)
+          : "";
+        try {
+          window.chrome?.webview?.postMessage(JSON.stringify({
+            type: "coverDecodeError",
+            trackId,
+            mime,
+            uriLength: uri.length,
+            generation
+          }));
+        } catch {
+          // Diagnostics must not interrupt the fallback transition.
         }
 
         scheduleFallbackCoverUpdate(text, fallbackColor, () => {

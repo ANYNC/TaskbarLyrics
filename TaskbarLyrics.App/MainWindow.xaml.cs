@@ -62,8 +62,10 @@ public partial class MainWindow : Window
     private string _lastWebTrackId = string.Empty;
     private FrameworkElement? _lyricsWebViewElement;
     private object? _lyricsWebViewControl;
+    private CoreWebView2? _lyricsCoreWebView2;
     private EventInfo? _lyricsNavigationCompletedEvent;
     private Delegate? _lyricsNavigationCompletedHandler;
+    private string _lastCoverVisualDiagnosticsKey = string.Empty;
     private string? _lastDiagnosticsTrackId;
     private bool? _lastDiagnosticsIsPlaying;
     private string? _lastDiagnosticsLyricSource;
@@ -281,6 +283,7 @@ public partial class MainWindow : Window
             source.RemoveHook(WndProc);
         }
 
+        DetachWebViewMessageHandler();
         DetachWebViewNavigationHandler();
 
         _lyricSyncService.Dispose();
@@ -614,6 +617,7 @@ public partial class MainWindow : Window
         {
             _currentCoverDataUri = BuildCoverDataUri(bytes);
             _currentCoverVisualTrackId = trackId;
+            LogCoverVisualState(trackId, "SMTC", bytes.Length, DetectImageMimeType(bytes));
             PushCoverToWebView();
             return;
         }
@@ -628,13 +632,41 @@ public partial class MainWindow : Window
         {
             _currentCoverDataUri = BuildCoverDataUri(localCoverBytes);
             _currentCoverVisualTrackId = trackId;
+            LogCoverVisualState(trackId, "Local", localCoverBytes.Length, DetectImageMimeType(localCoverBytes));
             PushCoverToWebView();
             return;
         }
 
         _currentCoverDataUri = null;
         _currentCoverVisualTrackId = trackId;
+        LogCoverVisualState(trackId, "Fallback", 0, string.Empty);
         PushCoverToWebView();
+    }
+
+    private void LogCoverVisualState(string? trackId, string visualSource, int byteLength, string mime)
+    {
+        var diagnosticsKey = $"{trackId}|{visualSource}|{byteLength}|{mime}";
+        if (string.Equals(diagnosticsKey, _lastCoverVisualDiagnosticsKey, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _lastCoverVisualDiagnosticsKey = diagnosticsKey;
+        var track = _currentTrack;
+        Log.Diagnostic(
+            "COVER-UI",
+            $"VisualChanged Track='{ToDiagnosticLogValue(trackId)}' Source='{ToDiagnosticLogValue(track?.SourceApp)}' " +
+            $"Title='{ToDiagnosticLogValue(track?.Title)}' Visual='{visualSource}' Bytes={byteLength} " +
+            $"Mime='{ToDiagnosticLogValue(mime)}'");
+    }
+
+    private static string ToDiagnosticLogValue(string? value)
+    {
+        var normalized = (value ?? string.Empty)
+            .Replace('\r', ' ')
+            .Replace('\n', ' ')
+            .Trim();
+        return normalized.Length <= 240 ? normalized : normalized[..240];
     }
 
     private byte[]? TryGetThrottledLocalCover(TrackInfo? track, string? trackId)
@@ -717,6 +749,7 @@ public partial class MainWindow : Window
                 coreWebView2.Settings.AreDevToolsEnabled = false;
                 coreWebView2.Settings.IsZoomControlEnabled = false;
                 coreWebView2.Settings.IsBuiltInErrorPageEnabled = false;
+                AttachWebViewMessageHandler(coreWebView2);
             }
 
             AttachWebViewNavigationHandler(webViewControl);
@@ -765,7 +798,8 @@ public partial class MainWindow : Window
         var dataUriJson = JsonSerializer.Serialize(_currentCoverDataUri ?? string.Empty);
         var fallbackTextJson = JsonSerializer.Serialize(_currentCoverFallbackText);
         var fallbackColorJson = JsonSerializer.Serialize(_currentCoverFallbackColorCss);
-        var script = $"window.taskbarLyrics?.setCover({dataUriJson}, {fallbackTextJson}, {fallbackColorJson});";
+        var diagnosticTrackIdJson = JsonSerializer.Serialize(_currentCoverVisualTrackId ?? string.Empty);
+        var script = $"window.taskbarLyrics?.setCover({dataUriJson}, {fallbackTextJson}, {fallbackColorJson}, {diagnosticTrackIdJson});";
         _ = ExecuteWebScriptAsync(script);
     }
 
@@ -911,6 +945,67 @@ public partial class MainWindow : Window
         PushLyricsToWebView(_currentLine, _nextLine, 0, _lastWebCurrentLineIndex, _lastWebTrackId, false, false);
         PushCoverToWebView();
         PushSpectrumTuningToWebView(_spectrumTuningSettings);
+    }
+
+    private void AttachWebViewMessageHandler(CoreWebView2 coreWebView2)
+    {
+        DetachWebViewMessageHandler();
+        _lyricsCoreWebView2 = coreWebView2;
+        coreWebView2.WebMessageReceived += OnLyricsWebViewMessageReceived;
+    }
+
+    private void DetachWebViewMessageHandler()
+    {
+        if (_lyricsCoreWebView2 is null)
+        {
+            return;
+        }
+
+        _lyricsCoreWebView2.WebMessageReceived -= OnLyricsWebViewMessageReceived;
+        _lyricsCoreWebView2 = null;
+    }
+
+    private void OnLyricsWebViewMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
+    {
+        try
+        {
+            var message = e.TryGetWebMessageAsString();
+            using var document = JsonDocument.Parse(message);
+            var root = document.RootElement;
+            if (!root.TryGetProperty("type", out var typeElement) ||
+                !string.Equals(typeElement.GetString(), "coverDecodeError", StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            var messageTrackId = root.TryGetProperty("trackId", out var trackElement)
+                ? trackElement.GetString() ?? string.Empty
+                : string.Empty;
+            var mime = root.TryGetProperty("mime", out var mimeElement)
+                ? mimeElement.GetString() ?? string.Empty
+                : string.Empty;
+            var uriLength = root.TryGetProperty("uriLength", out var lengthElement) && lengthElement.TryGetInt32(out var length)
+                ? length
+                : 0;
+            var generation = root.TryGetProperty("generation", out var generationElement) && generationElement.TryGetInt32(out var value)
+                ? value
+                : 0;
+            var activeTrack = _currentTrack;
+
+            Log.Diagnostic(
+                "COVER-WEB",
+                $"DecodeFailed MessageTrack='{ToDiagnosticLogValue(messageTrackId)}' " +
+                $"ActiveTrack='{ToDiagnosticLogValue(activeTrack?.Id)}' Source='{ToDiagnosticLogValue(activeTrack?.SourceApp)}' " +
+                $"Title='{ToDiagnosticLogValue(activeTrack?.Title)}' Mime='{ToDiagnosticLogValue(mime)}' " +
+                $"DataUriLength={uriLength} Generation={generation}");
+        }
+        catch (Exception ex)
+        {
+            Log.Diagnostic(
+                "COVER-WEB",
+                $"MessageParseFailed Exception='{ex.GetType().Name}' HResult=0x{ex.HResult:X8} " +
+                $"Message='{ToDiagnosticLogValue(ex.Message)}'");
+        }
     }
 
     private void PushStyleToWebView(AppSettings settings)

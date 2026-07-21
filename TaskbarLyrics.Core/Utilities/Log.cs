@@ -44,6 +44,27 @@ public static class Log
     public static void Warn(string message) => Write(Level.Warn, message);
     public static void Error(string message) => Write(Level.Error, message);
 
+    /// <summary>
+    /// Writes a low-frequency diagnostic event even when verbose logging is disabled.
+    /// Use this for state transitions and individual operations, never for polling loops.
+    /// </summary>
+    public static void Diagnostic(string category, string message)
+    {
+        try
+        {
+            var safeCategory = string.IsNullOrWhiteSpace(category) ? "DIAGNOSTIC" : category.Trim();
+            LogFileWriter.AppendLine(
+                GetDebugLogPath(),
+                $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] [{safeCategory}] {message}",
+                MaxLogFileSizeBytes,
+                LogRetentionDays);
+        }
+        catch
+        {
+            // Diagnostics must never affect the application flow.
+        }
+    }
+
     public static void SetVerboseEnabled(bool enabled)
     {
         _isVerboseEnabled = enabled;
