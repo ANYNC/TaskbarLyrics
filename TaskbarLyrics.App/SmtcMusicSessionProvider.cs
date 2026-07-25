@@ -9,7 +9,7 @@ using Windows.Storage.Streams;
 
 namespace TaskbarLyrics.App;
 
-public sealed class SmtcMusicSessionProvider : IMusicSessionProvider
+public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlaybackController, IPlayerRecognitionController
 {
     private static readonly string[] DefaultRecognitionOrder = { "QQMusic", "Netease", "Kugou", "Spotify" };
     private static readonly TimeSpan MissingCoverRetryInterval = TimeSpan.FromSeconds(5);
@@ -130,6 +130,9 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider
             Log.Warn($"SMTC media hotkey command failed: {exception}");
         }
     }
+
+    public Task ExecuteAsync(MediaHotkeyAction action, CancellationToken cancellationToken) =>
+        TryControlAsync(action, cancellationToken);
 
     private static async Task TrySeekAsync(
         GlobalSystemMediaTransportControlsSession session,

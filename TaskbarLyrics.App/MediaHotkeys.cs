@@ -17,17 +17,17 @@ public sealed class GlobalMediaHotkeySettings
 {
     public bool Enabled { get; set; } = true;
 
-    public string TogglePlayPause { get; set; } = "Ctrl+Shift+P";
+    public string TogglePlayPause { get; set; } = MediaHotkeyCatalog.Get(MediaHotkeyAction.TogglePlayPause).DefaultBinding;
 
-    public string PreviousTrack { get; set; } = "Ctrl+Shift+Left";
+    public string PreviousTrack { get; set; } = MediaHotkeyCatalog.Get(MediaHotkeyAction.PreviousTrack).DefaultBinding;
 
-    public string NextTrack { get; set; } = "Ctrl+Shift+Right";
+    public string NextTrack { get; set; } = MediaHotkeyCatalog.Get(MediaHotkeyAction.NextTrack).DefaultBinding;
 
-    public string SeekBackward { get; set; } = "Ctrl+Alt+Shift+Left";
+    public string SeekBackward { get; set; } = MediaHotkeyCatalog.Get(MediaHotkeyAction.SeekBackward).DefaultBinding;
 
-    public string SeekForward { get; set; } = "Ctrl+Alt+Shift+Right";
+    public string SeekForward { get; set; } = MediaHotkeyCatalog.Get(MediaHotkeyAction.SeekForward).DefaultBinding;
 
-    public string ToggleLyricsVisibility { get; set; } = "Ctrl+Shift+D";
+    public string ToggleLyricsVisibility { get; set; } = MediaHotkeyCatalog.Get(MediaHotkeyAction.ToggleLyricsVisibility).DefaultBinding;
 
     public GlobalMediaHotkeySettings Clone() => new()
     {
@@ -40,40 +40,12 @@ public sealed class GlobalMediaHotkeySettings
         ToggleLyricsVisibility = ToggleLyricsVisibility
     };
 
-    public string GetBinding(MediaHotkeyAction action) => action switch
-    {
-        MediaHotkeyAction.TogglePlayPause => TogglePlayPause,
-        MediaHotkeyAction.PreviousTrack => PreviousTrack,
-        MediaHotkeyAction.NextTrack => NextTrack,
-        MediaHotkeyAction.SeekBackward => SeekBackward,
-        MediaHotkeyAction.SeekForward => SeekForward,
-        MediaHotkeyAction.ToggleLyricsVisibility => ToggleLyricsVisibility,
-        _ => string.Empty
-    };
+    public string GetBinding(MediaHotkeyAction action) => MediaHotkeyCatalog.Get(action).ReadBinding(this);
 
     public void ResetBinding(MediaHotkeyAction action)
     {
-        switch (action)
-        {
-            case MediaHotkeyAction.TogglePlayPause:
-                TogglePlayPause = "Ctrl+Shift+P";
-                break;
-            case MediaHotkeyAction.PreviousTrack:
-                PreviousTrack = "Ctrl+Shift+Left";
-                break;
-            case MediaHotkeyAction.NextTrack:
-                NextTrack = "Ctrl+Shift+Right";
-                break;
-            case MediaHotkeyAction.SeekBackward:
-                SeekBackward = "Ctrl+Alt+Shift+Left";
-                break;
-            case MediaHotkeyAction.SeekForward:
-                SeekForward = "Ctrl+Alt+Shift+Right";
-                break;
-            case MediaHotkeyAction.ToggleLyricsVisibility:
-                ToggleLyricsVisibility = "Ctrl+Shift+D";
-                break;
-        }
+        var definition = MediaHotkeyCatalog.Get(action);
+        definition.WriteBinding(this, definition.DefaultBinding);
     }
 }
 

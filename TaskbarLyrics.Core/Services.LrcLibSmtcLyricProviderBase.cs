@@ -19,7 +19,7 @@ public abstract class LrcLibSmtcLyricProviderBase : ILyricProvider
     private static readonly Regex OffsetRegex = new(@"\[offset\s*[:\uFF1A]\s*(?<value>[+-]?\d+)\]", RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private static readonly Regex BracketSuffixRegex = new(@"\s*[\(\[\{（【].*?[\)\]\}）】]\s*", RegexOptions.Compiled);
     private static readonly Regex FeatureSuffixRegex = new(@"\s+(feat\.?|ft\.?|with)\s+.*$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
-    private static readonly ConcurrentDictionary<string, ProviderCacheState> ProviderCaches = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly ConcurrentDictionary<string, ILyricCacheStore<CachedLyrics>> ProviderCaches = new(StringComparer.OrdinalIgnoreCase);
 
     protected LrcLibSmtcLyricProviderBase(string sourceApp, string cacheFileName, bool strictSourceMatch = true)
     {
@@ -92,25 +92,7 @@ public abstract class LrcLibSmtcLyricProviderBase : ILyricProvider
 
     protected static void ClearCacheFile(string cacheFileName)
     {
-        var state = ProviderCaches.GetOrAdd(cacheFileName, _ => new ProviderCacheState());
-        state.MemoryCache.Clear();
-
-        lock (state.DiskCacheLock)
-        {
-            state.DiskCache = new Dictionary<string, CachedLyrics>(StringComparer.Ordinal);
-            try
-            {
-                var cacheFilePath = GetCacheFilePath(cacheFileName);
-                if (File.Exists(cacheFilePath))
-                {
-                    File.Delete(cacheFilePath);
-                }
-            }
-            catch
-            {
-                // Ignore cache delete failures.
-            }
-        }
+        GetOrCreateCacheStore(cacheFileName).Clear();
     }
 
     private bool CanHandleTrack(TrackInfo track)
@@ -576,23 +558,10 @@ public abstract class LrcLibSmtcLyricProviderBase : ILyricProvider
         out (string? SyncedLyrics, string? PlainLyrics) payload,
         out LyricAcquisitionKind acquisition)
     {
-        var cacheState = GetOrCreateCacheState();
-        if (cacheState.MemoryCache.TryGetValue(cacheKey, out payload))
+        if (GetOrCreateCacheStore(CacheFileName).TryGet(cacheKey, out var cached, out acquisition))
         {
-            acquisition = LyricAcquisitionKind.MemoryCache;
+            payload = (cached!.SyncedLyrics, cached.PlainLyrics);
             return true;
-        }
-
-        lock (cacheState.DiskCacheLock)
-        {
-            EnsureDiskCacheLoaded(cacheState);
-            if (cacheState.DiskCache is not null && cacheState.DiskCache.TryGetValue(cacheKey, out var cached))
-            {
-                payload = (cached.SyncedLyrics, cached.PlainLyrics);
-                cacheState.MemoryCache[cacheKey] = payload;
-                acquisition = LyricAcquisitionKind.DiskCache;
-                return true;
-            }
         }
 
         payload = default;
@@ -602,62 +571,13 @@ public abstract class LrcLibSmtcLyricProviderBase : ILyricProvider
 
     private void StoreCachedPayload(string cacheKey, (string? SyncedLyrics, string? PlainLyrics) payload)
     {
-        var cacheState = GetOrCreateCacheState();
-        cacheState.MemoryCache[cacheKey] = payload;
-
-        lock (cacheState.DiskCacheLock)
-        {
-            EnsureDiskCacheLoaded(cacheState);
-            cacheState.DiskCache ??= new Dictionary<string, CachedLyrics>(StringComparer.Ordinal);
-            cacheState.DiskCache[cacheKey] = new CachedLyrics
+        GetOrCreateCacheStore(CacheFileName).Set(
+            cacheKey,
+            new CachedLyrics
             {
                 SyncedLyrics = payload.SyncedLyrics,
                 PlainLyrics = payload.PlainLyrics
-            };
-
-            try
-            {
-                var path = GetCacheFilePath(CacheFileName);
-                var dir = Path.GetDirectoryName(path);
-                if (!string.IsNullOrWhiteSpace(dir))
-                {
-                    Directory.CreateDirectory(dir);
-                }
-
-                var json = JsonSerializer.Serialize(cacheState.DiskCache);
-                File.WriteAllText(path, json);
-            }
-            catch
-            {
-                // Ignore disk cache write failures.
-            }
-        }
-    }
-
-    private void EnsureDiskCacheLoaded(ProviderCacheState cacheState)
-    {
-        if (cacheState.DiskCache is not null)
-        {
-            return;
-        }
-
-        try
-        {
-            var path = GetCacheFilePath(CacheFileName);
-            if (!File.Exists(path))
-            {
-                cacheState.DiskCache = new Dictionary<string, CachedLyrics>(StringComparer.Ordinal);
-                return;
-            }
-
-            var json = File.ReadAllText(path);
-            cacheState.DiskCache = JsonSerializer.Deserialize<Dictionary<string, CachedLyrics>>(json)
-                ?? new Dictionary<string, CachedLyrics>(StringComparer.Ordinal);
-        }
-        catch
-        {
-            cacheState.DiskCache = new Dictionary<string, CachedLyrics>(StringComparer.Ordinal);
-        }
+            });
     }
 
     private static string GetCacheFilePath(string cacheFileName)
@@ -669,9 +589,11 @@ public abstract class LrcLibSmtcLyricProviderBase : ILyricProvider
             cacheFileName);
     }
 
-    private ProviderCacheState GetOrCreateCacheState()
+    private static ILyricCacheStore<CachedLyrics> GetOrCreateCacheStore(string cacheFileName)
     {
-        return ProviderCaches.GetOrAdd(CacheFileName, _ => new ProviderCacheState());
+        return ProviderCaches.GetOrAdd(
+            cacheFileName,
+            name => new JsonLyricCacheStore<CachedLyrics>(GetCacheFilePath(name)));
     }
 
     private static string CollapseWhitespace(string value)
@@ -850,13 +772,4 @@ public abstract class LrcLibSmtcLyricProviderBase : ILyricProvider
         public string? PlainLyrics { get; set; }
     }
 
-    private sealed class ProviderCacheState
-    {
-        public ConcurrentDictionary<string, (string? SyncedLyrics, string? PlainLyrics)> MemoryCache { get; } =
-            new(StringComparer.Ordinal);
-
-        public object DiskCacheLock { get; } = new();
-
-        public Dictionary<string, CachedLyrics>? DiskCache { get; set; }
-    }
 }

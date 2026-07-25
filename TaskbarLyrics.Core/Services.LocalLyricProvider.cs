@@ -45,8 +45,8 @@ public sealed class LocalLyricProvider : ILyricProvider, IDisposable
     private readonly IReadOnlyList<string> _rootFolders;
     private readonly object _indexLock = new();
     private readonly List<LocalLyricEntry> _index = new();
-    private readonly CancellationTokenSource _indexCancellation = new();
-    private readonly Task _indexTask;
+    private readonly ILocalMediaIndex _mediaIndex;
+    private int _sharedIndexVersion = -1;
     private int _isDisposed;
 
     static LocalLyricProvider()
@@ -61,7 +61,7 @@ public sealed class LocalLyricProvider : ILyricProvider, IDisposable
             .Select(path => path.Trim().Trim('"'))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
-        _indexTask = Task.Run(() => BuildIndexAsync(_indexCancellation.Token));
+        _mediaIndex = LocalMediaIndexRegistry.Acquire(_rootFolders);
     }
 
     public string SourceApp => "Local";
@@ -125,84 +125,25 @@ public sealed class LocalLyricProvider : ILyricProvider, IDisposable
             return Array.Empty<LocalLyricEntry>();
         }
 
+        var sharedSnapshot = _mediaIndex.GetSnapshot();
         lock (_indexLock)
         {
-            return _index.ToList();
-        }
-    }
-
-    private async Task BuildIndexAsync(CancellationToken cancellationToken)
-    {
-        try
-        {
-            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var pending = new List<LocalLyricEntry>();
-            foreach (var folder in _rootFolders)
+            if (_sharedIndexVersion != sharedSnapshot.Version)
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                if (!Directory.Exists(folder))
+                var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                var entries = new List<LocalLyricEntry>();
+                foreach (var file in sharedSnapshot.Files)
                 {
-                    continue;
+                    TryAddEntry(seen, entries, file.Path, readEmbeddedMetadata: false);
                 }
 
-                foreach (var file in SafeEnumerateFiles(folder, cancellationToken))
-                {
-                    var extension = Path.GetExtension(file);
-                    if (LyricExtensions.Contains(extension))
-                    {
-                        TryAddEntry(seen, pending, file, readEmbeddedMetadata: false);
-                        continue;
-                    }
-
-                    if (!AudioExtensions.Contains(extension))
-                    {
-                        continue;
-                    }
-
-                    TryAddEntry(seen, pending, file, readEmbeddedMetadata: false);
-
-                    foreach (var lyricExtension in LyricExtensions)
-                    {
-                        var lyricPath = Path.ChangeExtension(file, lyricExtension);
-                        if (File.Exists(lyricPath))
-                        {
-                            TryAddEntry(seen, pending, lyricPath, readEmbeddedMetadata: false);
-                        }
-                    }
-
-                    if (pending.Count >= 200)
-                    {
-                        FlushPendingIndexEntries(pending);
-                        await Task.Delay(20, cancellationToken).ConfigureAwait(false);
-                    }
-                }
+                _index.Clear();
+                _index.AddRange(entries);
+                _sharedIndexVersion = sharedSnapshot.Version;
             }
 
-            FlushPendingIndexEntries(pending);
-            Log.Info($"Local lyrics background index built. Folders={_rootFolders.Count}, Entries={seen.Count}");
+            return _index.ToList();
         }
-        catch (OperationCanceledException)
-        {
-        }
-        catch (Exception ex)
-        {
-            Log.Warn($"Local lyrics background index failed: {ex.Message}");
-        }
-    }
-
-    private void FlushPendingIndexEntries(List<LocalLyricEntry> pending)
-    {
-        if (pending.Count == 0 || Volatile.Read(ref _isDisposed) != 0)
-        {
-            return;
-        }
-
-        lock (_indexLock)
-        {
-            _index.AddRange(pending);
-        }
-
-        pending.Clear();
     }
 
     private static void TryAddEntry(ISet<string> seen, ICollection<LocalLyricEntry> entries, string lyricPath, bool readEmbeddedMetadata)
@@ -729,19 +670,11 @@ public sealed class LocalLyricProvider : ILyricProvider, IDisposable
             return;
         }
 
-        _indexCancellation.Cancel();
+        _mediaIndex.Dispose();
         lock (_indexLock)
         {
             _index.Clear();
         }
-
-        if (_indexTask.IsCompleted)
-        {
-            _indexCancellation.Dispose();
-            return;
-        }
-
-        _indexTask.GetAwaiter().OnCompleted(_indexCancellation.Dispose);
     }
 
     private sealed record LocalLyricEntry(string LyricPath, string Stem, string Artist, string Title);

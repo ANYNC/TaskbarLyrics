@@ -16,10 +16,13 @@ internal sealed class LyricsWindowHost : IDisposable
     private volatile bool _isVisible;
     private int _startupAbandoned;
 
-    public LyricsWindowHost(AppSettings initialSettings, TrackLyricOffsetStore trackLyricOffsetStore)
+    public LyricsWindowHost(
+        AppSettings initialSettings,
+        TrackLyricOffsetStore trackLyricOffsetStore,
+        AppCompositionRoot compositionRoot)
     {
         var settings = initialSettings.Clone();
-        _thread = new Thread(() => Run(settings, trackLyricOffsetStore))
+        _thread = new Thread(() => Run(settings, trackLyricOffsetStore, compositionRoot))
         {
             IsBackground = true,
             Name = "TaskbarLyrics Lyrics UI"
@@ -130,12 +133,15 @@ internal sealed class LyricsWindowHost : IDisposable
         Close();
     }
 
-    private void Run(AppSettings initialSettings, TrackLyricOffsetStore trackLyricOffsetStore)
+    private void Run(
+        AppSettings initialSettings,
+        TrackLyricOffsetStore trackLyricOffsetStore,
+        AppCompositionRoot compositionRoot)
     {
         try
         {
             _dispatcher = Dispatcher.CurrentDispatcher;
-            _window = new MainWindow(trackLyricOffsetStore);
+            _window = new MainWindow(trackLyricOffsetStore, compositionRoot);
             _window.ApplySettings(initialSettings);
             _window.IsVisibleChanged += (_, _) => _isVisible = _window.IsVisible;
             _window.Closed += (_, _) =>

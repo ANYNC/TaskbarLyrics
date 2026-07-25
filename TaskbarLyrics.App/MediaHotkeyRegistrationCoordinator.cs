@@ -1,6 +1,6 @@
 namespace TaskbarLyrics.App;
 
-internal interface IMediaHotkeyRegistrar
+internal interface IGlobalHotkeyRegistrar
 {
     bool TryRegister(int id, int modifiers, int virtualKey);
     void Unregister(int id);
@@ -19,24 +19,12 @@ internal static class MediaHotkeyRegistrationStatus
 internal sealed class MediaHotkeyRegistrationCoordinator : IDisposable
 {
     private const int ModNoRepeat = 0x4000;
-    private const int HotkeyIdBase = 0x5A00;
-
-    private static readonly MediaHotkeyAction[] Actions =
-    [
-        MediaHotkeyAction.TogglePlayPause,
-        MediaHotkeyAction.PreviousTrack,
-        MediaHotkeyAction.NextTrack,
-        MediaHotkeyAction.SeekBackward,
-        MediaHotkeyAction.SeekForward,
-        MediaHotkeyAction.ToggleLyricsVisibility
-    ];
-
-    private readonly IMediaHotkeyRegistrar _registrar;
+    private readonly IGlobalHotkeyRegistrar _registrar;
     private readonly Dictionary<MediaHotkeyAction, string> _statuses = new();
     private readonly HashSet<int> _registeredIds = [];
     private bool _disposed;
 
-    public MediaHotkeyRegistrationCoordinator(IMediaHotkeyRegistrar registrar)
+    public MediaHotkeyRegistrationCoordinator(IGlobalHotkeyRegistrar registrar)
     {
         _registrar = registrar;
         SetAllStatuses(MediaHotkeyRegistrationStatus.Disabled);
@@ -57,28 +45,31 @@ internal sealed class MediaHotkeyRegistrationCoordinator : IDisposable
         var parsedBindings = new Dictionary<MediaHotkeyAction, MediaHotkeyBinding>();
         var duplicateActions = new HashSet<MediaHotkeyAction>();
         var seenBindings = new Dictionary<MediaHotkeyBinding, MediaHotkeyAction>();
-        foreach (var action in Actions)
+        foreach (var definition in MediaHotkeyCatalog.Definitions)
         {
-            if (!MediaHotkeyBindingParser.TryParse(snapshot.GetBinding(action), out var binding))
+            if (!MediaHotkeyBindingParser.TryParse(definition.ReadBinding(snapshot), out var binding))
             {
-                _statuses[action] = MediaHotkeyRegistrationStatus.Invalid;
+                _statuses[definition.Action] = MediaHotkeyRegistrationStatus.Invalid;
                 continue;
             }
 
-            if (seenBindings.ContainsKey(binding))
+            if (seenBindings.TryGetValue(binding, out var originalAction))
             {
-                duplicateActions.Add(action);
-                _statuses[action] = MediaHotkeyRegistrationStatus.Duplicate;
+                duplicateActions.Add(originalAction);
+                duplicateActions.Add(definition.Action);
+                parsedBindings.Remove(originalAction);
+                _statuses[originalAction] = MediaHotkeyRegistrationStatus.Duplicate;
+                _statuses[definition.Action] = MediaHotkeyRegistrationStatus.Duplicate;
                 continue;
             }
 
-            seenBindings[binding] = action;
-            parsedBindings[action] = binding;
+            seenBindings[binding] = definition.Action;
+            parsedBindings[definition.Action] = binding;
         }
 
         foreach (var (action, binding) in parsedBindings)
         {
-            var id = GetHotkeyId(action);
+            var id = MediaHotkeyCatalog.Get(action).RegistrationId;
             if (_registrar.TryRegister(id, binding.Modifiers | ModNoRepeat, binding.VirtualKey))
             {
                 _registeredIds.Add(id);
@@ -90,24 +81,26 @@ internal sealed class MediaHotkeyRegistrationCoordinator : IDisposable
             }
         }
 
-        foreach (var action in Actions.Where(action => !parsedBindings.ContainsKey(action) && !duplicateActions.Contains(action)))
+        foreach (var action in MediaHotkeyCatalog.Definitions
+                     .Select(definition => definition.Action)
+                     .Where(action => !parsedBindings.ContainsKey(action) && !duplicateActions.Contains(action)))
         {
             _statuses.TryAdd(action, MediaHotkeyRegistrationStatus.Invalid);
         }
     }
 
-    public IReadOnlyDictionary<string, string> GetStatusSnapshot() => Actions.ToDictionary(
-        GetActionKey,
-        action => _statuses.TryGetValue(action, out var status) ? status : MediaHotkeyRegistrationStatus.NotRegistered,
+    public IReadOnlyDictionary<string, string> GetStatusSnapshot() => MediaHotkeyCatalog.Definitions.ToDictionary(
+        definition => definition.StatusKey,
+        definition => _statuses.TryGetValue(definition.Action, out var status) ? status : MediaHotkeyRegistrationStatus.NotRegistered,
         StringComparer.Ordinal);
 
     public bool TryGetRegisteredAction(int id, out MediaHotkeyAction action)
     {
-        foreach (var candidate in Actions)
+        foreach (var definition in MediaHotkeyCatalog.Definitions)
         {
-            if (GetHotkeyId(candidate) == id && _registeredIds.Contains(id))
+            if (definition.RegistrationId == id && _registeredIds.Contains(id))
             {
-                action = candidate;
+                action = definition.Action;
                 return true;
             }
         }
@@ -137,22 +130,11 @@ internal sealed class MediaHotkeyRegistrationCoordinator : IDisposable
         UnregisterAll();
     }
 
-    internal static int GetHotkeyId(MediaHotkeyAction action) => HotkeyIdBase + (int)action;
-
-    private static string GetActionKey(MediaHotkeyAction action) => action switch
-    {
-        MediaHotkeyAction.TogglePlayPause => "togglePlayPause",
-        MediaHotkeyAction.PreviousTrack => "previousTrack",
-        MediaHotkeyAction.NextTrack => "nextTrack",
-        MediaHotkeyAction.SeekBackward => "seekBackward",
-        MediaHotkeyAction.SeekForward => "seekForward",
-        MediaHotkeyAction.ToggleLyricsVisibility => "toggleLyricsVisibility",
-        _ => string.Empty
-    };
+    internal static int GetHotkeyId(MediaHotkeyAction action) => MediaHotkeyCatalog.Get(action).RegistrationId;
 
     private void SetAllStatuses(string status)
     {
-        foreach (var action in Actions)
+        foreach (var action in MediaHotkeyCatalog.Definitions.Select(definition => definition.Action))
         {
             _statuses[action] = status;
         }

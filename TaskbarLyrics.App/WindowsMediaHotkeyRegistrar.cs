@@ -2,7 +2,7 @@ using System.Runtime.InteropServices;
 
 namespace TaskbarLyrics.App;
 
-internal sealed class WindowsMediaHotkeyRegistrar(IntPtr windowHandle) : IMediaHotkeyRegistrar
+internal sealed class WindowsMediaHotkeyRegistrar(IntPtr windowHandle) : IGlobalHotkeyRegistrar
 {
     public bool TryRegister(int id, int modifiers, int virtualKey) =>
         RegisterHotKey(windowHandle, id, modifiers, virtualKey);

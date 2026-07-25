@@ -21,6 +21,7 @@ public partial class App : System.Windows.Application
     private LyricsWindowHost? _lyricsWindowHost;
     private TrackLyricOffsetStore? _trackLyricOffsetStore;
     private GlobalMediaHotkeyService? _mediaHotkeyService;
+    private AppCompositionRoot? _compositionRoot;
     private CancellationTokenSource? _activationServerCancellation;
     private SpectrumTuningSettings _spectrumTuningSettings = SpectrumTuningSettings.CreateDefault();
 
@@ -62,8 +63,9 @@ public partial class App : System.Windows.Application
         Settings.StartWithWindows = Settings.StartWithWindows || StartupService.IsEnabled();
         StartupService.SetEnabled(Settings.StartWithWindows);
 
+        _compositionRoot = new AppCompositionRoot();
         _trackLyricOffsetStore = new TrackLyricOffsetStore();
-        _lyricsWindowHost = new LyricsWindowHost(Settings, _trackLyricOffsetStore);
+        _lyricsWindowHost = new LyricsWindowHost(Settings, _trackLyricOffsetStore, _compositionRoot);
         _mediaHotkeyService = new GlobalMediaHotkeyService(ExecuteMediaHotkeyAsync);
         _mediaHotkeyService.Apply(Settings.GlobalMediaHotkeys);
 

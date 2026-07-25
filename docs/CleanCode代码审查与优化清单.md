@@ -605,13 +605,15 @@ Lyrics
 
 ### 第三阶段：拆分核心类
 
-- [ ] 拆分 `MainWindow`。
-- [ ] 拆分 `SettingsWindow`。
-- [ ] 提取 `LocalMediaIndex`。
-- [ ] 提取统一缓存仓储。
-- [ ] 拆分快捷键定义、绑定解析、Windows 注册器和命令协调器。
-- [ ] 通过 `IMediaPlaybackController` 等能力接口替代对 `SmtcMusicSessionProvider` 的具体类型判断。
-- [ ] 把对象创建移动到应用 Composition Root。
+- [x] 拆分 `MainWindow`：播放会话、歌词同步创建、WebView 脚本、任务栏定位和原生窗口调用已移至专用服务；窗口保留 WPF 生命周期与事件转发。
+- [x] 拆分 `SettingsWindow`：WebView 消息解析与字体目录查询已移至专用服务，设置页既有消息字段和交互保持不变。
+- [x] 提取 `LocalMediaIndex`：本地歌词与封面共用可取消、引用计数管理的媒体目录索引。
+- [x] 提取统一缓存仓储：两个歌词提供者共用 `ILyricCacheStore`，统一内存/磁盘缓存、原子写入、读取失败回退和清理。
+- [x] 拆分快捷键定义、绑定解析、Windows 注册器和命令协调器：默认键位、设置键、状态键和注册 ID 均从 `MediaHotkeyCatalog` 派生。
+- [x] 通过 `IMediaPlaybackController`、`IPlayerRecognitionController` 等能力接口替代对 `SmtcMusicSessionProvider` 的具体类型判断。
+- [x] 把对象创建移动到应用 Composition Root。
+
+本阶段完成窗口宿主的首轮收敛；Settings/Lyrics 的前端脚本拆分、WebView 消息版本化及 C#/JS 对称 DTO 仍归入第四阶段。
 
 ### 第四阶段：前端模块化和强类型契约
 
@@ -694,17 +696,21 @@ GlobalMediaHotkeyCoordinator
 ### 18.4 快捷键专项验收清单
 
 - [ ] 修改非快捷键设置不会产生任何 `RegisterHotKey`/`UnregisterHotKey` 调用。
-- [ ] 同一组合分配给两个动作时，两个动作都显示冲突且均不注册。
+- [x] 同一组合分配给两个动作时，两个动作都显示冲突且均不注册。
 - [ ] 无效、重复、系统占用和关闭状态使用稳定状态码，C#/JS 不依赖中文文本判断逻辑。
 - [x] 快速连续触发播放/暂停、切歌和跳转时，命令顺序确定且没有未观察异常。
 - [x] 程序退出或歌词线程关闭时，停止接收新命令并有界等待在途命令。
 - [ ] 托盘展示的快捷键与实际注册状态一致。
-- [ ] 解析器覆盖字母、数字、方向键、功能键、重复修饰键、空分段、超长输入和不支持键。
+- [x] 解析器覆盖字母、数字、方向键、功能键、重复修饰键、空分段、超长输入和不支持键。
 - [ ] 播放源启用状态或识别顺序变化后，快捷键控制的会话与歌词会话一致。
-- [ ] 设置契约测试继续通过，并增加不依赖 WebView2/Win32 的纯逻辑单元测试。
+- [x] 设置契约测试继续通过，并增加不依赖 WebView2/Win32 的纯逻辑单元测试。
 
 ## 19. 本次审查验证结果
 
+- 2026-07-26（第三阶段）：新增 `LocalMediaIndex`、`ILyricCacheStore`、`MediaHotkeyCatalog`、`IMediaPlaybackController`、`AppCompositionRoot`、任务栏定位服务、歌词 WebView 脚本工厂、设置消息路由和字体目录服务。`MainWindow` 不再直接创建歌词/封面提供者或依赖 SMTC 具体类型；`SettingsWindow` 不再自行反序列化 WebView 消息或扫描系统字体。
+- 本地歌词与本地封面通过同一份可取消的媒体文件索引消费音频/歌词文件；两个歌词缓存实现收敛为统一的内存与磁盘缓存仓储，写入先落临时文件再替换正式文件，读写失败只降级缓存并记录日志，不影响歌词检索主链路。
+- 第三阶段新增应用层测试 8 项（快捷键定义表、重复注册协调、Composition Root、设置消息路由、歌词 WebView 脚本），新增核心层测试 2 项（本地媒体索引、歌词缓存仓储）。当前 `TaskbarLyrics.App.Tests` 为 35 项、`TaskbarLyrics.Core.Tests` 为 19 项，合计 54 项。
+- 已通过 `scripts/verify.ps1`、`dotnet test TaskbarLyrics.App.Tests/TaskbarLyrics.App.Tests.csproj --no-restore` 与 `dotnet test TaskbarLyrics.Core.Tests/TaskbarLyrics.Core.Tests.csproj --no-restore`；提交前还会执行全解决方案构建与 `git diff --check`。
 - 2026-07-26：新增 `TaskbarLyrics.App.Tests` 与 `TaskbarLyrics.Core.Tests`：前者包含设置变化分类、快捷键命令队列/绑定解析/注册协调、SMTC 会话复用与设置存储共 27 项测试；后者包含歌词 Registry 生命周期、歌词同步取消/旧结果隔离、匹配规则、来源路由、LRC 时间戳解析和显示偏移共 17 项测试。
 - `dotnet test TaskbarLyrics.App.Tests/TaskbarLyrics.App.Tests.csproj --no-restore -p:BaseOutputPath=build_verify_app_tests/` 与 `dotnet test TaskbarLyrics.Core.Tests/TaskbarLyrics.Core.Tests.csproj --no-restore -p:BaseOutputPath=build_verify_core_tests/` 均通过：合计 44/44。
 - 设置变化按歌词服务、本地媒体、播放器识别、频谱、样式、窗口布局和快捷键分流；普通外观或更新设置不再触发系统快捷键重新注册。

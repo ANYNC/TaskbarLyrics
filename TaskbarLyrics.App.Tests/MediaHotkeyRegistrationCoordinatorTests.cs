@@ -5,7 +5,7 @@ namespace TaskbarLyrics.App.Tests;
 public sealed class MediaHotkeyRegistrationCoordinatorTests
 {
     [Fact]
-    public void Apply_WhenBindingsAreDuplicated_RegistersOnlyTheFirstBinding()
+    public void Apply_WhenBindingsAreDuplicated_MarksEveryConflictingActionAndRegistersNeither()
     {
         var registrar = new FakeRegistrar();
         using var coordinator = new MediaHotkeyRegistrationCoordinator(registrar);
@@ -17,9 +17,10 @@ public sealed class MediaHotkeyRegistrationCoordinatorTests
         coordinator.Apply(settings);
 
         var statuses = coordinator.GetStatusSnapshot();
+        Assert.Equal(MediaHotkeyRegistrationStatus.Duplicate, statuses["previousTrack"]);
         Assert.Equal(MediaHotkeyRegistrationStatus.Duplicate, statuses["nextTrack"]);
-        Assert.Equal(5, registrar.RegistrationAttempts.Count);
-        Assert.True(coordinator.TryGetRegisteredAction(
+        Assert.Equal(4, registrar.RegistrationAttempts.Count);
+        Assert.False(coordinator.TryGetRegisteredAction(
             MediaHotkeyRegistrationCoordinator.GetHotkeyId(MediaHotkeyAction.PreviousTrack),
             out _));
         Assert.False(coordinator.TryGetRegisteredAction(
@@ -56,7 +57,7 @@ public sealed class MediaHotkeyRegistrationCoordinatorTests
             Assert.Equal(MediaHotkeyRegistrationStatus.Disabled, status));
     }
 
-    private sealed class FakeRegistrar(IReadOnlySet<int>? rejectedIds = null) : IMediaHotkeyRegistrar
+    private sealed class FakeRegistrar(IReadOnlySet<int>? rejectedIds = null) : IGlobalHotkeyRegistrar
     {
         private readonly IReadOnlySet<int> _rejectedIds = rejectedIds ?? new HashSet<int>();
 

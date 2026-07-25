@@ -1,8 +1,6 @@
-using System.Collections.Concurrent;
 using System.Globalization;
 using System.Net;
 using System.Text;
-using System.Text.Json;
 using System.Text.RegularExpressions;
 using TaskbarLyrics.Core.Abstractions;
 using TaskbarLyrics.Core.Models;
@@ -32,10 +30,8 @@ public abstract class LyricProviderBase : ILyricProvider
     private static readonly TimeSpan OpeningDuplicateTimestampWindow = TimeSpan.FromSeconds(3);
     private static readonly TimeSpan OpeningCreditFilterWindow = TimeSpan.FromSeconds(5);
 
-    // 缓存系统
-    private static readonly ConcurrentDictionary<string, LyricDocument?> MemoryCache = new(StringComparer.OrdinalIgnoreCase);
-    private static readonly object DiskCacheLock = new();
-    private static Dictionary<string, LyricDocument>? _diskCache;
+    private static readonly ILyricCacheStore<LyricDocument> CacheStore =
+        new JsonLyricCacheStore<LyricDocument>(CacheFilePathStatic);
 
     protected HttpClient Http { get; }
 
@@ -59,28 +55,16 @@ public abstract class LyricProviderBase : ILyricProvider
     {
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
         var cacheKey = BuildCacheKey(track);
-        if (MemoryCache.TryGetValue(cacheKey, out var cachedDoc))
+        if (CacheStore.TryGet(cacheKey, out var cachedDoc, out var acquisition))
         {
-            return new LyricFetchResult(cachedDoc, LyricAcquisitionKind.MemoryCache, stopwatch.ElapsedMilliseconds);
-        }
-
-        lock (DiskCacheLock)
-        {
-            EnsureDiskCacheLoaded();
-            if (_diskCache!.TryGetValue(cacheKey, out var diskDoc))
-            {
-                var processedDiskDoc = ProcessDocument(diskDoc);
-                MemoryCache[cacheKey] = processedDiskDoc;
-                return new LyricFetchResult(processedDiskDoc, LyricAcquisitionKind.DiskCache, stopwatch.ElapsedMilliseconds);
-            }
+            return new LyricFetchResult(cachedDoc, acquisition, stopwatch.ElapsedMilliseconds);
         }
 
         var result = await ResolveRemoteAsync(track, cancellationToken);
         if (result != null)
         {
             result = ProcessDocument(result);
-            MemoryCache[cacheKey] = result;
-            lock (DiskCacheLock) { EnsureDiskCacheLoaded(); _diskCache![cacheKey] = result; SaveDiskCache(); }
+            CacheStore.Set(cacheKey, result);
         }
         return new LyricFetchResult(
             result,
@@ -442,42 +426,9 @@ public abstract class LyricProviderBase : ILyricProvider
 
     private static double CalculateSimilarity(string s, string t) => LyricMatcher.NormalizeForSearch(s) == LyricMatcher.NormalizeForSearch(t) ? 1.0 : 0.0;
 
-    private void EnsureDiskCacheLoaded() 
-    { 
-        if (_diskCache != null) return; 
-        try { 
-            if (!File.Exists(CacheFilePathStatic)) { _diskCache = new Dictionary<string, LyricDocument>(StringComparer.OrdinalIgnoreCase); return; } 
-            _diskCache = JsonSerializer.Deserialize<Dictionary<string, LyricDocument>>(File.ReadAllText(CacheFilePathStatic)) ?? new(); 
-        } catch { _diskCache = new(); } 
-    }
-
-    private void SaveDiskCache() 
-    { 
-        try { 
-            var dir = Path.GetDirectoryName(CacheFilePathStatic); 
-            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir); 
-            File.WriteAllText(CacheFilePathStatic, JsonSerializer.Serialize(_diskCache)); 
-        } catch { } 
-    }
-
     public static void ClearCache()
     {
-        lock (DiskCacheLock)
-        {
-            _diskCache = new Dictionary<string, LyricDocument>(StringComparer.OrdinalIgnoreCase);
-            MemoryCache.Clear();
-            try
-            {
-                if (File.Exists(CacheFilePathStatic))
-                {
-                    File.Delete(CacheFilePathStatic);
-                }
-            }
-            catch
-            {
-                // Ignore delete errors
-            }
-        }
+        CacheStore.Clear();
     }
 
     private static string CacheFilePathStatic => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "TaskbarLyrics", "cache", "unified-lyrics-v8.json");

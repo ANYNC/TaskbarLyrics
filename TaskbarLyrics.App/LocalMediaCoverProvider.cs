@@ -2,17 +2,13 @@ using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
 using TaskbarLyrics.Core.Models;
+using TaskbarLyrics.Core.Services;
 using TaskbarLyrics.Core.Utilities;
 
 namespace TaskbarLyrics.App;
 
 internal sealed class LocalMediaCoverProvider : IDisposable
 {
-    private static readonly HashSet<string> AudioExtensions = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ".mp3", ".flac", ".m4a", ".aac", ".wav", ".ogg", ".opus", ".wma"
-    };
-
     private static readonly string[] ImageExtensions = [".jpg", ".jpeg", ".png", ".webp"];
     private static readonly string[] CommonCoverNames = ["cover", "folder", "front", "album"];
 
@@ -28,8 +24,8 @@ internal sealed class LocalMediaCoverProvider : IDisposable
     private readonly object _indexLock = new();
     private readonly Dictionary<string, byte[]?> _coverCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<LocalMediaEntry> _index = new();
-    private readonly CancellationTokenSource _indexCancellation = new();
-    private readonly Task _indexTask;
+    private readonly ILocalMediaIndex _mediaIndex;
+    private int _sharedIndexVersion = -1;
     private int _isDisposed;
 
     static LocalMediaCoverProvider()
@@ -44,7 +40,7 @@ internal sealed class LocalMediaCoverProvider : IDisposable
             .Select(path => path.Trim().Trim('"'))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
-        _indexTask = Task.Run(() => BuildIndexAsync(_indexCancellation.Token));
+        _mediaIndex = LocalMediaIndexRegistry.Acquire(_rootFolders);
     }
 
     public byte[]? TryGetCover(TrackInfo? track, CancellationToken cancellationToken = default)
@@ -95,66 +91,20 @@ internal sealed class LocalMediaCoverProvider : IDisposable
             return Array.Empty<LocalMediaEntry>();
         }
 
+        var sharedSnapshot = _mediaIndex.GetSnapshot();
         lock (_indexLock)
         {
-            return _index.ToList();
-        }
-    }
-
-    private async Task BuildIndexAsync(CancellationToken cancellationToken)
-    {
-        try
-        {
-            var pending = new List<LocalMediaEntry>();
-            foreach (var folder in _rootFolders)
+            if (_sharedIndexVersion != sharedSnapshot.Version)
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                if (!Directory.Exists(folder))
-                {
-                    continue;
-                }
-
-                foreach (var file in SafeEnumerateFiles(folder, cancellationToken))
-                {
-                    if (!AudioExtensions.Contains(Path.GetExtension(file)))
-                    {
-                        continue;
-                    }
-
-                    var entry = CreateEntry(file);
-                    pending.Add(entry);
-                    if (pending.Count >= 200)
-                    {
-                        FlushPendingIndexEntries(pending);
-                        await Task.Delay(20, cancellationToken).ConfigureAwait(false);
-                    }
-                }
+                _index.Clear();
+                _index.AddRange(sharedSnapshot.Files
+                    .Where(file => file.Kind == LocalMediaFileKind.Audio)
+                    .Select(file => CreateEntry(file.Path)));
+                _sharedIndexVersion = sharedSnapshot.Version;
             }
 
-            FlushPendingIndexEntries(pending);
+            return _index.ToList();
         }
-        catch (OperationCanceledException)
-        {
-        }
-        catch (Exception exception)
-        {
-            Log.Warn($"Local cover background index failed: {exception}");
-        }
-    }
-
-    private void FlushPendingIndexEntries(List<LocalMediaEntry> pending)
-    {
-        if (pending.Count == 0 || Volatile.Read(ref _isDisposed) != 0)
-        {
-            return;
-        }
-
-        lock (_indexLock)
-        {
-            _index.AddRange(pending);
-        }
-
-        pending.Clear();
     }
 
     private static LocalMediaEntry CreateEntry(string path)
@@ -346,50 +296,6 @@ internal sealed class LocalMediaCoverProvider : IDisposable
         return null;
     }
 
-    private static IEnumerable<string> SafeEnumerateFiles(string rootFolder, CancellationToken cancellationToken)
-    {
-        var pending = new Stack<string>();
-        pending.Push(rootFolder);
-
-        while (pending.Count > 0)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            var folder = pending.Pop();
-
-            IEnumerable<string> files;
-            try
-            {
-                files = Directory.EnumerateFiles(folder);
-            }
-            catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
-            {
-                continue;
-            }
-
-            foreach (var file in files)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                yield return file;
-            }
-
-            IEnumerable<string> directories;
-            try
-            {
-                directories = Directory.EnumerateDirectories(folder);
-            }
-            catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
-            {
-                continue;
-            }
-
-            foreach (var directory in directories)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                pending.Push(directory);
-            }
-        }
-    }
-
     private static (string Artist, string Title) SplitArtistTitle(string stem)
     {
         var bracketArtist = BracketArtistFileRegex.Match(stem);
@@ -518,7 +424,7 @@ internal sealed class LocalMediaCoverProvider : IDisposable
             return;
         }
 
-        _indexCancellation.Cancel();
+        _mediaIndex.Dispose();
         lock (_indexLock)
         {
             _index.Clear();
@@ -529,13 +435,6 @@ internal sealed class LocalMediaCoverProvider : IDisposable
             _coverCache.Clear();
         }
 
-        if (_indexTask.IsCompleted)
-        {
-            _indexCancellation.Dispose();
-            return;
-        }
-
-        _indexTask.GetAwaiter().OnCompleted(_indexCancellation.Dispose);
     }
 
     private sealed record LocalMediaEntry(string Path, string Stem, string Artist, string Title);

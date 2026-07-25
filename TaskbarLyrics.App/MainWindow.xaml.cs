@@ -3,7 +3,6 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Reflection;
-using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
@@ -22,13 +21,15 @@ namespace TaskbarLyrics.App;
 
 public partial class MainWindow : Window
 {
-    private const int WmShowWindow = 0x0018;
     private readonly IMusicSessionProvider _musicSessionProvider;
+    private readonly IMediaPlaybackController _mediaPlaybackController;
+    private readonly IPlayerRecognitionController _playerRecognitionController;
+    private readonly AppCompositionRoot _compositionRoot;
     private readonly TrackLyricOffsetStore _trackLyricOffsetStore;
     private readonly SystemAudioSpectrumService _audioSpectrumService = new();
     private readonly DispatcherTimer _timer;
     private readonly DispatcherTimer _spectrumTimer;
-    private readonly uint _taskbarCreatedMessage;
+    private readonly TaskbarPlacementService _taskbarPlacementService = new();
     private LocalMediaCoverProvider? _localMediaCoverProvider;
     private Media.Color _primaryTextColor = Media.Colors.White;
     private Media.Color _secondaryTextColor = Media.Color.FromArgb(190, 255, 255, 255);
@@ -75,14 +76,17 @@ public partial class MainWindow : Window
     private TrackInfo? _currentTrack;
     private bool _hasAppliedSettings;
 
-    public MainWindow(TrackLyricOffsetStore trackLyricOffsetStore)
+    internal MainWindow(TrackLyricOffsetStore trackLyricOffsetStore, AppCompositionRoot compositionRoot)
     {
         InitializeComponent();
 
         _trackLyricOffsetStore = trackLyricOffsetStore;
-        _musicSessionProvider = new SmtcMusicSessionProvider();
-        _lyricSyncService = BuildLyricSyncService();
-        _taskbarCreatedMessage = NativeMethods.RegisterWindowMessage("TaskbarCreated");
+        _compositionRoot = compositionRoot;
+        var musicServices = _compositionRoot.CreateMusicSessionServices();
+        _musicSessionProvider = musicServices.SessionProvider;
+        _mediaPlaybackController = musicServices.PlaybackController;
+        _playerRecognitionController = musicServices.PlayerRecognitionController;
+        _lyricSyncService = _compositionRoot.CreateLyricSyncService(new AppSettings(), _trackLyricOffsetStore);
 
         _timer = new DispatcherTimer(DispatcherPriority.Background)
         {
@@ -117,11 +121,11 @@ public partial class MainWindow : Window
         _currentSettings = snapshot;
         _hasAppliedSettings = true;
 
-        if (changes.PlayerRecognitionChanged && _musicSessionProvider is SmtcMusicSessionProvider smtcProvider)
+        if (changes.PlayerRecognitionChanged)
         {
-            smtcProvider.SetRecognitionOrder(
+            _playerRecognitionController.SetRecognitionOrder(
                 snapshot.SourceRecognitionOrder,
-                BuildEnabledPlayerSources(snapshot));
+                _compositionRoot.GetEnabledPlayerSources(snapshot));
         }
 
         if (changes.WindowLayoutChanged)
@@ -168,9 +172,7 @@ public partial class MainWindow : Window
     private void ReconfigureLocalMedia(AppSettings settings)
     {
         var previousProvider = _localMediaCoverProvider;
-        _localMediaCoverProvider = settings.EnableLocalLyrics && settings.LocalMusicFolders.Count > 0
-            ? new LocalMediaCoverProvider(settings.LocalMusicFolders)
-            : null;
+        _localMediaCoverProvider = _compositionRoot.CreateLocalMediaCoverProvider(settings);
         previousProvider?.Dispose();
         _lastLocalCoverLookupTrackId = null;
         _nextLocalCoverLookupUtc = default;
@@ -203,44 +205,10 @@ public partial class MainWindow : Window
 
     private void RebuildLyricSyncService(AppSettings settings)
     {
-        var nextService = BuildLyricSyncService(settings);
+        var nextService = _compositionRoot.CreateLyricSyncService(settings, _trackLyricOffsetStore);
         var currentService = _lyricSyncService;
         _lyricSyncService = nextService;
         currentService.Dispose();
-    }
-
-    private static IReadOnlyCollection<string> BuildEnabledPlayerSources(AppSettings settings)
-    {
-        var sources = new List<string>();
-        if (settings.EnableQQMusic) sources.Add("QQMusic");
-        if (settings.EnableNetease) sources.Add("Netease");
-        if (settings.EnableKugou) sources.Add("Kugou");
-        if (settings.EnableSpotify) sources.Add("Spotify");
-        return sources;
-    }
-
-    private LyricSyncService BuildLyricSyncService(AppSettings? settings = null)
-    {
-        var providers = new List<ILyricProvider>
-        {
-            new GenericSmtcLyricProvider()
-        };
-
-        if (settings?.EnableLocalLyrics == true && settings.LocalMusicFolders.Count > 0)
-        {
-            providers.Add(new LocalLyricProvider(settings.LocalMusicFolders));
-        }
-
-        // Player recognition switches must not disable fallback lyric providers.
-        providers.Add(new LyricifyLyricProvider("Netease", Lyricify.Lyrics.Searchers.Searchers.Netease));
-        providers.Add(new LyricifyLyricProvider("QQMusic", Lyricify.Lyrics.Searchers.Searchers.QQMusic));
-        providers.Add(new LyricifyLyricProvider("Kugou", Lyricify.Lyrics.Searchers.Searchers.Kugou));
-        return new LyricSyncService(
-            new LyricProviderRegistry(providers),
-            _ => settings?.ShowLyricTranslation == true,
-            sourceApp => TimeSpan.FromMilliseconds(settings?.GetPlayerLyricOffsetMilliseconds(sourceApp) ?? 0),
-            (track, lyricSource) => TimeSpan.FromMilliseconds(
-                _trackLyricOffsetStore.GetOffsetMilliseconds(track, lyricSource)));
     }
 
     internal CurrentTrackLyricsContext? GetCurrentTrackLyricsContextSnapshot()
@@ -253,9 +221,7 @@ public partial class MainWindow : Window
 
     internal Task ExecuteMediaHotkeyAsync(MediaHotkeyAction action, CancellationToken cancellationToken)
     {
-        return _musicSessionProvider is SmtcMusicSessionProvider smtcProvider
-            ? smtcProvider.TryControlAsync(action, cancellationToken)
-            : Task.CompletedTask;
+        return _mediaPlaybackController.ExecuteAsync(action, cancellationToken);
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
@@ -280,7 +246,7 @@ public partial class MainWindow : Window
         if (PresentationSource.FromVisual(this) is HwndSource source)
         {
             source.AddHook(WndProc);
-            ApplyToolWindowStyle(source.Handle);
+            _taskbarPlacementService.ApplyToolWindowStyle(source.Handle);
             AttachToTaskbarHost();
         }
     }
@@ -831,14 +797,14 @@ public partial class MainWindow : Window
             return;
         }
 
-        var currentJson = JsonSerializer.Serialize(current);
-        var nextJson = JsonSerializer.Serialize(next);
-        var progressJson = JsonSerializer.Serialize(Math.Clamp(lineProgress, 0, 1));
-        var lineIndexJson = JsonSerializer.Serialize(currentLineIndex);
-        var trackIdJson = JsonSerializer.Serialize(trackId ?? string.Empty);
-        var isPureMusicJson = JsonSerializer.Serialize(isPureMusic);
-        var isPlayingJson = JsonSerializer.Serialize(isPlaying);
-        var script = $"window.taskbarLyrics?.setLyrics({currentJson}, {nextJson}, {progressJson}, {lineIndexJson}, {trackIdJson}, {isPureMusicJson}, {isPlayingJson});";
+        var script = LyricsWebViewScriptFactory.SetLyrics(
+            current,
+            next,
+            lineProgress,
+            currentLineIndex,
+            trackId,
+            isPureMusic,
+            isPlaying);
         TaskObserver.Observe(ExecuteWebScriptAsync(script), "lyrics web view update");
     }
 
@@ -849,11 +815,11 @@ public partial class MainWindow : Window
             return;
         }
 
-        var dataUriJson = JsonSerializer.Serialize(_currentCoverDataUri ?? string.Empty);
-        var fallbackTextJson = JsonSerializer.Serialize(_currentCoverFallbackText);
-        var fallbackColorJson = JsonSerializer.Serialize(_currentCoverFallbackColorCss);
-        var diagnosticTrackIdJson = JsonSerializer.Serialize(_currentCoverVisualTrackId ?? string.Empty);
-        var script = $"window.taskbarLyrics?.setCover({dataUriJson}, {fallbackTextJson}, {fallbackColorJson}, {diagnosticTrackIdJson});";
+        var script = LyricsWebViewScriptFactory.SetCover(
+            _currentCoverDataUri,
+            _currentCoverFallbackText,
+            _currentCoverFallbackColorCss,
+            _currentCoverVisualTrackId);
         TaskObserver.Observe(ExecuteWebScriptAsync(script), "lyrics cover update");
     }
 
@@ -864,14 +830,14 @@ public partial class MainWindow : Window
             return;
         }
 
-        var valuesJson = JsonSerializer.Serialize(bars.Select(value => Math.Clamp(value, 0f, 1f)));
+        var script = LyricsWebViewScriptFactory.SetSpectrum(bars);
         if (_isSpectrumScriptPending)
         {
-            _pendingSpectrumValuesJson = valuesJson;
+            _pendingSpectrumValuesJson = script;
             return;
         }
 
-        SendSpectrumToWebView(valuesJson);
+        SendSpectrumToWebView(script);
     }
 
     private void PushSpectrumTuningToWebView(SpectrumTuningSettings settings)
@@ -881,23 +847,12 @@ public partial class MainWindow : Window
             return;
         }
 
-        var payload = new
-        {
-            rise = settings.FrontendRise,
-            fall = settings.FrontendFall,
-            minHeight = settings.MinBarHeight,
-            heightRange = settings.BarHeightRange,
-            opacity = settings.BarOpacity,
-            barCount = settings.BarCount
-        };
-        var payloadJson = JsonSerializer.Serialize(payload);
-        var script = $"window.taskbarLyrics?.setSpectrumTuning({payloadJson});";
+        var script = LyricsWebViewScriptFactory.SetSpectrumTuning(settings);
         TaskObserver.Observe(ExecuteWebScriptAsync(script), "lyrics spectrum tuning update");
     }
 
-    private void SendSpectrumToWebView(string valuesJson)
+    private void SendSpectrumToWebView(string script)
     {
-        var script = $"window.taskbarLyrics?.setSpectrum({valuesJson});";
         var task = ExecuteWebScriptAsync(script);
         if (task is null)
         {
@@ -1316,102 +1271,26 @@ public partial class MainWindow : Window
 
     private void AnchorToTaskbar()
     {
-        var workArea = SystemParameters.WorkArea;
-        var screenWidth = SystemParameters.PrimaryScreenWidth;
-        var screenHeight = SystemParameters.PrimaryScreenHeight;
-        const double normalTaskbarHeight = 48;
-        var taskbarHeight = Math.Max(normalTaskbarHeight, screenHeight - workArea.Height);
         var settings = (System.Windows.Application.Current as App)?.Settings ?? new AppSettings();
-        Height = CalculateWindowHeight(settings, taskbarHeight, screenHeight);
-
-        Left = settings.HorizontalAnchor switch
-        {
-            LyricsHorizontalAnchor.Left => Math.Max(0, settings.XOffset),
-            LyricsHorizontalAnchor.Center => ((screenWidth - Width) / 2.0) + settings.XOffset,
-            _ => Math.Max(0, screenWidth - Width - 230 + settings.XOffset)
-        };
-
-        var taskbarTop = screenHeight - taskbarHeight;
-        var anchorTop = Height <= taskbarHeight
-            ? taskbarTop + ((taskbarHeight - Height) / 2.0)
-            : screenHeight - Height;
-        Top = Math.Clamp(anchorTop + settings.YOffset, 0, Math.Max(0, screenHeight - Height));
-    }
-
-    private static double CalculateWindowHeight(AppSettings settings, double taskbarHeight, double screenHeight)
-    {
-        var taskbarSafeHeight = Math.Clamp(taskbarHeight - 4, 36, taskbarHeight);
-        if (settings.UseSafeFontSizeRange && settings.UseSafeCoverSizeRange)
-        {
-            return taskbarSafeHeight;
-        }
-
-        var fontSize = AppSettings.ClampFontSize(settings.FontSize, settings.UseSafeFontSizeRange);
-        var coverSize = AppSettings.ClampCoverSize(settings.CoverSize, settings.UseSafeCoverSizeRange);
-        var textHeight = Math.Ceiling((fontSize * 2.15) + 12);
-        var coverHeight = Math.Ceiling(coverSize + 10);
-        var contentHeight = Math.Max(36, Math.Max(textHeight, coverHeight));
-        return Math.Clamp(contentHeight, taskbarSafeHeight, Math.Max(taskbarHeight, screenHeight * 0.6));
+        _taskbarPlacementService.Anchor(this, settings);
     }
 
     private void AttachToTaskbarHost()
     {
-        var hwnd = new WindowInteropHelper(this).Handle;
-        if (hwnd == IntPtr.Zero)
-        {
-            return;
-        }
-
-        Topmost = _forceAlwaysOnTop;
-        var hWndInsertAfter = _forceAlwaysOnTop
-            ? NativeMethods.HWND_TOPMOST
-            : NativeMethods.HWND_NOTOPMOST;
-
-        NativeMethods.SetWindowPos(
-            hwnd,
-            hWndInsertAfter,
-            0,
-            0,
-            0,
-            0,
-            NativeMethods.SWP_NOMOVE |
-            NativeMethods.SWP_NOSIZE |
-            NativeMethods.SWP_NOACTIVATE |
-            NativeMethods.SWP_ASYNCWINDOWPOS |
-            NativeMethods.SWP_SHOWWINDOW);
-        NativeMethods.ShowWindow(hwnd, NativeMethods.SW_SHOWNOACTIVATE);
-    }
-
-    private static void ApplyToolWindowStyle(IntPtr hwnd)
-    {
-        if (hwnd == IntPtr.Zero)
-        {
-            return;
-        }
-
-        var extendedStyle = NativeMethods.GetWindowLongPtr(hwnd, NativeMethods.GWL_EXSTYLE);
-        var nextStyle = new IntPtr(extendedStyle.ToInt64() | NativeMethods.WS_EX_TOOLWINDOW);
-        if (nextStyle != extendedStyle)
-        {
-            NativeMethods.SetWindowLongPtr(hwnd, NativeMethods.GWL_EXSTYLE, nextStyle);
-        }
+        _taskbarPlacementService.Attach(this, _forceAlwaysOnTop);
     }
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
-        if ((uint)msg == _taskbarCreatedMessage)
+        if (_taskbarPlacementService.RequiresReattach(msg))
         {
             Dispatcher.BeginInvoke(new Action(() =>
             {
-                AnchorToTaskbar();
-                AttachToTaskbarHost();
-            }));
-        }
-        else if (msg == WmShowWindow)
-        {
-            Dispatcher.BeginInvoke(new Action(() =>
-            {
-                EnsureVisibleIfExpected();
+                if (_taskbarPlacementService.IsShowWindowMessage(msg))
+                {
+                    EnsureVisibleIfExpected();
+                }
+
                 AnchorToTaskbar();
                 AttachToTaskbarHost();
             }));
@@ -1441,43 +1320,4 @@ public partial class MainWindow : Window
         AttachToTaskbarHost();
     }
 
-}
-
-internal static class NativeMethods
-{
-    internal static readonly IntPtr HWND_TOP = IntPtr.Zero;
-    internal static readonly IntPtr HWND_TOPMOST = new(-1);
-    internal static readonly IntPtr HWND_NOTOPMOST = new(-2);
-    internal const uint SWP_NOSIZE = 0x0001;
-    internal const uint SWP_NOMOVE = 0x0002;
-    internal const uint SWP_NOACTIVATE = 0x0010;
-    internal const uint SWP_ASYNCWINDOWPOS = 0x4000;
-    internal const uint SWP_NOSENDCHANGING = 0x0400;
-    internal const uint SWP_NOOWNERZORDER = 0x0200;
-    internal const uint SWP_SHOWWINDOW = 0x0040;
-    internal const int SW_SHOWNOACTIVATE = 4;
-    internal const int GWL_EXSTYLE = -20;
-    internal const int WS_EX_TOOLWINDOW = 0x00000080;
-
-    [DllImport("user32.dll", SetLastError = true)]
-    internal static extern IntPtr GetWindowLongPtr(IntPtr hWnd, int nIndex);
-
-    [DllImport("user32.dll", SetLastError = true)]
-    internal static extern IntPtr SetWindowLongPtr(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
-
-    [DllImport("user32.dll", SetLastError = true)]
-    internal static extern bool SetWindowPos(
-        IntPtr hWnd,
-        IntPtr hWndInsertAfter,
-        int X,
-        int Y,
-        int cx,
-        int cy,
-        uint uFlags);
-
-    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-    internal static extern uint RegisterWindowMessage(string lpString);
-
-    [DllImport("user32.dll", SetLastError = true)]
-    internal static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
 }

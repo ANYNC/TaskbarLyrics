@@ -2,9 +2,7 @@ using System.Globalization;
 using System.IO;
 using System.Net.Http;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using System.Windows;
-using System.Windows.Markup;
 using System.Windows.Media;
 using System.Windows.Threading;
 using Microsoft.Web.WebView2.Core;
@@ -19,16 +17,12 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
 {
     private const string DisabledSpectrumDisplayMode = "Disabled";
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        Converters = { new JsonStringEnumConverter() }
-    };
-
     private readonly AppSettings _settings;
     private readonly TrackLyricOffsetStore _trackLyricOffsetStore;
     private readonly Func<Task<CurrentTrackLyricsContext?>> _getCurrentTrackLyricsContext;
     private readonly DispatcherTimer _trackOffsetRefreshTimer;
+    private readonly SettingsWebMessageRouter _messageRouter = new();
+    private readonly FontCatalogService _fontCatalog = new();
     private bool _isWebReady;
     private bool _isTrackOffsetRefreshRunning;
     private bool _isTrackOffsetsPageActive;
@@ -145,7 +139,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             messageJson = e.WebMessageAsJson;
         }
 
-        var message = JsonSerializer.Deserialize<WebSettingsMessage>(messageJson, JsonOptions);
+        var message = _messageRouter.Parse(messageJson);
         if (message?.Type is null)
         {
             return;
@@ -272,8 +266,8 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         }
 
         var payload = CreateSettingsPayload();
-        var settingsJson = JsonSerializer.Serialize(payload, JsonOptions);
-        var fontsJson = JsonSerializer.Serialize(GetFontOptions(), JsonOptions);
+        var settingsJson = JsonSerializer.Serialize(payload, SettingsWebJson.Options);
+        var fontsJson = JsonSerializer.Serialize(_fontCatalog.GetOptions(), SettingsWebJson.Options);
         await SettingsWebView.ExecuteScriptAsync($"window.settingsApp?.setState({settingsJson}, {fontsJson});");
     }
 
@@ -343,7 +337,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             };
         }
 
-        var json = JsonSerializer.Serialize(current, JsonOptions);
+        var json = JsonSerializer.Serialize(current, SettingsWebJson.Options);
         if (!force && string.Equals(json, _lastCurrentTrackOffsetPayloadJson, StringComparison.Ordinal))
         {
             return;
@@ -390,7 +384,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             })
             .ToList()
         };
-        var json = JsonSerializer.Serialize(payload, JsonOptions);
+        var json = JsonSerializer.Serialize(payload, SettingsWebJson.Options);
 
         await SettingsWebView.ExecuteScriptAsync($"window.settingsApp?.setTrackOffsetEntries({json});");
     }
@@ -467,7 +461,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         {
             state = isSaved ? "saved" : "error",
             message
-        }, JsonOptions);
+        }, SettingsWebJson.Options);
         await SettingsWebView.ExecuteScriptAsync($"window.settingsApp?.setTrackOffsetSaveStatus({payload});");
     }
 
@@ -483,7 +477,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         _pendingPage = null;
         _pendingFocusCurrentTrack = false;
         await SettingsWebView.ExecuteScriptAsync(
-            $"window.settingsApp?.navigateToPage({JsonSerializer.Serialize(page, JsonOptions)}, {(focusCurrentTrack ? "true" : "false")});");
+            $"window.settingsApp?.navigateToPage({JsonSerializer.Serialize(page, SettingsWebJson.Options)}, {(focusCurrentTrack ? "true" : "false")});");
     }
 
     private static int ReadOffsetMilliseconds(JsonElement? value, int fallback)
@@ -503,14 +497,14 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
     {
         return value is null
             ? null
-            : JsonSerializer.Deserialize<TrackOffsetMutationPayload>(value.Value.GetRawText(), JsonOptions);
+            : JsonSerializer.Deserialize<TrackOffsetMutationPayload>(value.Value.GetRawText(), SettingsWebJson.Options);
     }
 
     private static TrackOffsetQueryPayload? DeserializeTrackOffsetQuery(JsonElement? value)
     {
         return value is null
             ? null
-            : JsonSerializer.Deserialize<TrackOffsetQueryPayload>(value.Value.GetRawText(), JsonOptions);
+            : JsonSerializer.Deserialize<TrackOffsetQueryPayload>(value.Value.GetRawText(), SettingsWebJson.Options);
     }
 
     private static TrackLyricOffsetSort ParseTrackOffsetSort(string? value)
@@ -527,7 +521,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
     {
         return value is null
             ? null
-            : JsonSerializer.Deserialize<TrackLyricOffsetRecordKey>(value.Value.GetRawText(), JsonOptions);
+            : JsonSerializer.Deserialize<TrackLyricOffsetRecordKey>(value.Value.GetRawText(), SettingsWebJson.Options);
     }
 
     private WebSettingsPayload CreateSettingsPayload()
@@ -577,7 +571,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             CoverSize = _settings.CoverSize,
             CoverGap = _settings.CoverGap,
             CoverCornerRadius = _settings.CoverCornerRadius,
-            FontFamily = ResolveInstalledFontFamily(AppSettings.NormalizeFontFamily(_settings.FontFamily)) ?? AppSettings.BundledFontFamily,
+            FontFamily = _fontCatalog.ResolveInstalledFamily(AppSettings.NormalizeFontFamily(_settings.FontFamily)) ?? AppSettings.BundledFontFamily,
             FontWeight = NormalizeFontWeight(_settings.FontWeight),
             ForegroundColorMode = _settings.ForegroundColorMode,
             ForegroundColor = _settings.ForegroundColor,
@@ -619,82 +613,6 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         return result;
     }
 
-    private static List<FontOption> GetFontOptions()
-    {
-        var fonts = Fonts.SystemFontFamilies
-            .Select(x => new FontOption
-            {
-                Value = x.Source,
-                Label = GetLocalizedFontName(x)
-            })
-            .OrderBy(x => x.Label, StringComparer.CurrentCultureIgnoreCase)
-            .ToList();
-
-        if (!fonts.Any(x => string.Equals(x.Value, AppSettings.BundledFontFamily, StringComparison.OrdinalIgnoreCase)))
-        {
-            fonts.Insert(0, new FontOption
-            {
-                Value = AppSettings.BundledFontFamily,
-                Label = $"{AppSettings.BundledFontFamily} (内置)"
-            });
-        }
-
-        return fonts;
-    }
-
-    private static string GetLocalizedFontName(System.Windows.Media.FontFamily fontFamily)
-    {
-        var languages = new[]
-        {
-            XmlLanguage.GetLanguage("zh-CN"),
-            XmlLanguage.GetLanguage("zh-Hans"),
-            XmlLanguage.GetLanguage(CultureInfo.CurrentUICulture.IetfLanguageTag),
-            XmlLanguage.GetLanguage("en-US")
-        };
-
-        foreach (var language in languages)
-        {
-            if (fontFamily.FamilyNames.TryGetValue(language, out var name) &&
-                !string.IsNullOrWhiteSpace(name))
-            {
-                return name;
-            }
-        }
-
-        return fontFamily.FamilyNames.Values.FirstOrDefault(x => !string.IsNullOrWhiteSpace(x))
-            ?? fontFamily.Source;
-    }
-
-    private string? ResolveInstalledFontFamily(string? fontFamily)
-    {
-        if (string.IsNullOrWhiteSpace(fontFamily))
-        {
-            return null;
-        }
-
-        var fonts = GetFontOptions();
-        var byValue = fonts.ToDictionary(x => x.Value, x => x.Value, StringComparer.OrdinalIgnoreCase);
-        var byLabel = fonts
-            .GroupBy(x => x.Label, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(x => x.Key, x => x.First().Value, StringComparer.OrdinalIgnoreCase);
-
-        foreach (var candidate in fontFamily.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            if (string.Equals(candidate, AppSettings.BundledFontFamily, StringComparison.OrdinalIgnoreCase))
-            {
-                return AppSettings.BundledFontFamily;
-            }
-
-            if (byValue.TryGetValue(candidate, out var value) ||
-                byLabel.TryGetValue(candidate, out value))
-            {
-                return value;
-            }
-        }
-
-        return null;
-    }
-
     private static string NormalizeFontWeight(string? value)
     {
         return value?.Trim() switch
@@ -727,6 +645,17 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             return;
         }
 
+        var hotkeyDefinition = MediaHotkeyCatalog.Definitions
+            .FirstOrDefault(definition => string.Equals(definition.SettingKey, key, StringComparison.Ordinal));
+        if (hotkeyDefinition is not null)
+        {
+            var hotkeySettings = EnsureMediaHotkeySettings();
+            hotkeyDefinition.WriteBinding(
+                hotkeySettings,
+                ReadHotkeyBinding(element, hotkeyDefinition.ReadBinding(hotkeySettings)));
+            return;
+        }
+
         switch (key)
         {
             case "enableQQMusic":
@@ -749,24 +678,6 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 break;
             case "enableGlobalMediaHotkeys":
                 EnsureMediaHotkeySettings().Enabled = ReadBool(element, EnsureMediaHotkeySettings().Enabled);
-                break;
-            case "hotkeyTogglePlayPause":
-                EnsureMediaHotkeySettings().TogglePlayPause = ReadHotkeyBinding(element, EnsureMediaHotkeySettings().TogglePlayPause);
-                break;
-            case "hotkeyPreviousTrack":
-                EnsureMediaHotkeySettings().PreviousTrack = ReadHotkeyBinding(element, EnsureMediaHotkeySettings().PreviousTrack);
-                break;
-            case "hotkeyNextTrack":
-                EnsureMediaHotkeySettings().NextTrack = ReadHotkeyBinding(element, EnsureMediaHotkeySettings().NextTrack);
-                break;
-            case "hotkeySeekBackward":
-                EnsureMediaHotkeySettings().SeekBackward = ReadHotkeyBinding(element, EnsureMediaHotkeySettings().SeekBackward);
-                break;
-            case "hotkeySeekForward":
-                EnsureMediaHotkeySettings().SeekForward = ReadHotkeyBinding(element, EnsureMediaHotkeySettings().SeekForward);
-                break;
-            case "hotkeyToggleLyricsVisibility":
-                EnsureMediaHotkeySettings().ToggleLyricsVisibility = ReadHotkeyBinding(element, EnsureMediaHotkeySettings().ToggleLyricsVisibility);
                 break;
             case "showLyricsOnStartup":
                 _settings.ShowLyricsOnStartup = ReadBool(element, _settings.ShowLyricsOnStartup);
@@ -892,13 +803,9 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
 
     private static bool IsMediaHotkeySetting(string? key)
     {
-        return key is "enableGlobalMediaHotkeys" or
-            "hotkeyTogglePlayPause" or
-            "hotkeyPreviousTrack" or
-            "hotkeyNextTrack" or
-            "hotkeySeekBackward" or
-            "hotkeySeekForward" or
-            "hotkeyToggleLyricsVisibility";
+        return key == "enableGlobalMediaHotkeys" ||
+            MediaHotkeyCatalog.Definitions.Any(definition =>
+                string.Equals(definition.SettingKey, key, StringComparison.Ordinal));
     }
 
     private static string ReadHotkeyBinding(JsonElement element, string fallback)
@@ -1033,7 +940,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             return;
         }
 
-        var json = JsonSerializer.Serialize(payload, JsonOptions);
+        var json = JsonSerializer.Serialize(payload, SettingsWebJson.Options);
         await SettingsWebView.ExecuteScriptAsync($"window.settingsApp?.setUpdateStatus({json});");
     }
 
@@ -1045,7 +952,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         }
 
         var state = WindowState == WindowState.Maximized ? "maximized" : "normal";
-        await SettingsWebView.ExecuteScriptAsync($"window.settingsApp?.setWindowState({JsonSerializer.Serialize(state, JsonOptions)});");
+        await SettingsWebView.ExecuteScriptAsync($"window.settingsApp?.setWindowState({JsonSerializer.Serialize(state, SettingsWebJson.Options)});");
     }
 
     private static void OpenExternalLink(string url)
@@ -1263,15 +1170,6 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         NativeWindowTheme.Apply(this, SettingsWebView);
     }
 
-    private sealed class WebSettingsMessage
-    {
-        public string? Type { get; set; }
-
-        public string? Key { get; set; }
-
-        public JsonElement? Value { get; set; }
-    }
-
     private sealed class CurrentTrackOffsetPayload
     {
         public string Title { get; set; } = string.Empty;
@@ -1386,10 +1284,4 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         public string Url { get; set; } = "";
     }
 
-    private sealed class FontOption
-    {
-        public string Value { get; set; } = "";
-
-        public string Label { get; set; } = "";
-    }
 }
