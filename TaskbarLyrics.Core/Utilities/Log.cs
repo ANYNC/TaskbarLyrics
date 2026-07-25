@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.IO;
 using System.Text;
 
@@ -33,7 +34,7 @@ public static class Log
             var logPath = level == Level.Error
                 ? GetErrorLogPath()
                 : GetDebugLogPath();
-            LogFileWriter.AppendLine(logPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] [{level.ToString().ToUpper()}] {message}", MaxLogFileSizeBytes);
+            LogFileWriter.AppendLine(logPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] [{level.ToString().ToUpperInvariant()}] {message}", MaxLogFileSizeBytes);
         }
         catch
         {
@@ -148,7 +149,7 @@ public static class LogFileWriter
         var fileName = Path.GetFileName(logPath);
         var (prefix, date) = GetLogNameParts(fileName);
         var extension = Path.GetExtension(fileName);
-        var today = DateTime.Now.ToString("yyyy-MM-dd");
+        var today = DateTime.Now.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
         if (!string.Equals(date, today, StringComparison.Ordinal))
         {

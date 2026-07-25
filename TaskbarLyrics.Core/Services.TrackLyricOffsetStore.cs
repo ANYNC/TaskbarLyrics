@@ -527,7 +527,7 @@ public sealed class TrackLyricOffsetStore : IDisposable
         return Math.Clamp(value, MinimumOffsetMilliseconds, MaximumOffsetMilliseconds);
     }
 
-    private static IEnumerable<string> SplitSearchTerms(string? search)
+    private static string[] SplitSearchTerms(string? search)
     {
         return string.IsNullOrWhiteSpace(search)
             ? Array.Empty<string>()

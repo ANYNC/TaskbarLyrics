@@ -7,6 +7,7 @@ using TaskbarLyrics.Core.Models;
 using TaskbarLyrics.Core.Utilities;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Net.Http;
 using System.Text;
@@ -224,7 +225,7 @@ public sealed class LyricifyLyricProvider : LyricProviderBase
                                 continue;
                             }
 
-                            var startTimeStr = TimeSpan.FromMilliseconds(startTime).ToString(@"mm\:ss\.ff");
+                            var startTimeStr = TimeSpan.FromMilliseconds(startTime).ToString(@"mm\:ss\.ff", CultureInfo.InvariantCulture);
                             lyricBuilder.Append('[').Append(startTimeStr).Append(']').AppendLine(item.Text);
                             if (item is IFullLineInfo fullLineInfo &&
                                 fullLineInfo.Translations.TryGetValue("zh", out var translation) &&

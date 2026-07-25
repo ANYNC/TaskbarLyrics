@@ -8,7 +8,7 @@ namespace TaskbarLyrics.Core.Services;
 public sealed class LyricProviderRegistry : ILyricProviderRegistry
 {
     private readonly IReadOnlyList<ILyricProvider> _providers;
-    private readonly IReadOnlyDictionary<ILyricProvider, SemaphoreSlim> _providerGates;
+    private readonly Dictionary<ILyricProvider, SemaphoreSlim> _providerGates;
     private int _activeProviderOperations;
     private int _isDisposed;
     private int _resourcesDisposed;
@@ -165,7 +165,7 @@ public sealed class LyricProviderRegistry : ILyricProviderRegistry
         return BuildResults(fallbackResults);
     }
 
-    private void LogNoLyricsSummary(
+    private static void LogNoLyricsSummary(
         TrackInfo track,
         string sourceApp,
         IReadOnlyDictionary<ILyricProvider, LyricFetchResult> fallbackResults,
@@ -307,7 +307,7 @@ public sealed class LyricProviderRegistry : ILyricProviderRegistry
         };
     }
 
-    private MappingResult ResolveMapping(TrackInfo track)
+    private static MappingResult ResolveMapping(TrackInfo track)
     {
         var targetTitle = track.Title;
         var targetArtist = track.Artist;
@@ -358,7 +358,7 @@ public sealed class LyricProviderRegistry : ILyricProviderRegistry
     }
 
     private List<LyricResolveResult> BuildResults(
-        IReadOnlyDictionary<ILyricProvider, LyricFetchResult>? results = null)
+        Dictionary<ILyricProvider, LyricFetchResult>? results = null)
     {
         return _providers
             .Select(provider =>
@@ -425,7 +425,7 @@ public sealed class LyricProviderRegistry : ILyricProviderRegistry
         {
             using var providerCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             providerTask = provider.GetLyricsWithDiagnosticsAsync(track, providerCts.Token);
-            var timeoutTask = Task.Delay(timeout);
+            var timeoutTask = Task.Delay(timeout, CancellationToken.None);
             var cancellationTask = Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
             var completedTask = await Task.WhenAny(providerTask, timeoutTask, cancellationTask);
             if (completedTask == timeoutTask)

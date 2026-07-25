@@ -9,9 +9,7 @@ public sealed class LyricProviderBaseTests
     [Fact]
     public void ParseLrcAppliesOffsetAndExpandsMultipleTimestamps()
     {
-        var provider = new ParserProvider();
-
-        var lines = provider.Parse("[offset:+500]\n[00:01.20][00:02.00]Hello world");
+        var lines = ParserProvider.Parse("[offset:+500]\n[00:01.20][00:02.00]Hello world");
 
         Assert.Collection(
             lines,
@@ -30,9 +28,7 @@ public sealed class LyricProviderBaseTests
     [Fact]
     public void ParseLrcClampsNegativeTimestampAfterOffset()
     {
-        var provider = new ParserProvider();
-
-        var line = Assert.Single(provider.Parse("[offset:-1500]\n[00:01.00]Opening"));
+        var line = Assert.Single(ParserProvider.Parse("[offset:-1500]\n[00:01.00]Opening"));
 
         Assert.Equal(TimeSpan.Zero, line.Timestamp);
         Assert.Equal("Opening", line.Text);
@@ -106,7 +102,7 @@ public sealed class LyricProviderBaseTests
 
         public override string SourceApp => "Test";
 
-        public List<LyricLine> Parse(string content) => ParseLrc(content);
+        public static List<LyricLine> Parse(string content) => ParseLrc(content);
 
         public string GetCacheKey(TrackInfo track) => BuildCacheKey(track);
 

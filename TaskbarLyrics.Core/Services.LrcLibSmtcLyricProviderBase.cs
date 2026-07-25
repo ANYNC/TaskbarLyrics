@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Globalization;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using TaskbarLyrics.Core.Abstractions;
@@ -380,7 +381,7 @@ public abstract class LrcLibSmtcLyricProviderBase : ILyricProvider
         return list.Where(x => !string.IsNullOrWhiteSpace(x.Title));
     }
 
-    private static IEnumerable<string> BuildSearchQueries(string title, string artist)
+    private static List<string> BuildSearchQueries(string title, string artist)
     {
         var queries = new List<string>();
 
@@ -675,8 +676,8 @@ public abstract class LrcLibSmtcLyricProviderBase : ILyricProvider
 
             foreach (Match match in matches)
             {
-                var minute = int.Parse(match.Groups[1].Value);
-                var second = int.Parse(match.Groups[2].Value);
+                var minute = int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
+                var second = int.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture);
                 var fractionRaw = match.Groups[3].Value;
                 var millisecond = ParseMillisecond(fractionRaw);
 
@@ -736,9 +737,9 @@ public abstract class LrcLibSmtcLyricProviderBase : ILyricProvider
 
         return fractionRaw.Length switch
         {
-            1 => int.Parse(fractionRaw) * 100,
-            2 => int.Parse(fractionRaw) * 10,
-            _ => int.Parse(fractionRaw[..3])
+            1 => int.Parse(fractionRaw, CultureInfo.InvariantCulture) * 100,
+            2 => int.Parse(fractionRaw, CultureInfo.InvariantCulture) * 10,
+            _ => int.Parse(fractionRaw[..3], CultureInfo.InvariantCulture)
         };
     }
 

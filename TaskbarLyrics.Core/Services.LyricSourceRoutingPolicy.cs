@@ -5,6 +5,8 @@ namespace TaskbarLyrics.Core.Services;
 internal static class LyricSourceRoutingPolicy
 {
     private static readonly string[] AdaptedProviders = { "QQMusic", "Netease", "Kugou" };
+    private static readonly string[] UnknownSourcePrimaryFallbackProviders = { "QQMusic", "Netease", "LRCLIB" };
+    private static readonly string[] UnknownSourceSecondaryFallbackProviders = { "Kugou" };
 
     public static bool TryGetOfficialProvider(string? sourceApp, out string provider)
     {
@@ -49,12 +51,12 @@ internal static class LyricSourceRoutingPolicy
 
         return new[]
         {
-            BuildBatch(new[] { "QQMusic", "Netease", "LRCLIB" }),
-            BuildBatch(new[] { "Kugou" })
+            BuildBatch(UnknownSourcePrimaryFallbackProviders),
+            BuildBatch(UnknownSourceSecondaryFallbackProviders)
         };
     }
 
-    private static IReadOnlyList<string> BuildBatch(IEnumerable<string> providers)
+    private static string[] BuildBatch(IEnumerable<string> providers)
     {
         return providers
             .Where(provider => !string.IsNullOrWhiteSpace(provider))

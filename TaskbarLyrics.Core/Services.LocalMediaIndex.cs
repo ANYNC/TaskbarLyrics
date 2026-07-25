@@ -54,7 +54,7 @@ public static class LocalMediaIndexRegistry
         }
     }
 
-    private static IReadOnlyList<string> NormalizeFolders(IEnumerable<string>? rootFolders) => (rootFolders ?? [])
+    private static string[] NormalizeFolders(IEnumerable<string>? rootFolders) => (rootFolders ?? [])
         .Where(path => !string.IsNullOrWhiteSpace(path))
         .Select(path => path.Trim().Trim('"'))
         .Distinct(StringComparer.OrdinalIgnoreCase)

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 using Lyricify.Lyrics.Models;
@@ -141,7 +142,7 @@ public sealed class LocalLyricProvider : ILyricProvider, IDisposable
         }
     }
 
-    private static void TryAddEntry(ISet<string> seen, ICollection<LocalLyricEntry> entries, string lyricPath)
+    private static void TryAddEntry(HashSet<string> seen, ICollection<LocalLyricEntry> entries, string lyricPath)
     {
         if (!seen.Add(lyricPath))
         {
@@ -428,8 +429,8 @@ public sealed class LocalLyricProvider : ILyricProvider, IDisposable
 
     private static TimeSpan ParseTimestamp(Match match)
     {
-        var minutes = int.Parse(match.Groups[1].Value);
-        var seconds = int.Parse(match.Groups[2].Value);
+        var minutes = int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
+        var seconds = int.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture);
         var milliseconds = ParseMilliseconds(match.Groups[3].Value);
         return new TimeSpan(0, 0, minutes, seconds, milliseconds);
     }
@@ -443,9 +444,9 @@ public sealed class LocalLyricProvider : ILyricProvider, IDisposable
 
         return fractionRaw.Length switch
         {
-            1 => int.Parse(fractionRaw) * 100,
-            2 => int.Parse(fractionRaw) * 10,
-            _ => int.Parse(fractionRaw[..3])
+            1 => int.Parse(fractionRaw, CultureInfo.InvariantCulture) * 100,
+            2 => int.Parse(fractionRaw, CultureInfo.InvariantCulture) * 10,
+            _ => int.Parse(fractionRaw[..3], CultureInfo.InvariantCulture)
         };
     }
 

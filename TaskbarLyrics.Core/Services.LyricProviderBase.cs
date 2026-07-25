@@ -30,7 +30,7 @@ public abstract class LyricProviderBase : ILyricProvider
     private static readonly TimeSpan OpeningDuplicateTimestampWindow = TimeSpan.FromSeconds(3);
     private static readonly TimeSpan OpeningCreditFilterWindow = TimeSpan.FromSeconds(5);
 
-    private static readonly ILyricCacheStore<LyricDocument> CacheStore =
+    private static readonly JsonLyricCacheStore<LyricDocument> CacheStore =
         new JsonLyricCacheStore<LyricDocument>(CacheFilePathStatic);
 
     protected HttpClient Http { get; }
@@ -97,7 +97,7 @@ public abstract class LyricProviderBase : ILyricProvider
     // ========================================================
     // ✅ 第一核心：ProcessDocument (后处理)
     // ========================================================
-    private LyricDocument ProcessDocument(LyricDocument doc)
+    private static LyricDocument ProcessDocument(LyricDocument doc)
     {
         var lines = doc.Lines.Select(l => l with
         {
@@ -116,7 +116,7 @@ public abstract class LyricProviderBase : ILyricProvider
     // ========================================================
     // ✅ 第二核心：BetterLyrics 风格净化逻辑
     // ========================================================
-    private string BetterLyrics_Sanitize(string input)
+    private static string BetterLyrics_Sanitize(string input)
     {
         if (string.IsNullOrWhiteSpace(input)) return string.Empty;
 
@@ -183,7 +183,7 @@ public abstract class LyricProviderBase : ILyricProvider
         return ChineseScriptConverter.ToSimplified(result).Trim();
     }
 
-    private bool ContainsAnyMeaningfulChar(string s)
+    private static bool ContainsAnyMeaningfulChar(string s)
     {
         return s.Any(c => char.IsLetterOrDigit(c) || (int)c > 0x4E00);
     }
@@ -191,7 +191,7 @@ public abstract class LyricProviderBase : ILyricProvider
     // ========================================================
     // ✅ 第三核心：ParseLrc (逐行精准提取)
     // ========================================================
-    protected List<LyricLine> ParseLrc(string? lrc)
+    protected static List<LyricLine> ParseLrc(string? lrc)
     {
         if (string.IsNullOrWhiteSpace(lrc)) return new List<LyricLine>();
 
@@ -226,8 +226,8 @@ public abstract class LyricProviderBase : ILyricProvider
 
             foreach (Match match in matches)
             {
-                int min = int.Parse(match.Groups[1].Value);
-                int sec = int.Parse(match.Groups[2].Value);
+                int min = int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
+                int sec = int.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture);
                 int ms = ParseMillisecond(match.Groups[3].Value);
                 var timestamp = new TimeSpan(0, 0, min, sec, ms).Add(TimeSpan.FromMilliseconds(offsetMs));
                 resultList.Add(new LyricLine(ClampTimestamp(timestamp), cleanedContent));
@@ -310,7 +310,7 @@ public abstract class LyricProviderBase : ILyricProvider
         return !string.IsNullOrWhiteSpace(text) && LeadingCreditRegex.IsMatch(text);
     }
 
-    private List<LyricLine> AlignBilingualLyrics(List<LyricLine> rawLines)
+    private static List<LyricLine> AlignBilingualLyrics(List<LyricLine> rawLines)
     {
         if (rawLines.Count == 0) return rawLines;
         var sorted = rawLines.OrderBy(l => l.Timestamp).ToList();
@@ -338,7 +338,7 @@ public abstract class LyricProviderBase : ILyricProvider
         return mainTrack.OrderBy(l => l.Timestamp).ToList();
     }
 
-    private List<LyricLine> EnsureSyllables(List<LyricLine> lines)
+    private static List<LyricLine> EnsureSyllables(List<LyricLine> lines)
     {
         for (int i = 0; i < lines.Count; i++)
         {
@@ -352,7 +352,7 @@ public abstract class LyricProviderBase : ILyricProvider
         return lines;
     }
 
-    protected string DecodeBytesToString(byte[] bytes)
+    protected static string DecodeBytesToString(byte[] bytes)
     {
         try { return new UTF8Encoding(false, true).GetString(bytes); }
         catch (DecoderFallbackException)
@@ -362,10 +362,15 @@ public abstract class LyricProviderBase : ILyricProvider
         }
     }
 
-    private int ParseMillisecond(string fractionRaw)
+    private static int ParseMillisecond(string fractionRaw)
     {
         if (string.IsNullOrWhiteSpace(fractionRaw)) return 0;
-        return fractionRaw.Length switch { 1 => int.Parse(fractionRaw) * 100, 2 => int.Parse(fractionRaw) * 10, _ => int.Parse(fractionRaw[..3]) };
+        return fractionRaw.Length switch
+        {
+            1 => int.Parse(fractionRaw, CultureInfo.InvariantCulture) * 100,
+            2 => int.Parse(fractionRaw, CultureInfo.InvariantCulture) * 10,
+            _ => int.Parse(fractionRaw[..3], CultureInfo.InvariantCulture)
+        };
     }
 
     private static TimeSpan ClampTimestamp(TimeSpan timestamp)
@@ -388,7 +393,7 @@ public abstract class LyricProviderBase : ILyricProvider
         return $"v9|{provider}|{source}|metadata:{NormalizeForCache(track.Title)}|{NormalizeForCache(track.Artist)}|{NormalizeForCache(track.Album)}|{NormalizeDurationForCache(track.Duration)}";
     }
 
-    private string NormalizeForCache(string s)
+    private static string NormalizeForCache(string s)
     {
         var n = ChineseScriptConverter.ToSimplified(s).ToLowerInvariant();
         var sb = new StringBuilder();
@@ -403,7 +408,7 @@ public abstract class LyricProviderBase : ILyricProvider
             : 0;
     }
 
-    protected string NormalizeForSearch(string? value)
+    protected static string NormalizeForSearch(string? value)
     {
         if (string.IsNullOrWhiteSpace(value)) return string.Empty;
 
@@ -448,7 +453,7 @@ public abstract class LyricProviderBase : ILyricProvider
         return stringBuilder.ToString().Normalize(NormalizationForm.FormC);
     }
 
-    protected int ScoreMatch(TrackInfo target, string resultTitle, string resultArtist, int? resultDurationInSeconds = null)
+    protected static int ScoreMatch(TrackInfo target, string resultTitle, string resultArtist, int? resultDurationInSeconds = null)
     {
         return LyricMatcher.Score(target, resultTitle, resultArtist, resultDurationInSeconds ?? 0);
     }

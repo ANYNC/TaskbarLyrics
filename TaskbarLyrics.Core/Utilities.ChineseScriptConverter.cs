@@ -8,7 +8,7 @@ public static class ChineseScriptConverter
     private const uint LCMAP_SIMPLIFIED_CHINESE = 0x02000000;
     private static readonly Lazy<Func<string, string>?> OpenCcToSimplified = new(CreateOpenCcToSimplified);
 
-    private static readonly IReadOnlyDictionary<char, char> FallbackSimplifiedMap = new Dictionary<char, char>
+    private static readonly Dictionary<char, char> FallbackSimplifiedMap = new()
     {
         ['後'] = '后',
         ['愛'] = '爱',
