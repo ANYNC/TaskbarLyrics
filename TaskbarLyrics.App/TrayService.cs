@@ -12,6 +12,7 @@ public sealed class TrayService : IDisposable
 
     public TrayService(
         Action toggleLyricsWindow,
+        Func<string> getToggleLyricsHotkey,
         Action<bool, SpectrumDisplayMode> setSpectrumDisplayMode,
         Func<bool> isSpectrumEnabled,
         Func<SpectrumDisplayMode> getSpectrumDisplayMode,
@@ -38,6 +39,7 @@ public sealed class TrayService : IDisposable
                 System.Windows.Application.Current.Dispatcher.BeginInvoke(() =>
                     ShowMenu(
                         toggleLyricsWindow,
+                        getToggleLyricsHotkey(),
                         setSpectrumDisplayMode,
                         isSpectrumEnabled(),
                         getSpectrumDisplayMode(),
@@ -74,6 +76,7 @@ public sealed class TrayService : IDisposable
 
     private void ShowMenu(
         Action toggleLyricsWindow,
+        string toggleLyricsHotkey,
         Action<bool, SpectrumDisplayMode> setSpectrumDisplayMode,
         bool isSpectrumEnabled,
         SpectrumDisplayMode spectrumDisplayMode,
@@ -87,6 +90,7 @@ public sealed class TrayService : IDisposable
         _menuWindow?.Close();
         _menuWindow = new TrayMenuWindow(
             toggleLyricsWindow,
+            toggleLyricsHotkey,
             setSpectrumDisplayMode,
             isSpectrumEnabled,
             spectrumDisplayMode,

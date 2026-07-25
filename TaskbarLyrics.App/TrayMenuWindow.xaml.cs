@@ -49,6 +49,7 @@ public partial class TrayMenuWindow : Window
 
     public TrayMenuWindow(
         Action toggleLyricsWindow,
+        string toggleLyricsHotkey,
         Action<bool, SpectrumDisplayMode> setSpectrumDisplayMode,
         bool isSpectrumEnabled,
         SpectrumDisplayMode spectrumDisplayMode,
@@ -62,6 +63,10 @@ public partial class TrayMenuWindow : Window
         AppIconProvider.ApplyWindowIcon(this);
         ApplyTheme();
         _toggleLyricsWindow = toggleLyricsWindow;
+        ToggleLyricsHotkeyText.Text = toggleLyricsHotkey;
+        ToggleLyricsHotkeyText.Visibility = string.IsNullOrWhiteSpace(toggleLyricsHotkey)
+            ? Visibility.Collapsed
+            : Visibility.Visible;
         _setSpectrumDisplayMode = setSpectrumDisplayMode;
         _spectrumDisplayMode = spectrumDisplayMode;
         _openCurrentTrackOffsetSettings = openCurrentTrackOffsetSettings;
@@ -102,6 +107,9 @@ public partial class TrayMenuWindow : Window
         Resources["TrayMenuTextBrush"] = new Media.SolidColorBrush(light
             ? Media.Color.FromRgb(15, 23, 42)
             : Media.Colors.White);
+        Resources["TrayMenuMutedTextBrush"] = new Media.SolidColorBrush(light
+            ? Media.Color.FromRgb(100, 116, 139)
+            : Media.Color.FromRgb(180, 180, 180));
         Resources["TrayMenuSeparatorBrush"] = new Media.SolidColorBrush(light
             ? Media.Color.FromRgb(218, 226, 237)
             : Media.Color.FromRgb(74, 74, 74));

@@ -19,6 +19,7 @@ public partial class App : System.Windows.Application
     private SpectrumTuningWindow? _spectrumTuningWindow;
     private LyricsWindowHost? _lyricsWindowHost;
     private TrackLyricOffsetStore? _trackLyricOffsetStore;
+    private GlobalMediaHotkeyService? _mediaHotkeyService;
     private CancellationTokenSource? _activationServerCancellation;
     private SpectrumTuningSettings _spectrumTuningSettings = SpectrumTuningSettings.CreateDefault();
 
@@ -53,6 +54,7 @@ public partial class App : System.Windows.Application
         Settings = _settingsStore.Load();
         Settings.FontFamily = AppSettings.NormalizeFontFamily(Settings.FontFamily);
         Settings.SpectrumTuning ??= SpectrumTuningSettings.CreateDefault();
+        Settings.GlobalMediaHotkeys ??= new GlobalMediaHotkeySettings();
         NativeWindowTheme.SetMode(Settings.ToolWindowTheme);
         _spectrumTuningSettings = Settings.SpectrumTuning.Clone();
         ApplyStartupForegroundColor(Settings);
@@ -61,6 +63,8 @@ public partial class App : System.Windows.Application
 
         _trackLyricOffsetStore = new TrackLyricOffsetStore();
         _lyricsWindowHost = new LyricsWindowHost(Settings, _trackLyricOffsetStore);
+        _mediaHotkeyService = new GlobalMediaHotkeyService(ExecuteMediaHotkeyAsync);
+        _mediaHotkeyService.Apply(Settings.GlobalMediaHotkeys);
 
         if (Settings.ShowLyricsOnStartup)
         {
@@ -71,6 +75,9 @@ public partial class App : System.Windows.Application
         _lyricsWindowHost.ApplySpectrumTuning(_spectrumTuningSettings);
         _trayService = new TrayService(
             ToggleLyricsWindow,
+            () => Settings.GlobalMediaHotkeys is { Enabled: true } hotkeys
+                ? hotkeys.ToggleLyricsVisibility
+                : string.Empty,
             SetSpectrumDisplayMode,
             () => Settings.EnableSpectrum,
             () => Settings.SpectrumDisplayMode,
@@ -91,6 +98,7 @@ public partial class App : System.Windows.Application
         SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
         _settingsStore?.Save(Settings);
         _spectrumTuningWindow?.Close();
+        _mediaHotkeyService?.Dispose();
         _lyricsWindowHost?.Dispose();
         _trayService?.Dispose();
         _trackLyricOffsetStore?.Dispose();
@@ -102,10 +110,26 @@ public partial class App : System.Windows.Application
     {
         var nextSettings = settings.Clone();
         nextSettings.SpectrumTuning = Settings.SpectrumTuning.Clone();
+        nextSettings.GlobalMediaHotkeys ??= new GlobalMediaHotkeySettings();
         NativeWindowTheme.SetMode(nextSettings.ToolWindowTheme);
         Settings = nextSettings;
         _settingsStore?.Save(Settings);
         _lyricsWindowHost?.ApplySettings(Settings);
+        _mediaHotkeyService?.Apply(Settings.GlobalMediaHotkeys);
+    }
+
+    public IReadOnlyDictionary<string, string> GetMediaHotkeyStatuses()
+    {
+        return _mediaHotkeyService?.GetStatusSnapshot()
+            ?? new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["toggleLyricsVisibility"] = "未注册",
+                ["togglePlayPause"] = "未注册",
+                ["previousTrack"] = "未注册",
+                ["nextTrack"] = "未注册",
+                ["seekBackward"] = "未注册",
+                ["seekForward"] = "未注册"
+            };
     }
 
     private async Task RunAutomaticUpdateCheckAsync()
@@ -265,6 +289,17 @@ public partial class App : System.Windows.Application
     public void OpenSmtcTimelineMonitorWindow()
     {
         _lyricsWindowHost?.OpenSmtcTimelineMonitorWindow();
+    }
+
+    private Task ExecuteMediaHotkeyAsync(MediaHotkeyAction action)
+    {
+        if (action == MediaHotkeyAction.ToggleLyricsVisibility)
+        {
+            ToggleLyricsWindow();
+            return Task.CompletedTask;
+        }
+
+        return _lyricsWindowHost?.ExecuteMediaHotkeyAsync(action) ?? Task.CompletedTask;
     }
 
     public void ShowLyricsWindow()

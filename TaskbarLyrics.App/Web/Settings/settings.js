@@ -18,6 +18,7 @@
 
     const pageMeta = {
       sources: ["播放源", "选择需要监听的音乐软件，并调整识别优先级。"],
+      shortcuts: ["快捷键", "设置在其他应用前台时控制播放器的全局组合键。"],
       lyrics: ["歌词", "控制歌词显示、翻译和频谱策略。"],
       trackOffsets: ["单曲偏移", "调整当前歌曲同步，并管理按歌词源保存的偏移。"],
       appearance: ["外观", "调整文字与封面，并在任务栏预览中即时检查效果。"],
@@ -41,6 +42,7 @@
     let pageTransitionToken = 0;
     let activeSelectTrigger = null;
     let activeSelectIndex = -1;
+    let activeHotkeyRecorder = null;
     let colorDraft = { h: 0, s: 0, v: 1, hex: "#FFFFFF" };
     let colorPointerActive = false;
     let updateState = "idle";
@@ -513,6 +515,60 @@
       $$('[data-color-swatch]').forEach(swatch => { swatch.style.backgroundColor = state.foregroundColor; });
     }
 
+    function renderMediaHotkeys() {
+      if (!state) return;
+      const enabled = Boolean(state.enableGlobalMediaHotkeys);
+      $("#mediaHotkeyMasterStatus").textContent = enabled ? "已启用" : "已关闭";
+      $$('[data-hotkey-binding]').forEach(button => {
+        if (button !== activeHotkeyRecorder) button.textContent = state[button.dataset.hotkeyBinding] || "未设置";
+      });
+      $$('[data-hotkey-status]').forEach(output => {
+        const status = state.mediaHotkeyStatuses?.[output.dataset.hotkeyStatus] || "未注册";
+        output.textContent = status;
+        output.dataset.state = status === "已注册" ? "ready" : status === "已关闭" ? "off" : "warning";
+      });
+    }
+
+    function cancelHotkeyRecording() {
+      if (!activeHotkeyRecorder) return;
+      activeHotkeyRecorder.classList.remove("recording");
+      activeHotkeyRecorder = null;
+      renderMediaHotkeys();
+    }
+
+    function beginHotkeyRecording(button) {
+      if (activeHotkeyRecorder === button) return;
+      cancelHotkeyRecording();
+      activeHotkeyRecorder = button;
+      button.classList.add("recording");
+      button.textContent = "按下组合键…";
+      button.focus({ preventScroll: true });
+    }
+
+    function getRecordedHotkey(event) {
+      const modifiers = [];
+      if (event.ctrlKey) modifiers.push("Ctrl");
+      if (event.altKey) modifiers.push("Alt");
+      if (event.shiftKey) modifiers.push("Shift");
+      if (!modifiers.length) return null;
+
+      const specialKeys = {
+        ArrowLeft: "Left", ArrowUp: "Up", ArrowRight: "Right", ArrowDown: "Down",
+        Home: "Home", End: "End", PageUp: "PageUp", PageDown: "PageDown",
+        Insert: "Insert", Delete: "Delete", " ": "Space"
+      };
+      const key = specialKeys[event.key] ?? (/^[a-z0-9]$/i.test(event.key) ? event.key.toUpperCase() : /^F(?:[1-9]|1\d|2[0-4])$/i.test(event.key) ? event.key.toUpperCase() : null);
+      return key ? [...modifiers, key].join("+") : null;
+    }
+
+    function commitHotkeyBinding(key, binding) {
+      if (!state) return;
+      state[key] = binding;
+      bridge.post({ type: "update", key, value: binding });
+      markSaved();
+      renderMediaHotkeys();
+    }
+
     function setAvailableFonts(fonts) {
       const normalized = fonts.map(font => typeof font === "string"
         ? { value: font, label: font }
@@ -807,6 +863,7 @@
       syncSizeBounds();
       syncColorMode();
       syncControls();
+      renderMediaHotkeys();
       applyDependencies();
       updateOutputs();
       activatePage(state.page, false);
@@ -818,6 +875,16 @@
     }
 
     document.addEventListener("click", event => {
+      const hotkeyBinding = event.target.closest("[data-hotkey-binding]");
+      if (hotkeyBinding) { beginHotkeyRecording(hotkeyBinding); return; }
+
+      const hotkeyReset = event.target.closest("[data-hotkey-reset]");
+      if (hotkeyReset) {
+        bridge.post({ type: "resetMediaHotkey", value: hotkeyReset.dataset.hotkeyReset });
+        markSaved();
+        return;
+      }
+
       const themeOption = event.target.closest("[data-theme-value]");
       if (themeOption) { commitSetting("toolWindowTheme", themeOption.dataset.themeValue); return; }
 
@@ -929,6 +996,22 @@
     });
 
     document.addEventListener("keydown", event => {
+      if (activeHotkeyRecorder) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (event.key === "Escape") { cancelHotkeyRecording(); return; }
+        const binding = getRecordedHotkey(event);
+        if (!binding) {
+          if (!["Control", "Alt", "Shift", "Meta"].includes(event.key)) activeHotkeyRecorder.textContent = "请使用 Ctrl、Alt 或 Shift";
+          return;
+        }
+        const button = activeHotkeyRecorder;
+        button.classList.remove("recording");
+        activeHotkeyRecorder = null;
+        commitHotkeyBinding(button.dataset.hotkeyBinding, binding);
+        return;
+      }
+
       const handle = event.target.closest("[data-drag-id]");
       if (!handle || !event.altKey || !["ArrowUp", "ArrowDown"].includes(event.key)) return;
       event.preventDefault();
@@ -986,6 +1069,7 @@
     });
 
     window.addEventListener("resize", () => { closeSelect(false); closeColorPopover(false); });
+    window.addEventListener("blur", cancelHotkeyRecording);
     $$(".page").forEach(page => page.addEventListener("scroll", () => { closeSelect(false); closeColorPopover(false); }, { passive: true }));
 
     $("#colorPickerButton").addEventListener("click", () => $("#colorPopover").getAttribute("data-state") !== "open" ? openColorPopover() : closeColorPopover(true));

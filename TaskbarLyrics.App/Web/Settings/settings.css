@@ -332,6 +332,17 @@
     .switch input:checked + .switch-track::after { transform: translateX(19px); }
     .switch input:focus-visible + .switch-track { outline: 2px solid var(--ring); outline-offset: 2px; }
 
+    .media-hotkey-list { display: grid; }
+    .media-hotkey-row { min-height: 62px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 420px); align-items: center; gap: 18px; padding: 10px 18px; border-bottom: 1px solid var(--border); }
+    .media-hotkey-row:last-child { border-bottom: 0; }
+    .media-hotkey-controls { display: grid; grid-template-columns: minmax(142px, 1fr) minmax(104px, auto) auto; align-items: center; gap: 8px; }
+    .media-hotkey-recorder { min-width: 0; text-align: left; font-family: Consolas, "Cascadia Mono", monospace; cursor: pointer; }
+    .media-hotkey-recorder.recording { border-color: var(--ring); background: var(--accent); box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 18%, transparent); }
+    .media-hotkey-status { min-width: 0; overflow: hidden; color: var(--muted-foreground); font-size: 10px; text-align: right; white-space: nowrap; text-overflow: ellipsis; }
+    .media-hotkey-status[data-state="ready"] { color: oklch(.72 .13 150); }
+    .media-hotkey-status[data-state="warning"] { color: oklch(.76 .14 80); }
+    .media-hotkey-status[data-state="off"] { color: var(--muted-foreground); }
+
     .stepper { display: grid; grid-template-columns: 34px minmax(64px, 1fr) 34px; gap: 5px; }
     .stepper button { border: 1px solid var(--input); border-radius: var(--radius-sm); background: var(--secondary); color: var(--muted-foreground); cursor: pointer; transition: background var(--duration-fast) ease, color var(--duration-fast) ease; }
     .stepper button:hover { color: var(--foreground); background: var(--surface-hover); }
@@ -525,6 +536,8 @@
       .save-state { display: none; }
       .setting-row { grid-template-columns: 1fr; gap: 8px; }
       .setting-row.compact { grid-template-columns: 1fr auto; }
+      .media-hotkey-row { grid-template-columns: 1fr; gap: 8px; }
+      .media-hotkey-controls { grid-template-columns: minmax(122px, 1fr) minmax(96px, auto) auto; }
       .color-mode-control { grid-template-columns: 1fr; }
       .about-product { grid-template-columns: 58px minmax(0, 1fr); }
       .about-product > .btn { grid-column: 1 / -1; justify-self: start; }

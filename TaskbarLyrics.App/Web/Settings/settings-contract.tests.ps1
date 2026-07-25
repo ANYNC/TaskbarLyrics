@@ -12,14 +12,14 @@ $lyricsWindow = [IO.File]::ReadAllText((Join-Path $appRoot 'MainWindow.xaml.cs')
 
 $errors = [Collections.Generic.List[string]]::new()
 
-$pages = @('sources', 'lyrics', 'trackOffsets', 'appearance', 'window', 'general', 'advanced', 'about')
+$pages = @('sources', 'shortcuts', 'lyrics', 'trackOffsets', 'appearance', 'window', 'general', 'advanced', 'about')
 foreach ($page in $pages) {
     if (-not $html.Contains("data-nav=`"$page`"")) { $errors.Add("missing nav: $page") }
     if (-not $html.Contains("data-page=`"$page`"")) { $errors.Add("missing page: $page") }
 }
 
 $settings = @(
-    'enableLocalLyrics', 'localMusicFolders', 'showLyricsOnStartup', 'showLyricTranslation',
+    'enableLocalLyrics', 'localMusicFolders', 'enableGlobalMediaHotkeys', 'showLyricsOnStartup', 'showLyricTranslation',
     'spectrumDisplayMode', 'useSafeFontSizeRange', 'fontSize',
     'useSafeCoverSizeRange', 'coverSize', 'coverGap', 'coverCornerRadius', 'fontFamily',
     'fontWeight', 'foregroundColorMode', 'showTextShadow', 'toolWindowTheme', 'showBackground',
@@ -31,7 +31,7 @@ foreach ($key in $settings) {
 }
 
 $requiredHtml = @(
-    'id="sourceGrid"', 'id="priorityList"', 'id="selectPopover"', 'role="listbox"',
+    'id="sourceGrid"', 'id="priorityList"', 'id="mediaHotkeyList"', 'data-hotkey-binding="hotkeyToggleLyricsVisibility"', 'id="selectPopover"', 'role="listbox"',
     'id="colorPopover"', 'id="colorArea"', 'id="restoreDialog"', 'id="clearDialog"',
     'id="playerSettingsDialog"', 'id="playerRecognitionToggle"', 'id="playerOffsetInput"',
     'id="currentTrackOffset"', 'id="trackOffsetList"', 'id="trackOffsetPagination"', 'id="clearTrackOffsetsDialog"',
@@ -53,6 +53,7 @@ $requiredScript = @(
     'function openSelect', 'function closeSelect', 'function rgbToHex', 'function toArgb',
     'function activatePage', 'function renderSources', 'function renderPriority', 'function setWindowState',
     'function openPlayerSettings', 'function commitPlayerOffset', 'playerLyricOffset:',
+    'function renderMediaHotkeys', 'function beginHotkeyRecording', 'function getRecordedHotkey', 'type: "resetMediaHotkey"',
     'function renderTrackOffsets', 'function commitCurrentTrackOffset', 'function setCurrentTrackOffsetData',
     'function setTrackOffsetEntries', 'function requestTrackOffsetPage', 'function changeTrackOffsetPage',
     'type: "queryTrackOffsets"',
@@ -71,10 +72,11 @@ foreach ($unsupported in @('AppleMusic', 'Foobar', 'MusicBee', 'AIMP', 'VLC', 'W
     if ($script.Contains($unsupported)) { $errors.Add("unsupported source exposed: $unsupported") }
 }
 
-foreach ($marker in @('case "pickLocalFolder":', 'case "showLyricsWindow":', 'case "openSmtcMonitor":', 'case "openSpectrumTuning":', 'case "settingsPageChanged":', 'case "queryTrackOffsets":', 'case "setCurrentTrackOffset":', 'case "setStoredTrackOffset":', 'case "deleteTrackOffset":', 'case "clearTrackOffsets":', 'case "windowDrag":', 'case "windowResizeStart":', 'case "windowClose":')) {
+foreach ($marker in @('case "pickLocalFolder":', 'case "showLyricsWindow":', 'case "openSmtcMonitor":', 'case "openSpectrumTuning":', 'case "settingsPageChanged":', 'case "queryTrackOffsets":', 'case "setCurrentTrackOffset":', 'case "setStoredTrackOffset":', 'case "deleteTrackOffset":', 'case "clearTrackOffsets":', 'case "resetMediaHotkey":', 'case "windowDrag":', 'case "windowResizeStart":', 'case "windowClose":')) {
     if (-not $settingsWindow.Contains($marker)) { $errors.Add("missing desktop message: $marker") }
 }
 if (-not $app.Contains('public void ShowLyricsWindow()')) { $errors.Add('missing App.ShowLyricsWindow') }
+if (-not $appSettings.Contains('public GlobalMediaHotkeySettings GlobalMediaHotkeys')) { $errors.Add('global media hotkeys settings missing') }
 if (-not $appSettings.Contains('public const string DefaultFontFamily = BundledFontFamily;')) { $errors.Add('bundled font is not the default') }
 if (-not $app.Contains('Settings.FontFamily = AppSettings.NormalizeFontFamily(Settings.FontFamily);')) { $errors.Add('startup font normalization missing') }
 if (-not $lyricsWindow.Contains('fontFamily = AppSettings.NormalizeFontFamily(settings.FontFamily)')) { $errors.Add('lyrics font normalization missing') }

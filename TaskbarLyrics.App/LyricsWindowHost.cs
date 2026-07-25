@@ -89,6 +89,11 @@ internal sealed class LyricsWindowHost : IDisposable
             DispatcherPriority.Normal).Task;
     }
 
+    public Task ExecuteMediaHotkeyAsync(MediaHotkeyAction action)
+    {
+        return InvokeAsync(() => _window?.ExecuteMediaHotkeyAsync(action) ?? Task.CompletedTask);
+    }
+
     public void Close()
     {
         if (_disposed)
@@ -139,5 +144,15 @@ internal sealed class LyricsWindowHost : IDisposable
         }
 
         _dispatcher.BeginInvoke(action, DispatcherPriority.Normal);
+    }
+
+    private Task InvokeAsync(Func<Task> action)
+    {
+        if (_disposed || _dispatcher is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        return _dispatcher.InvokeAsync(action, DispatcherPriority.Normal).Task.Unwrap();
     }
 }

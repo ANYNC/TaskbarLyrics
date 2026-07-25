@@ -151,6 +151,10 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             case "update":
                 ApplyWebSettingUpdate(message.Key, message.Value);
                 SaveSettings();
+                if (IsMediaHotkeySetting(message.Key))
+                {
+                    await PushSettingsToWebAsync();
+                }
                 break;
             case "reorderSources":
                 ApplySourceOrder(message.Value);
@@ -160,6 +164,11 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 var defaultSettings = new AppSettings();
                 App.ApplyStartupForegroundColor(defaultSettings);
                 CopySettings(defaultSettings, _settings);
+                SaveSettings();
+                await PushSettingsToWebAsync();
+                break;
+            case "resetMediaHotkey":
+                ResetMediaHotkey(message.Value);
                 SaveSettings();
                 await PushSettingsToWebAsync();
                 break;
@@ -509,6 +518,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
     private WebSettingsPayload CreateSettingsPayload()
     {
         _settings.NormalizePlayerSources();
+        var mediaHotkeys = _settings.GlobalMediaHotkeys ??= new GlobalMediaHotkeySettings();
         return new WebSettingsPayload
         {
             SourceRecognitionOrder = NormalizeSourceOrder(_settings.SourceRecognitionOrder),
@@ -526,6 +536,16 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 StringComparer.OrdinalIgnoreCase),
             EnableLocalLyrics = _settings.EnableLocalLyrics,
             LocalMusicFolders = NormalizeLocalMusicFolders(_settings.LocalMusicFolders),
+            EnableGlobalMediaHotkeys = mediaHotkeys.Enabled,
+            HotkeyTogglePlayPause = mediaHotkeys.TogglePlayPause,
+            HotkeyPreviousTrack = mediaHotkeys.PreviousTrack,
+            HotkeyNextTrack = mediaHotkeys.NextTrack,
+            HotkeySeekBackward = mediaHotkeys.SeekBackward,
+            HotkeySeekForward = mediaHotkeys.SeekForward,
+            HotkeyToggleLyricsVisibility = mediaHotkeys.ToggleLyricsVisibility,
+            MediaHotkeyStatuses = (System.Windows.Application.Current as App)?.GetMediaHotkeyStatuses()
+                .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal)
+                ?? new Dictionary<string, string>(StringComparer.Ordinal),
             ShowLyricsOnStartup = _settings.ShowLyricsOnStartup,
             StartWithWindows = _settings.StartWithWindows,
             AutoCheckUpdates = _settings.AutoCheckUpdates,
@@ -712,6 +732,27 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             case "localMusicFolders":
                 _settings.LocalMusicFolders = NormalizeLocalMusicFolders(ReadStringList(element));
                 break;
+            case "enableGlobalMediaHotkeys":
+                EnsureMediaHotkeySettings().Enabled = ReadBool(element, EnsureMediaHotkeySettings().Enabled);
+                break;
+            case "hotkeyTogglePlayPause":
+                EnsureMediaHotkeySettings().TogglePlayPause = ReadHotkeyBinding(element, EnsureMediaHotkeySettings().TogglePlayPause);
+                break;
+            case "hotkeyPreviousTrack":
+                EnsureMediaHotkeySettings().PreviousTrack = ReadHotkeyBinding(element, EnsureMediaHotkeySettings().PreviousTrack);
+                break;
+            case "hotkeyNextTrack":
+                EnsureMediaHotkeySettings().NextTrack = ReadHotkeyBinding(element, EnsureMediaHotkeySettings().NextTrack);
+                break;
+            case "hotkeySeekBackward":
+                EnsureMediaHotkeySettings().SeekBackward = ReadHotkeyBinding(element, EnsureMediaHotkeySettings().SeekBackward);
+                break;
+            case "hotkeySeekForward":
+                EnsureMediaHotkeySettings().SeekForward = ReadHotkeyBinding(element, EnsureMediaHotkeySettings().SeekForward);
+                break;
+            case "hotkeyToggleLyricsVisibility":
+                EnsureMediaHotkeySettings().ToggleLyricsVisibility = ReadHotkeyBinding(element, EnsureMediaHotkeySettings().ToggleLyricsVisibility);
+                break;
             case "showLyricsOnStartup":
                 _settings.ShowLyricsOnStartup = ReadBool(element, _settings.ShowLyricsOnStartup);
                 break;
@@ -816,6 +857,39 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 _settings.YOffset = Math.Clamp(ReadDouble(element, _settings.YOffset), -2000, 2000);
                 break;
         }
+    }
+
+    private void ResetMediaHotkey(JsonElement? value)
+    {
+        if (value is null ||
+            !Enum.TryParse<MediaHotkeyAction>(ReadString(value.Value, string.Empty), true, out var action))
+        {
+            return;
+        }
+
+        EnsureMediaHotkeySettings().ResetBinding(action);
+    }
+
+    private GlobalMediaHotkeySettings EnsureMediaHotkeySettings()
+    {
+        return _settings.GlobalMediaHotkeys ??= new GlobalMediaHotkeySettings();
+    }
+
+    private static bool IsMediaHotkeySetting(string? key)
+    {
+        return key is "enableGlobalMediaHotkeys" or
+            "hotkeyTogglePlayPause" or
+            "hotkeyPreviousTrack" or
+            "hotkeyNextTrack" or
+            "hotkeySeekBackward" or
+            "hotkeySeekForward" or
+            "hotkeyToggleLyricsVisibility";
+    }
+
+    private static string ReadHotkeyBinding(JsonElement element, string fallback)
+    {
+        var binding = ReadString(element, fallback).Trim();
+        return binding.Length <= 64 ? binding : fallback;
     }
 
     private void ApplySourceOrder(JsonElement? value)
@@ -1119,6 +1193,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             StringComparer.OrdinalIgnoreCase);
         target.EnableLocalLyrics = source.EnableLocalLyrics;
         target.LocalMusicFolders = NormalizeLocalMusicFolders(source.LocalMusicFolders);
+        target.GlobalMediaHotkeys = (source.GlobalMediaHotkeys ?? new GlobalMediaHotkeySettings()).Clone();
         target.ShowLyricsOnStartup = source.ShowLyricsOnStartup;
         target.StartWithWindows = source.StartWithWindows;
         target.AutoCheckUpdates = source.AutoCheckUpdates;
@@ -1246,6 +1321,14 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         public Dictionary<string, int> DefaultPlayerLyricOffsets { get; set; } = new(StringComparer.OrdinalIgnoreCase);
         public bool EnableLocalLyrics { get; set; }
         public List<string> LocalMusicFolders { get; set; } = new();
+        public bool EnableGlobalMediaHotkeys { get; set; }
+        public string HotkeyTogglePlayPause { get; set; } = "";
+        public string HotkeyPreviousTrack { get; set; } = "";
+        public string HotkeyNextTrack { get; set; } = "";
+        public string HotkeySeekBackward { get; set; } = "";
+        public string HotkeySeekForward { get; set; } = "";
+        public string HotkeyToggleLyricsVisibility { get; set; } = "";
+        public Dictionary<string, string> MediaHotkeyStatuses { get; set; } = new(StringComparer.Ordinal);
         public bool ShowLyricsOnStartup { get; set; }
         public bool StartWithWindows { get; set; }
         public bool AutoCheckUpdates { get; set; }

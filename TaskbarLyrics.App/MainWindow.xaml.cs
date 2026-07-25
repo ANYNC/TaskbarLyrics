@@ -203,6 +203,13 @@ public partial class MainWindow : Window
             : new CurrentTrackLyricsContext(_currentTrack, lyricSource ?? string.Empty);
     }
 
+    internal Task ExecuteMediaHotkeyAsync(MediaHotkeyAction action)
+    {
+        return _musicSessionProvider is SmtcMusicSessionProvider smtcProvider
+            ? smtcProvider.TryControlAsync(action)
+            : Task.CompletedTask;
+    }
+
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
         AnchorToTaskbar();

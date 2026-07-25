@@ -77,6 +77,74 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider
         return new LyricOffsetDiagnostics(playerOffset, trackOffset, playerOffset + trackOffset);
     }
 
+    public async Task TryControlAsync(MediaHotkeyAction action)
+    {
+        try
+        {
+            var manager = await GetManagerAsync(CancellationToken.None);
+            var session = manager is null ? null : SelectSession(manager);
+            if (session is null)
+            {
+                return;
+            }
+
+            switch (action)
+            {
+                case MediaHotkeyAction.TogglePlayPause:
+                    var playback = session.GetPlaybackInfo();
+                    if (playback?.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing)
+                    {
+                        await session.TryPauseAsync();
+                    }
+                    else
+                    {
+                        await session.TryPlayAsync();
+                    }
+                    break;
+                case MediaHotkeyAction.PreviousTrack:
+                    await session.TrySkipPreviousAsync();
+                    break;
+                case MediaHotkeyAction.NextTrack:
+                    await session.TrySkipNextAsync();
+                    break;
+                case MediaHotkeyAction.SeekBackward:
+                    await TrySeekAsync(session, TimeSpan.FromSeconds(-5));
+                    break;
+                case MediaHotkeyAction.SeekForward:
+                    await TrySeekAsync(session, TimeSpan.FromSeconds(5));
+                    break;
+            }
+        }
+        catch
+        {
+            // A player can revoke its SMTC session at any point. Hotkeys fail silently.
+        }
+    }
+
+    private static async Task TrySeekAsync(
+        GlobalSystemMediaTransportControlsSession session,
+        TimeSpan offset)
+    {
+        var timeline = session.GetTimelineProperties();
+        var playback = session.GetPlaybackInfo();
+        var current = ComputeExtrapolatedPosition(
+            timeline,
+            playback?.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing,
+            DateTimeOffset.UtcNow,
+            out _);
+        var target = current + offset;
+        if (target < timeline.StartTime)
+        {
+            target = timeline.StartTime;
+        }
+        else if (timeline.EndTime > timeline.StartTime && target > timeline.EndTime)
+        {
+            target = timeline.EndTime;
+        }
+
+        await session.TryChangePlaybackPositionAsync(target.Ticks);
+    }
+
     public async Task<PlaybackSnapshot> GetCurrentAsync(CancellationToken cancellationToken = default)
     {
         var manager = await GetManagerAsync(cancellationToken);

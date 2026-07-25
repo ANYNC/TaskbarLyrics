@@ -142,6 +142,8 @@ public sealed class AppSettings
 
     public bool ForceAlwaysOnTop { get; set; } = true;
 
+    public GlobalMediaHotkeySettings GlobalMediaHotkeys { get; set; } = new();
+
     public static string NormalizeFontFamily(string? fontFamily)
     {
         if (string.IsNullOrWhiteSpace(fontFamily))
@@ -174,6 +176,7 @@ public sealed class AppSettings
             StringComparer.OrdinalIgnoreCase);
         cloned.LocalMusicFolders = LocalMusicFolders.ToList();
         cloned.SpectrumTuning = SpectrumTuning.Clone();
+        cloned.GlobalMediaHotkeys = (GlobalMediaHotkeys ?? new GlobalMediaHotkeySettings()).Clone();
         return cloned;
     }
 
