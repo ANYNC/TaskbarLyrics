@@ -266,9 +266,12 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         }
 
         var payload = CreateSettingsPayload();
-        var settingsJson = JsonSerializer.Serialize(payload, SettingsWebJson.Options);
-        var fontsJson = JsonSerializer.Serialize(_fontCatalog.GetOptions(), SettingsWebJson.Options);
-        await SettingsWebView.ExecuteScriptAsync($"window.settingsApp?.setState({settingsJson}, {fontsJson});");
+        await SettingsWebView.ExecuteScriptAsync(
+            WebViewMessageScriptFactory.Dispatch("settingsApp", "settingsState", new
+            {
+                settings = payload,
+                fonts = _fontCatalog.GetOptions()
+            }));
     }
 
     public async Task ApplyExternalSettingsAsync(AppSettings settings)
@@ -344,7 +347,8 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         }
 
         _lastCurrentTrackOffsetPayloadJson = json;
-        await SettingsWebView.ExecuteScriptAsync($"window.settingsApp?.setCurrentTrackOffsetData({json});");
+        await SettingsWebView.ExecuteScriptAsync(
+            WebViewMessageScriptFactory.Dispatch("settingsApp", "currentTrackOffset", current));
     }
 
     private async Task PushTrackOffsetEntriesToWebAsync(TrackOffsetQueryPayload query)
@@ -384,9 +388,8 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             })
             .ToList()
         };
-        var json = JsonSerializer.Serialize(payload, SettingsWebJson.Options);
-
-        await SettingsWebView.ExecuteScriptAsync($"window.settingsApp?.setTrackOffsetEntries({json});");
+        await SettingsWebView.ExecuteScriptAsync(
+            WebViewMessageScriptFactory.Dispatch("settingsApp", "trackOffsetEntries", payload));
     }
 
     private async Task SetCurrentTrackOffsetAsync(JsonElement? value)
@@ -457,12 +460,13 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             return;
         }
 
-        var payload = JsonSerializer.Serialize(new
+        var payload = new
         {
             state = isSaved ? "saved" : "error",
             message
-        }, SettingsWebJson.Options);
-        await SettingsWebView.ExecuteScriptAsync($"window.settingsApp?.setTrackOffsetSaveStatus({payload});");
+        };
+        await SettingsWebView.ExecuteScriptAsync(
+            WebViewMessageScriptFactory.Dispatch("settingsApp", "trackOffsetSaveStatus", payload));
     }
 
     private async Task PushPendingNavigationAsync()
@@ -477,7 +481,11 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         _pendingPage = null;
         _pendingFocusCurrentTrack = false;
         await SettingsWebView.ExecuteScriptAsync(
-            $"window.settingsApp?.navigateToPage({JsonSerializer.Serialize(page, SettingsWebJson.Options)}, {(focusCurrentTrack ? "true" : "false")});");
+            WebViewMessageScriptFactory.Dispatch("settingsApp", "navigate", new
+            {
+                page,
+                focusCurrentTrack
+            }));
     }
 
     private static int ReadOffsetMilliseconds(JsonElement? value, int fallback)
@@ -940,8 +948,8 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             return;
         }
 
-        var json = JsonSerializer.Serialize(payload, SettingsWebJson.Options);
-        await SettingsWebView.ExecuteScriptAsync($"window.settingsApp?.setUpdateStatus({json});");
+        await SettingsWebView.ExecuteScriptAsync(
+            WebViewMessageScriptFactory.Dispatch("settingsApp", "updateStatus", payload));
     }
 
     private async Task PushWindowStateToWebAsync()
@@ -952,7 +960,8 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         }
 
         var state = WindowState == WindowState.Maximized ? "maximized" : "normal";
-        await SettingsWebView.ExecuteScriptAsync($"window.settingsApp?.setWindowState({JsonSerializer.Serialize(state, SettingsWebJson.Options)});");
+        await SettingsWebView.ExecuteScriptAsync(
+            WebViewMessageScriptFactory.Dispatch("settingsApp", "windowState", state));
     }
 
     private static void OpenExternalLink(string url)

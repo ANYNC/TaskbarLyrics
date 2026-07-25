@@ -30,6 +30,7 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer _timer;
     private readonly DispatcherTimer _spectrumTimer;
     private readonly TaskbarPlacementService _taskbarPlacementService = new();
+    private readonly LyricsWebMessageRouter _lyricsWebMessageRouter = new();
     private LocalMediaCoverProvider? _localMediaCoverProvider;
     private Media.Color _primaryTextColor = Media.Colors.White;
     private Media.Color _secondaryTextColor = Media.Color.FromArgb(190, 255, 255, 255);
@@ -987,25 +988,23 @@ public partial class MainWindow : Window
     {
         try
         {
-            var message = e.TryGetWebMessageAsString();
-            using var document = JsonDocument.Parse(message);
-            var root = document.RootElement;
-            if (!root.TryGetProperty("type", out var typeElement) ||
-                !string.Equals(typeElement.GetString(), "coverDecodeError", StringComparison.Ordinal))
+            var message = _lyricsWebMessageRouter.Parse(e.TryGetWebMessageAsString());
+            if (message?.Payload is not { ValueKind: JsonValueKind.Object } payload ||
+                !string.Equals(message.Type, "coverDecodeError", StringComparison.Ordinal))
             {
                 return;
             }
 
-            var messageTrackId = root.TryGetProperty("trackId", out var trackElement)
+            var messageTrackId = payload.TryGetProperty("trackId", out var trackElement)
                 ? trackElement.GetString() ?? string.Empty
                 : string.Empty;
-            var mime = root.TryGetProperty("mime", out var mimeElement)
+            var mime = payload.TryGetProperty("mime", out var mimeElement)
                 ? mimeElement.GetString() ?? string.Empty
                 : string.Empty;
-            var uriLength = root.TryGetProperty("uriLength", out var lengthElement) && lengthElement.TryGetInt32(out var length)
+            var uriLength = payload.TryGetProperty("uriLength", out var lengthElement) && lengthElement.TryGetInt32(out var length)
                 ? length
                 : 0;
-            var generation = root.TryGetProperty("generation", out var generationElement) && generationElement.TryGetInt32(out var value)
+            var generation = payload.TryGetProperty("generation", out var generationElement) && generationElement.TryGetInt32(out var value)
                 ? value
                 : 0;
             var activeTrack = _currentTrack;
@@ -1056,8 +1055,7 @@ public partial class MainWindow : Window
                 : "none"
         };
 
-        var payloadJson = JsonSerializer.Serialize(stylePayload);
-        var script = $"window.taskbarLyrics?.applyStyle({payloadJson});";
+        var script = WebViewMessageScriptFactory.Dispatch("taskbarLyrics", "style", stylePayload);
         TaskObserver.Observe(ExecuteWebScriptAsync(script), "lyrics style update");
     }
 
@@ -1215,7 +1213,11 @@ public partial class MainWindow : Window
             var lyricsWebDir = Path.Combine(AppContext.BaseDirectory, "Web", "Lyrics");
             var template = File.ReadAllText(Path.Combine(lyricsWebDir, "index.html"));
             var style = File.ReadAllText(Path.Combine(lyricsWebDir, "style.css"));
-            var script = File.ReadAllText(Path.Combine(lyricsWebDir, "app.js"));
+            var script = string.Join(Environment.NewLine, [
+                File.ReadAllText(Path.Combine(lyricsWebDir, "bridge.js")),
+                File.ReadAllText(Path.Combine(lyricsWebDir, "state.js")),
+                File.ReadAllText(Path.Combine(lyricsWebDir, "app.js"))
+            ]);
 
             return template
                 .Replace("{{STYLE_CSS}}", style, StringComparison.Ordinal)

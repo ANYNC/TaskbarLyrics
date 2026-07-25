@@ -617,11 +617,11 @@ Lyrics
 
 ### 第四阶段：前端模块化和强类型契约
 
-- [ ] 拆分 `settings.js` 和 `app.js`。
-- [ ] 版本化 WebView 消息。
-- [ ] 建立 C#/JS 对称 DTO。
-- [ ] 快捷键状态使用稳定状态码传输，在前端完成中文展示，不以中文文案作为协议字段。
-- [ ] 增加 DOM 和消息行为测试。
+- [x] 拆分 `settings.js` 和 `app.js`：桥接、快捷键状态、页面状态、单曲偏移以及歌词桥接/状态独立为可加载模块；入口脚本继续保持既有页面初始化职责。
+- [x] 版本化 WebView 消息：设置页和歌词页双向使用 V1 `{ version, type, payload }` 信封，不再接受旧格式。
+- [x] 建立 C#/JS 对称 DTO：C# 路由器验证版本、类型和 payload，C# 到 JS 的脚本调用统一进入 `receive(envelope)`。
+- [x] 快捷键状态使用稳定状态码传输，在前端完成中文展示，不以中文文案作为协议字段。
+- [x] 增加 DOM 和消息行为测试：Vitest + jsdom 覆盖桥接、状态映射与设置页导航。
 
 ### 第五阶段：清理与规范化
 
@@ -707,6 +707,9 @@ GlobalMediaHotkeyCoordinator
 
 ## 19. 本次审查验证结果
 
+- 2026-07-26（第四阶段）：WebView 协议直接切换为 V1，设置页和歌词页的入站/出站消息统一为 `{ version: 1, type, payload }`；错误版本、空消息和损坏 JSON 会被 C# 路由器安全忽略。
+- 新增 `package.json`/锁文件与 Vitest + jsdom 测试。前端测试不属于应用输出目录或发布 ZIP；`scripts/verify.ps1` 会先运行 `npm run test:web`，在本机未安装依赖时执行 `npm ci --ignore-scripts`。
+- 当前测试为 App 36 项、Core 19 项、前端 4 项，合计 59 项；设置页 DOM 导航、快捷键稳定状态码和歌词页诊断信封均有自动验证。
 - 2026-07-26（第三阶段）：新增 `LocalMediaIndex`、`ILyricCacheStore`、`MediaHotkeyCatalog`、`IMediaPlaybackController`、`AppCompositionRoot`、任务栏定位服务、歌词 WebView 脚本工厂、设置消息路由和字体目录服务。`MainWindow` 不再直接创建歌词/封面提供者或依赖 SMTC 具体类型；`SettingsWindow` 不再自行反序列化 WebView 消息或扫描系统字体。
 - 本地歌词与本地封面通过同一份可取消的媒体文件索引消费音频/歌词文件；两个歌词缓存实现收敛为统一的内存与磁盘缓存仓储，写入先落临时文件再替换正式文件，读写失败只降级缓存并记录日志，不影响歌词检索主链路。
 - 第三阶段新增应用层测试 8 项（快捷键定义表、重复注册协调、Composition Root、设置消息路由、歌词 WebView 脚本），新增核心层测试 2 项（本地媒体索引、歌词缓存仓储）。当前 `TaskbarLyrics.App.Tests` 为 35 项、`TaskbarLyrics.Core.Tests` 为 19 项，合计 54 项。

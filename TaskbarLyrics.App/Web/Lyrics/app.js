@@ -729,7 +729,7 @@ if (typeof ResizeObserver !== "undefined") {
   window.addEventListener("resize", updateMetrics);
 }
 
-window.taskbarLyrics = {
+const lyricsApi = {
   setLyrics(current, next, progress, currentLineIndex, trackId, isPureMusic, isPlaying) {
     const safeCurrent = toDisplayLine(current, SEARCHING_TEXT);
     const safeNext = toDisplayLine(next, " ");
@@ -833,13 +833,12 @@ window.taskbarLyrics = {
           ? uri.slice(5, mimeSeparatorIndex)
           : "";
         try {
-          window.chrome?.webview?.postMessage(JSON.stringify({
-            type: "coverDecodeError",
+          window.taskbarLyricsBridge.post("coverDecodeError", {
             trackId,
             mime,
             uriLength: uri.length,
             generation
-          }));
+          });
         } catch {
           // Diagnostics must not interrupt the fallback transition.
         }
@@ -886,7 +885,7 @@ window.taskbarLyrics = {
     requestedFontSize = Number(payload.fontSize) || 13;
     root.style.setProperty("--font-size", `${requestedFontSize}px`);
     updateMetrics();
-    root.style.setProperty("--font-weight", normalizeWeight(payload.fontWeight));
+    root.style.setProperty("--font-weight", window.taskbarLyricsState.normalizeWeight(payload.fontWeight));
 
     const coverSize = Number(payload.coverSize);
     if (Number.isFinite(coverSize) && coverSize > 0) {
@@ -921,6 +920,37 @@ window.taskbarLyrics = {
 
     if (payload.textShadow && CSS.supports("text-shadow", payload.textShadow)) {
       root.style.setProperty("--text-shadow", payload.textShadow);
+    }
+  }
+};
+
+window.taskbarLyrics = {
+  receive(message) {
+    if (message?.version !== 1 || !message.type) return;
+    const payload = message.payload;
+    switch (message.type) {
+      case "lyrics":
+        lyricsApi.setLyrics(
+          payload?.current,
+          payload?.next,
+          payload?.progress,
+          payload?.currentLineIndex,
+          payload?.trackId,
+          payload?.isPureMusic,
+          payload?.isPlaying);
+        break;
+      case "cover":
+        lyricsApi.setCover(payload?.dataUri, payload?.fallbackText, payload?.fallbackColor, payload?.trackId);
+        break;
+      case "spectrum":
+        lyricsApi.setSpectrum(payload);
+        break;
+      case "spectrumTuning":
+        lyricsApi.setSpectrumTuning(payload);
+        break;
+      case "style":
+        lyricsApi.applyStyle(payload);
+        break;
     }
   }
 };

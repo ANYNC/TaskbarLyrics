@@ -13,22 +13,33 @@ internal static class LyricsWebViewScriptFactory
         bool isPureMusic,
         bool isPlaying)
     {
-        return $"window.taskbarLyrics?.setLyrics({JsonSerializer.Serialize(current)}, {JsonSerializer.Serialize(next)}, " +
-               $"{JsonSerializer.Serialize(Math.Clamp(lineProgress, 0, 1))}, {JsonSerializer.Serialize(currentLineIndex)}, " +
-               $"{JsonSerializer.Serialize(trackId ?? string.Empty)}, {JsonSerializer.Serialize(isPureMusic)}, {JsonSerializer.Serialize(isPlaying)});";
+        return WebViewMessageScriptFactory.Dispatch("taskbarLyrics", "lyrics", new
+        {
+            current,
+            next,
+            progress = Math.Clamp(lineProgress, 0, 1),
+            currentLineIndex,
+            trackId = trackId ?? string.Empty,
+            isPureMusic,
+            isPlaying
+        });
     }
 
     public static string SetCover(string? dataUri, string fallbackText, string fallbackColor, string? trackId)
     {
-        return $"window.taskbarLyrics?.setCover({JsonSerializer.Serialize(dataUri ?? string.Empty)}, " +
-               $"{JsonSerializer.Serialize(fallbackText)}, {JsonSerializer.Serialize(fallbackColor)}, " +
-               $"{JsonSerializer.Serialize(trackId ?? string.Empty)});";
+        return WebViewMessageScriptFactory.Dispatch("taskbarLyrics", "cover", new
+        {
+            dataUri = dataUri ?? string.Empty,
+            fallbackText,
+            fallbackColor,
+            trackId = trackId ?? string.Empty
+        });
     }
 
     public static string SetSpectrum(IReadOnlyList<float> bars)
     {
         var values = bars.Select(value => Math.Clamp(value, 0f, 1f));
-        return $"window.taskbarLyrics?.setSpectrum({JsonSerializer.Serialize(values)});";
+        return WebViewMessageScriptFactory.Dispatch("taskbarLyrics", "spectrum", values);
     }
 
     public static string SetSpectrumTuning(SpectrumTuningSettings settings)
@@ -42,6 +53,6 @@ internal static class LyricsWebViewScriptFactory
             opacity = settings.BarOpacity,
             barCount = settings.BarCount
         };
-        return $"window.taskbarLyrics?.setSpectrumTuning({JsonSerializer.Serialize(payload)});";
+        return WebViewMessageScriptFactory.Dispatch("taskbarLyrics", "spectrumTuning", payload);
     }
 }

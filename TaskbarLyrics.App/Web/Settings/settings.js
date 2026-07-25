@@ -66,6 +66,8 @@
     const escapeHtml = value => String(value).replace(/[&<>"]/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[char]));
     const bridge = { post(message) { window.chrome?.webview?.postMessage(JSON.stringify(message)); } };
 
+    bridge.post = window.taskbarLyricsBridge.post.bind(window.taskbarLyricsBridge);
+
     function renderSources() {
       const grid = $("#sourceGrid");
       grid.innerHTML = sourceCatalog.map(source => `
@@ -89,11 +91,7 @@
       return "同步";
     }
 
-    function normalizeTrackOffset(value, fallback = 0) {
-      const numeric = Number(value);
-      if (!Number.isFinite(numeric)) return fallback;
-      return Math.max(-5000, Math.min(5000, Math.round(numeric / 10) * 10));
-    }
+    const normalizeTrackOffset = (value, fallback = 0) => window.taskbarLyricsTrackOffsets.normalize(value, fallback);
 
     function sourceDisplayName(source) {
       const known = sourceCatalogDefaults.find(item => item.adapter.toLowerCase() === String(source ?? "").toLowerCase());
@@ -102,12 +100,7 @@
       return source || "未知来源";
     }
 
-    function formatTrackDuration(seconds) {
-      const value = Math.max(0, Number(seconds) || 0);
-      if (!value) return "时长未知";
-      const minutes = Math.floor(value / 60);
-      return `${String(minutes).padStart(2, "0")}:${String(Math.round(value % 60)).padStart(2, "0")}`;
-    }
+    const formatTrackDuration = seconds => window.taskbarLyricsTrackOffsets.formatDuration(seconds);
 
     function formatTrackOffsetDate(value) {
       const date = new Date(value);
@@ -523,9 +516,9 @@
         if (button !== activeHotkeyRecorder) button.textContent = state[button.dataset.hotkeyBinding] || "未设置";
       });
       $$('[data-hotkey-status]').forEach(output => {
-        const status = state.mediaHotkeyStatuses?.[output.dataset.hotkeyStatus] || "未注册";
-        output.textContent = status;
-        output.dataset.state = status === "已注册" ? "ready" : status === "已关闭" ? "off" : "warning";
+        const status = state.mediaHotkeyStatuses?.[output.dataset.hotkeyStatus] || "notRegistered";
+        output.textContent = window.taskbarLyricsHotkeys.label(status);
+        output.dataset.state = window.taskbarLyricsHotkeys.visualState(status);
       });
     }
 
@@ -597,13 +590,11 @@
       const previousTrackOffsetSourceFilter = state?.trackOffsetSourceFilter ?? "All";
       const previousTrackOffsetSort = state?.trackOffsetSort ?? "updated";
       const foregroundColor = fromArgb(nextState.foregroundColor);
-      state = {
-        ...nextState,
+      state = window.taskbarLyricsSettingsState.create(nextState, {
         page: previousPage,
-        foregroundColor,
         trackOffsetSourceFilter: previousTrackOffsetSourceFilter,
         trackOffsetSort: previousTrackOffsetSort
-      };
+      }, foregroundColor);
       const incomingOffsets = nextState.playerLyricOffsets ?? {};
       const incomingDefaults = nextState.defaultPlayerLyricOffsets ?? {};
       const defaultOffsetFor = source => {
@@ -1237,6 +1228,32 @@
     });
 
     $("#colorPresets").innerHTML = presetColors.map(color => `<button class="color-preset" type="button" style="--preset:${color}" data-preset-color-value="${color}" aria-label="选择 ${color}"></button>`).join("");
-    window.settingsApp = { setState, setUpdateStatus, setCurrentTrackOffsetData, setTrackOffsetEntries, setTrackOffsetSaveStatus, navigateToPage };
-    window.settingsApp.setWindowState = setWindowState;
+    function receive(message) {
+      if (message?.version !== 1 || !message.type) return;
+      switch (message.type) {
+        case "settingsState":
+          setState(message.payload?.settings ?? {}, message.payload?.fonts ?? []);
+          break;
+        case "updateStatus":
+          setUpdateStatus(message.payload);
+          break;
+        case "currentTrackOffset":
+          setCurrentTrackOffsetData(message.payload);
+          break;
+        case "trackOffsetEntries":
+          setTrackOffsetEntries(message.payload);
+          break;
+        case "trackOffsetSaveStatus":
+          setTrackOffsetSaveStatus(message.payload);
+          break;
+        case "navigate":
+          navigateToPage(message.payload?.page, Boolean(message.payload?.focusCurrentTrack));
+          break;
+        case "windowState":
+          setWindowState(message.payload);
+          break;
+      }
+    }
+
+    window.settingsApp = { receive };
     bridge.post({ type: "ready" });

@@ -28,6 +28,7 @@ TestResults/
 coverage/
 *.coverage
 *.coveragexml
+node_modules/
 
 # Logs / temp
 *.log

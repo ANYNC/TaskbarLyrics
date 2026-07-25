@@ -5,7 +5,7 @@ namespace TaskbarLyrics.App.Tests;
 public sealed class LyricsWebViewScriptFactoryTests
 {
     [Fact]
-    public void SetLyrics_EscapesTextAndClampsProgress()
+    public void SetLyrics_EmitsV1EnvelopeAndClampsProgress()
     {
         var script = LyricsWebViewScriptFactory.SetLyrics(
             "A \"quoted\" line",
@@ -16,9 +16,11 @@ public sealed class LyricsWebViewScriptFactoryTests
             isPureMusic: false,
             isPlaying: true);
 
-        Assert.Contains("window.taskbarLyrics?.setLyrics", script);
+        Assert.Contains("window.taskbarLyrics?.receive", script);
+        Assert.Contains("\"version\":1", script);
+        Assert.Contains("\"type\":\"lyrics\"", script);
         Assert.Contains("A \\u0022quoted\\u0022 line", script);
-        Assert.Contains(", 1, 3,", script);
+        Assert.Contains("\"progress\":1", script);
     }
 
     [Fact]
@@ -26,6 +28,7 @@ public sealed class LyricsWebViewScriptFactoryTests
     {
         var script = LyricsWebViewScriptFactory.SetSpectrum([-1, 0.5f, 2]);
 
-        Assert.Equal("window.taskbarLyrics?.setSpectrum([0,0.5,1]);", script);
+        Assert.Contains("\"type\":\"spectrum\"", script);
+        Assert.Contains("[0,0.5,1]", script);
     }
 }

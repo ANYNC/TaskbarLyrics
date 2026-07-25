@@ -5,6 +5,8 @@ $appRoot = Resolve-Path (Join-Path $settingsRoot '..\..')
 $html = [IO.File]::ReadAllText((Join-Path $settingsRoot 'settings.html'), [Text.UTF8Encoding]::new($false, $true))
 $css = [IO.File]::ReadAllText((Join-Path $settingsRoot 'settings.css'), [Text.UTF8Encoding]::new($false, $true))
 $script = [IO.File]::ReadAllText((Join-Path $settingsRoot 'settings.js'), [Text.UTF8Encoding]::new($false, $true))
+$bridge = [IO.File]::ReadAllText((Join-Path $settingsRoot 'bridge.js'), [Text.UTF8Encoding]::new($false, $true))
+$hotkeyScript = [IO.File]::ReadAllText((Join-Path $settingsRoot 'hotkeys.js'), [Text.UTF8Encoding]::new($false, $true))
 $settingsWindow = [IO.File]::ReadAllText((Join-Path $appRoot 'SettingsWindow.xaml.cs'), [Text.UTF8Encoding]::new($false, $true))
 $app = [IO.File]::ReadAllText((Join-Path $appRoot 'App.xaml.cs'), [Text.UTF8Encoding]::new($false, $true))
 $appSettings = [IO.File]::ReadAllText((Join-Path $appRoot 'AppSettings.cs'), [Text.UTF8Encoding]::new($false, $true))
@@ -45,8 +47,7 @@ if ([regex]::IsMatch($html, '<select\b', 'IgnoreCase')) { $errors.Add('native se
 if ([regex]::IsMatch($html, 'input[^>]+type="color"', 'IgnoreCase')) { $errors.Add('native color input remains') }
 
 $requiredScript = @(
-    'window.settingsApp = { setState, setUpdateStatus, setCurrentTrackOffsetData, setTrackOffsetEntries, setTrackOffsetSaveStatus, navigateToPage }', 'window.settingsApp.setWindowState = setWindowState',
-    'window.chrome?.webview?.postMessage',
+    'window.settingsApp = { receive }', 'function receive(message)',
     'type: "reorderSources"', 'type: "pickLocalFolder"', 'type: "showLyricsWindow"',
     'type: "openSmtcMonitor"', 'type: "openSpectrumTuning"',
     'type: "windowDrag"', 'type: "windowResizeStart"', 'type: "windowMinimize"', 'type: "windowMaximize"', 'type: "windowClose"',
@@ -62,6 +63,13 @@ $requiredScript = @(
 )
 foreach ($marker in $requiredScript) {
     if (-not $script.Contains($marker)) { $errors.Add("missing script marker: $marker") }
+}
+
+foreach ($marker in @('version: VERSION', 'payload: toPayload(message)', 'type: message.type')) {
+    if (-not $bridge.Contains($marker)) { $errors.Add("missing V1 bridge marker: $marker") }
+}
+foreach ($marker in @('const labels =', 'registered:', 'duplicate:', 'visualState(state)')) {
+    if (-not $hotkeyScript.Contains($marker)) { $errors.Add("missing hotkey status presentation: $marker") }
 }
 
 $supportedSources = @('QQMusic', 'Netease', 'Kugou', 'Spotify')
@@ -80,6 +88,7 @@ if (-not $appSettings.Contains('public GlobalMediaHotkeySettings GlobalMediaHotk
 if (-not $appSettings.Contains('public const string DefaultFontFamily = BundledFontFamily;')) { $errors.Add('bundled font is not the default') }
 if (-not $app.Contains('Settings.FontFamily = AppSettings.NormalizeFontFamily(Settings.FontFamily);')) { $errors.Add('startup font normalization missing') }
 if (-not $lyricsWindow.Contains('fontFamily = AppSettings.NormalizeFontFamily(settings.FontFamily)')) { $errors.Add('lyrics font normalization missing') }
+if (-not $lyricsWindow.Contains('WebViewMessageScriptFactory.Dispatch("taskbarLyrics", "style"')) { $errors.Add('lyrics V1 style dispatch missing') }
 
 if (-not $css.Contains('--background: oklch(0.145 0 0)')) { $errors.Add('neutral palette missing') }
 if ($css.Contains('Settings prototype integration: neutral Shadcn-inspired control layer.')) { $errors.Add('legacy override layer remains') }

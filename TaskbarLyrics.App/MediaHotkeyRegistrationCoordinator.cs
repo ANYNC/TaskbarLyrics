@@ -8,12 +8,12 @@ internal interface IGlobalHotkeyRegistrar
 
 internal static class MediaHotkeyRegistrationStatus
 {
-    public const string Disabled = "已关闭";
-    public const string Invalid = "组合无效";
-    public const string Duplicate = "与其他快捷键重复";
-    public const string Registered = "已注册";
-    public const string Occupied = "已被系统或其他应用占用";
-    public const string NotRegistered = "未注册";
+    public const string Disabled = "disabled";
+    public const string Invalid = "invalid";
+    public const string Duplicate = "duplicate";
+    public const string Registered = "registered";
+    public const string Occupied = "occupied";
+    public const string NotRegistered = "notRegistered";
 }
 
 internal sealed class MediaHotkeyRegistrationCoordinator : IDisposable
