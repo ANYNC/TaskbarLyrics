@@ -1,4 +1,3 @@
-using System.Runtime.InteropServices;
 using System.Windows.Interop;
 using TaskbarLyrics.Core.Utilities;
 
@@ -81,26 +80,9 @@ public sealed class GlobalMediaHotkeySettings
 internal sealed class GlobalMediaHotkeyService : IDisposable
 {
     private const int WmHotkey = 0x0312;
-    private const int ModAlt = 0x0001;
-    private const int ModControl = 0x0002;
-    private const int ModShift = 0x0004;
-    private const int ModNoRepeat = 0x4000;
-    private const int HotkeyIdBase = 0x5A00;
-
-    private static readonly MediaHotkeyAction[] Actions =
-    {
-        MediaHotkeyAction.TogglePlayPause,
-        MediaHotkeyAction.PreviousTrack,
-        MediaHotkeyAction.NextTrack,
-        MediaHotkeyAction.SeekBackward,
-        MediaHotkeyAction.SeekForward,
-        MediaHotkeyAction.ToggleLyricsVisibility
-    };
-
     private readonly SerialCommandQueue<MediaHotkeyAction> _commandQueue;
     private readonly HwndSource _messageSource;
-    private readonly Dictionary<MediaHotkeyAction, string> _statuses = new();
-    private readonly HashSet<int> _registeredIds = new();
+    private readonly MediaHotkeyRegistrationCoordinator _registrationCoordinator;
     private bool _stopping;
     private bool _messageSourceDisposed;
     private bool _disposed;
@@ -118,7 +100,8 @@ internal sealed class GlobalMediaHotkeyService : IDisposable
             WindowStyle = 0
         });
         _messageSource.AddHook(WndProc);
-        SetAllStatuses("已关闭");
+        _registrationCoordinator = new MediaHotkeyRegistrationCoordinator(
+            new WindowsMediaHotkeyRegistrar(_messageSource.Handle));
     }
 
     public void Apply(GlobalMediaHotkeySettings? settings)
@@ -128,62 +111,12 @@ internal sealed class GlobalMediaHotkeyService : IDisposable
             return;
         }
 
-        UnregisterAll();
-        var snapshot = settings?.Clone() ?? new GlobalMediaHotkeySettings();
-        if (!snapshot.Enabled)
-        {
-            SetAllStatuses("已关闭");
-            return;
-        }
-
-        var parsedBindings = new Dictionary<MediaHotkeyAction, HotkeyBinding>();
-        var duplicateActions = new HashSet<MediaHotkeyAction>();
-        var seenBindings = new Dictionary<HotkeyBinding, MediaHotkeyAction>();
-        foreach (var action in Actions)
-        {
-            if (!TryParseBinding(snapshot.GetBinding(action), out var binding))
-            {
-                _statuses[action] = "组合无效";
-                continue;
-            }
-
-            if (seenBindings.ContainsKey(binding))
-            {
-                duplicateActions.Add(action);
-                _statuses[action] = "与其他快捷键重复";
-                continue;
-            }
-
-            seenBindings[binding] = action;
-            parsedBindings[action] = binding;
-        }
-
-        foreach (var (action, binding) in parsedBindings)
-        {
-            var id = GetHotkeyId(action);
-            if (RegisterHotKey(_messageSource.Handle, id, binding.Modifiers | ModNoRepeat, binding.VirtualKey))
-            {
-                _registeredIds.Add(id);
-                _statuses[action] = "已注册";
-            }
-            else
-            {
-                _statuses[action] = "已被系统或其他应用占用";
-            }
-        }
-
-        foreach (var action in Actions.Where(action => !parsedBindings.ContainsKey(action) && !duplicateActions.Contains(action)))
-        {
-            _statuses.TryAdd(action, "组合无效");
-        }
+        _registrationCoordinator.Apply(settings);
     }
 
     public IReadOnlyDictionary<string, string> GetStatusSnapshot()
     {
-        return Actions.ToDictionary(
-            GetActionKey,
-            action => _statuses.TryGetValue(action, out var status) ? status : "未注册",
-            StringComparer.Ordinal);
+        return _registrationCoordinator.GetStatusSnapshot();
     }
 
     public void Dispose()
@@ -195,6 +128,7 @@ internal sealed class GlobalMediaHotkeyService : IDisposable
 
         _disposed = true;
         BeginStopping();
+        _registrationCoordinator.Dispose();
         DisposeMessageSource();
         _commandQueue.Dispose();
     }
@@ -223,9 +157,7 @@ internal sealed class GlobalMediaHotkeyService : IDisposable
             return IntPtr.Zero;
         }
 
-        var id = wParam.ToInt32();
-        var action = Actions.FirstOrDefault(candidate => GetHotkeyId(candidate) == id);
-        if (!_registeredIds.Contains(id) || GetHotkeyId(action) != id)
+        if (!_registrationCoordinator.TryGetRegisteredAction(wParam.ToInt32(), out var action))
         {
             return IntPtr.Zero;
         }
@@ -243,7 +175,7 @@ internal sealed class GlobalMediaHotkeyService : IDisposable
         }
 
         _stopping = true;
-        UnregisterAll();
+        _registrationCoordinator.UnregisterAll();
         _messageSource.RemoveHook(WndProc);
     }
 
@@ -258,38 +190,17 @@ internal sealed class GlobalMediaHotkeyService : IDisposable
         _messageSource.Dispose();
     }
 
-    private void UnregisterAll()
-    {
-        foreach (var id in _registeredIds)
-        {
-            _ = UnregisterHotKey(_messageSource.Handle, id);
-        }
+}
 
-        _registeredIds.Clear();
-    }
+internal readonly record struct MediaHotkeyBinding(int Modifiers, int VirtualKey);
 
-    private void SetAllStatuses(string status)
-    {
-        foreach (var action in Actions)
-        {
-            _statuses[action] = status;
-        }
-    }
+internal static class MediaHotkeyBindingParser
+{
+    internal const int ModifierAlt = 0x0001;
+    internal const int ModifierControl = 0x0002;
+    internal const int ModifierShift = 0x0004;
 
-    private static int GetHotkeyId(MediaHotkeyAction action) => HotkeyIdBase + (int)action;
-
-    private static string GetActionKey(MediaHotkeyAction action) => action switch
-    {
-        MediaHotkeyAction.TogglePlayPause => "togglePlayPause",
-        MediaHotkeyAction.PreviousTrack => "previousTrack",
-        MediaHotkeyAction.NextTrack => "nextTrack",
-        MediaHotkeyAction.SeekBackward => "seekBackward",
-        MediaHotkeyAction.SeekForward => "seekForward",
-        MediaHotkeyAction.ToggleLyricsVisibility => "toggleLyricsVisibility",
-        _ => string.Empty
-    };
-
-    private static bool TryParseBinding(string? value, out HotkeyBinding binding)
+    public static bool TryParse(string? value, out MediaHotkeyBinding binding)
     {
         binding = default;
         if (string.IsNullOrWhiteSpace(value))
@@ -304,19 +215,19 @@ internal sealed class GlobalMediaHotkeyService : IDisposable
             var part = rawPart.Trim();
             if (part.Equals("Ctrl", StringComparison.OrdinalIgnoreCase) || part.Equals("Control", StringComparison.OrdinalIgnoreCase))
             {
-                modifiers |= ModControl;
+                modifiers |= ModifierControl;
                 continue;
             }
 
             if (part.Equals("Alt", StringComparison.OrdinalIgnoreCase))
             {
-                modifiers |= ModAlt;
+                modifiers |= ModifierAlt;
                 continue;
             }
 
             if (part.Equals("Shift", StringComparison.OrdinalIgnoreCase))
             {
-                modifiers |= ModShift;
+                modifiers |= ModifierShift;
                 continue;
             }
 
@@ -333,7 +244,7 @@ internal sealed class GlobalMediaHotkeyService : IDisposable
             return false;
         }
 
-        binding = new HotkeyBinding(modifiers, virtualKey.Value);
+        binding = new MediaHotkeyBinding(modifiers, virtualKey.Value);
         return true;
     }
 
@@ -381,13 +292,4 @@ internal sealed class GlobalMediaHotkeyService : IDisposable
         return false;
     }
 
-    private readonly record struct HotkeyBinding(int Modifiers, int VirtualKey);
-
-    [DllImport("user32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool RegisterHotKey(IntPtr hWnd, int id, int fsModifiers, int vk);
-
-    [DllImport("user32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
 }

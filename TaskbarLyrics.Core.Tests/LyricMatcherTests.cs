@@ -26,6 +26,16 @@ public sealed class LyricMatcherTests
         Assert.Equal(0, score);
     }
 
+    [Fact]
+    public void Score_WhenNonQqMusicDurationDiffersByTwentySeconds_RejectsTheMatch()
+    {
+        var track = CreateTrack("Midnight City", "M83", 244);
+
+        var score = LyricMatcher.Score(track, "Midnight City", "M83", 270);
+
+        Assert.Equal(0, score);
+    }
+
     private static TrackInfo CreateTrack(string title, string artist, int durationSeconds) => new(
         "track-id",
         title,

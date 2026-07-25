@@ -597,11 +597,11 @@ Lyrics
 ### 第二阶段：建立测试保护网
 
 - [x] 新建 `TaskbarLyrics.Core.Tests`。
-- [ ] 覆盖匹配、解析、路由、同步和偏移。
-- [ ] 覆盖快捷键解析、规范化、重复检测、注册失败、快速连按和关闭竞态。
-- [ ] 验证快捷键始终控制歌词识别策略选中的同一 SMTC 会话。
-- [ ] 把设置契约测试纳入统一验证脚本。
-- [ ] 增加设置存储和并发生命周期测试。
+- [x] 覆盖匹配、解析、路由、同步和偏移。
+- [x] 覆盖快捷键解析、规范化、重复检测、注册失败、快速连按和关闭竞态。
+- [x] 验证快捷键始终控制歌词识别策略选中的同一 SMTC 会话。
+- [x] 把设置契约测试纳入统一验证脚本。
+- [x] 增加设置存储和并发生命周期测试。
 
 ### 第三阶段：拆分核心类
 
@@ -705,13 +705,19 @@ GlobalMediaHotkeyCoordinator
 
 ## 19. 本次审查验证结果
 
-- 2026-07-26：新增 `TaskbarLyrics.App.Tests` 与 `TaskbarLyrics.Core.Tests`：前者包含设置变化分类、快捷键命令队列与设置落盘共 10 项测试；后者包含歌词 Registry 生命周期及匹配规则共 3 项测试。
-- `dotnet test TaskbarLyrics.App.Tests/TaskbarLyrics.App.Tests.csproj --no-restore -p:BaseOutputPath=build_verify_app_tests/` 与 `dotnet test TaskbarLyrics.Core.Tests/TaskbarLyrics.Core.Tests.csproj --no-restore -p:BaseOutputPath=build_verify_core_tests/` 均通过：合计 13/13。
+- 2026-07-26：新增 `TaskbarLyrics.App.Tests` 与 `TaskbarLyrics.Core.Tests`：前者包含设置变化分类、快捷键命令队列/绑定解析/注册协调、SMTC 会话复用与设置存储共 27 项测试；后者包含歌词 Registry 生命周期、歌词同步取消/旧结果隔离、匹配规则、来源路由、LRC 时间戳解析和显示偏移共 17 项测试。
+- `dotnet test TaskbarLyrics.App.Tests/TaskbarLyrics.App.Tests.csproj --no-restore -p:BaseOutputPath=build_verify_app_tests/` 与 `dotnet test TaskbarLyrics.Core.Tests/TaskbarLyrics.Core.Tests.csproj --no-restore -p:BaseOutputPath=build_verify_core_tests/` 均通过：合计 44/44。
 - 设置变化按歌词服务、本地媒体、播放器识别、频谱、样式、窗口布局和快捷键分流；普通外观或更新设置不再触发系统快捷键重新注册。
 - 快捷键命令改为单消费者队列：按序执行，退出时停止接收、取消在途命令并最多等待 1 秒；意外异常保留在诊断日志中。新增队列顺序与关闭行为单元测试。
+- 快捷键绑定解析已从 Win32 注册服务中分离为可独立验证的纯逻辑，覆盖字母、数字、方向键、功能键、空输入、重复修饰键、缺少修饰键、多按键和不支持按键。
+- 快捷键注册协调已从窗口句柄与 P/Invoke 中分离：协调器负责状态、重复检测、重注册与注销，Windows 适配器只负责调用系统 API；可在不注册真实系统快捷键的前提下验证系统占用等失败路径。
+- SMTC 会话选择会缓存歌词刷新时实际选中的会话实例；快捷键优先控制该实例，只有会话已从系统列表移除时才重新选择，避免多个播放器同时存在时歌词与控制目标不一致。
+- 歌词同步测试覆盖播放器 offset 与单曲 offset 的叠加，确认偏移在歌词选行及行内进度计算前生效。
+- 歌词同步测试覆盖切歌竞态：上一首搜索晚到返回时，其结果不会回写到已经切换的当前歌曲。
+- 新增 `scripts/verify.ps1`，一次执行 App/Core 单元测试与设置页源码契约测试；测试输出固定写入被忽略的 `build_verify_tests` 目录。
 - 本地歌词与封面索引改由各自 provider 持有取消令牌；目录或本地歌词设置变化、窗口关闭时会取消旧索引、清空索引与封面缓存，并在索引任务结束后释放令牌资源。
 - 歌词 STA 线程启动改为 10 秒有界等待；线程初始化异常会写入日志并反馈给启动方，超时后的迟到线程会自行关闭。
-- 歌词 Registry 现在拥有 provider 与并发 gate 的生命周期：销毁时会停止新检索、释放可释放 provider，并只在在途操作完成后释放 gate；同时清理了一段不可达的官方歌词返回分支。
+- 歌词 Registry 现在拥有 provider 与并发 gate 的生命周期：销毁时会停止新检索，并等待在途 provider 调用结束后再释放 provider 与并发 gate；同时清理了一段不可达的官方歌词返回分支。
 - 设置先写入同目录临时文件并强制刷盘，再以同卷替换更新正式文件；异常保留旧设置并记录错误。`Error` 级别日志已独立写入 `app_error-日期.log`，其余级别继续写入调试日志。
 - 引入统一 `TaskObserver`：应用启动、更新检查、激活监听、设置导航及三个 WebView 窗口的异步初始化和脚本调用均会记录意外失败；原先的窗口内 `LogToFile` 已并入统一日志设施。
 - 早期审查中，`dotnet build TaskbarLyrics.App/TaskbarLyrics.App.csproj --no-restore -o build_verify_hotkey` 成功：0 警告、0 错误；`settings-contract.tests.ps1` 通过。

@@ -19,6 +19,7 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider
 
     private readonly SemaphoreSlim _managerLock = new(1, 1);
     private readonly TimelinePositionStrategyRegistry _timelineStrategyRegistry = TimelinePositionStrategyRegistry.CreateDefault();
+    private readonly ActiveSessionCache<GlobalSystemMediaTransportControlsSession> _activeSessionCache = new();
     private GlobalSystemMediaTransportControlsSessionManager? _manager;
     private SmtcTimelineDiagnostics? _lastTimelineDiagnostics;
     private string? _currentLyricSourceApp;
@@ -47,6 +48,7 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider
             : new HashSet<string>(enabledSources, StringComparer.OrdinalIgnoreCase);
         var normalized = NormalizeRecognitionOrder(order, _enabledSources);
         _recognitionOrder = normalized.ToArray();
+        _activeSessionCache.Clear();
     }
 
     public SmtcTimelineDiagnostics? GetLastTimelineDiagnostics()
@@ -83,7 +85,7 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider
         {
             var manager = await GetManagerAsync(cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
-            var session = manager is null ? null : SelectSession(manager);
+            var session = manager is null ? null : SelectSessionForControl(manager);
             if (session is null)
             {
                 return;
@@ -161,10 +163,12 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider
         var manager = await GetManagerAsync(cancellationToken);
         if (manager is null)
         {
+            _activeSessionCache.Clear();
             return BuildProcessFallbackSnapshot();
         }
 
         var session = SelectSession(manager);
+        _activeSessionCache.Remember(session);
         if (session is null)
         {
             return BuildProcessFallbackSnapshot();
@@ -438,7 +442,27 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider
     private GlobalSystemMediaTransportControlsSession? SelectSession(
         GlobalSystemMediaTransportControlsSessionManager manager)
     {
+        return SelectSession(manager.GetSessions());
+    }
+
+    private GlobalSystemMediaTransportControlsSession? SelectSessionForControl(
+        GlobalSystemMediaTransportControlsSessionManager manager)
+    {
         var sessions = manager.GetSessions();
+        var activeSession = _activeSessionCache.FindIn(sessions);
+        if (activeSession is not null)
+        {
+            return activeSession;
+        }
+
+        var selectedSession = SelectSession(sessions);
+        _activeSessionCache.Remember(selectedSession);
+        return selectedSession;
+    }
+
+    private GlobalSystemMediaTransportControlsSession? SelectSession(
+        IEnumerable<GlobalSystemMediaTransportControlsSession>? sessions)
+    {
         if (sessions is not null)
         {
             var supportedPlaying = sessions

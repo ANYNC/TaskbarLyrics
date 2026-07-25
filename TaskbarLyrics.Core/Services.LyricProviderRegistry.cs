@@ -11,7 +11,7 @@ public sealed class LyricProviderRegistry : ILyricProviderRegistry
     private readonly IReadOnlyDictionary<ILyricProvider, SemaphoreSlim> _providerGates;
     private int _activeProviderOperations;
     private int _isDisposed;
-    private int _gatesDisposed;
+    private int _resourcesDisposed;
 
     public LyricProviderRegistry(IEnumerable<ILyricProvider> providers)
     {
@@ -487,12 +487,7 @@ public sealed class LyricProviderRegistry : ILyricProviderRegistry
             return;
         }
 
-        foreach (var provider in _providers.OfType<IDisposable>())
-        {
-            provider.Dispose();
-        }
-
-        TryDisposeGates();
+        TryDisposeResources();
     }
 
     private bool TryEnterProviderOperation()
@@ -516,17 +511,22 @@ public sealed class LyricProviderRegistry : ILyricProviderRegistry
     {
         if (Interlocked.Decrement(ref _activeProviderOperations) == 0)
         {
-            TryDisposeGates();
+            TryDisposeResources();
         }
     }
 
-    private void TryDisposeGates()
+    private void TryDisposeResources()
     {
         if (Volatile.Read(ref _isDisposed) == 0 ||
             Volatile.Read(ref _activeProviderOperations) != 0 ||
-            Interlocked.CompareExchange(ref _gatesDisposed, 1, 0) != 0)
+            Interlocked.CompareExchange(ref _resourcesDisposed, 1, 0) != 0)
         {
             return;
+        }
+
+        foreach (var provider in _providers.OfType<IDisposable>())
+        {
+            provider.Dispose();
         }
 
         foreach (var gate in _providerGates.Values)

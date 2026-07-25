@@ -24,6 +24,23 @@ public sealed class LyricProviderRegistryTests
         Assert.Null(result.Document);
     }
 
+    [Fact]
+    public async Task Dispose_DefersProviderDisposalUntilActiveSearchCompletes()
+    {
+        var provider = new BlockingDisposableProvider();
+        var registry = new LyricProviderRegistry([provider]);
+
+        var search = registry.ResolveLyricsAsync(CreateTrack());
+        await provider.SearchStarted.Task.WaitAsync(TimeSpan.FromSeconds(1));
+
+        registry.Dispose();
+
+        Assert.False(provider.IsDisposed);
+        provider.CompleteSearch();
+        await search.WaitAsync(TimeSpan.FromSeconds(1));
+        Assert.True(provider.IsDisposed);
+    }
+
     private static TrackInfo CreateTrack() => new(
         "track-id",
         "Track",
@@ -41,6 +58,31 @@ public sealed class LyricProviderRegistryTests
         public Task<LyricDocument?> GetLyricsAsync(TrackInfo track, CancellationToken cancellationToken = default)
         {
             return Task.FromResult<LyricDocument?>(null);
+        }
+
+        public void Dispose()
+        {
+            IsDisposed = true;
+        }
+    }
+
+    private sealed class BlockingDisposableProvider : ILyricProvider, IDisposable
+    {
+        private readonly TaskCompletionSource<LyricDocument?> _completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource SearchStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public string SourceApp => "QQMusic";
+        public bool IsDisposed { get; private set; }
+
+        public Task<LyricDocument?> GetLyricsAsync(TrackInfo track, CancellationToken cancellationToken = default)
+        {
+            SearchStarted.TrySetResult();
+            return _completion.Task;
+        }
+
+        public void CompleteSearch()
+        {
+            _completion.TrySetResult(null);
         }
 
         public void Dispose()
