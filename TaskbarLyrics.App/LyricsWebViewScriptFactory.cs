@@ -1,5 +1,3 @@
-using System.Text.Json;
-
 namespace TaskbarLyrics.App;
 
 internal static class LyricsWebViewScriptFactory

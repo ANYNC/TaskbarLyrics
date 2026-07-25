@@ -74,9 +74,9 @@ internal sealed class LyricsWindowHost : IDisposable
         InvokeAsync(() => _window?.ApplySpectrumTuning(snapshot));
     }
 
-    public void SetSpectrumDisplayMode(bool enabled, SpectrumDisplayMode mode)
+    public void SetSpectrumDisplayMode(SpectrumDisplayMode mode)
     {
-        InvokeAsync(() => _window?.SetSpectrumDisplayMode(enabled, mode));
+        InvokeAsync(() => _window?.SetSpectrumDisplayMode(mode));
     }
 
     public void SetSpectrumPreviewEnabled(bool enabled)

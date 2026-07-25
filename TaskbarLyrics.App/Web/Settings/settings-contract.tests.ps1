@@ -33,7 +33,7 @@ foreach ($key in $settings) {
 }
 
 $requiredHtml = @(
-    'id="sourceGrid"', 'id="priorityList"', 'id="mediaHotkeyList"', 'data-hotkey-binding="hotkeyToggleLyricsVisibility"', 'id="selectPopover"', 'role="listbox"',
+    'id="sourceGrid"', 'id="priorityList"', 'id="mediaHotkeyList"', 'id="selectPopover"', 'role="listbox"',
     'id="colorPopover"', 'id="colorArea"', 'id="restoreDialog"', 'id="clearDialog"',
     'id="playerSettingsDialog"', 'id="playerRecognitionToggle"', 'id="playerOffsetInput"',
     'id="currentTrackOffset"', 'id="trackOffsetList"', 'id="trackOffsetPagination"', 'id="clearTrackOffsetsDialog"',

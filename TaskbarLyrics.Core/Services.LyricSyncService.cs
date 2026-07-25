@@ -188,7 +188,7 @@ public sealed class LyricSyncService : IDisposable
             var bestResult = results
                 .Where(r => r.Document != null && r.Document.Lines.Count > 0)
                 .OrderByDescending(r => r.Document!.BestScore)
-                .ThenBy(r => r.SourceApp == "QQMusic" || r.SourceApp == "Netease" ? 0 : 1) 
+                .ThenBy(r => r.SourceApp == "QQMusic" || r.SourceApp == "Netease" ? 0 : 1)
                 .FirstOrDefault();
 
             if (bestResult != null && _currentTrackId == trackId)

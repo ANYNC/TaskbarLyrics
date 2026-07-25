@@ -12,7 +12,7 @@ public class SongSearchMapDbContext : DbContext
     {
         var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
         var dbDirectory = Path.Combine(appData, "TaskbarLyrics", "database");
-        
+
         try
         {
             Directory.CreateDirectory(dbDirectory);

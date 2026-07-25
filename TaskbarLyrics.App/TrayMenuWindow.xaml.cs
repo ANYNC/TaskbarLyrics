@@ -34,7 +34,7 @@ public partial class TrayMenuWindow : Window
     private static readonly IntPtr TopMostWindow = new(-1);
 
     private readonly Action _toggleLyricsWindow;
-    private readonly Action<bool, SpectrumDisplayMode> _setSpectrumDisplayMode;
+    private readonly Action<SpectrumDisplayMode> _setSpectrumDisplayMode;
     private readonly SpectrumDisplayMode _spectrumDisplayMode;
     private readonly Action _openCurrentTrackOffsetSettings;
     private readonly Action _openSettings;
@@ -50,8 +50,7 @@ public partial class TrayMenuWindow : Window
     public TrayMenuWindow(
         Action toggleLyricsWindow,
         string toggleLyricsHotkey,
-        Action<bool, SpectrumDisplayMode> setSpectrumDisplayMode,
-        bool isSpectrumEnabled,
+        Action<SpectrumDisplayMode> setSpectrumDisplayMode,
         SpectrumDisplayMode spectrumDisplayMode,
         Action openCurrentTrackOffsetSettings,
         Action openSettings,
@@ -75,7 +74,7 @@ public partial class TrayMenuWindow : Window
         _openSpectrumTuning = openSpectrumTuning;
         _exitApp = exitApp;
         _mouseHookCallback = OnLowLevelMouseEvent;
-        SyncSpectrumModeChecks(isSpectrumEnabled, spectrumDisplayMode);
+        SyncSpectrumModeChecks(spectrumDisplayMode);
         SourceInitialized += OnSourceInitialized;
         NativeWindowTheme.ThemeChanged += OnWindowThemeChanged;
         _spectrumPopupCloseTimer = new DispatcherTimer
@@ -389,15 +388,9 @@ public partial class TrayMenuWindow : Window
             return;
         }
 
-        if (string.Equals(modeName, "Disabled", StringComparison.Ordinal))
-        {
-            InvokeCommand(() => _setSpectrumDisplayMode(false, _spectrumDisplayMode));
-            return;
-        }
-
         if (Enum.TryParse<SpectrumDisplayMode>(modeName, out var mode))
         {
-            InvokeCommand(() => _setSpectrumDisplayMode(true, mode));
+            InvokeCommand(() => _setSpectrumDisplayMode(mode));
         }
     }
 
@@ -436,16 +429,16 @@ public partial class TrayMenuWindow : Window
         command();
     }
 
-    private void SyncSpectrumModeChecks(bool isEnabled, SpectrumDisplayMode mode)
+    private void SyncSpectrumModeChecks(SpectrumDisplayMode mode)
     {
-        SpectrumDisabledCheck.Visibility = isEnabled ? Visibility.Hidden : Visibility.Visible;
-        SpectrumPureMusicCheck.Visibility = isEnabled && mode == SpectrumDisplayMode.PureMusicOnly
+        SpectrumDisabledCheck.Visibility = mode == SpectrumDisplayMode.Disabled ? Visibility.Visible : Visibility.Hidden;
+        SpectrumPureMusicCheck.Visibility = mode == SpectrumDisplayMode.PureMusicOnly
             ? Visibility.Visible
             : Visibility.Hidden;
-        SpectrumNoLyricsCheck.Visibility = isEnabled && mode == SpectrumDisplayMode.PureMusicOrNoLyrics
+        SpectrumNoLyricsCheck.Visibility = mode == SpectrumDisplayMode.PureMusicOrNoLyrics
             ? Visibility.Visible
             : Visibility.Hidden;
-        SpectrumAlwaysCheck.Visibility = isEnabled && mode == SpectrumDisplayMode.Always
+        SpectrumAlwaysCheck.Visibility = mode == SpectrumDisplayMode.Always
             ? Visibility.Visible
             : Visibility.Hidden;
     }

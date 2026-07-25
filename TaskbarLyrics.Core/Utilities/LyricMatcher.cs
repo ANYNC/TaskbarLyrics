@@ -177,26 +177,26 @@ public static class LyricMatcher
     public static string NormalizeForSearch(string? value)
     {
         if (string.IsNullOrWhiteSpace(value)) return string.Empty;
-        
+
         var normalized = ChineseScriptConverter.ToSimplified(value).ToLowerInvariant();
         normalized = RemoveDiacritics(normalized);
 
         // 移除常见平台噪声标签
         var noNoise = Regex.Replace(normalized, @"\s*[\(\[（【](explicit|deluxe|digital|premium|album|edit|version|special|anniversary|studio|remastered)[\)\]）】]\s*", " ", RegexOptions.IgnoreCase);
-        
+
         // 移除所有括号内容进行纯基准对比（相似度算法对噪声敏感）
         var pureTitle = BracketSuffixRegex.Replace(noNoise, " ");
-        
+
         // 移除歌手后缀
         var noFeatures = FeatureSuffixRegex.Replace(pureTitle, string.Empty);
-        
+
         var sb = new StringBuilder();
         foreach (var ch in noFeatures)
         {
             if (char.IsLetterOrDigit(ch) || char.IsWhiteSpace(ch)) sb.Append(ch);
             else sb.Append(' ');
         }
-        
+
         return Regex.Replace(sb.ToString(), @"\s+", " ").Trim();
     }
 

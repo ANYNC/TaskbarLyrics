@@ -44,10 +44,7 @@ internal readonly record struct AppSettingsChangeSet(
             !AreSamePlayerSourceSettings(current.PlayerSources, next.PlayerSources);
 
         var spectrumDisplayChanged = isInitialApplication ||
-            current.EnableSpectrum != next.EnableSpectrum ||
-            current.SpectrumDisplayMode != next.SpectrumDisplayMode ||
-            current.EnablePureMusicSpectrum != next.EnablePureMusicSpectrum ||
-            current.ShowSpectrumWhenLyricsNotFound != next.ShowSpectrumWhenLyricsNotFound;
+            current.SpectrumDisplayMode != next.SpectrumDisplayMode;
 
         var visualStyleChanged = isInitialApplication ||
             current.UseSafeFontSizeRange != next.UseSafeFontSizeRange ||

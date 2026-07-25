@@ -82,7 +82,6 @@ public partial class App : System.Windows.Application
                 ? hotkeys.ToggleLyricsVisibility
                 : string.Empty,
             SetSpectrumDisplayMode,
-            () => Settings.EnableSpectrum,
             () => Settings.SpectrumDisplayMode,
             OpenCurrentTrackOffsetSettings,
             OpenSettingsWindow,
@@ -290,16 +289,12 @@ public partial class App : System.Windows.Application
         }
     }
 
-    private void SetSpectrumDisplayMode(bool enabled, SpectrumDisplayMode mode)
+    private void SetSpectrumDisplayMode(SpectrumDisplayMode mode)
     {
-        Settings.EnableSpectrum = enabled;
-        if (enabled)
-        {
-            Settings.SpectrumDisplayMode = mode;
-        }
+        Settings.SpectrumDisplayMode = mode;
 
         _settingsStore?.Save(Settings);
-        _lyricsWindowHost?.SetSpectrumDisplayMode(enabled, mode);
+        _lyricsWindowHost?.SetSpectrumDisplayMode(mode);
         if (_settingsWindow is not null)
         {
             TaskObserver.Observe(

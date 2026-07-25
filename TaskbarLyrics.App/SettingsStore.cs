@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 using System.Text.Json;
 
 using TaskbarLyrics.Core.Utilities;
@@ -30,6 +30,8 @@ public sealed class SettingsStore
 
             var json = File.ReadAllText(_filePath);
             var settings = JsonSerializer.Deserialize<AppSettings>(json) ?? new AppSettings();
+            using var document = JsonDocument.Parse(json);
+            MigrateLegacySpectrumSettings(document.RootElement, settings);
             settings.NormalizePlayerSources();
             return settings;
         }
@@ -91,6 +93,20 @@ public sealed class SettingsStore
                     Log.Warn($"Failed to remove temporary settings file '{temporaryPath}': {exception.Message}");
                 }
             }
+        }
+    }
+
+    private static void MigrateLegacySpectrumSettings(JsonElement root, AppSettings settings)
+    {
+        if (!root.TryGetProperty("EnableSpectrum", out var enabledElement) ||
+            enabledElement.ValueKind is not JsonValueKind.True and not JsonValueKind.False)
+        {
+            return;
+        }
+
+        if (!enabledElement.GetBoolean())
+        {
+            settings.SpectrumDisplayMode = SpectrumDisplayMode.Disabled;
         }
     }
 }

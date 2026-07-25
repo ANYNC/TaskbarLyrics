@@ -62,6 +62,36 @@ public sealed class SettingsStoreTests
     }
 
     [Fact]
+    public void Load_MigratesLegacySpectrumSwitchAndSaveDropsLegacyFields()
+    {
+        var directory = Path.Combine(AppContext.BaseDirectory, $"settings-store-{Guid.NewGuid():N}");
+        var filePath = Path.Combine(directory, "settings.json");
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            File.WriteAllText(filePath, "{\"EnableSpectrum\":false,\"EnablePureMusicSpectrum\":true,\"ShowSpectrumWhenLyricsNotFound\":false}");
+            var store = new SettingsStore(filePath);
+
+            var loaded = store.Load();
+            store.Save(loaded);
+
+            Assert.Equal(SpectrumDisplayMode.Disabled, loaded.SpectrumDisplayMode);
+            var saved = File.ReadAllText(filePath);
+            Assert.DoesNotContain("EnableSpectrum", saved, StringComparison.Ordinal);
+            Assert.DoesNotContain("EnablePureMusicSpectrum", saved, StringComparison.Ordinal);
+            Assert.DoesNotContain("ShowSpectrumWhenLyricsNotFound", saved, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(directory))
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public void Save_WhenCalledConcurrently_KeepsAValidSettingsFile()
     {
         var directory = Path.Combine(AppContext.BaseDirectory, $"settings-store-{Guid.NewGuid():N}");

@@ -15,8 +15,6 @@ namespace TaskbarLyrics.App;
 
 public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
 {
-    private const string DisabledSpectrumDisplayMode = "Disabled";
-
     private readonly AppSettings _settings;
     private readonly TrackLyricOffsetStore _trackLyricOffsetStore;
     private readonly Func<Task<CurrentTrackLyricsContext?>> _getCurrentTrackLyricsContext;
@@ -563,16 +561,21 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             MediaHotkeyStatuses = (System.Windows.Application.Current as App)?.GetMediaHotkeyStatuses()
                 .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal)
                 ?? new Dictionary<string, string>(StringComparer.Ordinal),
+            MediaHotkeys = MediaHotkeyCatalog.Definitions.Select(definition => new WebMediaHotkeyDefinition
+            {
+                Action = definition.Action.ToString(),
+                SettingKey = definition.SettingKey,
+                StatusKey = definition.StatusKey,
+                DisplayName = definition.DisplayName,
+                Description = definition.Description
+            })
+            .ToList(),
             ShowLyricsOnStartup = _settings.ShowLyricsOnStartup,
             StartWithWindows = _settings.StartWithWindows,
             AutoCheckUpdates = _settings.AutoCheckUpdates,
             ShowLyricTranslation = _settings.ShowLyricTranslation,
             ToolWindowTheme = _settings.ToolWindowTheme,
-            SpectrumDisplayMode = _settings.EnableSpectrum
-                ? _settings.SpectrumDisplayMode.ToString()
-                : DisabledSpectrumDisplayMode,
-            EnablePureMusicSpectrum = _settings.EnablePureMusicSpectrum,
-            ShowSpectrumWhenLyricsNotFound = _settings.ShowSpectrumWhenLyricsNotFound,
+            SpectrumDisplayMode = _settings.SpectrumDisplayMode.ToString(),
             UseSafeFontSizeRange = _settings.UseSafeFontSizeRange,
             FontSize = _settings.FontSize,
             UseSafeCoverSizeRange = _settings.UseSafeCoverSizeRange,
@@ -707,22 +710,11 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 }
                 break;
             case "spectrumDisplayMode":
-                var spectrumDisplayMode = ReadString(element, DisabledSpectrumDisplayMode);
-                if (string.Equals(spectrumDisplayMode, DisabledSpectrumDisplayMode, StringComparison.OrdinalIgnoreCase))
+                var spectrumDisplayMode = ReadString(element, SpectrumDisplayMode.Disabled.ToString());
+                if (Enum.TryParse<SpectrumDisplayMode>(spectrumDisplayMode, true, out var parsedSpectrumDisplayMode))
                 {
-                    _settings.EnableSpectrum = false;
-                }
-                else if (Enum.TryParse<SpectrumDisplayMode>(spectrumDisplayMode, true, out var parsedSpectrumDisplayMode))
-                {
-                    _settings.EnableSpectrum = true;
                     _settings.SpectrumDisplayMode = parsedSpectrumDisplayMode;
                 }
-                break;
-            case "enablePureMusicSpectrum":
-                _settings.EnablePureMusicSpectrum = ReadBool(element, _settings.EnablePureMusicSpectrum);
-                break;
-            case "showSpectrumWhenLyricsNotFound":
-                _settings.ShowSpectrumWhenLyricsNotFound = ReadBool(element, _settings.ShowSpectrumWhenLyricsNotFound);
                 break;
             case "showBackground":
                 _settings.ShowBackground = ReadBool(element, _settings.ShowBackground);
@@ -1132,10 +1124,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         target.LastNotifiedUpdateVersion = source.LastNotifiedUpdateVersion;
         target.ShowLyricTranslation = source.ShowLyricTranslation;
         target.ToolWindowTheme = source.ToolWindowTheme;
-        target.EnableSpectrum = source.EnableSpectrum;
         target.SpectrumDisplayMode = source.SpectrumDisplayMode;
-        target.EnablePureMusicSpectrum = source.EnablePureMusicSpectrum;
-        target.ShowSpectrumWhenLyricsNotFound = source.ShowSpectrumWhenLyricsNotFound;
         target.UseSafeFontSizeRange = source.UseSafeFontSizeRange;
         target.FontSize = source.FontSize;
         target.UseSafeCoverSizeRange = source.UseSafeCoverSizeRange;
@@ -1251,14 +1240,13 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         public string HotkeySeekForward { get; set; } = "";
         public string HotkeyToggleLyricsVisibility { get; set; } = "";
         public Dictionary<string, string> MediaHotkeyStatuses { get; set; } = new(StringComparer.Ordinal);
+        public List<WebMediaHotkeyDefinition> MediaHotkeys { get; set; } = [];
         public bool ShowLyricsOnStartup { get; set; }
         public bool StartWithWindows { get; set; }
         public bool AutoCheckUpdates { get; set; }
         public bool ShowLyricTranslation { get; set; }
         public ToolWindowTheme ToolWindowTheme { get; set; }
-        public string SpectrumDisplayMode { get; set; } = DisabledSpectrumDisplayMode;
-        public bool EnablePureMusicSpectrum { get; set; }
-        public bool ShowSpectrumWhenLyricsNotFound { get; set; }
+        public string SpectrumDisplayMode { get; set; } = TaskbarLyrics.App.SpectrumDisplayMode.Disabled.ToString();
         public bool UseSafeFontSizeRange { get; set; }
         public double FontSize { get; set; }
         public bool UseSafeCoverSizeRange { get; set; }
@@ -1280,6 +1268,19 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         public bool ForceAlwaysOnTop { get; set; }
         public string AppVersion { get; set; } = "";
         public string RepositoryUrl { get; set; } = "";
+    }
+
+    private sealed class WebMediaHotkeyDefinition
+    {
+        public string Action { get; set; } = "";
+
+        public string SettingKey { get; set; } = "";
+
+        public string StatusKey { get; set; } = "";
+
+        public string DisplayName { get; set; } = "";
+
+        public string Description { get; set; } = "";
     }
 
     private sealed class UpdateStatusPayload

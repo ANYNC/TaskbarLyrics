@@ -97,12 +97,12 @@ public sealed class LyricifyLyricProvider : LyricProviderBase
                     var searchMetadata = BuildTrackMetadata(track);
 
                     searchResult = await SearchHelper.Search(
-                        searchMetadata, 
-                        _searcherType, 
+                        searchMetadata,
+                        _searcherType,
                         Lyricify.Lyrics.Searchers.Helpers.CompareHelper.MatchType.NoMatch);
                 }
             }
-            
+
             cancellationToken.ThrowIfCancellationRequested();
         }
         catch (OperationCanceledException)

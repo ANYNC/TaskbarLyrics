@@ -512,6 +512,8 @@
       if (!state) return;
       const enabled = Boolean(state.enableGlobalMediaHotkeys);
       $("#mediaHotkeyMasterStatus").textContent = enabled ? "已启用" : "已关闭";
+      $("#mediaHotkeyList").innerHTML = (state.mediaHotkeys ?? []).map(definition => `
+        <div class="media-hotkey-row"><div class="setting-label"><strong>${escapeHtml(definition.displayName)}</strong><small>${escapeHtml(definition.description)}</small></div><div class="media-hotkey-controls"><button class="control media-hotkey-recorder" type="button" data-hotkey-binding="${escapeHtml(definition.settingKey)}" aria-label="录制${escapeHtml(definition.displayName)}快捷键"></button><output class="media-hotkey-status" data-hotkey-status="${escapeHtml(definition.statusKey)}"></output><button class="btn ghost small media-hotkey-reset" type="button" data-hotkey-reset="${escapeHtml(definition.action)}">恢复</button></div></div>`).join("");
       $$('[data-hotkey-binding]').forEach(button => {
         if (button !== activeHotkeyRecorder) button.textContent = state[button.dataset.hotkeyBinding] || "未设置";
       });

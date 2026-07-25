@@ -45,6 +45,10 @@ try {
         powershell -ExecutionPolicy Bypass -File $settingsContract
     }
 
+    Invoke-VerificationStep 'Code format verification' {
+        dotnet format TaskbarLyrics.sln --verify-no-changes --no-restore
+    }
+
     Write-Host 'Verification passed.'
 }
 finally {

@@ -160,7 +160,8 @@ public partial class SpectrumTuningWindow : Wpf.Ui.Controls.FluentWindow
         {
             case "SampleWindow": Settings.SampleWindow = CoerceSampleWindow((int)Math.Round(value)); break;
             case "UpdateIntervalMs": Settings.UpdateIntervalMs = (int)Math.Round(value); break;
-            case "BarCount": Settings.BarCount = Math.Clamp(
+            case "BarCount":
+                Settings.BarCount = Math.Clamp(
                 (int)Math.Round(value),
                 SpectrumTuningSettings.MinBarCount,
                 SpectrumTuningSettings.MaxBarCount); break;

@@ -11,13 +11,13 @@ namespace TaskbarLyrics.Core.Services;
 public abstract class LyricProviderBase : ILyricProvider
 {
     // --- BetterLyrics 风格的严苛正则 ---
-    
+
     // 只匹配标准 LRC 时间轴，不进行模糊匹配
     private static readonly Regex LrcTimestampRegex = new(@"\[(\d+)[:：](\d+)(?:[\.\uFF0E:：](\d{1,3}))?\]", RegexOptions.Compiled);
-    
+
     // 专门移除行内的 QRC 逐字标签（如 <00:12.34>）
     private static readonly Regex InnerTagRegex = new(@"<[^>]+>", RegexOptions.Compiled);
-    
+
     // 偏移量解析
     private static readonly Regex OffsetRegex = new(@"\[offset\s*[:：]\s*(?<val>[+-]?\d+)\]", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
@@ -79,8 +79,8 @@ public abstract class LyricProviderBase : ILyricProvider
     // ========================================================
     private LyricDocument ProcessDocument(LyricDocument doc)
     {
-        var lines = doc.Lines.Select(l => l with 
-        { 
+        var lines = doc.Lines.Select(l => l with
+        {
             Text = BetterLyrics_Sanitize(l.Text),
             Translation = l.Translation != null ? BetterLyrics_Sanitize(l.Translation) : null
         })
@@ -111,7 +111,7 @@ public abstract class LyricProviderBase : ILyricProvider
         for (int i = 0; i < text.Length; i++)
         {
             char c = text[i];
-            
+
             // 彻底封杀导致框叉的 \uFFFC 和 \uFFFD 以及 PUA 区
             if ((int)c >= 0xFFF0 || ((int)c >= 0xE000 && (int)c <= 0xF8FF)) continue;
 
@@ -122,10 +122,10 @@ public abstract class LyricProviderBase : ILyricProvider
             var cat = CharUnicodeInfo.GetUnicodeCategory(c);
             bool isSafe = cat switch
             {
-                UnicodeCategory.UppercaseLetter or 
-                UnicodeCategory.LowercaseLetter or 
+                UnicodeCategory.UppercaseLetter or
+                UnicodeCategory.LowercaseLetter or
                 UnicodeCategory.OtherLetter or      // 汉字/中日韩
-                UnicodeCategory.DecimalDigitNumber or 
+                UnicodeCategory.DecimalDigitNumber or
                 UnicodeCategory.ConnectorPunctuation or
                 UnicodeCategory.DashPunctuation or
                 UnicodeCategory.OpenPunctuation or
@@ -133,7 +133,7 @@ public abstract class LyricProviderBase : ILyricProvider
                 UnicodeCategory.InitialQuotePunctuation or
                 UnicodeCategory.FinalQuotePunctuation or
                 UnicodeCategory.OtherPunctuation or
-                UnicodeCategory.SpaceSeparator or 
+                UnicodeCategory.SpaceSeparator or
                 UnicodeCategory.MathSymbol or
                 UnicodeCategory.CurrencySymbol or
                 UnicodeCategory.ModifierSymbol or
@@ -156,7 +156,7 @@ public abstract class LyricProviderBase : ILyricProvider
         }
 
         var result = sb.ToString().Trim();
-        
+
         // 关键：如果净化后不包含任何字母、数字或汉字，直接返回空，这能彻底干掉 [00:41.30] 后的乱码
         if (!ContainsAnyMeaningfulChar(result)) return string.Empty;
 
@@ -198,7 +198,7 @@ public abstract class LyricProviderBase : ILyricProvider
             // 提取内容：多时间戳行共用最后一个时间戳之后的歌词文本。
             var textStart = matches[^1].Index + matches[^1].Length;
             string rawContent = textStart < trimmedLine.Length ? trimmedLine[textStart..] : string.Empty;
-            
+
             // 精准净化
             string cleanedContent = BetterLyrics_Sanitize(rawContent);
 
@@ -335,15 +335,17 @@ public abstract class LyricProviderBase : ILyricProvider
     protected string DecodeBytesToString(byte[] bytes)
     {
         try { return new UTF8Encoding(false, true).GetString(bytes); }
-        catch (DecoderFallbackException) {
+        catch (DecoderFallbackException)
+        {
             try { return Encoding.GetEncoding(936).GetString(bytes); }
             catch { return Encoding.UTF8.GetString(bytes); }
         }
     }
 
-    private int ParseMillisecond(string fractionRaw) { 
-        if (string.IsNullOrWhiteSpace(fractionRaw)) return 0; 
-        return fractionRaw.Length switch { 1 => int.Parse(fractionRaw) * 100, 2 => int.Parse(fractionRaw) * 10, _ => int.Parse(fractionRaw[..3]) }; 
+    private int ParseMillisecond(string fractionRaw)
+    {
+        if (string.IsNullOrWhiteSpace(fractionRaw)) return 0;
+        return fractionRaw.Length switch { 1 => int.Parse(fractionRaw) * 100, 2 => int.Parse(fractionRaw) * 10, _ => int.Parse(fractionRaw[..3]) };
     }
 
     private static TimeSpan ClampTimestamp(TimeSpan timestamp)
@@ -352,19 +354,18 @@ public abstract class LyricProviderBase : ILyricProvider
     }
 
     // ========================================================
-    // ✅ 匹配与得分逻辑 (此前被误删)
     // ========================================================
     protected string BuildCacheKey(TrackInfo track)
     {
         return $"{SourceApp}|{NormalizeForCache(track.Title)}|{NormalizeForCache(track.Artist)}|{NormalizeDurationForCache(track.Duration)}";
     }
 
-    private string NormalizeForCache(string s) 
-    { 
-        var n = ChineseScriptConverter.ToSimplified(s).ToLowerInvariant(); 
-        var sb = new StringBuilder(); 
-        foreach (var ch in n) if (char.IsLetterOrDigit(ch)) sb.Append(ch); 
-        return sb.ToString(); 
+    private string NormalizeForCache(string s)
+    {
+        var n = ChineseScriptConverter.ToSimplified(s).ToLowerInvariant();
+        var sb = new StringBuilder();
+        foreach (var ch in n) if (char.IsLetterOrDigit(ch)) sb.Append(ch);
+        return sb.ToString();
     }
 
     private static int NormalizeDurationForCache(TimeSpan duration)
@@ -377,19 +378,19 @@ public abstract class LyricProviderBase : ILyricProvider
     protected string NormalizeForSearch(string? value)
     {
         if (string.IsNullOrWhiteSpace(value)) return string.Empty;
-        
+
         // 1. 转繁为简并小写
         var normalized = ChineseScriptConverter.ToSimplified(value).ToLowerInvariant();
-        
+
         // 2. 移除音标 (á -> a)
         normalized = RemoveDiacritics(normalized);
 
         // 3. 移除常见平台噪声标签
         var noNoise = Regex.Replace(normalized, @"\s*[\(\[（【](explicit|deluxe|digital|premium|album|edit|version|special|anniversary|studio)[\)\]）】]\s*", " ", RegexOptions.IgnoreCase);
-        
+
         // 4. 分离歌手后缀 (feat. ft. with)
         var noFeatures = FeatureSuffixRegex.Replace(noNoise, string.Empty);
-        
+
         // 5. 移除非字母数字字符，但保留空格以便分词
         var sb = new StringBuilder();
         foreach (var ch in noFeatures)
@@ -397,7 +398,7 @@ public abstract class LyricProviderBase : ILyricProvider
             if (char.IsLetterOrDigit(ch) || char.IsWhiteSpace(ch)) sb.Append(ch);
             else sb.Append(' ');
         }
-        
+
         // 6. 合并多余空格并 Trim
         return Regex.Replace(sb.ToString(), @"\s+", " ").Trim();
     }

@@ -65,17 +65,6 @@ const spectrumTuning = {
   opacity: 0.78
 };
 
-function normalizeWeight(weight) {
-  const normalized = String(weight || "").trim().toLowerCase();
-  switch (normalized) {
-    case "light": return "300";
-    case "medium": return "500";
-    case "semibold": return "600";
-    case "bold": return "700";
-    default: return "500";
-  }
-}
-
 function clamp01(value) {
   const parsed = Number(value);
   if (Number.isNaN(parsed)) {

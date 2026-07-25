@@ -44,7 +44,6 @@ public partial class MainWindow : Window
     private string _currentCoverFallbackColorCss = "rgba(67, 160, 71, 1)";
     private string? _lastLocalCoverLookupTrackId;
     private DateTimeOffset _nextLocalCoverLookupUtc;
-    private bool _enableSpectrum = true;
     private SpectrumDisplayMode _spectrumDisplayMode = SpectrumDisplayMode.PureMusicOrNoLyrics;
     private IReadOnlyList<float> _spectrumSilence = new float[SpectrumTuningSettings.DefaultBarCount];
     private bool _spectrumPreviewEnabled;
@@ -152,7 +151,6 @@ public partial class MainWindow : Window
 
         if (changes.SpectrumDisplayChanged)
         {
-            _enableSpectrum = snapshot.EnableSpectrum;
             _spectrumDisplayMode = snapshot.SpectrumDisplayMode;
         }
 
@@ -470,24 +468,16 @@ public partial class MainWindow : Window
         }
     }
 
-    public void SetSpectrumDisplayMode(bool enabled, SpectrumDisplayMode mode)
+    public void SetSpectrumDisplayMode(SpectrumDisplayMode mode)
     {
-        _enableSpectrum = enabled;
-        if (enabled)
-        {
-            _spectrumDisplayMode = mode;
-        }
+        _spectrumDisplayMode = mode;
     }
 
     private bool ShouldShowSpectrum(LyricDisplayFrame frame)
     {
-        if (!_enableSpectrum)
-        {
-            return false;
-        }
-
         return _spectrumDisplayMode switch
         {
+            SpectrumDisplayMode.Disabled => false,
             SpectrumDisplayMode.Always => true,
             SpectrumDisplayMode.PureMusicOrNoLyrics => frame.IsPureMusic || IsLyricsNotFoundFrame(frame),
             _ => frame.IsPureMusic

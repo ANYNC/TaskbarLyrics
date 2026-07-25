@@ -14,11 +14,6 @@ public sealed class LocalLyricProvider : ILyricProvider, IDisposable
         ".mp3", ".flac", ".m4a", ".aac", ".wav", ".ogg", ".opus", ".wma"
     };
 
-    private static readonly HashSet<string> LyricExtensions = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ".lrc", ".qrc", ".krc"
-    };
-
     private static readonly Regex TimestampRegex = new(
         @"\[(\d+):(\d+)(?:[\.:](\d{1,3}))?\]",
         RegexOptions.Compiled);
@@ -134,7 +129,7 @@ public sealed class LocalLyricProvider : ILyricProvider, IDisposable
                 var entries = new List<LocalLyricEntry>();
                 foreach (var file in sharedSnapshot.Files)
                 {
-                    TryAddEntry(seen, entries, file.Path, readEmbeddedMetadata: false);
+                    TryAddEntry(seen, entries, file.Path);
                 }
 
                 _index.Clear();
@@ -146,7 +141,7 @@ public sealed class LocalLyricProvider : ILyricProvider, IDisposable
         }
     }
 
-    private static void TryAddEntry(ISet<string> seen, ICollection<LocalLyricEntry> entries, string lyricPath, bool readEmbeddedMetadata)
+    private static void TryAddEntry(ISet<string> seen, ICollection<LocalLyricEntry> entries, string lyricPath)
     {
         if (!seen.Add(lyricPath))
         {
@@ -160,84 +155,8 @@ public sealed class LocalLyricProvider : ILyricProvider, IDisposable
         }
 
         var (artist, title) = SplitArtistTitle(stem);
-        if (readEmbeddedMetadata && AudioExtensions.Contains(Path.GetExtension(lyricPath)))
-        {
-            var embeddedMetadata = TryExtractEmbeddedMetadata(lyricPath);
-            title = string.IsNullOrWhiteSpace(embeddedMetadata.Title) ? title : embeddedMetadata.Title;
-            artist = MergeArtists(artist, embeddedMetadata.Artist, embeddedMetadata.AlbumArtist);
-        }
 
         entries.Add(new LocalLyricEntry(lyricPath, stem, artist, title));
-    }
-
-    private static (string? Title, string? Artist, string? AlbumArtist) TryExtractEmbeddedMetadata(string path)
-    {
-        try
-        {
-            var bytes = File.ReadAllBytes(path);
-            return (
-                TryExtractVorbisComment(bytes, "TITLE"),
-                TryExtractVorbisComment(bytes, "ARTIST"),
-                TryExtractVorbisComment(bytes, "ALBUMARTIST"));
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            Log.Warn($"Local embedded metadata read failed: {path}, {ex.Message}");
-            return (null, null, null);
-        }
-    }
-
-    private static string MergeArtists(params string?[] artists)
-    {
-        return string.Join(" ", artists
-            .Where(artist => !string.IsNullOrWhiteSpace(artist))
-            .SelectMany(artist => artist!
-                .Split([';', '/', ',', '、', '&'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-            .Distinct(StringComparer.OrdinalIgnoreCase));
-    }
-
-    private static IEnumerable<string> SafeEnumerateFiles(string rootFolder, CancellationToken cancellationToken)
-    {
-        var pending = new Stack<string>();
-        pending.Push(rootFolder);
-
-        while (pending.Count > 0)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            var folder = pending.Pop();
-
-            IEnumerable<string> files;
-            try
-            {
-                files = Directory.EnumerateFiles(folder);
-            }
-            catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
-            {
-                continue;
-            }
-
-            foreach (var file in files)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                yield return file;
-            }
-
-            IEnumerable<string> directories;
-            try
-            {
-                directories = Directory.EnumerateDirectories(folder);
-            }
-            catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
-            {
-                continue;
-            }
-
-            foreach (var directory in directories)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                pending.Push(directory);
-            }
-        }
     }
 
     private static LocalLyricMatch? FindBestMatch(TrackInfo track, IReadOnlyList<LocalLyricEntry> entries)

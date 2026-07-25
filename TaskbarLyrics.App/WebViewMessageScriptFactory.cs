@@ -1,10 +1,16 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace TaskbarLyrics.App;
 
 internal static class WebViewMessageScriptFactory
 {
     private const int ProtocolVersion = 1;
+    private static readonly JsonSerializerOptions SerializerOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        Converters = { new JsonStringEnumConverter() }
+    };
 
     public static string Dispatch(string receiver, string type, object? payload)
     {
@@ -14,6 +20,6 @@ internal static class WebViewMessageScriptFactory
             type,
             payload
         };
-        return $"window.{receiver}?.receive({JsonSerializer.Serialize(message)});";
+        return $"window.{receiver}?.receive({JsonSerializer.Serialize(message, SerializerOptions)});";
     }
 }

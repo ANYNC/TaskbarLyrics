@@ -1,4 +1,4 @@
-﻿namespace TaskbarLyrics.App;
+namespace TaskbarLyrics.App;
 
 public enum LyricsHorizontalAnchor
 {
@@ -16,6 +16,7 @@ public enum ForegroundColorMode
 
 public enum SpectrumDisplayMode
 {
+    Disabled = -1,
     PureMusicOrNoLyrics,
     PureMusicOnly,
     Always
@@ -94,13 +95,7 @@ public sealed class AppSettings
 
     public ToolWindowTheme ToolWindowTheme { get; set; } = ToolWindowTheme.System;
 
-    public bool EnableSpectrum { get; set; } = true;
-
     public SpectrumDisplayMode SpectrumDisplayMode { get; set; } = SpectrumDisplayMode.PureMusicOrNoLyrics;
-
-    public bool EnablePureMusicSpectrum { get; set; } = true;
-
-    public bool ShowSpectrumWhenLyricsNotFound { get; set; } = false;
 
     public SpectrumTuningSettings SpectrumTuning { get; set; } = SpectrumTuningSettings.CreateDefault();
 
