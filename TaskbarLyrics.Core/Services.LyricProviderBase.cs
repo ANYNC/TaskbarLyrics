@@ -10,6 +10,11 @@ namespace TaskbarLyrics.Core.Services;
 
 public abstract class LyricProviderBase : ILyricProvider
 {
+    // A fuzzy metadata match may be correct at one point in time but wrong after
+    // a provider changes its search result. Persist only results tied to the
+    // player-reported song ID, so an incorrect fuzzy match cannot become sticky.
+    private const int CurrentCacheFormatVersion = 10;
+
     // --- BetterLyrics 风格的严苛正则 ---
 
     // 只匹配标准 LRC 时间轴，不进行模糊匹配
@@ -61,8 +66,10 @@ public abstract class LyricProviderBase : ILyricProvider
         CancellationToken cancellationToken = default)
     {
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-        var cacheKey = BuildCacheKey(track);
-        if (_cacheStore.TryGet(cacheKey, out var cachedDoc, out var acquisition))
+        var canUsePersistentCache = HasStableCacheIdentity(track);
+        var cacheKey = canUsePersistentCache ? BuildCacheKey(track) : null;
+        if (cacheKey is not null &&
+            _cacheStore.TryGet(cacheKey, out var cachedDoc, out var acquisition))
         {
             if (HasUsableLines(cachedDoc))
             {
@@ -79,7 +86,10 @@ public abstract class LyricProviderBase : ILyricProvider
             result = ProcessDocument(result);
             if (HasUsableLines(result))
             {
-                _cacheStore.Store(cacheKey, result);
+                if (cacheKey is not null)
+                {
+                    _cacheStore.Store(cacheKey, result);
+                }
             }
             else
             {
@@ -387,10 +397,15 @@ public abstract class LyricProviderBase : ILyricProvider
         var songId = NormalizeForCache(track.SongId ?? string.Empty);
         if (!string.IsNullOrWhiteSpace(songId))
         {
-            return $"v9|{provider}|{source}|song:{songId}";
+            return $"v{CurrentCacheFormatVersion}|{provider}|{source}|song:{songId}";
         }
 
-        return $"v9|{provider}|{source}|metadata:{NormalizeForCache(track.Title)}|{NormalizeForCache(track.Artist)}|{NormalizeForCache(track.Album)}|{NormalizeDurationForCache(track.Duration)}";
+        return $"v{CurrentCacheFormatVersion}|{provider}|{source}|metadata:{NormalizeForCache(track.Title)}|{NormalizeForCache(track.Artist)}|{NormalizeForCache(track.Album)}|{NormalizeDurationForCache(track.Duration)}";
+    }
+
+    private static bool HasStableCacheIdentity(TrackInfo track)
+    {
+        return !string.IsNullOrWhiteSpace(track.SongId);
     }
 
     private static string NormalizeForCache(string s)
@@ -468,25 +483,41 @@ public abstract class LyricProviderBase : ILyricProvider
     public static void ClearCache()
     {
         CacheStore.Clear();
-        DeleteLegacyCacheFile();
+        DeleteLegacyCacheFiles();
     }
 
-    private static void DeleteLegacyCacheFile()
+    private static void DeleteLegacyCacheFiles()
     {
-        try
+        foreach (var legacyCacheFilePath in LegacyCacheFilePaths)
         {
-            if (File.Exists(LegacyCacheFilePath))
+            try
             {
-                File.Delete(LegacyCacheFilePath);
+                if (File.Exists(legacyCacheFilePath))
+                {
+                    File.Delete(legacyCacheFilePath);
+                }
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                Log.Warn($"Failed to clear legacy lyric cache '{legacyCacheFilePath}': {exception.Message}");
             }
         }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            Log.Warn($"Failed to clear legacy lyric cache '{LegacyCacheFilePath}': {exception.Message}");
-        }
     }
 
-    private static string CacheFilePathStatic => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "TaskbarLyrics", "cache", "unified-lyrics-v9.json");
+    private static readonly string[] LegacyCacheFilePaths =
+    [
+        GetCacheFilePath(8),
+        GetCacheFilePath(9)
+    ];
 
-    private static string LegacyCacheFilePath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "TaskbarLyrics", "cache", "unified-lyrics-v8.json");
+    private static string CacheFilePathStatic => GetCacheFilePath(CurrentCacheFormatVersion);
+
+    private static string GetCacheFilePath(int cacheFormatVersion)
+    {
+        return Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "TaskbarLyrics",
+            "cache",
+            $"unified-lyrics-v{cacheFormatVersion}.json");
+    }
 }

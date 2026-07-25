@@ -61,6 +61,39 @@ public sealed class LyricProviderBaseTests
     }
 
     [Fact]
+    public async Task GetLyricsWithDiagnosticsAsyncDoesNotPersistFuzzyMetadataMatches()
+    {
+        var cache = new InMemoryCacheStore();
+        var provider = new ResolvingProvider(
+            cache,
+            new LyricDocument(new[] { new LyricLine(TimeSpan.Zero, "Valid lyric") }, bestScore: 100));
+        var track = CreateTrack(songId: null);
+
+        await provider.GetLyricsWithDiagnosticsAsync(track);
+        await provider.GetLyricsWithDiagnosticsAsync(track);
+
+        Assert.Equal(2, provider.ResolveCount);
+        Assert.Equal(0, cache.StoreCount);
+    }
+
+    [Fact]
+    public async Task GetLyricsWithDiagnosticsAsyncCachesResultsWithStableSongId()
+    {
+        var cache = new InMemoryCacheStore();
+        var provider = new ResolvingProvider(
+            cache,
+            new LyricDocument(new[] { new LyricLine(TimeSpan.Zero, "Valid lyric") }, bestScore: 100));
+        var track = CreateTrack(songId: "12345");
+
+        await provider.GetLyricsWithDiagnosticsAsync(track);
+        var cached = await provider.GetLyricsWithDiagnosticsAsync(track);
+
+        Assert.Equal(1, provider.ResolveCount);
+        Assert.Equal(1, cache.StoreCount);
+        Assert.Equal(LyricAcquisitionKind.MemoryCache, cached.Acquisition);
+    }
+
+    [Fact]
     public async Task GetLyricsWithDiagnosticsAsyncDiscardsInvalidCachedDocument()
     {
         var cache = new InMemoryCacheStore();
@@ -150,7 +183,13 @@ public sealed class LyricProviderBaseTests
             return false;
         }
 
-        public void Store(string key, LyricDocument payload) => _entries[key] = payload;
+        public int StoreCount { get; private set; }
+
+        public void Store(string key, LyricDocument payload)
+        {
+            StoreCount++;
+            _entries[key] = payload;
+        }
 
         public void Remove(string key) => _entries.Remove(key);
 

@@ -11,6 +11,7 @@ namespace TaskbarLyrics.Core.Services;
 
 public abstract class LrcLibSmtcLyricProviderBase : ILyricProvider
 {
+    private const int CurrentCacheFormatVersion = 10;
     private const bool EnableTraditionalToSimplified = false;
     private const int SearchParallelism = 3;
     private const int MinimumSearchScore = 70;
@@ -55,12 +56,7 @@ public abstract class LrcLibSmtcLyricProviderBase : ILyricProvider
             return NotFound();
         }
 
-        var payload = await FetchLyricsPayloadAsync(
-            track.SourceApp,
-            track.Title,
-            track.Artist,
-            track.Duration,
-            cancellationToken);
+        var payload = await FetchLyricsPayloadAsync(track, cancellationToken);
         if (payload is null)
         {
             return NotFound();
@@ -107,34 +103,36 @@ public abstract class LrcLibSmtcLyricProviderBase : ILyricProvider
     }
 
     private async Task<PayloadFetchResult?> FetchLyricsPayloadAsync(
-        string sourceApp,
-        string title,
-        string artist,
-        TimeSpan duration,
+        TrackInfo track,
         CancellationToken cancellationToken)
     {
-        var cacheKey = BuildCacheKey(sourceApp, title, artist, duration);
-        if (TryGetCachedPayload(cacheKey, out var cached, out var acquisition) && HasAnyLyrics(cached))
+        var cacheKey = BuildCacheKey(track);
+        if (cacheKey is not null &&
+            TryGetCachedPayload(cacheKey, out var cached, out var acquisition) &&
+            HasAnyLyrics(cached))
         {
             return new PayloadFetchResult(cached.SyncedLyrics, cached.PlainLyrics, acquisition);
         }
 
         var structured = await SearchStructuredCandidatesAsync(
-            title,
-            artist,
-            duration,
+            track.Title,
+            track.Artist,
+            track.Duration,
             cancellationToken);
         if (structured is not null)
         {
-            StoreCachedPayload(cacheKey, structured.Payload);
+            if (cacheKey is not null)
+            {
+                StoreCachedPayload(cacheKey, structured.Payload);
+            }
             return new PayloadFetchResult(
                 structured.Payload.SyncedLyrics,
                 structured.Payload.PlainLyrics,
                 LyricAcquisitionKind.Remote);
         }
 
-        var searched = await SearchPayloadAsync(title, artist, duration, cancellationToken);
-        if (searched is not null)
+        var searched = await SearchPayloadAsync(track.Title, track.Artist, track.Duration, cancellationToken);
+        if (searched is not null && cacheKey is not null)
         {
             StoreCachedPayload(cacheKey, searched.Payload);
         }
@@ -543,15 +541,15 @@ public abstract class LrcLibSmtcLyricProviderBase : ILyricProvider
         return idx == 0 ? string.Empty : new string(buffer, 0, idx);
     }
 
-    private static string BuildCacheKey(string sourceApp, string title, string artist, TimeSpan duration)
+    private static string? BuildCacheKey(TrackInfo track)
     {
-        var sourceKey = NormalizeForMatch(sourceApp);
-        var titleKey = NormalizeForMatch(title);
-        var artistKey = NormalizeForMatch(artist);
-        var durationKey = duration > TimeSpan.Zero
-            ? (int)Math.Round(duration.TotalSeconds / 2, MidpointRounding.AwayFromZero) * 2
-            : 0;
-        return $"{sourceKey}|{titleKey}|{artistKey}|{durationKey}";
+        var songId = NormalizeForMatch(track.SongId);
+        if (string.IsNullOrWhiteSpace(songId))
+        {
+            return null;
+        }
+
+        return $"v{CurrentCacheFormatVersion}|{NormalizeForMatch(track.SourceApp)}|song:{songId}";
     }
 
     private bool TryGetCachedPayload(
