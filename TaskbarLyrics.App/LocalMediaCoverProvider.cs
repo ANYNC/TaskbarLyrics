@@ -6,7 +6,7 @@ using TaskbarLyrics.Core.Utilities;
 
 namespace TaskbarLyrics.App;
 
-internal sealed class LocalMediaCoverProvider
+internal sealed class LocalMediaCoverProvider : IDisposable
 {
     private static readonly HashSet<string> AudioExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -28,7 +28,9 @@ internal sealed class LocalMediaCoverProvider
     private readonly object _indexLock = new();
     private readonly Dictionary<string, byte[]?> _coverCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<LocalMediaEntry> _index = new();
+    private readonly CancellationTokenSource _indexCancellation = new();
     private readonly Task _indexTask;
+    private int _isDisposed;
 
     static LocalMediaCoverProvider()
     {
@@ -42,12 +44,14 @@ internal sealed class LocalMediaCoverProvider
             .Select(path => path.Trim().Trim('"'))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
-        _indexTask = Task.Run(() => BuildIndexAsync(CancellationToken.None));
+        _indexTask = Task.Run(() => BuildIndexAsync(_indexCancellation.Token));
     }
 
     public byte[]? TryGetCover(TrackInfo? track, CancellationToken cancellationToken = default)
     {
-        if (track is null ||
+        if (Volatile.Read(ref _isDisposed) != 0 ||
+            cancellationToken.IsCancellationRequested ||
+            track is null ||
             _rootFolders.Count == 0 ||
             string.IsNullOrWhiteSpace(track.Title) ||
             string.Equals(track.Title, "Unknown Title", StringComparison.OrdinalIgnoreCase))
@@ -86,6 +90,11 @@ internal sealed class LocalMediaCoverProvider
 
     private IReadOnlyList<LocalMediaEntry> SnapshotIndex()
     {
+        if (Volatile.Read(ref _isDisposed) != 0)
+        {
+            return Array.Empty<LocalMediaEntry>();
+        }
+
         lock (_indexLock)
         {
             return _index.ToList();
@@ -127,14 +136,15 @@ internal sealed class LocalMediaCoverProvider
         catch (OperationCanceledException)
         {
         }
-        catch
+        catch (Exception exception)
         {
+            Log.Warn($"Local cover background index failed: {exception}");
         }
     }
 
     private void FlushPendingIndexEntries(List<LocalMediaEntry> pending)
     {
-        if (pending.Count == 0)
+        if (pending.Count == 0 || Volatile.Read(ref _isDisposed) != 0)
         {
             return;
         }
@@ -358,6 +368,7 @@ internal sealed class LocalMediaCoverProvider
 
             foreach (var file in files)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 yield return file;
             }
 
@@ -373,6 +384,7 @@ internal sealed class LocalMediaCoverProvider
 
             foreach (var directory in directories)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 pending.Push(directory);
             }
         }
@@ -497,6 +509,33 @@ internal sealed class LocalMediaCoverProvider
         }
 
         return -1;
+    }
+
+    public void Dispose()
+    {
+        if (Interlocked.Exchange(ref _isDisposed, 1) != 0)
+        {
+            return;
+        }
+
+        _indexCancellation.Cancel();
+        lock (_indexLock)
+        {
+            _index.Clear();
+        }
+
+        lock (_coverCache)
+        {
+            _coverCache.Clear();
+        }
+
+        if (_indexTask.IsCompleted)
+        {
+            _indexCancellation.Dispose();
+            return;
+        }
+
+        _indexTask.GetAwaiter().OnCompleted(_indexCancellation.Dispose);
     }
 
     private sealed record LocalMediaEntry(string Path, string Stem, string Artist, string Title);

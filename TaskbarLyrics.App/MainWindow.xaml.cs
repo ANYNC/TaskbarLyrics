@@ -73,6 +73,7 @@ public partial class MainWindow : Window
     private string _lastSpectrumDiagnosticsKey = string.Empty;
     private AppSettings _currentSettings = new();
     private TrackInfo? _currentTrack;
+    private bool _hasAppliedSettings;
 
     public MainWindow(TrackLyricOffsetStore trackLyricOffsetStore)
     {
@@ -111,32 +112,80 @@ public partial class MainWindow : Window
 
     public void ApplySettings(AppSettings settings)
     {
-        _currentSettings = settings.Clone();
-        if (_musicSessionProvider is SmtcMusicSessionProvider smtcProvider)
+        var snapshot = settings.Clone();
+        var changes = AppSettingsChangeSet.Create(_currentSettings, snapshot, !_hasAppliedSettings);
+        _currentSettings = snapshot;
+        _hasAppliedSettings = true;
+
+        if (changes.PlayerRecognitionChanged && _musicSessionProvider is SmtcMusicSessionProvider smtcProvider)
         {
             smtcProvider.SetRecognitionOrder(
-                settings.SourceRecognitionOrder,
-                BuildEnabledPlayerSources(settings));
+                snapshot.SourceRecognitionOrder,
+                BuildEnabledPlayerSources(snapshot));
         }
 
-        Width = Math.Clamp(settings.WindowWidth, 320, 1400);
+        if (changes.WindowLayoutChanged)
+        {
+            Width = Math.Clamp(snapshot.WindowWidth, 320, 1400);
+            _forceAlwaysOnTop = snapshot.ForceAlwaysOnTop;
+        }
+
+        if (changes.LocalMediaLibraryChanged)
+        {
+            ReconfigureLocalMedia(snapshot);
+        }
+
+        if (changes.VisualStyleChanged)
+        {
+            ApplyVisualStyle(snapshot);
+        }
+
+        if (changes.LyricSyncServiceChanged)
+        {
+            RebuildLyricSyncService(snapshot);
+        }
+
+        if (changes.SpectrumDisplayChanged)
+        {
+            _enableSpectrum = snapshot.EnableSpectrum;
+            _spectrumDisplayMode = snapshot.SpectrumDisplayMode;
+        }
+
+        if (changes.WindowLayoutChanged)
+        {
+            AnchorToTaskbar();
+            AttachToTaskbarHost();
+        }
+
+        if (changes.VisualStyleChanged)
+        {
+            PushStyleToWebView(snapshot);
+        }
+
+        PushLyricsToWebView(_currentLine, _nextLine, 0, _lastWebCurrentLineIndex, _lastWebTrackId, false, false);
+    }
+
+    private void ReconfigureLocalMedia(AppSettings settings)
+    {
+        var previousProvider = _localMediaCoverProvider;
         _localMediaCoverProvider = settings.EnableLocalLyrics && settings.LocalMusicFolders.Count > 0
             ? new LocalMediaCoverProvider(settings.LocalMusicFolders)
             : null;
-        _forceAlwaysOnTop = settings.ForceAlwaysOnTop;
+        previousProvider?.Dispose();
+        _lastLocalCoverLookupTrackId = null;
+        _nextLocalCoverLookupUtc = default;
+    }
+
+    private void ApplyVisualStyle(AppSettings settings)
+    {
         try
         {
             var brush = (Media.Brush?)new Media.BrushConverter().ConvertFromString(settings.ForegroundColor);
-            if (brush is Media.SolidColorBrush solid)
-            {
-                _primaryTextColor = solid.Color;
-            }
-            else
-            {
-                _primaryTextColor = Media.Colors.White;
-            }
+            _primaryTextColor = brush is Media.SolidColorBrush solid
+                ? solid.Color
+                : Media.Colors.White;
         }
-        catch
+        catch (Exception ex) when (ex is FormatException or ArgumentException or NotSupportedException)
         {
             _primaryTextColor = Media.Colors.White;
         }
@@ -150,15 +199,14 @@ public partial class MainWindow : Window
         RootBorder.Background = Media.Brushes.Transparent;
         RootBorder.BorderBrush = Media.Brushes.Transparent;
         RootBorder.BorderThickness = new Thickness(0);
+    }
 
-        _lyricSyncService.Dispose();
-        _lyricSyncService = BuildLyricSyncService(settings);
-        _enableSpectrum = settings.EnableSpectrum;
-        _spectrumDisplayMode = settings.SpectrumDisplayMode;
-        AnchorToTaskbar();
-        AttachToTaskbarHost();
-        PushStyleToWebView(settings);
-        PushLyricsToWebView(_currentLine, _nextLine, 0, _lastWebCurrentLineIndex, _lastWebTrackId, false, false);
+    private void RebuildLyricSyncService(AppSettings settings)
+    {
+        var nextService = BuildLyricSyncService(settings);
+        var currentService = _lyricSyncService;
+        _lyricSyncService = nextService;
+        currentService.Dispose();
     }
 
     private static IReadOnlyCollection<string> BuildEnabledPlayerSources(AppSettings settings)
@@ -203,14 +251,19 @@ public partial class MainWindow : Window
             : new CurrentTrackLyricsContext(_currentTrack, lyricSource ?? string.Empty);
     }
 
-    internal Task ExecuteMediaHotkeyAsync(MediaHotkeyAction action)
+    internal Task ExecuteMediaHotkeyAsync(MediaHotkeyAction action, CancellationToken cancellationToken)
     {
         return _musicSessionProvider is SmtcMusicSessionProvider smtcProvider
-            ? smtcProvider.TryControlAsync(action)
+            ? smtcProvider.TryControlAsync(action, cancellationToken)
             : Task.CompletedTask;
     }
 
-    private async void OnLoaded(object sender, RoutedEventArgs e)
+    private void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        TaskObserver.Observe(InitializeLyricsWindowAsync(), "lyrics window initialization");
+    }
+
+    private async Task InitializeLyricsWindowAsync()
     {
         AnchorToTaskbar();
         AttachToTaskbarHost();
@@ -294,6 +347,7 @@ public partial class MainWindow : Window
         DetachWebViewNavigationHandler();
 
         _lyricSyncService.Dispose();
+        _localMediaCoverProvider?.Dispose();
         _audioSpectrumService.Dispose();
     }
 
@@ -355,16 +409,6 @@ public partial class MainWindow : Window
         });
     }
 
-    private static void LogToFile(string message)
-    {
-        try
-        {
-            var logPath = Log.GetDebugLogPath();
-            LogFileWriter.AppendLine(logPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] {message}");
-        }
-        catch {}
-    }
-
     private async void OnTimerTick(object? sender, EventArgs e)
     {
         if (_isTimerTickRunning)
@@ -411,7 +455,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            LogToFile($"EXCEPTION in OnTimerTick: {ex}");
+            Log.Error($"Lyrics timer tick failed: {ex}");
             _currentLine = $"歌词服务异常: {ex.Message}";
             _nextLine = string.Empty;
             _isCurrentFramePureMusic = false;
@@ -557,7 +601,8 @@ public partial class MainWindow : Window
 
         _lastSpectrumDiagnosticsKey = key;
         _nextSpectrumDiagnosticsLogUtc = now.AddSeconds(5);
-        LogToFile(
+        Log.Diagnostic(
+            "SPECTRUM",
             $"Spectrum: PureMusic={snapshot.IsPureMusicMode}, Playing={snapshot.IsPlaying}, CaptureAvailable={snapshot.IsCaptureAvailable}, " +
             $"InputPeak={snapshot.InputPeak:0.0000}, OutputPeak={snapshot.OutputPeak:0.0000}, Format='{snapshot.Format}', " +
             $"LastAudioUtc='{snapshot.LastAudioUtc:yyyy-MM-dd HH:mm:ss.fff}', Error='{snapshot.LastError}'");
@@ -586,11 +631,13 @@ public partial class MainWindow : Window
         _lastDiagnosticsLyricSource = lyricSource;
         if (snapshot.Track is null)
         {
-            LogToFile("SMTC: No active track found (Track is null)");
+            Log.Diagnostic("SMTC", "No active track found (Track is null)");
             return;
         }
 
-        LogToFile($"SMTC: Title='{snapshot.Track.Title}', Artist='{snapshot.Track.Artist}', App='{snapshot.Track.SourceApp}', Playing={snapshot.IsPlaying}, Pos={snapshot.Position}, CoverLen={snapshot.CoverImageBytes?.Length ?? 0}, LyricSource='{lyricSource}'");
+        Log.Diagnostic(
+            "SMTC",
+            $"Title='{snapshot.Track.Title}', Artist='{snapshot.Track.Artist}', App='{snapshot.Track.SourceApp}', Playing={snapshot.IsPlaying}, Pos={snapshot.Position}, CoverLen={snapshot.CoverImageBytes?.Length ?? 0}, LyricSource='{lyricSource}'");
     }
 
     private void UpdateLyricLines(string current, string next, double lineProgress)
@@ -792,7 +839,7 @@ public partial class MainWindow : Window
         var isPureMusicJson = JsonSerializer.Serialize(isPureMusic);
         var isPlayingJson = JsonSerializer.Serialize(isPlaying);
         var script = $"window.taskbarLyrics?.setLyrics({currentJson}, {nextJson}, {progressJson}, {lineIndexJson}, {trackIdJson}, {isPureMusicJson}, {isPlayingJson});";
-        _ = ExecuteWebScriptAsync(script);
+        TaskObserver.Observe(ExecuteWebScriptAsync(script), "lyrics web view update");
     }
 
     private void PushCoverToWebView()
@@ -807,7 +854,7 @@ public partial class MainWindow : Window
         var fallbackColorJson = JsonSerializer.Serialize(_currentCoverFallbackColorCss);
         var diagnosticTrackIdJson = JsonSerializer.Serialize(_currentCoverVisualTrackId ?? string.Empty);
         var script = $"window.taskbarLyrics?.setCover({dataUriJson}, {fallbackTextJson}, {fallbackColorJson}, {diagnosticTrackIdJson});";
-        _ = ExecuteWebScriptAsync(script);
+        TaskObserver.Observe(ExecuteWebScriptAsync(script), "lyrics cover update");
     }
 
     private void PushSpectrumToWebView(IReadOnlyList<float> bars)
@@ -845,7 +892,7 @@ public partial class MainWindow : Window
         };
         var payloadJson = JsonSerializer.Serialize(payload);
         var script = $"window.taskbarLyrics?.setSpectrumTuning({payloadJson});";
-        _ = ExecuteWebScriptAsync(script);
+        TaskObserver.Observe(ExecuteWebScriptAsync(script), "lyrics spectrum tuning update");
     }
 
     private void SendSpectrumToWebView(string valuesJson)
@@ -858,9 +905,18 @@ public partial class MainWindow : Window
         }
 
         _isSpectrumScriptPending = true;
-        _ = task.ContinueWith(_ =>
+        TaskObserver.Observe(CompleteSpectrumScriptAsync(task), "lyrics spectrum update");
+    }
+
+    private async Task CompleteSpectrumScriptAsync(Task scriptTask)
+    {
+        try
         {
-            Dispatcher.BeginInvoke(new Action(() =>
+            await scriptTask.ConfigureAwait(false);
+        }
+        finally
+        {
+            await Dispatcher.InvokeAsync(() =>
             {
                 _isSpectrumScriptPending = false;
                 var pendingValuesJson = _pendingSpectrumValuesJson;
@@ -872,8 +928,8 @@ public partial class MainWindow : Window
                 {
                     SendSpectrumToWebView(pendingValuesJson);
                 }
-            }));
-        }, TaskScheduler.Default);
+            });
+        }
     }
 
     private static string BuildCoverDataUri(byte[] bytes)
@@ -1047,7 +1103,7 @@ public partial class MainWindow : Window
 
         var payloadJson = JsonSerializer.Serialize(stylePayload);
         var script = $"window.taskbarLyrics?.applyStyle({payloadJson});";
-        _ = ExecuteWebScriptAsync(script);
+        TaskObserver.Observe(ExecuteWebScriptAsync(script), "lyrics style update");
     }
 
     private object EnsureWebViewControlCreated()
@@ -1174,13 +1230,21 @@ public partial class MainWindow : Window
 
     private Task? ExecuteWebScriptAsync(string script)
     {
-        if (_lyricsWebViewControl is null)
+        try
         {
+            if (_lyricsWebViewControl is null)
+            {
+                return null;
+            }
+
+            var method = _lyricsWebViewControl.GetType().GetMethod("ExecuteScriptAsync", new[] { typeof(string) });
+            return method?.Invoke(_lyricsWebViewControl, new object?[] { script }) as Task;
+        }
+        catch (Exception exception)
+        {
+            Log.Error($"Lyrics web script dispatch failed: {exception}");
             return null;
         }
-
-        var method = _lyricsWebViewControl.GetType().GetMethod("ExecuteScriptAsync", new[] { typeof(string) });
-        return method?.Invoke(_lyricsWebViewControl, new object?[] { script }) as Task;
     }
 
     private static string ToCssColor(Media.Color color)

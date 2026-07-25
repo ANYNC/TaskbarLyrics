@@ -1,10 +1,17 @@
 ﻿using System.IO;
 using System.Text.Json;
 
+using TaskbarLyrics.Core.Utilities;
+
 namespace TaskbarLyrics.App;
 
 public sealed class SettingsStore
 {
+    private static readonly JsonSerializerOptions SerializerOptions = new()
+    {
+        WriteIndented = true
+    };
+
     private readonly string _filePath;
 
     public SettingsStore(string filePath)
@@ -26,26 +33,64 @@ public sealed class SettingsStore
             settings.NormalizePlayerSources();
             return settings;
         }
-        catch
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException)
         {
+            Log.Warn($"Failed to load settings from '{_filePath}': {exception.Message}");
             return new AppSettings();
         }
     }
 
     public void Save(AppSettings settings)
     {
-        settings.NormalizePlayerSources();
-        var dir = Path.GetDirectoryName(_filePath);
-        if (!string.IsNullOrWhiteSpace(dir))
+        string? temporaryPath = null;
+        try
         {
-            Directory.CreateDirectory(dir);
+            settings.NormalizePlayerSources();
+            var directory = Path.GetDirectoryName(_filePath);
+            if (!string.IsNullOrWhiteSpace(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            var settingsDirectory = string.IsNullOrWhiteSpace(directory)
+                ? AppContext.BaseDirectory
+                : directory;
+            temporaryPath = Path.Combine(
+                settingsDirectory,
+                $".{Path.GetFileName(_filePath)}.{Guid.NewGuid():N}.tmp");
+            var serializedSettings = JsonSerializer.SerializeToUtf8Bytes(settings, SerializerOptions);
+            using (var stream = new FileStream(
+                       temporaryPath,
+                       FileMode.CreateNew,
+                       FileAccess.Write,
+                       FileShare.None,
+                       bufferSize: 4096,
+                       FileOptions.WriteThrough))
+            {
+                stream.Write(serializedSettings);
+                stream.Flush(flushToDisk: true);
+            }
+
+            File.Move(temporaryPath, _filePath, overwrite: true);
+            temporaryPath = null;
         }
-
-        var json = JsonSerializer.Serialize(settings, new JsonSerializerOptions
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException or NotSupportedException)
         {
-            WriteIndented = true
-        });
-
-        File.WriteAllText(_filePath, json);
+            Log.Error($"Failed to save settings to '{_filePath}': {exception}");
+        }
+        finally
+        {
+            if (!string.IsNullOrWhiteSpace(temporaryPath))
+            {
+                try
+                {
+                    File.Delete(temporaryPath);
+                }
+                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                {
+                    Log.Warn($"Failed to remove temporary settings file '{temporaryPath}': {exception.Message}");
+                }
+            }
+        }
     }
 }

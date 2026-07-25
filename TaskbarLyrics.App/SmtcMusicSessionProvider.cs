@@ -77,11 +77,12 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider
         return new LyricOffsetDiagnostics(playerOffset, trackOffset, playerOffset + trackOffset);
     }
 
-    public async Task TryControlAsync(MediaHotkeyAction action)
+    public async Task TryControlAsync(MediaHotkeyAction action, CancellationToken cancellationToken)
     {
         try
         {
-            var manager = await GetManagerAsync(CancellationToken.None);
+            var manager = await GetManagerAsync(cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
             var session = manager is null ? null : SelectSession(manager);
             if (session is null)
             {
@@ -92,6 +93,7 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider
             {
                 case MediaHotkeyAction.TogglePlayPause:
                     var playback = session.GetPlaybackInfo();
+                    cancellationToken.ThrowIfCancellationRequested();
                     if (playback?.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing)
                     {
                         await session.TryPauseAsync();
@@ -102,29 +104,37 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider
                     }
                     break;
                 case MediaHotkeyAction.PreviousTrack:
+                    cancellationToken.ThrowIfCancellationRequested();
                     await session.TrySkipPreviousAsync();
                     break;
                 case MediaHotkeyAction.NextTrack:
+                    cancellationToken.ThrowIfCancellationRequested();
                     await session.TrySkipNextAsync();
                     break;
                 case MediaHotkeyAction.SeekBackward:
-                    await TrySeekAsync(session, TimeSpan.FromSeconds(-5));
+                    await TrySeekAsync(session, TimeSpan.FromSeconds(-5), cancellationToken);
                     break;
                 case MediaHotkeyAction.SeekForward:
-                    await TrySeekAsync(session, TimeSpan.FromSeconds(5));
+                    await TrySeekAsync(session, TimeSpan.FromSeconds(5), cancellationToken);
                     break;
             }
         }
-        catch
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            // A player can revoke its SMTC session at any point. Hotkeys fail silently.
+            throw;
+        }
+        catch (Exception exception)
+        {
+            Log.Warn($"SMTC media hotkey command failed: {exception}");
         }
     }
 
     private static async Task TrySeekAsync(
         GlobalSystemMediaTransportControlsSession session,
-        TimeSpan offset)
+        TimeSpan offset,
+        CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var timeline = session.GetTimelineProperties();
         var playback = session.GetPlaybackInfo();
         var current = ComputeExtrapolatedPosition(
@@ -142,6 +152,7 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider
             target = timeline.EndTime;
         }
 
+        cancellationToken.ThrowIfCancellationRequested();
         await session.TryChangePlaybackPositionAsync(target.Ticks);
     }
 

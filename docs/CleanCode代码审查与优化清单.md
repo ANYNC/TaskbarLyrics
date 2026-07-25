@@ -3,7 +3,7 @@
 > 文档状态：基于当前 `main` 分支代码审查整理  
 > 审查范围：`TaskbarLyrics.App`、`TaskbarLyrics.Core`、Web UI 及现有工程化配置  
 > 文档用途：作为后续渐进式重构、任务拆分和验收的依据  
-> 本次仅记录问题与建议，不包含源码修改
+> 本文保留审查基线，并在第 16、19 节同步记录已完成的优化与验证结果。
 
 ## 1. 总体结论
 
@@ -566,7 +566,7 @@ Lyrics
 
 ## 15. 单元测试
 
-当前没有 .NET 测试项目，唯一可执行测试是基于字符串扫描的设置契约脚本。
+初始审查时没有 .NET 测试项目；目前已新增 `TaskbarLyrics.App.Tests`，但仍需按下列清单补齐 Core 纯逻辑与并发测试。
 
 建议优先补充：
 
@@ -585,17 +585,21 @@ Lyrics
 
 ### 第一阶段：稳定性和资源生命周期
 
-- [ ] 修复设置热应用导致的全量重建。
-- [ ] 给本地索引增加取消和释放。
-- [ ] 修复 STA 初始化永久等待。
-- [ ] 观察所有后台任务异常。
-- [ ] 设置改为原子保存。
-- [ ] 修复 error log 路由。
+- [x] 修复设置热应用导致的全量重建。
+- [x] 快捷键仅在总开关或绑定实际变化时重新注册，普通外观设置不得触发全量注销与注册。
+- [x] 为快捷键命令建立串行执行、取消、异常观察和退出等待策略。
+- [x] 给本地索引增加取消和释放。
+- [x] 修复 STA 初始化永久等待。
+- [x] 观察所有后台任务异常。
+- [x] 设置改为原子保存。
+- [x] 修复 error log 路由。
 
 ### 第二阶段：建立测试保护网
 
-- [ ] 新建 `TaskbarLyrics.Core.Tests`。
+- [x] 新建 `TaskbarLyrics.Core.Tests`。
 - [ ] 覆盖匹配、解析、路由、同步和偏移。
+- [ ] 覆盖快捷键解析、规范化、重复检测、注册失败、快速连按和关闭竞态。
+- [ ] 验证快捷键始终控制歌词识别策略选中的同一 SMTC 会话。
 - [ ] 把设置契约测试纳入统一验证脚本。
 - [ ] 增加设置存储和并发生命周期测试。
 
@@ -605,6 +609,8 @@ Lyrics
 - [ ] 拆分 `SettingsWindow`。
 - [ ] 提取 `LocalMediaIndex`。
 - [ ] 提取统一缓存仓储。
+- [ ] 拆分快捷键定义、绑定解析、Windows 注册器和命令协调器。
+- [ ] 通过 `IMediaPlaybackController` 等能力接口替代对 `SmtcMusicSessionProvider` 的具体类型判断。
 - [ ] 把对象创建移动到应用 Composition Root。
 
 ### 第四阶段：前端模块化和强类型契约
@@ -612,11 +618,13 @@ Lyrics
 - [ ] 拆分 `settings.js` 和 `app.js`。
 - [ ] 版本化 WebView 消息。
 - [ ] 建立 C#/JS 对称 DTO。
+- [ ] 快捷键状态使用稳定状态码传输，在前端完成中文展示，不以中文文案作为协议字段。
 - [ ] 增加 DOM 和消息行为测试。
 
 ### 第五阶段：清理与规范化
 
 - [ ] 删除遗留设置、死方法和无效参数。
+- [ ] 用单一快捷键定义表消除默认键位、动作键、状态键和设置字段的重复映射。
 - [ ] 统一命名、目录与格式。
 - [ ] 清理历史式和误导性注释。
 - [ ] 启用分析器和格式验证。
@@ -634,9 +642,77 @@ Lyrics
 - 新增设置必须明确默认值、验证、迁移、持久化和前端契约。
 - 新增歌词源应通过提供者注册和统一缓存接口接入，避免继续扩展窗口类。
 
-## 18. 本次审查验证结果
+## 18. 新增快捷键专项复审（2026-07-26）
 
-- 独立输出目录构建成功：0 警告、0 错误。
-- 设置契约测试通过。
-- 常规输出目录构建因正在运行的 `TaskbarLyrics.App` 锁定 DLL 而失败，不是源码编译错误。
-- 本次审查未修改项目源码。
+### 18.1 总体结论
+
+新增快捷键功能已经形成完整的用户链路：配置持久化、按键录制、重复与占用提示、Windows 全局注册、歌词线程调度、SMTC 控制和退出注销均已接通。以下设计值得保留：
+
+- 使用独立隐藏消息窗口承接 `WM_HOTKEY`，资源 owner 明确。
+- 注册时启用 `MOD_NOREPEAT`，避免按住按键持续触发。
+- 退出时先释放快捷键，再关闭歌词线程。
+- 播放控制通过 `LyricsWindowHost` 的 Dispatcher 边界进入歌词线程，没有从主线程直接访问 `_window`。
+- 快捷键设置更新后重新推送注册状态，用户能够看到无效、重复或被占用的结果。
+
+没有发现需要立即停用功能的 P0 问题，但有三项建议进入 P1：
+
+1. `App.SaveSettings()` 对任何设置保存都会调用 `GlobalMediaHotkeyService.Apply()`。调整字体、颜色等无关设置也会先注销全部系统快捷键再重新注册，产生不必要的 Windows 资源抖动和短暂失效窗口。
+2. `WndProc` 以 fire-and-forget 启动命令，服务和 SMTC 提供者又分别使用空 `catch`。快速连按可能并发执行多个播放命令，退出时也没有取消或等待在途命令，真实失败与程序缺陷均不可观察。
+3. 规格要求快捷键解析和会话选择测试，但当前仍没有 .NET 测试项目。字符串扫描式设置契约只能确认标记存在，不能证明解析、注册和并发行为正确。
+
+### 18.2 Clean Code 多维度检查
+
+| 维度 | 当前问题 | 优化方向 | 优先级 |
+| --- | --- | --- | --- |
+| 命名与函数语义 | `TryControlAsync()` 不返回成功状态；不支持的动作和播放器拒绝命令时也表现为正常完成 | 返回 `MediaCommandResult`，或改名为 `ExecuteAsync` 并在边界明确区分成功、无会话、不支持和失败 | P2 |
+| 函数与副作用 | `SaveSettings()` 同时持久化、重配歌词服务并重注册快捷键；快捷键配置未变化也会触发 Windows 调用 | 比较不可变快照，只在 `GlobalMediaHotkeys` 实际变化时调用 `Apply`；继续拆分设置保存与运行时应用 | P1 |
+| 类与单一职责 | `MediaHotkeys.cs` 同时包含动作枚举、持久化模型、默认值、解析器、Win32 P/Invoke、注册状态和命令调度 | 拆分为 `MediaHotkeyDefinition`、`HotkeyBinding`、`HotkeyBindingParser`、`IGlobalHotkeyRegistrar` 和协调器 | P2 |
+| 消除重复 | 六个动作及其默认值、C# 属性名、Web 设置键和状态键散落在多个 switch、数组、DTO、HTML 与 JS 中 | 建立单一动作定义表；由定义表生成默认值、注册 ID、状态键和 UI 行，或至少集中映射 | P2 |
+| 抽象与依赖倒置 | `MainWindow.ExecuteMediaHotkeyAsync()` 通过 `is SmtcMusicSessionProvider` 下转型获得控制能力 | 定义独立 `IMediaPlaybackController`，让窗口依赖能力接口；Win32 注册也通过接口隔离 | P2 |
+| 数据与类型设计 | 绑定以任意字符串持久化；解析器接受重复修饰键和空分段，没有规范化后的值对象 | 使用可比较的 `HotkeyBinding` 值对象，集中 Parse/Normalize/Format，保存规范字符串或结构化 DTO | P2 |
+| 状态一致性 | 重复键位只把后出现的动作标为重复，先出现的动作仍注册；托盘菜单显示“已配置”键位，即使实际无效或被占用 | 对同一组合的全部动作给出一致冲突状态；托盘只展示已成功注册的有效绑定，或明确标注不可用 | P2 |
+| 错误处理与可观察性 | `ExecuteActionSilentlyAsync()` 和 `TryControlAsync()` 均捕获所有异常且不分类；`UnregisterHotKey` 返回值被忽略 | 只静默用户界面，不静默诊断；捕获预期的 WinRT/会话异常，意外异常进入限频日志；记录 Win32 错误码 | P1 |
+| 并发与生命周期 | 每次按键创建未保存任务；快速连按可并发读取状态并发出相同命令；`Dispose()` 不等待在途命令 | 使用单消费者队列或 `SemaphoreSlim` 串行化命令；owner 负责停止接收、取消、等待后再释放 HWND | P1 |
+| 边界与线程约束 | HwndSource、设置应用和状态读取依赖主 UI 线程，但契约只存在于调用习惯中 | 在服务入口断言 Dispatcher 访问，或由显式 UI-thread owner 封装所有注册与状态操作 | P2 |
+| Web 契约 | C# 发送“已注册”“已关闭”等中文字符串，JS 再用中文文本判断 `ready/off/warning` | 传输 `registered/disabled/invalid/duplicate/occupied` 等稳定状态码，中文只属于展示层 | P2 |
+| 前端可访问性 | 录制状态主要依赖按钮文字和 CSS；状态变化没有明确的 live-region 语义 | 增加 `aria-pressed`/录制说明，并让注册结果通过合适的 `aria-live` 区域播报 | P3 |
+| 可测试性 | 私有静态解析器与 P/Invoke、HwndSource 紧耦合，无法在无桌面资源的单元测试中验证核心规则 | 把纯解析和冲突分析移到无 UI 类型；用 registrar/controller fake 测试协调流程 | P1 |
+
+### 18.3 建议目标结构
+
+```text
+GlobalMediaHotkeyCoordinator
+├─ MediaHotkeyCatalog             单一动作定义、默认值和稳定键
+├─ HotkeyBindingParser            解析、规范化和格式化
+├─ IGlobalHotkeyRegistrar         Windows 注册、注销与错误码
+├─ IMediaPlaybackController       播放、切歌和跳转能力
+└─ MediaHotkeyStatusSnapshot      强类型状态，供设置页和托盘读取
+```
+
+设置页只提交动作键与规范绑定；协调器比较新旧快照并执行增量注册；Windows 适配器只处理 HWND 和 P/Invoke；播放器控制器负责选择与歌词一致的会话。这样可以分别测试规则、系统资源和播放器行为，避免继续扩大 `App`、`MainWindow` 与 `SettingsWindow` 的职责。
+
+### 18.4 快捷键专项验收清单
+
+- [ ] 修改非快捷键设置不会产生任何 `RegisterHotKey`/`UnregisterHotKey` 调用。
+- [ ] 同一组合分配给两个动作时，两个动作都显示冲突且均不注册。
+- [ ] 无效、重复、系统占用和关闭状态使用稳定状态码，C#/JS 不依赖中文文本判断逻辑。
+- [x] 快速连续触发播放/暂停、切歌和跳转时，命令顺序确定且没有未观察异常。
+- [x] 程序退出或歌词线程关闭时，停止接收新命令并有界等待在途命令。
+- [ ] 托盘展示的快捷键与实际注册状态一致。
+- [ ] 解析器覆盖字母、数字、方向键、功能键、重复修饰键、空分段、超长输入和不支持键。
+- [ ] 播放源启用状态或识别顺序变化后，快捷键控制的会话与歌词会话一致。
+- [ ] 设置契约测试继续通过，并增加不依赖 WebView2/Win32 的纯逻辑单元测试。
+
+## 19. 本次审查验证结果
+
+- 2026-07-26：新增 `TaskbarLyrics.App.Tests` 与 `TaskbarLyrics.Core.Tests`：前者包含设置变化分类、快捷键命令队列与设置落盘共 10 项测试；后者包含歌词 Registry 生命周期及匹配规则共 3 项测试。
+- `dotnet test TaskbarLyrics.App.Tests/TaskbarLyrics.App.Tests.csproj --no-restore -p:BaseOutputPath=build_verify_app_tests/` 与 `dotnet test TaskbarLyrics.Core.Tests/TaskbarLyrics.Core.Tests.csproj --no-restore -p:BaseOutputPath=build_verify_core_tests/` 均通过：合计 13/13。
+- 设置变化按歌词服务、本地媒体、播放器识别、频谱、样式、窗口布局和快捷键分流；普通外观或更新设置不再触发系统快捷键重新注册。
+- 快捷键命令改为单消费者队列：按序执行，退出时停止接收、取消在途命令并最多等待 1 秒；意外异常保留在诊断日志中。新增队列顺序与关闭行为单元测试。
+- 本地歌词与封面索引改由各自 provider 持有取消令牌；目录或本地歌词设置变化、窗口关闭时会取消旧索引、清空索引与封面缓存，并在索引任务结束后释放令牌资源。
+- 歌词 STA 线程启动改为 10 秒有界等待；线程初始化异常会写入日志并反馈给启动方，超时后的迟到线程会自行关闭。
+- 歌词 Registry 现在拥有 provider 与并发 gate 的生命周期：销毁时会停止新检索、释放可释放 provider，并只在在途操作完成后释放 gate；同时清理了一段不可达的官方歌词返回分支。
+- 设置先写入同目录临时文件并强制刷盘，再以同卷替换更新正式文件；异常保留旧设置并记录错误。`Error` 级别日志已独立写入 `app_error-日期.log`，其余级别继续写入调试日志。
+- 引入统一 `TaskObserver`：应用启动、更新检查、激活监听、设置导航及三个 WebView 窗口的异步初始化和脚本调用均会记录意外失败；原先的窗口内 `LogToFile` 已并入统一日志设施。
+- 早期审查中，`dotnet build TaskbarLyrics.App/TaskbarLyrics.App.csproj --no-restore -o build_verify_hotkey` 成功：0 警告、0 错误；`settings-contract.tests.ps1` 通过。
+- 常规解决方案构建会受正在运行的 `TaskbarLyrics.App` 锁定默认输出目录影响；验证使用独立输出目录完成。

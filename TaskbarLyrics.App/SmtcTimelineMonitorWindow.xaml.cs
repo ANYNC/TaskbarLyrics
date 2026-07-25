@@ -53,7 +53,12 @@ public partial class SmtcTimelineMonitorWindow : Wpf.Ui.Controls.FluentWindow
         ApplyWindowTheme();
     }
 
-    private async void OnLoaded(object? sender, RoutedEventArgs e)
+    private void OnLoaded(object? sender, RoutedEventArgs e)
+    {
+        TaskObserver.Observe(InitializeWebViewAndStartTimerAsync(), "SMTC timeline monitor initialization");
+    }
+
+    private async Task InitializeWebViewAndStartTimerAsync()
     {
         await InitializeWebViewAsync();
         _timer.Start();
@@ -112,7 +117,9 @@ public partial class SmtcTimelineMonitorWindow : Wpf.Ui.Controls.FluentWindow
         var diagnostics = _provider.GetLastTimelineDiagnostics();
         if (diagnostics is null)
         {
-            _ = MonitorWebView.ExecuteScriptAsync("window.smtcMonitor?.setData(null);");
+            TaskObserver.Observe(
+                MonitorWebView.ExecuteScriptAsync("window.smtcMonitor?.setData(null);"),
+                "SMTC timeline monitor update");
             return;
         }
 
@@ -141,7 +148,9 @@ public partial class SmtcTimelineMonitorWindow : Wpf.Ui.Controls.FluentWindow
         };
 
         var json = JsonSerializer.Serialize(payload, JsonOptions);
-        _ = MonitorWebView.ExecuteScriptAsync($"window.smtcMonitor?.setData({json});");
+        TaskObserver.Observe(
+            MonitorWebView.ExecuteScriptAsync($"window.smtcMonitor?.setData({json});"),
+            "SMTC timeline monitor update");
     }
 
     private void WebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
@@ -162,7 +171,9 @@ public partial class SmtcTimelineMonitorWindow : Wpf.Ui.Controls.FluentWindow
         {
             case "ready":
                 PushDiagnostics();
-                _ = MonitorWebView.ExecuteScriptAsync($"window.smtcMonitor?.setTopmost({(Topmost ? "true" : "false")});");
+                TaskObserver.Observe(
+                    MonitorWebView.ExecuteScriptAsync($"window.smtcMonitor?.setTopmost({(Topmost ? "true" : "false")});"),
+                    "SMTC timeline monitor topmost update");
                 break;
             case "copy":
                 if (!string.IsNullOrWhiteSpace(message.Text))
@@ -172,15 +183,21 @@ public partial class SmtcTimelineMonitorWindow : Wpf.Ui.Controls.FluentWindow
                 break;
             case "toggleTopmost":
                 Topmost = !Topmost;
-                _ = MonitorWebView.ExecuteScriptAsync($"window.smtcMonitor?.setTopmost({(Topmost ? "true" : "false")});");
+                TaskObserver.Observe(
+                    MonitorWebView.ExecuteScriptAsync($"window.smtcMonitor?.setTopmost({(Topmost ? "true" : "false")});"),
+                    "SMTC timeline monitor topmost update");
                 break;
             case "pause":
                 _timer.Stop();
-                _ = MonitorWebView.ExecuteScriptAsync("window.smtcMonitor?.setPaused(true);");
+                TaskObserver.Observe(
+                    MonitorWebView.ExecuteScriptAsync("window.smtcMonitor?.setPaused(true);"),
+                    "SMTC timeline monitor pause update");
                 break;
             case "resume":
                 _timer.Start();
-                _ = MonitorWebView.ExecuteScriptAsync("window.smtcMonitor?.setPaused(false);");
+                TaskObserver.Observe(
+                    MonitorWebView.ExecuteScriptAsync("window.smtcMonitor?.setPaused(false);"),
+                    "SMTC timeline monitor resume update");
                 break;
             case "windowDrag":
                 NativeWindowInteraction.BeginDrag(this);

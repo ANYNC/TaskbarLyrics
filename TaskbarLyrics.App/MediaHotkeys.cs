@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Windows.Interop;
+using TaskbarLyrics.Core.Utilities;
 
 namespace TaskbarLyrics.App;
 
@@ -96,15 +97,19 @@ internal sealed class GlobalMediaHotkeyService : IDisposable
         MediaHotkeyAction.ToggleLyricsVisibility
     };
 
-    private readonly Func<MediaHotkeyAction, Task> _executeActionAsync;
+    private readonly SerialCommandQueue<MediaHotkeyAction> _commandQueue;
     private readonly HwndSource _messageSource;
     private readonly Dictionary<MediaHotkeyAction, string> _statuses = new();
     private readonly HashSet<int> _registeredIds = new();
+    private bool _stopping;
+    private bool _messageSourceDisposed;
     private bool _disposed;
 
-    public GlobalMediaHotkeyService(Func<MediaHotkeyAction, Task> executeActionAsync)
+    public GlobalMediaHotkeyService(Func<MediaHotkeyAction, CancellationToken, Task> executeActionAsync)
     {
-        _executeActionAsync = executeActionAsync;
+        _commandQueue = new SerialCommandQueue<MediaHotkeyAction>(
+            executeActionAsync,
+            exception => Log.Warn($"Global media hotkey command failed: {exception}"));
         _messageSource = new HwndSource(new HwndSourceParameters("TaskbarLyrics.MediaHotkeys")
         {
             ParentWindow = new IntPtr(-3),
@@ -118,7 +123,7 @@ internal sealed class GlobalMediaHotkeyService : IDisposable
 
     public void Apply(GlobalMediaHotkeySettings? settings)
     {
-        if (_disposed)
+        if (_disposed || _stopping)
         {
             return;
         }
@@ -189,9 +194,26 @@ internal sealed class GlobalMediaHotkeyService : IDisposable
         }
 
         _disposed = true;
-        UnregisterAll();
-        _messageSource.RemoveHook(WndProc);
-        _messageSource.Dispose();
+        BeginStopping();
+        DisposeMessageSource();
+        _commandQueue.Dispose();
+    }
+
+    public async Task StopAsync(TimeSpan timeout)
+    {
+        BeginStopping();
+        try
+        {
+            await _commandQueue.StopAsync(timeout);
+        }
+        catch (TimeoutException exception)
+        {
+            Log.Warn($"Global media hotkey commands did not stop within {timeout.TotalMilliseconds:0} ms: {exception.Message}");
+        }
+        finally
+        {
+            DisposeMessageSource();
+        }
     }
 
     private IntPtr WndProc(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam, ref bool handled)
@@ -209,20 +231,31 @@ internal sealed class GlobalMediaHotkeyService : IDisposable
         }
 
         handled = true;
-        _ = ExecuteActionSilentlyAsync(action);
+        _commandQueue.TryEnqueue(action);
         return IntPtr.Zero;
     }
 
-    private async Task ExecuteActionSilentlyAsync(MediaHotkeyAction action)
+    private void BeginStopping()
     {
-        try
+        if (_stopping)
         {
-            await _executeActionAsync(action);
+            return;
         }
-        catch
+
+        _stopping = true;
+        UnregisterAll();
+        _messageSource.RemoveHook(WndProc);
+    }
+
+    private void DisposeMessageSource()
+    {
+        if (_messageSourceDisposed)
         {
-            // Global shortcuts must never surface a UI error.
+            return;
         }
+
+        _messageSourceDisposed = true;
+        _messageSource.Dispose();
     }
 
     private void UnregisterAll()

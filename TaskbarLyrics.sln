@@ -7,6 +7,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TaskbarLyrics.App", "Taskba
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TaskbarLyrics.Core", "TaskbarLyrics.Core\TaskbarLyrics.Core.csproj", "{6A931667-907B-4D36-A92C-F149EE3E06DE}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TaskbarLyrics.App.Tests", "TaskbarLyrics.App.Tests\TaskbarLyrics.App.Tests.csproj", "{A3F9EBBB-7F37-43B0-AC52-D80E633F0E9E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TaskbarLyrics.Core.Tests", "TaskbarLyrics.Core.Tests\TaskbarLyrics.Core.Tests.csproj", "{D2C1793D-5846-4554-AB44-FEBA0DBEDCA2}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -24,5 +28,13 @@ Global
 		{6A931667-907B-4D36-A92C-F149EE3E06DE}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{6A931667-907B-4D36-A92C-F149EE3E06DE}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{6A931667-907B-4D36-A92C-F149EE3E06DE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A3F9EBBB-7F37-43B0-AC52-D80E633F0E9E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A3F9EBBB-7F37-43B0-AC52-D80E633F0E9E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A3F9EBBB-7F37-43B0-AC52-D80E633F0E9E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A3F9EBBB-7F37-43B0-AC52-D80E633F0E9E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D2C1793D-5846-4554-AB44-FEBA0DBEDCA2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D2C1793D-5846-4554-AB44-FEBA0DBEDCA2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D2C1793D-5846-4554-AB44-FEBA0DBEDCA2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D2C1793D-5846-4554-AB44-FEBA0DBEDCA2}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

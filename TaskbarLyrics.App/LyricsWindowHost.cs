@@ -1,17 +1,20 @@
 using System.Threading;
 using System.Windows.Threading;
 using TaskbarLyrics.Core.Services;
+using TaskbarLyrics.Core.Utilities;
 
 namespace TaskbarLyrics.App;
 
 internal sealed class LyricsWindowHost : IDisposable
 {
-    private readonly ManualResetEventSlim _ready = new();
+    private static readonly TimeSpan StartupTimeout = TimeSpan.FromSeconds(10);
+    private readonly TaskCompletionSource _ready = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly Thread _thread;
     private Dispatcher? _dispatcher;
     private MainWindow? _window;
     private bool _disposed;
     private volatile bool _isVisible;
+    private int _startupAbandoned;
 
     public LyricsWindowHost(AppSettings initialSettings, TrackLyricOffsetStore trackLyricOffsetStore)
     {
@@ -23,7 +26,13 @@ internal sealed class LyricsWindowHost : IDisposable
         };
         _thread.SetApartmentState(ApartmentState.STA);
         _thread.Start();
-        _ready.Wait();
+        if (!_ready.Task.Wait(StartupTimeout))
+        {
+            Interlocked.Exchange(ref _startupAbandoned, 1);
+            throw new TimeoutException($"Lyrics window initialization exceeded {StartupTimeout.TotalSeconds:0} seconds.");
+        }
+
+        _ready.Task.GetAwaiter().GetResult();
     }
 
     public bool IsVisible => _isVisible;
@@ -89,9 +98,11 @@ internal sealed class LyricsWindowHost : IDisposable
             DispatcherPriority.Normal).Task;
     }
 
-    public Task ExecuteMediaHotkeyAsync(MediaHotkeyAction action)
+    public Task ExecuteMediaHotkeyAsync(MediaHotkeyAction action, CancellationToken cancellationToken)
     {
-        return InvokeAsync(() => _window?.ExecuteMediaHotkeyAsync(action) ?? Task.CompletedTask);
+        return InvokeAsync(
+            () => _window?.ExecuteMediaHotkeyAsync(action, cancellationToken) ?? Task.CompletedTask,
+            cancellationToken);
     }
 
     public void Close()
@@ -117,23 +128,36 @@ internal sealed class LyricsWindowHost : IDisposable
     public void Dispose()
     {
         Close();
-        _ready.Dispose();
     }
 
     private void Run(AppSettings initialSettings, TrackLyricOffsetStore trackLyricOffsetStore)
     {
-        _dispatcher = Dispatcher.CurrentDispatcher;
-        _window = new MainWindow(trackLyricOffsetStore);
-        _window.ApplySettings(initialSettings);
-        _window.IsVisibleChanged += (_, _) => _isVisible = _window.IsVisible;
-        _window.Closed += (_, _) =>
+        try
         {
-            _isVisible = false;
-            Dispatcher.CurrentDispatcher.BeginInvokeShutdown(DispatcherPriority.Normal);
-        };
+            _dispatcher = Dispatcher.CurrentDispatcher;
+            _window = new MainWindow(trackLyricOffsetStore);
+            _window.ApplySettings(initialSettings);
+            _window.IsVisibleChanged += (_, _) => _isVisible = _window.IsVisible;
+            _window.Closed += (_, _) =>
+            {
+                _isVisible = false;
+                Dispatcher.CurrentDispatcher.BeginInvokeShutdown(DispatcherPriority.Normal);
+            };
 
-        _ready.Set();
-        Dispatcher.Run();
+            if (Volatile.Read(ref _startupAbandoned) != 0)
+            {
+                _window.Close();
+                return;
+            }
+
+            _ready.TrySetResult();
+            Dispatcher.Run();
+        }
+        catch (Exception exception)
+        {
+            Log.Error($"Lyrics window initialization failed: {exception}");
+            _ready.TrySetException(exception);
+        }
     }
 
     private void InvokeAsync(Action action)
@@ -146,13 +170,13 @@ internal sealed class LyricsWindowHost : IDisposable
         _dispatcher.BeginInvoke(action, DispatcherPriority.Normal);
     }
 
-    private Task InvokeAsync(Func<Task> action)
+    private Task InvokeAsync(Func<Task> action, CancellationToken cancellationToken = default)
     {
         if (_disposed || _dispatcher is null)
         {
             return Task.CompletedTask;
         }
 
-        return _dispatcher.InvokeAsync(action, DispatcherPriority.Normal).Task.Unwrap();
+        return _dispatcher.InvokeAsync(action, DispatcherPriority.Normal, cancellationToken).Task.Unwrap();
     }
 }

@@ -23,6 +23,7 @@ public sealed class LyricSyncService : IDisposable
     private DateTimeOffset? _currentLyricResolvedAtUtc;
     private bool _isUpdating;
     private CancellationTokenSource? _searchCts;
+    private Task? _searchTask;
     private bool _isDisposed;
     private int _lastEmittedLineIndex = -1;
     private long _documentLoadedTicks;
@@ -71,7 +72,7 @@ public sealed class LyricSyncService : IDisposable
             _currentLyricFetchElapsedMilliseconds = 0;
             _currentLyricResolvedAtUtc = null;
             _lastEmittedLineIndex = -1;
-            _ = UpdateLyricsAsync(snapshot.Track, trackId);
+            _searchTask = UpdateLyricsAsync(snapshot.Track, trackId);
         }
 
         if (_currentDocument == null || _currentDocument.Lines.Count == 0)
@@ -211,6 +212,16 @@ public sealed class LyricSyncService : IDisposable
         {
             // A newer track replaced this request.
         }
+        catch (Exception exception)
+        {
+            Log.Warn($"Lyrics update failed for '{track.Title}' - '{track.Artist}': {exception}");
+            if (_currentTrackId == trackId)
+            {
+                _currentLyricAcquisition = LyricAcquisitionKind.NotFound;
+                _currentLyricFetchElapsedMilliseconds = 0;
+                _currentLyricResolvedAtUtc = DateTimeOffset.UtcNow;
+            }
+        }
         finally
         {
             if (ReferenceEquals(_searchCts, cts))
@@ -282,6 +293,7 @@ public sealed class LyricSyncService : IDisposable
 
         _isDisposed = true;
         CancelPendingSearch();
+        _registry.Dispose();
     }
 
 }

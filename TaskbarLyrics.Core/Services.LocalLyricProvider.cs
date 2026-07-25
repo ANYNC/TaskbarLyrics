@@ -7,7 +7,7 @@ using TaskbarLyrics.Core.Utilities;
 
 namespace TaskbarLyrics.Core.Services;
 
-public sealed class LocalLyricProvider : ILyricProvider
+public sealed class LocalLyricProvider : ILyricProvider, IDisposable
 {
     private static readonly HashSet<string> AudioExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -45,7 +45,9 @@ public sealed class LocalLyricProvider : ILyricProvider
     private readonly IReadOnlyList<string> _rootFolders;
     private readonly object _indexLock = new();
     private readonly List<LocalLyricEntry> _index = new();
+    private readonly CancellationTokenSource _indexCancellation = new();
     private readonly Task _indexTask;
+    private int _isDisposed;
 
     static LocalLyricProvider()
     {
@@ -59,7 +61,7 @@ public sealed class LocalLyricProvider : ILyricProvider
             .Select(path => path.Trim().Trim('"'))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
-        _indexTask = Task.Run(() => BuildIndexAsync(CancellationToken.None));
+        _indexTask = Task.Run(() => BuildIndexAsync(_indexCancellation.Token));
     }
 
     public string SourceApp => "Local";
@@ -74,7 +76,8 @@ public sealed class LocalLyricProvider : ILyricProvider
         CancellationToken cancellationToken = default)
     {
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-        if (_rootFolders.Count == 0 ||
+        if (Volatile.Read(ref _isDisposed) != 0 ||
+            _rootFolders.Count == 0 ||
             string.IsNullOrWhiteSpace(track.Title) ||
             string.Equals(track.Title, "Unknown Title", StringComparison.OrdinalIgnoreCase))
         {
@@ -117,6 +120,11 @@ public sealed class LocalLyricProvider : ILyricProvider
 
     private IReadOnlyList<LocalLyricEntry> SnapshotIndex()
     {
+        if (Volatile.Read(ref _isDisposed) != 0)
+        {
+            return Array.Empty<LocalLyricEntry>();
+        }
+
         lock (_indexLock)
         {
             return _index.ToList();
@@ -184,7 +192,7 @@ public sealed class LocalLyricProvider : ILyricProvider
 
     private void FlushPendingIndexEntries(List<LocalLyricEntry> pending)
     {
-        if (pending.Count == 0)
+        if (pending.Count == 0 || Volatile.Read(ref _isDisposed) != 0)
         {
             return;
         }
@@ -269,6 +277,7 @@ public sealed class LocalLyricProvider : ILyricProvider
 
             foreach (var file in files)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 yield return file;
             }
 
@@ -284,6 +293,7 @@ public sealed class LocalLyricProvider : ILyricProvider
 
             foreach (var directory in directories)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 pending.Push(directory);
             }
         }
@@ -710,6 +720,28 @@ public sealed class LocalLyricProvider : ILyricProvider
         }
 
         return lines;
+    }
+
+    public void Dispose()
+    {
+        if (Interlocked.Exchange(ref _isDisposed, 1) != 0)
+        {
+            return;
+        }
+
+        _indexCancellation.Cancel();
+        lock (_indexLock)
+        {
+            _index.Clear();
+        }
+
+        if (_indexTask.IsCompleted)
+        {
+            _indexCancellation.Dispose();
+            return;
+        }
+
+        _indexTask.GetAwaiter().OnCompleted(_indexCancellation.Dispose);
     }
 
     private sealed record LocalLyricEntry(string LyricPath, string Stem, string Artist, string Title);

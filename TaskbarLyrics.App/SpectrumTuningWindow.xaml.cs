@@ -48,9 +48,9 @@ public partial class SpectrumTuningWindow : Wpf.Ui.Controls.FluentWindow
         ApplyWindowTheme();
     }
 
-    private async void OnLoaded(object? sender, RoutedEventArgs e)
+    private void OnLoaded(object? sender, RoutedEventArgs e)
     {
-        await InitializeWebViewAsync();
+        TaskObserver.Observe(InitializeWebViewAsync(), "spectrum tuning initialization");
     }
 
     private void OnClosed(object? sender, EventArgs e)
@@ -205,7 +205,9 @@ public partial class SpectrumTuningWindow : Wpf.Ui.Controls.FluentWindow
         }
 
         var json = JsonSerializer.Serialize(Settings, JsonOptions);
-        _ = TuningWebView.ExecuteScriptAsync($"window.spectrumTuning?.setSettings({json});");
+        TaskObserver.Observe(
+            TuningWebView.ExecuteScriptAsync($"window.spectrumTuning?.setSettings({json});"),
+            "spectrum tuning settings update");
     }
 
     private void PushDiagnostics()
@@ -227,7 +229,9 @@ public partial class SpectrumTuningWindow : Wpf.Ui.Controls.FluentWindow
             snap.Format
         };
         var json = JsonSerializer.Serialize(payload, JsonOptions);
-        _ = TuningWebView.ExecuteScriptAsync($"window.spectrumTuning?.setDiagnostics({json});");
+        TaskObserver.Observe(
+            TuningWebView.ExecuteScriptAsync($"window.spectrumTuning?.setDiagnostics({json});"),
+            "spectrum tuning diagnostics update");
     }
 
     private void OnWindowThemeChanged(object? sender, EventArgs e)

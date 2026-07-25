@@ -3,14 +3,15 @@ using TaskbarLyrics.Core.Database;
 using TaskbarLyrics.Core.Models;
 using TaskbarLyrics.Core.Utilities;
 
-#pragma warning disable CS0162
-
 namespace TaskbarLyrics.Core.Services;
 
 public sealed class LyricProviderRegistry : ILyricProviderRegistry
 {
     private readonly IReadOnlyList<ILyricProvider> _providers;
     private readonly IReadOnlyDictionary<ILyricProvider, SemaphoreSlim> _providerGates;
+    private int _activeProviderOperations;
+    private int _isDisposed;
+    private int _gatesDisposed;
 
     public LyricProviderRegistry(IEnumerable<ILyricProvider> providers)
     {
@@ -22,6 +23,11 @@ public sealed class LyricProviderRegistry : ILyricProviderRegistry
         TrackInfo track,
         CancellationToken cancellationToken = default)
     {
+        if (Volatile.Read(ref _isDisposed) != 0)
+        {
+            return BuildResults();
+        }
+
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
         Log.Info($"ResolveLyricsAsync 开始处理轨道: {track.Title} - {track.Artist} (App: {track.SourceApp}, 时长: {track.Duration.TotalSeconds}s)");
 
@@ -137,13 +143,6 @@ public sealed class LyricProviderRegistry : ILyricProviderRegistry
                     return BuildResults(new Dictionary<ILyricProvider, LyricFetchResult>
                     {
                         [selectedProvider] = selectedResult
-                    });
-
-                    stopwatch.Stop();
-                    Log.Info($"官方歌词源 [{officialSource}] 返回有效歌词，独占采用。总耗时: {stopwatch.ElapsedMilliseconds} ms");
-                    return BuildResults(new Dictionary<ILyricProvider, LyricFetchResult>
-                    {
-                        [officialProvider] = officialResult.Result
                     });
                 }
 
@@ -390,8 +389,14 @@ public sealed class LyricProviderRegistry : ILyricProviderRegistry
         TimeSpan timeout,
         CancellationToken cancellationToken)
     {
+        if (!TryEnterProviderOperation())
+        {
+            return (provider, NotFound());
+        }
+
         if (!_providerGates.TryGetValue(provider, out var gate))
         {
+            ExitProviderOperation();
             return (provider, NotFound());
         }
 
@@ -400,12 +405,19 @@ public sealed class LyricProviderRegistry : ILyricProviderRegistry
             if (!await gate.WaitAsync(0, cancellationToken))
             {
                 Log.Warn($"音源 [{provider.SourceApp}] 上一次请求仍未结束，跳过本次检索以避免任务堆积。");
+                ExitProviderOperation();
                 return (provider, NotFound());
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
+            ExitProviderOperation();
             return (provider, NotFound());
+        }
+        catch
+        {
+            ExitProviderOperation();
+            throw;
         }
 
         Task<LyricFetchResult>? providerTask = null;
@@ -445,6 +457,7 @@ public sealed class LyricProviderRegistry : ILyricProviderRegistry
             if (providerTask is null || providerTask.IsCompleted)
             {
                 gate.Release();
+                ExitProviderOperation();
             }
             else
             {
@@ -453,6 +466,7 @@ public sealed class LyricProviderRegistry : ILyricProviderRegistry
                     {
                         _ = completed.Exception;
                         gate.Release();
+                        ExitProviderOperation();
                     },
                     CancellationToken.None,
                     TaskContinuationOptions.ExecuteSynchronously,
@@ -463,6 +477,61 @@ public sealed class LyricProviderRegistry : ILyricProviderRegistry
         static LyricFetchResult NotFound()
         {
             return new LyricFetchResult(null, LyricAcquisitionKind.NotFound, 0);
+        }
+    }
+
+    public void Dispose()
+    {
+        if (Interlocked.Exchange(ref _isDisposed, 1) != 0)
+        {
+            return;
+        }
+
+        foreach (var provider in _providers.OfType<IDisposable>())
+        {
+            provider.Dispose();
+        }
+
+        TryDisposeGates();
+    }
+
+    private bool TryEnterProviderOperation()
+    {
+        if (Volatile.Read(ref _isDisposed) != 0)
+        {
+            return false;
+        }
+
+        Interlocked.Increment(ref _activeProviderOperations);
+        if (Volatile.Read(ref _isDisposed) == 0)
+        {
+            return true;
+        }
+
+        ExitProviderOperation();
+        return false;
+    }
+
+    private void ExitProviderOperation()
+    {
+        if (Interlocked.Decrement(ref _activeProviderOperations) == 0)
+        {
+            TryDisposeGates();
+        }
+    }
+
+    private void TryDisposeGates()
+    {
+        if (Volatile.Read(ref _isDisposed) == 0 ||
+            Volatile.Read(ref _activeProviderOperations) != 0 ||
+            Interlocked.CompareExchange(ref _gatesDisposed, 1, 0) != 0)
+        {
+            return;
+        }
+
+        foreach (var gate in _providerGates.Values)
+        {
+            gate.Dispose();
         }
     }
 

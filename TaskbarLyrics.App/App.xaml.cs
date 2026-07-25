@@ -2,6 +2,7 @@ using System.IO;
 using System.Net.Http;
 using System.Text.Json;
 using System.Windows;
+using System.Windows.Threading;
 using Microsoft.Win32;
 using TaskbarLyrics.Core.Services;
 using TaskbarLyrics.Core.Utilities;
@@ -88,7 +89,7 @@ public partial class App : System.Windows.Application
             ExitApplication);
         StartActivationServer();
         SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
-        _ = RunAutomaticUpdateCheckAsync();
+        TaskObserver.Observe(RunAutomaticUpdateCheckAsync(), "automatic update check");
     }
 
     protected override void OnExit(ExitEventArgs e)
@@ -108,14 +109,23 @@ public partial class App : System.Windows.Application
 
     public void SaveSettings(AppSettings settings)
     {
+        var currentSettings = Settings;
         var nextSettings = settings.Clone();
         nextSettings.SpectrumTuning = Settings.SpectrumTuning.Clone();
         nextSettings.GlobalMediaHotkeys ??= new GlobalMediaHotkeySettings();
+        var changes = AppSettingsChangeSet.Create(currentSettings, nextSettings);
         NativeWindowTheme.SetMode(nextSettings.ToolWindowTheme);
         Settings = nextSettings;
         _settingsStore?.Save(Settings);
-        _lyricsWindowHost?.ApplySettings(Settings);
-        _mediaHotkeyService?.Apply(Settings.GlobalMediaHotkeys);
+        if (changes.RequiresLyricsWindowApply)
+        {
+            _lyricsWindowHost?.ApplySettings(Settings);
+        }
+
+        if (changes.GlobalMediaHotkeysChanged)
+        {
+            _mediaHotkeyService?.Apply(Settings.GlobalMediaHotkeys);
+        }
     }
 
     public IReadOnlyDictionary<string, string> GetMediaHotkeyStatuses()
@@ -249,7 +259,12 @@ public partial class App : System.Windows.Application
             {
                 _settingsStore?.Save(Settings);
                 _lyricsWindowHost?.ApplySettings(Settings);
-                _settingsWindow?.ApplyExternalSettings(Settings.Clone());
+                if (_settingsWindow is not null)
+                {
+                    TaskObserver.Observe(
+                        _settingsWindow.ApplyExternalSettingsAsync(Settings.Clone()),
+                        "settings window state update");
+                }
             }
         });
     }
@@ -283,7 +298,12 @@ public partial class App : System.Windows.Application
 
         _settingsStore?.Save(Settings);
         _lyricsWindowHost?.SetSpectrumDisplayMode(enabled, mode);
-        _settingsWindow?.ApplyExternalSettings(Settings.Clone());
+        if (_settingsWindow is not null)
+        {
+            TaskObserver.Observe(
+                _settingsWindow.ApplyExternalSettingsAsync(Settings.Clone()),
+                "settings window state update");
+        }
     }
 
     public void OpenSmtcTimelineMonitorWindow()
@@ -291,15 +311,29 @@ public partial class App : System.Windows.Application
         _lyricsWindowHost?.OpenSmtcTimelineMonitorWindow();
     }
 
-    private Task ExecuteMediaHotkeyAsync(MediaHotkeyAction action)
+    private Task ExecuteMediaHotkeyAsync(MediaHotkeyAction action, CancellationToken cancellationToken)
     {
+        if (IsExiting || cancellationToken.IsCancellationRequested)
+        {
+            return Task.FromCanceled(cancellationToken);
+        }
+
+        return Dispatcher.InvokeAsync(
+            () => ExecuteMediaHotkeyOnUiThreadAsync(action, cancellationToken),
+            DispatcherPriority.Normal,
+            cancellationToken).Task.Unwrap();
+    }
+
+    private Task ExecuteMediaHotkeyOnUiThreadAsync(MediaHotkeyAction action, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
         if (action == MediaHotkeyAction.ToggleLyricsVisibility)
         {
             ToggleLyricsWindow();
             return Task.CompletedTask;
         }
 
-        return _lyricsWindowHost?.ExecuteMediaHotkeyAsync(action) ?? Task.CompletedTask;
+        return _lyricsWindowHost?.ExecuteMediaHotkeyAsync(action, cancellationToken) ?? Task.CompletedTask;
     }
 
     public void ShowLyricsWindow()
@@ -340,7 +374,9 @@ public partial class App : System.Windows.Application
             _settingsWindow.Activate();
             if (!string.IsNullOrWhiteSpace(pageId))
             {
-                _ = _settingsWindow.NavigateToPageAsync(pageId, focusCurrentTrack);
+                TaskObserver.Observe(
+                    _settingsWindow.NavigateToPageAsync(pageId, focusCurrentTrack),
+                    "settings navigation");
             }
             return;
         }
@@ -359,11 +395,18 @@ public partial class App : System.Windows.Application
         _settingsWindow.Show();
         if (!string.IsNullOrWhiteSpace(pageId))
         {
-            _ = _settingsWindow.NavigateToPageAsync(pageId, focusCurrentTrack);
+            TaskObserver.Observe(
+                _settingsWindow.NavigateToPageAsync(pageId, focusCurrentTrack),
+                "settings navigation");
         }
     }
 
-    private async void OpenCurrentTrackOffsetSettings()
+    private void OpenCurrentTrackOffsetSettings()
+    {
+        TaskObserver.Observe(OpenCurrentTrackOffsetSettingsAsync(), "open current track offset settings");
+    }
+
+    private async Task OpenCurrentTrackOffsetSettingsAsync()
     {
         var context = _lyricsWindowHost is null
             ? null
@@ -388,9 +431,10 @@ public partial class App : System.Windows.Application
     private void StartActivationServer()
     {
         _activationServerCancellation = new CancellationTokenSource();
-        _ = Task.Run(() => SingleInstanceService.ListenForActivationAsync(
+        var activationTask = Task.Run(() => SingleInstanceService.ListenForActivationAsync(
             () => Dispatcher.InvokeAsync(OpenSettingsWindow).Task,
             _activationServerCancellation.Token));
+        TaskObserver.Observe(activationTask, "single-instance activation listener");
     }
 
     private void SettingsWindow_Closed(object? sender, EventArgs e)
@@ -442,7 +486,22 @@ public partial class App : System.Windows.Application
 
     private void ExitApplication()
     {
+        TaskObserver.Observe(ExitApplicationAsync(), "application shutdown");
+    }
+
+    private async Task ExitApplicationAsync()
+    {
+        if (IsExiting)
+        {
+            return;
+        }
+
         IsExiting = true;
+        if (_mediaHotkeyService is not null)
+        {
+            await _mediaHotkeyService.StopAsync(TimeSpan.FromSeconds(1));
+        }
+
         _lyricsWindowHost?.Close();
         Shutdown();
     }

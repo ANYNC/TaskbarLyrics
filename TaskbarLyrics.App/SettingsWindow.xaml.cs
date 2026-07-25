@@ -67,7 +67,12 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         ApplyWindowTheme();
     }
 
-    private async void SettingsWindow_Loaded(object? sender, RoutedEventArgs e)
+    private void SettingsWindow_Loaded(object? sender, RoutedEventArgs e)
+    {
+        TaskObserver.Observe(InitializeSettingsWebViewAndStartRefreshAsync(), "settings web view initialization");
+    }
+
+    private async Task InitializeSettingsWebViewAndStartRefreshAsync()
     {
         await InitializeSettingsWebViewAsync();
         _trackOffsetRefreshTimer.Start();
@@ -80,7 +85,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
 
     private void SettingsWindow_StateChanged(object? sender, EventArgs e)
     {
-        _ = PushWindowStateToWebAsync();
+        TaskObserver.Observe(PushWindowStateToWebAsync(), "settings window state update");
     }
 
     private void SettingsWindow_Closed(object? sender, EventArgs e)
@@ -127,7 +132,12 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         _isWebReady = true;
     }
 
-    private async void SettingsWebView_WebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
+    private void SettingsWebView_WebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
+    {
+        TaskObserver.Observe(HandleSettingsWebMessageAsync(e), "settings web message");
+    }
+
+    private async Task HandleSettingsWebMessageAsync(CoreWebView2WebMessageReceivedEventArgs e)
     {
         var messageJson = e.TryGetWebMessageAsString();
         if (string.IsNullOrWhiteSpace(messageJson))
@@ -267,7 +277,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         await SettingsWebView.ExecuteScriptAsync($"window.settingsApp?.setState({settingsJson}, {fontsJson});");
     }
 
-    public async void ApplyExternalSettings(AppSettings settings)
+    public async Task ApplyExternalSettingsAsync(AppSettings settings)
     {
         CopySettings(settings, _settings);
         await PushSettingsToWebAsync();
@@ -280,7 +290,12 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         await PushPendingNavigationAsync();
     }
 
-    private async void TrackOffsetRefreshTimer_Tick(object? sender, EventArgs e)
+    private void TrackOffsetRefreshTimer_Tick(object? sender, EventArgs e)
+    {
+        TaskObserver.Observe(RefreshCurrentTrackOffsetAsync(), "settings track offset refresh");
+    }
+
+    private async Task RefreshCurrentTrackOffsetAsync()
     {
         if (!_isTrackOffsetsPageActive || _isTrackOffsetRefreshRunning)
         {

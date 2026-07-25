@@ -30,7 +30,9 @@ public static class Log
 
         try
         {
-            var logPath = GetDebugLogPath();
+            var logPath = level == Level.Error
+                ? GetErrorLogPath()
+                : GetDebugLogPath();
             LogFileWriter.AppendLine(logPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] [{level.ToString().ToUpper()}] {message}", MaxLogFileSizeBytes);
         }
         catch
