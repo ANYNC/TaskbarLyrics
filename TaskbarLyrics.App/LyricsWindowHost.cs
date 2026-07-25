@@ -19,7 +19,7 @@ internal sealed class LyricsWindowHost : IDisposable
     public LyricsWindowHost(
         AppSettings initialSettings,
         TrackLyricOffsetStore trackLyricOffsetStore,
-        AppCompositionRoot compositionRoot)
+        IAppCompositionRoot compositionRoot)
     {
         var settings = initialSettings.Clone();
         _thread = new Thread(() => Run(settings, trackLyricOffsetStore, compositionRoot))
@@ -136,7 +136,7 @@ internal sealed class LyricsWindowHost : IDisposable
     private void Run(
         AppSettings initialSettings,
         TrackLyricOffsetStore trackLyricOffsetStore,
-        AppCompositionRoot compositionRoot)
+        IAppCompositionRoot compositionRoot)
     {
         try
         {

@@ -5,11 +5,9 @@ namespace TaskbarLyrics.App.Tests;
 public sealed class SettingsWebMessageRouterTests
 {
     [Fact]
-    public void Parse_DeserializesTheV1UpdateEnvelope()
+    public void ParseDeserializesTheV1UpdateEnvelope()
     {
-        var router = new SettingsWebMessageRouter();
-
-        var message = router.Parse("{\"version\":1,\"type\":\"update\",\"payload\":{\"key\":\"fontSize\",\"value\":18}}");
+        var message = SettingsWebMessageRouter.Parse("{\"version\":1,\"type\":\"update\",\"payload\":{\"key\":\"fontSize\",\"value\":18}}");
 
         Assert.NotNull(message);
         Assert.Equal("update", message.Type);
@@ -18,19 +16,15 @@ public sealed class SettingsWebMessageRouterTests
     }
 
     [Fact]
-    public void Parse_WhenMessageIsEmpty_ReturnsNull()
+    public void ParseWhenMessageIsEmptyReturnsNull()
     {
-        var router = new SettingsWebMessageRouter();
-
-        Assert.Null(router.Parse(""));
+        Assert.Null(SettingsWebMessageRouter.Parse(""));
     }
 
     [Fact]
-    public void Parse_WhenVersionIsUnsupported_ReturnsNull()
+    public void ParseWhenVersionIsUnsupportedReturnsNull()
     {
-        var router = new SettingsWebMessageRouter();
-
-        Assert.Null(router.Parse("{\"version\":2,\"type\":\"ready\",\"payload\":{}}"));
-        Assert.Null(router.Parse("{\"version\":1,\"type\":\"ready\",\"payload\":"));
+        Assert.Null(SettingsWebMessageRouter.Parse("{\"version\":2,\"type\":\"ready\",\"payload\":{}}"));
+        Assert.Null(SettingsWebMessageRouter.Parse("{\"version\":1,\"type\":\"ready\",\"payload\":"));
     }
 }

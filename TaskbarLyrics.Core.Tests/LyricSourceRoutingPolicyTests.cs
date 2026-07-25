@@ -12,7 +12,7 @@ public sealed class LyricSourceRoutingPolicyTests
     [InlineData("music.163.com", "Netease")]
     [InlineData("KuGou Music", "Kugou")]
     [InlineData("Spotify", "")]
-    public void TryGetOfficialProvider_MapsKnownPlayersAndRejectsOthers(string sourceApp, string expectedProvider)
+    public void TryGetOfficialProviderMapsKnownPlayersAndRejectsOthers(string sourceApp, string expectedProvider)
     {
         var found = LyricSourceRoutingPolicy.TryGetOfficialProvider(sourceApp, out var provider);
 
@@ -21,7 +21,7 @@ public sealed class LyricSourceRoutingPolicyTests
     }
 
     [Fact]
-    public void BuildFallbackBatches_ForOfficialPlayer_ExcludesItsOwnProvider()
+    public void BuildFallbackBatchesForOfficialPlayerExcludesItsOwnProvider()
     {
         var batches = LyricSourceRoutingPolicy.BuildFallbackBatches(CreateTrack("QQMusic"));
 
@@ -30,7 +30,7 @@ public sealed class LyricSourceRoutingPolicyTests
     }
 
     [Fact]
-    public void BuildFallbackBatches_ForOtherPlayer_KeepsConfiguredTwoPhaseFallback()
+    public void BuildFallbackBatchesForOtherPlayerKeepsConfiguredTwoPhaseFallback()
     {
         var batches = LyricSourceRoutingPolicy.BuildFallbackBatches(CreateTrack("Spotify"));
 

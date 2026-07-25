@@ -4,8 +4,10 @@ namespace TaskbarLyrics.App.Tests;
 
 public sealed class SerialCommandQueueTests
 {
+    private static readonly int[] ExpectedExecutionOrder = { 1, 2, 3 };
+
     [Fact]
-    public async Task TryEnqueue_ProcessesCommandsInOrderWithoutOverlap()
+    public async Task TryEnqueueProcessesCommandsInOrderWithoutOverlap()
     {
         var completed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var executionOrder = new List<int>();
@@ -35,12 +37,12 @@ public sealed class SerialCommandQueueTests
         await completed.Task.WaitAsync(TimeSpan.FromSeconds(1));
         await queue.StopAsync(TimeSpan.FromSeconds(1));
 
-        Assert.Equal(new[] { 1, 2, 3 }, executionOrder);
+        Assert.Equal(ExpectedExecutionOrder, executionOrder);
         Assert.Equal(1, maximumConcurrentCommandCount);
     }
 
     [Fact]
-    public async Task StopAsync_CancelsInFlightCommandAndRejectsNewCommands()
+    public async Task StopAsyncCancelsInFlightCommandAndRejectsNewCommands()
     {
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var canceled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);

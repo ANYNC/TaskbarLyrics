@@ -9,7 +9,7 @@ using Windows.Storage.Streams;
 
 namespace TaskbarLyrics.App;
 
-public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlaybackController, IPlayerRecognitionController
+public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlaybackController, IPlayerRecognitionController, IDisposable
 {
     private static readonly string[] DefaultRecognitionOrder = { "QQMusic", "Netease", "Kugou", "Spotify" };
     private static readonly TimeSpan MissingCoverRetryInterval = TimeSpan.FromSeconds(5);
@@ -38,6 +38,7 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
     private string _lastCoverThumbnailDiagnosticsKey = string.Empty;
     private string _lastMediaPropertiesErrorKey = string.Empty;
     private DateTimeOffset _nextMediaPropertiesErrorLogUtc;
+    private int _isDisposed;
 
     public void SetRecognitionOrder(
         IReadOnlyList<string>? order,
@@ -133,6 +134,19 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
 
     public Task ExecuteAsync(MediaHotkeyAction action, CancellationToken cancellationToken) =>
         TryControlAsync(action, cancellationToken);
+
+    public void Dispose()
+    {
+        if (Interlocked.Exchange(ref _isDisposed, 1) != 0)
+        {
+            return;
+        }
+
+        _activeSessionCache.Clear();
+        _manager = null;
+        _managerLock.Dispose();
+        GC.SuppressFinalize(this);
+    }
 
     private static async Task TrySeekAsync(
         GlobalSystemMediaTransportControlsSession session,
@@ -529,14 +543,32 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
 
     private async Task<GlobalSystemMediaTransportControlsSessionManager?> GetManagerAsync(CancellationToken cancellationToken)
     {
+        if (Volatile.Read(ref _isDisposed) != 0)
+        {
+            return null;
+        }
+
         if (_manager is not null)
         {
             return _manager;
         }
 
-        await _managerLock.WaitAsync(cancellationToken);
         try
         {
+            await _managerLock.WaitAsync(cancellationToken);
+        }
+        catch (ObjectDisposedException) when (Volatile.Read(ref _isDisposed) != 0)
+        {
+            return null;
+        }
+
+        try
+        {
+            if (Volatile.Read(ref _isDisposed) != 0)
+            {
+                return null;
+            }
+
             if (_manager is not null)
             {
                 return _manager;
@@ -551,7 +583,14 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
         }
         finally
         {
-            _managerLock.Release();
+            try
+            {
+                _managerLock.Release();
+            }
+            catch (ObjectDisposedException) when (Volatile.Read(ref _isDisposed) != 0)
+            {
+                // Shutdown can race an in-flight manager request; its result is no longer needed.
+            }
         }
     }
 
@@ -744,7 +783,7 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
 
     private static List<string> NormalizeRecognitionOrder(
         IReadOnlyList<string>? order,
-        IReadOnlySet<string> enabledSources)
+        HashSet<string> enabledSources)
     {
         var result = new List<string>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);

@@ -707,6 +707,8 @@ GlobalMediaHotkeyCoordinator
 
 ## 19. 本次审查验证结果
 
+- 2026-07-26（分析器整改）：应用和歌词窗口明确实现 `IDisposable` 并在 WPF 生命周期结束时释放资源；SMTC 提供者释放会话初始化锁；组合根通过接口表达依赖边界；无状态路由、字体目录和定位操作收敛为静态职责。诊断时间显式使用不变区域性，Win32 类名查询改用字符缓冲区，设置默认值和测试命名同步规范化。`dotnet build TaskbarLyrics.sln --no-restore` 已达到 0 warning、0 error，仍不启用 `TreatWarningsAsErrors`。
+
 - 2026-07-26（第五阶段）：频谱开关、显示策略和托盘菜单收敛为 `SpectrumDisplayMode`（含 `Disabled`）；旧 `EnableSpectrum` 字段在读取时迁移，后续保存不再写入旧字段。新增设置迁移测试，确认旧文件仍能关闭频谱且保存后清理旧字段。
 - 快捷键设置页面不再静态维护六组 HTML 映射，动作名、说明、设置键和状态键均由 `MediaHotkeyCatalog` 的描述数据提供。删除了无调用的本地扫描与历史式注释。
 - 已新增 `.editorconfig`、`Directory.Build.props` 及格式验证步骤，并以全仓机械格式化建立基线。推荐分析器已启用；为避免存量建议阻塞发布，当前不启用 `TreatWarningsAsErrors`。

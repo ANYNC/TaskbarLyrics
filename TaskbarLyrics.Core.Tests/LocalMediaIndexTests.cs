@@ -6,7 +6,7 @@ namespace TaskbarLyrics.Core.Tests;
 public sealed class LocalMediaIndexTests
 {
     [Fact]
-    public async Task Acquire_ForTheSameFolders_SharesOneCancellableFileIndex()
+    public async Task AcquireForTheSameFoldersSharesOneCancellableFileIndex()
     {
         var directory = Path.Combine(Path.GetTempPath(), $"taskbar-lyrics-index-{Guid.NewGuid():N}");
         Directory.CreateDirectory(directory);

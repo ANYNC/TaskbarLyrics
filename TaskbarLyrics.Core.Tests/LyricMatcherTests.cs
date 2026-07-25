@@ -7,7 +7,7 @@ namespace TaskbarLyrics.Core.Tests;
 public sealed class LyricMatcherTests
 {
     [Fact]
-    public void Score_WhenTitleArtistAndDurationMatch_ReturnsHighConfidence()
+    public void ScoreWhenTitleArtistAndDurationMatchReturnsHighConfidence()
     {
         var track = CreateTrack("Midnight City", "M83", 244);
 
@@ -17,7 +17,7 @@ public sealed class LyricMatcherTests
     }
 
     [Fact]
-    public void Score_WhenOnlyOneTitleHasLiveVersionMarker_RejectsTheMatch()
+    public void ScoreWhenOnlyOneTitleHasLiveVersionMarkerRejectsTheMatch()
     {
         var track = CreateTrack("Midnight City", "M83", 244);
 
@@ -27,7 +27,7 @@ public sealed class LyricMatcherTests
     }
 
     [Fact]
-    public void Score_WhenNonQqMusicDurationDiffersByTwentySeconds_RejectsTheMatch()
+    public void ScoreWhenNonQqMusicDurationDiffersByTwentySecondsRejectsTheMatch()
     {
         var track = CreateTrack("Midnight City", "M83", 244);
 

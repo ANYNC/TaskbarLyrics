@@ -1,4 +1,3 @@
-using System.Text;
 using System.Windows;
 using System.Windows.Controls.Primitives;
 using System.Windows.Interop;
@@ -497,9 +496,9 @@ public partial class TrayMenuWindow : Window
             return false;
         }
 
-        var className = new StringBuilder(128);
-        return GetClassName(hwnd, className, className.Capacity) > 0 &&
-            className.ToString() is "TopLevelWindowForOverflowXamlIsland" or "NotifyIconOverflowWindow";
+        var className = new char[128];
+        return GetClassName(hwnd, className, className.Length) > 0 &&
+            new string(className).TrimEnd('\0') is "TopLevelWindowForOverflowXamlIsland" or "NotifyIconOverflowWindow";
     }
 
     private static IntPtr FindTrayOverflowInputWindow(IntPtr trayOverflowWindow)
@@ -585,7 +584,7 @@ public partial class TrayMenuWindow : Window
     private static extern bool GetWindowRect(IntPtr hwnd, out NativeRect rect);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    private static extern int GetClassName(IntPtr hwnd, StringBuilder className, int maximumCount);
+    private static extern int GetClassName(IntPtr hwnd, [Out] char[] className, int maximumCount);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     [return: MarshalAs(UnmanagedType.Bool)]

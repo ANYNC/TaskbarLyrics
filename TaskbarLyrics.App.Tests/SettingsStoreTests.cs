@@ -6,7 +6,7 @@ namespace TaskbarLyrics.App.Tests;
 public sealed class SettingsStoreTests
 {
     [Fact]
-    public void Save_ReplacesTheSettingsFileWithoutLeavingTemporaryFiles()
+    public void SaveReplacesTheSettingsFileWithoutLeavingTemporaryFiles()
     {
         var directory = Path.Combine(AppContext.BaseDirectory, $"settings-store-{Guid.NewGuid():N}");
         var filePath = Path.Combine(directory, "settings.json");
@@ -38,7 +38,7 @@ public sealed class SettingsStoreTests
     }
 
     [Fact]
-    public void Load_WhenSettingsJsonIsInvalid_ReturnsDefaultSettings()
+    public void LoadWhenSettingsJsonIsInvalidReturnsDefaultSettings()
     {
         var directory = Path.Combine(AppContext.BaseDirectory, $"settings-store-{Guid.NewGuid():N}");
         var filePath = Path.Combine(directory, "settings.json");
@@ -62,7 +62,7 @@ public sealed class SettingsStoreTests
     }
 
     [Fact]
-    public void Load_MigratesLegacySpectrumSwitchAndSaveDropsLegacyFields()
+    public void LoadMigratesLegacySpectrumSwitchAndSaveDropsLegacyFields()
     {
         var directory = Path.Combine(AppContext.BaseDirectory, $"settings-store-{Guid.NewGuid():N}");
         var filePath = Path.Combine(directory, "settings.json");
@@ -92,7 +92,7 @@ public sealed class SettingsStoreTests
     }
 
     [Fact]
-    public void Save_WhenCalledConcurrently_KeepsAValidSettingsFile()
+    public void SaveWhenCalledConcurrentlyKeepsAValidSettingsFile()
     {
         var directory = Path.Combine(AppContext.BaseDirectory, $"settings-store-{Guid.NewGuid():N}");
         var filePath = Path.Combine(directory, "settings.json");

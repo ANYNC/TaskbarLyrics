@@ -5,7 +5,7 @@ namespace TaskbarLyrics.App.Tests;
 public sealed class MediaHotkeyRegistrationCoordinatorTests
 {
     [Fact]
-    public void Apply_WhenBindingsAreDuplicated_MarksEveryConflictingActionAndRegistersNeither()
+    public void ApplyWhenBindingsAreDuplicatedMarksEveryConflictingActionAndRegistersNeither()
     {
         var registrar = new FakeRegistrar();
         using var coordinator = new MediaHotkeyRegistrationCoordinator(registrar);
@@ -29,7 +29,7 @@ public sealed class MediaHotkeyRegistrationCoordinatorTests
     }
 
     [Fact]
-    public void Apply_WhenSystemRejectsBinding_ReportsOccupiedAndDoesNotDispatchIt()
+    public void ApplyWhenSystemRejectsBindingReportsOccupiedAndDoesNotDispatchIt()
     {
         var rejectedId = MediaHotkeyRegistrationCoordinator.GetHotkeyId(MediaHotkeyAction.TogglePlayPause);
         var registrar = new FakeRegistrar(new HashSet<int> { rejectedId });
@@ -44,7 +44,7 @@ public sealed class MediaHotkeyRegistrationCoordinatorTests
     }
 
     [Fact]
-    public void Apply_WhenSettingsAreReplaced_UnregistersExistingBindingsBeforeApplyingNewOnes()
+    public void ApplyWhenSettingsAreReplacedUnregistersExistingBindingsBeforeApplyingNewOnes()
     {
         var registrar = new FakeRegistrar();
         using var coordinator = new MediaHotkeyRegistrationCoordinator(registrar);

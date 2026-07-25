@@ -13,9 +13,9 @@ internal sealed class TaskbarPlacementService
     public bool RequiresReattach(int message) =>
         (uint)message == TaskbarCreatedMessage || message == WmShowWindow;
 
-    public bool IsShowWindowMessage(int message) => message == WmShowWindow;
+    public static bool IsShowWindowMessage(int message) => message == WmShowWindow;
 
-    public void Anchor(Window window, AppSettings settings)
+    public static void Anchor(Window window, AppSettings settings)
     {
         var workArea = SystemParameters.WorkArea;
         var screenWidth = SystemParameters.PrimaryScreenWidth;
@@ -38,7 +38,7 @@ internal sealed class TaskbarPlacementService
         window.Top = Math.Clamp(anchorTop + settings.YOffset, 0, Math.Max(0, screenHeight - window.Height));
     }
 
-    public void Attach(Window window, bool forceAlwaysOnTop)
+    public static void Attach(Window window, bool forceAlwaysOnTop)
     {
         var hwnd = new WindowInteropHelper(window).Handle;
         if (hwnd == IntPtr.Zero)
@@ -66,7 +66,7 @@ internal sealed class TaskbarPlacementService
         TaskbarNativeMethods.ShowWindow(hwnd, TaskbarNativeMethods.SW_SHOWNOACTIVATE);
     }
 
-    public void ApplyToolWindowStyle(IntPtr hwnd)
+    public static void ApplyToolWindowStyle(IntPtr hwnd)
     {
         if (hwnd == IntPtr.Zero)
         {

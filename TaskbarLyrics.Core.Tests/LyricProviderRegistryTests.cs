@@ -8,7 +8,7 @@ namespace TaskbarLyrics.Core.Tests;
 public sealed class LyricProviderRegistryTests
 {
     [Fact]
-    public async Task Dispose_DisposesOwnedProvidersAndRejectsNewSearches()
+    public async Task DisposeDisposesOwnedProvidersAndRejectsNewSearches()
     {
         var provider = new DisposableProvider();
         var registry = new LyricProviderRegistry([provider]);
@@ -25,7 +25,7 @@ public sealed class LyricProviderRegistryTests
     }
 
     [Fact]
-    public async Task Dispose_DefersProviderDisposalUntilActiveSearchCompletes()
+    public async Task DisposeDefersProviderDisposalUntilActiveSearchCompletes()
     {
         var provider = new BlockingDisposableProvider();
         var registry = new LyricProviderRegistry([provider]);

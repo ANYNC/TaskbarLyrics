@@ -19,8 +19,6 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
     private readonly TrackLyricOffsetStore _trackLyricOffsetStore;
     private readonly Func<Task<CurrentTrackLyricsContext?>> _getCurrentTrackLyricsContext;
     private readonly DispatcherTimer _trackOffsetRefreshTimer;
-    private readonly SettingsWebMessageRouter _messageRouter = new();
-    private readonly FontCatalogService _fontCatalog = new();
     private bool _isWebReady;
     private bool _isTrackOffsetRefreshRunning;
     private bool _isTrackOffsetsPageActive;
@@ -137,7 +135,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             messageJson = e.WebMessageAsJson;
         }
 
-        var message = _messageRouter.Parse(messageJson);
+        var message = SettingsWebMessageRouter.Parse(messageJson);
         if (message?.Type is null)
         {
             return;
@@ -268,7 +266,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             WebViewMessageScriptFactory.Dispatch("settingsApp", "settingsState", new
             {
                 settings = payload,
-                fonts = _fontCatalog.GetOptions()
+                fonts = FontCatalogService.GetOptions()
             }));
     }
 
@@ -582,7 +580,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             CoverSize = _settings.CoverSize,
             CoverGap = _settings.CoverGap,
             CoverCornerRadius = _settings.CoverCornerRadius,
-            FontFamily = _fontCatalog.ResolveInstalledFamily(AppSettings.NormalizeFontFamily(_settings.FontFamily)) ?? AppSettings.BundledFontFamily,
+            FontFamily = FontCatalogService.ResolveInstalledFamily(AppSettings.NormalizeFontFamily(_settings.FontFamily)) ?? AppSettings.BundledFontFamily,
             FontWeight = NormalizeFontWeight(_settings.FontWeight),
             ForegroundColorMode = _settings.ForegroundColorMode,
             ForegroundColor = _settings.ForegroundColor,
@@ -886,7 +884,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         };
     }
 
-    private void ClearLyricCache()
+    private static void ClearLyricCache()
     {
         LyricProviderBase.ClearCache();
         GenericSmtcLyricProvider.ClearCache();

@@ -19,18 +19,17 @@ using TaskbarLyrics.Core.Utilities;
 
 namespace TaskbarLyrics.App;
 
-public partial class MainWindow : Window
+public partial class MainWindow : Window, IDisposable
 {
     private readonly IMusicSessionProvider _musicSessionProvider;
     private readonly IMediaPlaybackController _mediaPlaybackController;
     private readonly IPlayerRecognitionController _playerRecognitionController;
-    private readonly AppCompositionRoot _compositionRoot;
+    private readonly IAppCompositionRoot _compositionRoot;
     private readonly TrackLyricOffsetStore _trackLyricOffsetStore;
     private readonly SystemAudioSpectrumService _audioSpectrumService = new();
     private readonly DispatcherTimer _timer;
     private readonly DispatcherTimer _spectrumTimer;
     private readonly TaskbarPlacementService _taskbarPlacementService = new();
-    private readonly LyricsWebMessageRouter _lyricsWebMessageRouter = new();
     private LocalMediaCoverProvider? _localMediaCoverProvider;
     private Media.Color _primaryTextColor = Media.Colors.White;
     private Media.Color _secondaryTextColor = Media.Color.FromArgb(190, 255, 255, 255);
@@ -75,8 +74,9 @@ public partial class MainWindow : Window
     private AppSettings _currentSettings = new();
     private TrackInfo? _currentTrack;
     private bool _hasAppliedSettings;
+    private int _isDisposed;
 
-    internal MainWindow(TrackLyricOffsetStore trackLyricOffsetStore, AppCompositionRoot compositionRoot)
+    internal MainWindow(TrackLyricOffsetStore trackLyricOffsetStore, IAppCompositionRoot compositionRoot)
     {
         InitializeComponent();
 
@@ -245,7 +245,7 @@ public partial class MainWindow : Window
         if (PresentationSource.FromVisual(this) is HwndSource source)
         {
             source.AddHook(WndProc);
-            _taskbarPlacementService.ApplyToolWindowStyle(source.Handle);
+            TaskbarPlacementService.ApplyToolWindowStyle(source.Handle);
             AttachToTaskbarHost();
         }
     }
@@ -291,6 +291,16 @@ public partial class MainWindow : Window
 
     private void OnClosed(object? sender, EventArgs e)
     {
+        Dispose();
+    }
+
+    public void Dispose()
+    {
+        if (Interlocked.Exchange(ref _isDisposed, 1) != 0)
+        {
+            return;
+        }
+
         CloseSmtcTimelineMonitorWindow();
         _timer.Stop();
         _spectrumTimer.Stop();
@@ -314,6 +324,8 @@ public partial class MainWindow : Window
         _lyricSyncService.Dispose();
         _localMediaCoverProvider?.Dispose();
         _audioSpectrumService.Dispose();
+        (_musicSessionProvider as IDisposable)?.Dispose();
+        GC.SuppressFinalize(this);
     }
 
     public void OpenSmtcTimelineMonitorWindow()
@@ -978,7 +990,7 @@ public partial class MainWindow : Window
     {
         try
         {
-            var message = _lyricsWebMessageRouter.Parse(e.TryGetWebMessageAsString());
+            var message = LyricsWebMessageRouter.Parse(e.TryGetWebMessageAsString());
             if (message?.Payload is not { ValueKind: JsonValueKind.Object } payload ||
                 !string.Equals(message.Type, "coverDecodeError", StringComparison.Ordinal))
             {
@@ -1264,12 +1276,12 @@ public partial class MainWindow : Window
     private void AnchorToTaskbar()
     {
         var settings = (System.Windows.Application.Current as App)?.Settings ?? new AppSettings();
-        _taskbarPlacementService.Anchor(this, settings);
+        TaskbarPlacementService.Anchor(this, settings);
     }
 
     private void AttachToTaskbarHost()
     {
-        _taskbarPlacementService.Attach(this, _forceAlwaysOnTop);
+        TaskbarPlacementService.Attach(this, _forceAlwaysOnTop);
     }
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
@@ -1278,7 +1290,7 @@ public partial class MainWindow : Window
         {
             Dispatcher.BeginInvoke(new Action(() =>
             {
-                if (_taskbarPlacementService.IsShowWindowMessage(msg))
+                if (TaskbarPlacementService.IsShowWindowMessage(msg))
                 {
                     EnsureVisibleIfExpected();
                 }

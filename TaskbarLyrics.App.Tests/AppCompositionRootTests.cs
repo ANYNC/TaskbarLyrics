@@ -5,7 +5,7 @@ namespace TaskbarLyrics.App.Tests;
 public sealed class AppCompositionRootTests
 {
     [Fact]
-    public void CreateMusicSessionServices_UsesOneProviderForAllPlaybackCapabilities()
+    public void CreateMusicSessionServicesUsesOneProviderForAllPlaybackCapabilities()
     {
         var services = new AppCompositionRoot().CreateMusicSessionServices();
 
@@ -14,7 +14,7 @@ public sealed class AppCompositionRootTests
     }
 
     [Fact]
-    public void GetEnabledPlayerSources_OnlyIncludesEnabledRecognizers()
+    public void GetEnabledPlayerSourcesOnlyIncludesEnabledRecognizers()
     {
         var settings = new AppSettings
         {

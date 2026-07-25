@@ -8,7 +8,20 @@ internal sealed record MusicSessionServices(
     IMediaPlaybackController PlaybackController,
     IPlayerRecognitionController PlayerRecognitionController);
 
-internal sealed class AppCompositionRoot
+internal interface IAppCompositionRoot
+{
+    MusicSessionServices CreateMusicSessionServices();
+
+    LyricSyncService CreateLyricSyncService(
+        AppSettings settings,
+        TrackLyricOffsetStore trackLyricOffsetStore);
+
+    LocalMediaCoverProvider? CreateLocalMediaCoverProvider(AppSettings settings);
+
+    IReadOnlyCollection<string> GetEnabledPlayerSources(AppSettings settings);
+}
+
+internal sealed class AppCompositionRoot : IAppCompositionRoot
 {
     public MusicSessionServices CreateMusicSessionServices()
     {

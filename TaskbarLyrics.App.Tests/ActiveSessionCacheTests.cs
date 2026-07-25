@@ -5,7 +5,7 @@ namespace TaskbarLyrics.App.Tests;
 public sealed class ActiveSessionCacheTests
 {
     [Fact]
-    public void FindIn_WhenLastLyricsSessionIsStillAvailable_ReturnsTheSameInstance()
+    public void FindInWhenLastLyricsSessionIsStillAvailableReturnsTheSameInstance()
     {
         var activeSession = new object();
         var cache = new ActiveSessionCache<object>();
@@ -17,7 +17,7 @@ public sealed class ActiveSessionCacheTests
     }
 
     [Fact]
-    public void FindIn_WhenLastLyricsSessionIsGone_ClearsItAndFallsBackToSelection()
+    public void FindInWhenLastLyricsSessionIsGoneClearsItAndFallsBackToSelection()
     {
         var activeSession = new object();
         var cache = new ActiveSessionCache<object>();

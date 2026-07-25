@@ -571,7 +571,7 @@ public abstract class LrcLibSmtcLyricProviderBase : ILyricProvider
 
     private void StoreCachedPayload(string cacheKey, (string? SyncedLyrics, string? PlainLyrics) payload)
     {
-        GetOrCreateCacheStore(CacheFileName).Set(
+        GetOrCreateCacheStore(CacheFileName).Store(
             cacheKey,
             new CachedLyrics
             {

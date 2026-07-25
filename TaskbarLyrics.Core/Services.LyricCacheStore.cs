@@ -9,7 +9,8 @@ public interface ILyricCacheStore<TPayload>
     where TPayload : class
 {
     bool TryGet(string key, out TPayload? payload, out LyricAcquisitionKind acquisition);
-    void Set(string key, TPayload payload);
+    void Store(string key, TPayload payload);
+    void Remove(string key);
     void Clear();
 }
 
@@ -54,7 +55,7 @@ public sealed class JsonLyricCacheStore<TPayload> : ILyricCacheStore<TPayload>
         return false;
     }
 
-    public void Set(string key, TPayload payload)
+    public void Store(string key, TPayload payload)
     {
         _memory[key] = payload;
         lock (_diskGate)
@@ -62,6 +63,19 @@ public sealed class JsonLyricCacheStore<TPayload> : ILyricCacheStore<TPayload>
             EnsureDiskLoaded();
             _disk![key] = payload;
             SaveDisk();
+        }
+    }
+
+    public void Remove(string key)
+    {
+        _memory.TryRemove(key, out _);
+        lock (_diskGate)
+        {
+            EnsureDiskLoaded();
+            if (_disk!.Remove(key))
+            {
+                SaveDisk();
+            }
         }
     }
 

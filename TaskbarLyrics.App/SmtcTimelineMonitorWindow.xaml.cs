@@ -1,4 +1,5 @@
 using System.IO;
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Windows;
@@ -126,18 +127,18 @@ public partial class SmtcTimelineMonitorWindow : Wpf.Ui.Controls.FluentWindow
         var drift = diagnostics.ExtrapolatedPosition - diagnostics.RawPosition;
         var payload = new
         {
-            capturedAtUtc = diagnostics.CapturedAtUtc.ToString("yyyy-MM-dd HH:mm:ss.fff"),
+            capturedAtUtc = diagnostics.CapturedAtUtc.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture),
             sourceAppUserModelId = diagnostics.SourceAppUserModelId,
             normalizedSource = diagnostics.NormalizedSource,
             resolvedSource = diagnostics.ResolvedSource,
             lyricSource = _provider.GetCurrentLyricSource(),
             lyricAcquisition = _lyricSyncService.CurrentLyricAcquisition,
             lyricFetchElapsedMs = _lyricSyncService.CurrentLyricFetchElapsedMilliseconds,
-            lyricResolvedAtUtc = _lyricSyncService.CurrentLyricResolvedAtUtc?.ToString("yyyy-MM-dd HH:mm:ss.fff"),
+            lyricResolvedAtUtc = _lyricSyncService.CurrentLyricResolvedAtUtc?.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture),
             isPlaying = diagnostics.IsPlaying,
             isFallback = diagnostics.IsFallbackSnapshot,
             rawMs = diagnostics.RawPosition.TotalMilliseconds,
-            lastUpdatedUtc = diagnostics.LastUpdatedTimeUtc.ToString("yyyy-MM-dd HH:mm:ss.fff"),
+            lastUpdatedUtc = diagnostics.LastUpdatedTimeUtc.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture),
             lastUpdateAgeMs = diagnostics.LastUpdateAge.TotalMilliseconds,
             extrapolatedMs = diagnostics.ExtrapolatedPosition.TotalMilliseconds,
             driftMs = drift.TotalMilliseconds,

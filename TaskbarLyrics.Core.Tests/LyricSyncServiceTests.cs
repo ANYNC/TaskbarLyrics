@@ -8,7 +8,7 @@ namespace TaskbarLyrics.Core.Tests;
 public sealed class LyricSyncServiceTests
 {
     [Fact]
-    public async Task GetDisplayFrameAsync_AppliesPlayerAndTrackOffsetsBeforeSelectingTheLine()
+    public async Task GetDisplayFrameAsyncAppliesPlayerAndTrackOffsetsBeforeSelectingTheLine()
     {
         var document = new LyricDocument(
         [
@@ -36,7 +36,7 @@ public sealed class LyricSyncServiceTests
     }
 
     [Fact]
-    public async Task GetDisplayFrameAsync_WhenPreviousSearchCompletesLate_KeepsNewerTrackLyrics()
+    public async Task GetDisplayFrameAsyncWhenPreviousSearchCompletesLateKeepsNewerTrackLyrics()
     {
         var registry = new OutOfOrderRegistry();
         using var service = new LyricSyncService(registry);
@@ -59,7 +59,7 @@ public sealed class LyricSyncServiceTests
     }
 
     [Fact]
-    public async Task Dispose_CancelsActiveSearchAndDisposesRegistry()
+    public async Task DisposeCancelsActiveSearchAndDisposesRegistry()
     {
         var registry = new BlockingRegistry();
         using var service = new LyricSyncService(registry);

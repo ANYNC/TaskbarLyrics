@@ -5,7 +5,7 @@ namespace TaskbarLyrics.App.Tests;
 public sealed class AppSettingsChangeSetTests
 {
     [Fact]
-    public void Create_WhenOnlyVisualStyleChanges_DoesNotRebuildLyricsOrHotkeys()
+    public void CreateWhenOnlyVisualStyleChangesDoesNotRebuildLyricsOrHotkeys()
     {
         var current = new AppSettings();
         var next = current.Clone();
@@ -20,7 +20,7 @@ public sealed class AppSettingsChangeSetTests
     }
 
     [Fact]
-    public void Create_WhenLocalMusicFolderChanges_ReconfiguresMediaAndLyrics()
+    public void CreateWhenLocalMusicFolderChangesReconfiguresMediaAndLyrics()
     {
         var current = new AppSettings();
         var next = current.Clone();
@@ -33,7 +33,7 @@ public sealed class AppSettingsChangeSetTests
     }
 
     [Fact]
-    public void Create_WhenRecognitionOrderChanges_DoesNotRebuildLyrics()
+    public void CreateWhenRecognitionOrderChangesDoesNotRebuildLyrics()
     {
         var current = new AppSettings();
         var next = current.Clone();
@@ -46,7 +46,7 @@ public sealed class AppSettingsChangeSetTests
     }
 
     [Fact]
-    public void Create_WhenPlayerOffsetChanges_RebuildsLyrics()
+    public void CreateWhenPlayerOffsetChangesRebuildsLyrics()
     {
         var current = new AppSettings();
         var next = current.Clone();
@@ -59,7 +59,7 @@ public sealed class AppSettingsChangeSetTests
     }
 
     [Fact]
-    public void Create_WhenHotkeyChanges_DoesNotApplyLyricsWindow()
+    public void CreateWhenHotkeyChangesDoesNotApplyLyricsWindow()
     {
         var current = new AppSettings();
         var next = current.Clone();
@@ -72,7 +72,7 @@ public sealed class AppSettingsChangeSetTests
     }
 
     [Fact]
-    public void Create_WhenOnlyUpdatePreferenceChanges_DoesNotApplyRuntimeServices()
+    public void CreateWhenOnlyUpdatePreferenceChangesDoesNotApplyRuntimeServices()
     {
         var current = new AppSettings();
         var next = current.Clone();
@@ -85,7 +85,7 @@ public sealed class AppSettingsChangeSetTests
     }
 
     [Fact]
-    public void Create_ForInitialApplication_RequiresEveryRuntimeArea()
+    public void CreateForInitialApplicationRequiresEveryRuntimeArea()
     {
         var settings = new AppSettings();
 

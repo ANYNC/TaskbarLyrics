@@ -11,9 +11,9 @@ internal sealed class LyricsWebMessage
     public JsonElement? Payload { get; set; }
 }
 
-internal sealed class LyricsWebMessageRouter
+internal static class LyricsWebMessageRouter
 {
-    public LyricsWebMessage? Parse(string? messageJson)
+    public static LyricsWebMessage? Parse(string? messageJson)
     {
         if (string.IsNullOrWhiteSpace(messageJson))
         {

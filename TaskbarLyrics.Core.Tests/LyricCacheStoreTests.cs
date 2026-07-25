@@ -7,7 +7,7 @@ namespace TaskbarLyrics.Core.Tests;
 public sealed class LyricCacheStoreTests
 {
     [Fact]
-    public void JsonStore_RoundTripsAcrossInstancesAndClearsPersistedState()
+    public void JsonStoreRoundTripsAcrossInstancesAndClearsPersistedState()
     {
         var directory = Path.Combine(Path.GetTempPath(), $"taskbar-lyrics-cache-{Guid.NewGuid():N}");
         var filePath = Path.Combine(directory, "cache.json");
@@ -16,7 +16,7 @@ public sealed class LyricCacheStoreTests
         try
         {
             var first = new JsonLyricCacheStore<CachePayload>(filePath);
-            first.Set("track", payload);
+            first.Store("track", payload);
 
             Assert.True(first.TryGet("track", out var fromMemory, out var memoryAcquisition));
             Assert.Equal(LyricAcquisitionKind.MemoryCache, memoryAcquisition);
@@ -26,6 +26,10 @@ public sealed class LyricCacheStoreTests
             Assert.True(second.TryGet("track", out var fromDisk, out var diskAcquisition));
             Assert.Equal(LyricAcquisitionKind.DiskCache, diskAcquisition);
             Assert.Equal("lyrics", fromDisk!.Value);
+
+            second.Remove("track");
+            var third = new JsonLyricCacheStore<CachePayload>(filePath);
+            Assert.False(third.TryGet("track", out _, out _));
 
             second.Clear();
             Assert.False(File.Exists(filePath));

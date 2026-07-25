@@ -83,7 +83,7 @@ public sealed class AppSettings
 
     public bool ShowLyricsOnStartup { get; set; } = true;
 
-    public bool StartWithWindows { get; set; } = false;
+    public bool StartWithWindows { get; set; }
 
     public bool AutoCheckUpdates { get; set; } = true;
 
@@ -91,7 +91,7 @@ public sealed class AppSettings
 
     public string LastNotifiedUpdateVersion { get; set; } = "";
 
-    public bool ShowLyricTranslation { get; set; } = false;
+    public bool ShowLyricTranslation { get; set; }
 
     public ToolWindowTheme ToolWindowTheme { get; set; } = ToolWindowTheme.System;
 
@@ -119,13 +119,13 @@ public sealed class AppSettings
 
     public string ForegroundColor { get; set; } = LightForegroundColor;
 
-    public bool ShowBackground { get; set; } = false;
+    public bool ShowBackground { get; set; }
 
     public double BackgroundOpacity { get; set; } = 0.55;
 
-    public bool ShowBorder { get; set; } = false;
+    public bool ShowBorder { get; set; }
 
-    public bool ShowTextShadow { get; set; } = false;
+    public bool ShowTextShadow { get; set; }
 
     public double WindowWidth { get; set; } = 420;
 

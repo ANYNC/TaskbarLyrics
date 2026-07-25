@@ -29,9 +29,9 @@ internal static class SettingsWebJson
     };
 }
 
-internal sealed class SettingsWebMessageRouter
+internal static class SettingsWebMessageRouter
 {
-    public SettingsWebMessage? Parse(string? messageJson)
+    public static SettingsWebMessage? Parse(string? messageJson)
     {
         if (string.IsNullOrWhiteSpace(messageJson))
         {

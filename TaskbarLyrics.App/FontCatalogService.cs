@@ -10,9 +10,9 @@ internal sealed class FontCatalogOption
     public string Label { get; init; } = string.Empty;
 }
 
-internal sealed class FontCatalogService
+internal static class FontCatalogService
 {
-    public IReadOnlyList<FontCatalogOption> GetOptions()
+    public static IReadOnlyList<FontCatalogOption> GetOptions()
     {
         var fonts = Media.Fonts.SystemFontFamilies
             .Select(fontFamily => new FontCatalogOption
@@ -38,7 +38,7 @@ internal sealed class FontCatalogService
         return fonts;
     }
 
-    public string? ResolveInstalledFamily(string? fontFamily)
+    public static string? ResolveInstalledFamily(string? fontFamily)
     {
         if (string.IsNullOrWhiteSpace(fontFamily))
         {

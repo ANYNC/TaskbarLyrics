@@ -9,7 +9,7 @@ using TaskbarLyrics.Core.Utilities;
 
 namespace TaskbarLyrics.App;
 
-public partial class App : System.Windows.Application
+public partial class App : System.Windows.Application, IDisposable
 {
     private static readonly TimeSpan AutoUpdateCheckDelay = TimeSpan.FromSeconds(8);
     private static readonly TimeSpan AutoUpdateCheckInterval = TimeSpan.FromDays(1);
@@ -21,9 +21,10 @@ public partial class App : System.Windows.Application
     private LyricsWindowHost? _lyricsWindowHost;
     private TrackLyricOffsetStore? _trackLyricOffsetStore;
     private GlobalMediaHotkeyService? _mediaHotkeyService;
-    private AppCompositionRoot? _compositionRoot;
+    private IAppCompositionRoot? _compositionRoot;
     private CancellationTokenSource? _activationServerCancellation;
     private SpectrumTuningSettings _spectrumTuningSettings = SpectrumTuningSettings.CreateDefault();
+    private int _isDisposed;
 
     public AppSettings Settings { get; private set; } = new();
 
@@ -95,6 +96,17 @@ public partial class App : System.Windows.Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        Dispose();
+        base.OnExit(e);
+    }
+
+    public void Dispose()
+    {
+        if (Interlocked.Exchange(ref _isDisposed, 1) != 0)
+        {
+            return;
+        }
+
         _activationServerCancellation?.Cancel();
         _activationServerCancellation?.Dispose();
         SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
@@ -105,7 +117,7 @@ public partial class App : System.Windows.Application
         _trayService?.Dispose();
         _trackLyricOffsetStore?.Dispose();
         SingleInstanceService.Release();
-        base.OnExit(e);
+        GC.SuppressFinalize(this);
     }
 
     public void SaveSettings(AppSettings settings)

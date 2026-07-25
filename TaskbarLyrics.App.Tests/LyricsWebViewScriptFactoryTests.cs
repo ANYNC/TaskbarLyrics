@@ -5,7 +5,7 @@ namespace TaskbarLyrics.App.Tests;
 public sealed class LyricsWebViewScriptFactoryTests
 {
     [Fact]
-    public void SetLyrics_EmitsV1EnvelopeAndClampsProgress()
+    public void SetLyricsEmitsV1EnvelopeAndClampsProgress()
     {
         var script = LyricsWebViewScriptFactory.SetLyrics(
             "A \"quoted\" line",
@@ -24,7 +24,7 @@ public sealed class LyricsWebViewScriptFactoryTests
     }
 
     [Fact]
-    public void SetSpectrum_ClampsEveryBar()
+    public void SetSpectrumClampsEveryBar()
     {
         var script = LyricsWebViewScriptFactory.SetSpectrum([-1, 0.5f, 2]);
 

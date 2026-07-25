@@ -107,8 +107,8 @@ internal readonly record struct AppSettingsChangeSet(
     }
 
     private static bool AreSamePlayerSourceSettings(
-        IReadOnlyDictionary<string, PlayerSourceSettings>? current,
-        IReadOnlyDictionary<string, PlayerSourceSettings>? next)
+        Dictionary<string, PlayerSourceSettings>? current,
+        Dictionary<string, PlayerSourceSettings>? next)
     {
         if (ReferenceEquals(current, next))
         {

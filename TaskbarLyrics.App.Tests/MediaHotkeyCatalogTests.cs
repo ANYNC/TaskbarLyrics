@@ -5,7 +5,7 @@ namespace TaskbarLyrics.App.Tests;
 public sealed class MediaHotkeyCatalogTests
 {
     [Fact]
-    public void Definitions_ProvideUniqueActionsStatusKeysAndRegistrationIds()
+    public void DefinitionsProvideUniqueActionsStatusKeysAndRegistrationIds()
     {
         var definitions = MediaHotkeyCatalog.Definitions;
 
@@ -16,7 +16,7 @@ public sealed class MediaHotkeyCatalogTests
     }
 
     [Fact]
-    public void ResetBinding_UsesTheDefaultFromTheCatalog()
+    public void ResetBindingUsesTheDefaultFromTheCatalog()
     {
         var settings = new GlobalMediaHotkeySettings { SeekForward = "Ctrl+F12" };
 

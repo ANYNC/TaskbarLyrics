@@ -9,7 +9,7 @@ public sealed class MediaHotkeyBindingParserTests
     [InlineData("Alt+F12", 0x7B)]
     [InlineData("Ctrl + Right", 0x27)]
     [InlineData("Shift+7", 0x37)]
-    public void TryParse_WhenBindingIsSupported_ReturnsExpectedVirtualKey(string value, int expectedVirtualKey)
+    public void TryParseWhenBindingIsSupportedReturnsExpectedVirtualKey(string value, int expectedVirtualKey)
     {
         var parsed = MediaHotkeyBindingParser.TryParse(value, out var binding);
 
@@ -23,7 +23,7 @@ public sealed class MediaHotkeyBindingParserTests
     [InlineData("Ctrl+Alt")]
     [InlineData("Ctrl+P+Q")]
     [InlineData("Ctrl+Unsupported")]
-    public void TryParse_WhenBindingIsIncompleteOrUnsupported_ReturnsFalse(string value)
+    public void TryParseWhenBindingIsIncompleteOrUnsupportedReturnsFalse(string value)
     {
         var parsed = MediaHotkeyBindingParser.TryParse(value, out var binding);
 
@@ -32,7 +32,7 @@ public sealed class MediaHotkeyBindingParserTests
     }
 
     [Fact]
-    public void TryParse_WhenModifierIsRepeated_NormalizesItIntoOneModifierFlag()
+    public void TryParseWhenModifierIsRepeatedNormalizesItIntoOneModifierFlag()
     {
         var parsed = MediaHotkeyBindingParser.TryParse("Ctrl+Ctrl+P", out var binding);
 
