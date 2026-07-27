@@ -1,4 +1,4 @@
-namespace TaskbarLyrics.App;
+﻿namespace TaskbarLyrics.App;
 
 public enum LyricsHorizontalAnchor
 {
@@ -225,7 +225,7 @@ public sealed class AppSettings
         return NormalizePlayerSourceName(sourceApp) switch
         {
             "QQMusic" => 350,
-            "Netease" => 100,
+            "Netease" => 0,
             "Kugou" => 100,
             "Spotify" => 300,
             _ => 0

@@ -63,7 +63,7 @@ public sealed class AppSettingsChangeSetTests
     {
         var current = new AppSettings();
         var next = current.Clone();
-        next.GlobalMediaHotkeys.TogglePlayPause = "Ctrl+Alt+P";
+        next.GlobalMediaHotkeys.TogglePlayPause = "Ctrl+Shift+P";
 
         var changes = AppSettingsChangeSet.Create(current, next);
 

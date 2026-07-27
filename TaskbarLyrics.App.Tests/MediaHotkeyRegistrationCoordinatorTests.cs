@@ -11,7 +11,7 @@ public sealed class MediaHotkeyRegistrationCoordinatorTests
         using var coordinator = new MediaHotkeyRegistrationCoordinator(registrar);
         var settings = new GlobalMediaHotkeySettings
         {
-            NextTrack = "Ctrl+Shift+Left"
+            NextTrack = MediaHotkeyCatalog.Get(MediaHotkeyAction.PreviousTrack).DefaultBinding
         };
 
         coordinator.Apply(settings);
