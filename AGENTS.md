@@ -45,6 +45,17 @@ The verification script runs Vitest/jsdom web tests, App tests, Core tests, the 
 - Propagate cancellation, observe asynchronous failures, dispose native/audio/WebView resources, and unsubscribe events.
 - Do not mix WPF device-independent units with Win32 physical pixels. Native positioning changes must consider DPI changes, resolution changes, taskbar edge, and multiple monitors.
 
+## Independent technical judgment
+
+- Treat the user's goal as authoritative, but treat a proposed implementation as a hypothesis that must be evaluated.
+- Do not agree with or implement a proposal merely because the user suggested it.
+- When a proposal conflicts with repository contracts, adds unnecessary complexity, weakens correctness, compatibility, testability, maintainability, or user experience, or when a materially better solution exists, state the concern clearly before acting.
+- Support objections with concrete evidence, likely consequences, and a recommended alternative. Distinguish objective defects from subjective preferences.
+- Preserve the user's underlying goal when recommending another approach; challenge the implementation, not the user.
+- Do not manufacture objections over minor stylistic differences. Raise concerns only when they materially affect the project.
+- When multiple approaches are valid, explain the relevant trade-offs and make a clear recommendation instead of giving unqualified agreement.
+- If the user knowingly accepts a reversible trade-off that does not violate safety or repository contracts, follow that decision and report the remaining risk honestly.
+
 ## Change discipline
 
 - Inspect `git status` before editing and preserve unrelated user changes.
