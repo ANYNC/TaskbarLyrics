@@ -52,6 +52,7 @@ The verification script runs Vitest/jsdom web tests, App tests, Core tests, the 
 - Prefer the smallest complete behavior-preserving change; do not add speculative abstractions.
 - Do not suppress analyzer warnings to hide design problems. Document any unavoidable suppression next to the boundary it protects.
 - Add regression tests for changed logic and failure paths. Record manual checks for Windows behavior that cannot be automated reliably.
+- Update `docs/工程变更记录.md` once when a complete, independently verifiable feature, fix, migration, or refactoring stage is completed and verified. Record user impact, technical boundaries, compatibility, verification, and remaining work; do not log conversation turns, abandoned attempts, file-by-file edits, formatting, or trivial renames.
 - Do not commit, push, publish, delete user data, or change external state unless the user authorizes it.
 
 ## Generated and local data
