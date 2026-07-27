@@ -53,4 +53,21 @@ describe("settings WebView bridge", () => {
 
     expect(dom.window.document.querySelector('[data-nav="lyrics"]').classList.contains("active")).toBe(true);
   });
+
+  it("uses visible navigation order for page transition direction", async () => {
+    const { dom, script } = await createSettingsDom();
+    const document = dom.window.document;
+    const pendingAnimation = new Promise(() => {});
+
+    document.querySelectorAll("[data-page]").forEach(page => {
+      page.animate = () => ({ cancel() {}, finished: pendingAnimation });
+    });
+    dom.window.eval(script);
+
+    document.querySelector('[data-page="sources"]').classList.remove("active");
+    document.querySelector('[data-page="general"]').classList.add("active");
+    document.querySelector('[data-nav="shortcuts"]').click();
+
+    expect(document.querySelector('[data-page="shortcuts"]').style.transform).toBe("translateX(28px)");
+  });
 });

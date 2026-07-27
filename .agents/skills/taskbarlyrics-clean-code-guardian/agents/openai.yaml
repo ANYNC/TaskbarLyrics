@@ -1,0 +1,4 @@
+interface:
+  display_name: "TaskbarLyrics Clean Code Guardian"
+  short_description: "Guard TaskbarLyrics changes with Clean Code gates"
+  default_prompt: "Use $taskbarlyrics-clean-code-guardian to implement and verify this TaskbarLyrics change."

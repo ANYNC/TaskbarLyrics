@@ -379,10 +379,11 @@
       if (!pageMeta[pageId]) return;
       const previousPageId = state?.page;
       const pages = $$('[data-page]');
+      const navigationOrder = $$('[data-nav]').map(button => button.dataset.nav);
       const nextPage = pages.find(page => page.dataset.page === pageId);
       const currentPage = pages.find(page => page.classList.contains("active"));
-      const currentIndex = currentPage ? pages.indexOf(currentPage) : 0;
-      const nextIndex = pages.indexOf(nextPage);
+      const currentIndex = currentPage ? navigationOrder.indexOf(currentPage.dataset.page) : 0;
+      const nextIndex = navigationOrder.indexOf(pageId);
       const heading = nextPage.querySelector('h2[tabindex="-1"]');
       const titleBlock = $("#pageTitle").parentElement;
       const updateTitleText = () => {
