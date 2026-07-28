@@ -31,7 +31,7 @@ internal static class NativeWindowTheme
 
     public static void SetMode(ToolWindowTheme mode)
     {
-        var normalized = Enum.IsDefined(typeof(ToolWindowTheme), mode)
+        var normalized = Enum.IsDefined(mode)
             ? mode
             : ToolWindowTheme.System;
         if (_mode == normalized)

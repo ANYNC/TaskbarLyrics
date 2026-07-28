@@ -83,7 +83,7 @@ internal readonly record struct AppSettingsChangeSet(
             globalMediaHotkeysChanged);
     }
 
-    private static bool AreSameStrings(IReadOnlyList<string>? current, IReadOnlyList<string>? next)
+    private static bool AreSameStrings(List<string>? current, List<string>? next)
     {
         if (ReferenceEquals(current, next))
         {

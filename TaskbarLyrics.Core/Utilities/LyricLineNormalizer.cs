@@ -58,7 +58,7 @@ public static class LyricLineNormalizer
         return merged;
     }
 
-    private static bool TryFindMergeTarget(IReadOnlyList<LyricLine> lines, int speakerIndex, out int targetIndex)
+    private static bool TryFindMergeTarget(List<LyricLine> lines, int speakerIndex, out int targetIndex)
     {
         var speaker = lines[speakerIndex];
         for (var i = speakerIndex + 1; i < lines.Count; i++)

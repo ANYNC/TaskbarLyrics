@@ -168,7 +168,7 @@ public sealed class LyricProviderRegistry : ILyricProviderRegistry
     private static void LogNoLyricsSummary(
         TrackInfo track,
         string sourceApp,
-        IReadOnlyDictionary<ILyricProvider, LyricFetchResult> fallbackResults,
+        Dictionary<ILyricProvider, LyricFetchResult> fallbackResults,
         TimeSpan elapsed)
     {
         var official = LyricSourceRoutingPolicy.TryGetOfficialProvider(sourceApp, out var officialSource)

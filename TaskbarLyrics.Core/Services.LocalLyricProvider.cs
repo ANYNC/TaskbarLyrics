@@ -38,7 +38,7 @@ public sealed class LocalLyricProvider : ILyricProvider, IDisposable
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     private static readonly TimeSpan OpeningCreditWindow = TimeSpan.FromSeconds(5);
-    private readonly IReadOnlyList<string> _rootFolders;
+    private readonly List<string> _rootFolders;
     private readonly object _indexLock = new();
     private readonly List<LocalLyricEntry> _index = new();
     private readonly ILocalMediaIndex _mediaIndex;

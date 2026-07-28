@@ -44,7 +44,7 @@ public partial class MainWindow : Window, IDisposable
     private string? _lastLocalCoverLookupTrackId;
     private DateTimeOffset _nextLocalCoverLookupUtc;
     private SpectrumDisplayMode _spectrumDisplayMode = SpectrumDisplayMode.PureMusicOrNoLyrics;
-    private IReadOnlyList<float> _spectrumSilence = new float[SpectrumTuningSettings.DefaultBarCount];
+    private float[] _spectrumSilence = new float[SpectrumTuningSettings.DefaultBarCount];
     private bool _spectrumPreviewEnabled;
     private SmtcTimelineMonitorWindow? _smtcTimelineMonitorWindow;
     private bool _isWebViewReady;
@@ -454,7 +454,7 @@ public partial class MainWindow : Window, IDisposable
             SpectrumTuningSettings.MinBarCount,
             SpectrumTuningSettings.MaxBarCount);
         _spectrumTuningSettings = snapshot;
-        if (_spectrumSilence.Count != snapshot.BarCount)
+        if (_spectrumSilence.Length != snapshot.BarCount)
         {
             _spectrumSilence = new float[snapshot.BarCount];
         }
@@ -523,9 +523,9 @@ public partial class MainWindow : Window, IDisposable
         }
     }
 
-    private void PublishSpectrumDiagnostics(IReadOnlyList<float> bars, SpectrumCaptureDiagnostics capture)
+    private void PublishSpectrumDiagnostics(float[] bars, SpectrumCaptureDiagnostics capture)
     {
-        var outputPeak = bars.Count == 0 ? 0f : bars.Max();
+        var outputPeak = bars.Length == 0 ? 0f : bars.Max();
         var snapshot = new SpectrumDiagnosticsSnapshot(
             DateTimeOffset.UtcNow,
             _isCurrentFramePureMusic,
