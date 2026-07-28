@@ -113,10 +113,11 @@ public sealed class JsonLyricCacheStore<TPayload> : ILyricCacheStore<TPayload>
                 : JsonSerializer.Deserialize<Dictionary<string, TPayload>>(File.ReadAllText(_filePath), SerializerOptions)
                     ?? new Dictionary<string, TPayload>(StringComparer.OrdinalIgnoreCase);
         }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException)
+        catch (Exception exception) when (IsCacheAccessFailure(exception))
         {
             Log.Warn($"Failed to read lyric cache '{_filePath}': {exception.Message}");
             _disk = new Dictionary<string, TPayload>(StringComparer.OrdinalIgnoreCase);
+            DeleteUnreadableCacheFile();
         }
     }
 
@@ -147,7 +148,7 @@ public sealed class JsonLyricCacheStore<TPayload> : ILyricCacheStore<TPayload>
             File.Move(temporaryPath, _filePath, overwrite: true);
             temporaryPath = null;
         }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException)
+        catch (Exception exception) when (IsCacheAccessFailure(exception))
         {
             Log.Warn($"Failed to save lyric cache '{_filePath}': {exception.Message}");
         }
@@ -165,5 +166,29 @@ public sealed class JsonLyricCacheStore<TPayload> : ILyricCacheStore<TPayload>
                 }
             }
         }
+    }
+
+    private void DeleteUnreadableCacheFile()
+    {
+        try
+        {
+            if (File.Exists(_filePath))
+            {
+                File.Delete(_filePath);
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            Log.Warn($"Failed to remove unreadable lyric cache '{_filePath}': {exception.Message}");
+        }
+    }
+
+    private static bool IsCacheAccessFailure(Exception exception)
+    {
+        return exception is IOException or
+            UnauthorizedAccessException or
+            JsonException or
+            NotSupportedException or
+            InvalidOperationException;
     }
 }

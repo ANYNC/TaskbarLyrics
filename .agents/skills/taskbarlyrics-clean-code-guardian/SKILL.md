@@ -55,7 +55,8 @@ Run verification proportional to impact:
 4. Before handing off non-trivial code changes, run `scripts/verify.ps1`, `dotnet build TaskbarLyrics.sln`, and `git diff --check`.
 5. Require zero build warnings. Fix the cause unless an unavoidable platform boundary is documented.
 6. Record manual checks for SMTC, tray, hotkeys, taskbar attachment, audio capture, WebView2, DPI, or multi-monitor behavior when automated coverage is insufficient.
-7. After automated verification succeeds for a change that affects the runnable app, run `powershell -ExecutionPolicy Bypass -File scripts/restart-app.ps1` and leave the app running for immediate user validation. Skip restart for documentation-only, test-only, instruction-only, or build-only changes, or when the user opts out.
+7. When the root rules require an engineering change record, insert it at the top of the record list in `docs/工程变更记录.md`; preserve descending date order, newest-completed-first order within a date, and the template at the end.
+8. After automated verification succeeds for a change that affects the runnable app, run `powershell -ExecutionPolicy Bypass -File scripts/restart-app.ps1` and leave the app running for immediate user validation. Skip restart for documentation-only, test-only, instruction-only, or build-only changes, or when the user opts out.
 
 Do not claim completion when required verification was skipped or failed. Report the exact missing evidence.
 

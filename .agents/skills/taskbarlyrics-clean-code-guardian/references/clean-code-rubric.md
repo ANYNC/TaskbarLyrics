@@ -90,6 +90,7 @@ Read this file for every code/configuration task governed by the skill. Review a
 
 - Comments explain constraints, compatibility, thread rules, or non-obvious decisions—not syntax.
 - Update documentation when user behavior, configuration, verification, or architecture changes.
+- When an engineering change record is required, keep the newest completed entry first, preserve descending dates, and keep the reusable template last.
 - Remove unused code and stale historical comments only when references and compatibility have been checked.
 
 ## 16. Change quality

@@ -62,6 +62,7 @@ Read this file for every code/configuration task governed by the skill.
 - `scripts/verify.ps1` runs web tests, App/Core tests, settings contract checks, and format verification.
 - `dotnet build TaskbarLyrics.sln` must finish with zero warnings and errors.
 - Use `git diff --check` before handoff.
+- Required entries in `docs/工程变更记录.md` go immediately below its record rules, ordered by descending date and newest completion first within the same date; the reusable template remains the final section.
 - After successful verification of a runnable-app change, run `scripts/restart-app.ps1` and leave the app ready for immediate user validation. Do not restart for documentation-only, test-only, instruction-only, or build-only changes unless requested.
 - Test projects, Vitest, jsdom, and `node_modules` are development-only and must not enter release ZIPs.
 - Build outputs, logs, `publish/`, `tmp/`, `bin/`, `obj/`, and `build_verify*/` are not source.
