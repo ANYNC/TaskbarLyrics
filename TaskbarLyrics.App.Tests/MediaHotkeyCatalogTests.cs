@@ -5,10 +5,10 @@ namespace TaskbarLyrics.App.Tests;
 public sealed class MediaHotkeyCatalogTests
 {
     [Theory]
-    [InlineData(MediaHotkeyAction.TogglePlayPause, "Ctrl+Alt+P")]
-    [InlineData(MediaHotkeyAction.PreviousTrack, "Ctrl+Alt+Left")]
-    [InlineData(MediaHotkeyAction.NextTrack, "Ctrl+Alt+Right")]
-    [InlineData(MediaHotkeyAction.ToggleLyricsVisibility, "Ctrl+Alt+D")]
+    [InlineData(MediaHotkeyAction.TogglePlayPause, "Alt+Shift+P")]
+    [InlineData(MediaHotkeyAction.PreviousTrack, "Alt+Shift+Left")]
+    [InlineData(MediaHotkeyAction.NextTrack, "Alt+Shift+Right")]
+    [InlineData(MediaHotkeyAction.ToggleLyricsVisibility, "Alt+Shift+D")]
     public void DefinitionsUseExpectedDefaultBindings(MediaHotkeyAction action, string expectedBinding)
     {
         Assert.Equal(expectedBinding, MediaHotkeyCatalog.Get(action).DefaultBinding);

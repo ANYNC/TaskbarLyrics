@@ -14,10 +14,10 @@ TaskbarLyrics 已能通过 SMTC 识别当前歌曲并在任务栏显示歌词，
 
 | 操作 | 默认快捷键 |
 | --- | --- |
-| 显示 / 隐藏歌词 | Ctrl+Alt+D |
-| 播放 / 暂停 | Ctrl+Alt+P |
-| 上一首 | Ctrl+Alt+Left |
-| 下一首 | Ctrl+Alt+Right |
+| 显示 / 隐藏歌词 | Alt+Shift+D |
+| 播放 / 暂停 | Alt+Shift+P |
+| 上一首 | Alt+Shift+Left |
+| 下一首 | Alt+Shift+Right |
 | 后退 5 秒 | Ctrl+Alt+Shift+Left |
 | 前进 5 秒 | Ctrl+Alt+Shift+Right |
 
@@ -27,10 +27,10 @@ TaskbarLyrics 已能通过 SMTC 识别当前歌曲并在任务栏显示歌词，
 
 1. As a TaskbarLyrics user, I want a global shortcut master switch, so that I can decide whether the application registers any system-wide media shortcuts.
 2. As a user installing or restoring TaskbarLyrics, I want global shortcuts to be enabled by default, so that the common controls are ready to use immediately.
-3. As a user, I want to show or hide the lyrics window with Ctrl+Alt+D by default, so that I can quickly clear or restore the taskbar area.
-4. As a user, I want to toggle play and pause with Ctrl+Alt+P by default, so that I can control music without leaving my current application.
-5. As a user, I want to go to the previous track with Ctrl+Alt+Left by default, so that I can quickly return to a song.
-6. As a user, I want to go to the next track with Ctrl+Alt+Right by default, so that I can skip a song quickly.
+3. As a user, I want to show or hide the lyrics window with Alt+Shift+D by default, so that I can quickly clear or restore the taskbar area.
+4. As a user, I want to toggle play and pause with Alt+Shift+P by default, so that I can control music without leaving my current application.
+5. As a user, I want to go to the previous track with Alt+Shift+Left by default, so that I can quickly return to a song.
+6. As a user, I want to go to the next track with Alt+Shift+Right by default, so that I can skip a song quickly.
 7. As a user, I want to seek backward five seconds with Ctrl+Alt+Shift+Left by default, so that I can replay a short passage.
 8. As a user, I want to seek forward five seconds with Ctrl+Alt+Shift+Right by default, so that I can skip a short passage.
 9. As a user, I want to record a shortcut by focusing its control and pressing a key combination, so that I do not need to type platform-specific shortcut names manually.
