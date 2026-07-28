@@ -14,9 +14,40 @@ public sealed class AppSettingsChangeSetTests
         var changes = AppSettingsChangeSet.Create(current, next);
 
         Assert.True(changes.VisualStyleChanged);
+        Assert.True(changes.LyricsLayoutChanged);
         Assert.True(changes.RequiresLyricsWindowApply);
         Assert.False(changes.LyricSyncServiceChanged);
         Assert.False(changes.GlobalMediaHotkeysChanged);
+    }
+
+    [Fact]
+    public void CreateWhenLayoutScaleChangesReappliesStyleAndWindowLayout()
+    {
+        var current = new AppSettings();
+        var next = current.Clone();
+        next.LyricsLayoutScalePercent = 125;
+
+        var changes = AppSettingsChangeSet.Create(current, next);
+
+        Assert.True(changes.VisualStyleChanged);
+        Assert.True(changes.LyricsLayoutChanged);
+        Assert.True(changes.RequiresLyricsWindowApply);
+        Assert.False(changes.LyricSyncServiceChanged);
+    }
+
+    [Fact]
+    public void CreateWhenCoverVisibilityChangesReappliesStyleAndWindowLayout()
+    {
+        var current = new AppSettings();
+        var next = current.Clone();
+        next.ShowCover = false;
+
+        var changes = AppSettingsChangeSet.Create(current, next);
+
+        Assert.True(changes.VisualStyleChanged);
+        Assert.True(changes.LyricsLayoutChanged);
+        Assert.True(changes.RequiresLyricsWindowApply);
+        Assert.False(changes.LyricSyncServiceChanged);
     }
 
     [Fact]
@@ -96,6 +127,7 @@ public sealed class AppSettingsChangeSetTests
         Assert.True(changes.LyricSyncServiceChanged);
         Assert.True(changes.SpectrumDisplayChanged);
         Assert.True(changes.VisualStyleChanged);
+        Assert.True(changes.LyricsLayoutChanged);
         Assert.True(changes.WindowLayoutChanged);
         Assert.True(changes.GlobalMediaHotkeysChanged);
     }

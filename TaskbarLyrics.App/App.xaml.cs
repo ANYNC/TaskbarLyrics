@@ -120,7 +120,7 @@ public partial class App : System.Windows.Application, IDisposable
         GC.SuppressFinalize(this);
     }
 
-    public void SaveSettings(AppSettings settings)
+    public bool SaveSettings(AppSettings settings)
     {
         var currentSettings = Settings;
         var nextSettings = settings.Clone();
@@ -129,7 +129,7 @@ public partial class App : System.Windows.Application, IDisposable
         var changes = AppSettingsChangeSet.Create(currentSettings, nextSettings);
         NativeWindowTheme.SetMode(nextSettings.ToolWindowTheme);
         Settings = nextSettings;
-        _settingsStore?.Save(Settings);
+        var saved = _settingsStore?.Save(Settings) ?? false;
         if (changes.RequiresLyricsWindowApply)
         {
             _lyricsWindowHost?.ApplySettings(Settings);
@@ -139,6 +139,14 @@ public partial class App : System.Windows.Application, IDisposable
         {
             _mediaHotkeyService?.Apply(Settings.GlobalMediaHotkeys);
         }
+
+        return saved;
+    }
+
+    public void PreviewSettings(AppSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        _lyricsWindowHost?.ApplySettings(settings);
     }
 
     public IReadOnlyDictionary<string, string> GetMediaHotkeyStatuses()

@@ -134,6 +134,11 @@ public partial class MainWindow : Window, IDisposable
             _forceAlwaysOnTop = snapshot.ForceAlwaysOnTop;
         }
 
+        if (changes.LyricsLayoutChanged)
+        {
+            ApplyHostLayout(CreateLayoutMetrics(snapshot));
+        }
+
         if (changes.LocalMediaLibraryChanged)
         {
             ReconfigureLocalMedia(snapshot);
@@ -154,7 +159,7 @@ public partial class MainWindow : Window, IDisposable
             _spectrumDisplayMode = snapshot.SpectrumDisplayMode;
         }
 
-        if (changes.WindowLayoutChanged)
+        if (changes.WindowLayoutChanged || changes.LyricsLayoutChanged)
         {
             AnchorToTaskbar();
             AttachToTaskbarHost();
@@ -200,6 +205,17 @@ public partial class MainWindow : Window, IDisposable
         RootBorder.Background = Media.Brushes.Transparent;
         RootBorder.BorderBrush = Media.Brushes.Transparent;
         RootBorder.BorderThickness = new Thickness(0);
+    }
+
+    private void ApplyHostLayout(LyricsLayoutMetrics metrics)
+    {
+        RootBorder.Padding = new Thickness(
+            metrics.HostHorizontalPadding,
+            metrics.HostVerticalPadding,
+            metrics.HostHorizontalPadding,
+            metrics.HostVerticalPadding);
+        LyricsContentRoot.MinHeight = metrics.MinimumContentHeight;
+        LyricsWebHost.Margin = new Thickness(0, 0, 0, -metrics.ViewportDescenderBuffer);
     }
 
     private void RebuildLyricSyncService(AppSettings settings)
@@ -960,7 +976,7 @@ public partial class MainWindow : Window, IDisposable
 
         if (System.Windows.Application.Current is App app)
         {
-            PushStyleToWebView(app.Settings);
+            PushStyleToWebView(_currentSettings);
         }
 
         PushLyricsToWebView(_currentLine, _nextLine, 0, _lastWebCurrentLineIndex, _lastWebTrackId, false, false);
@@ -1034,15 +1050,35 @@ public partial class MainWindow : Window, IDisposable
             return;
         }
 
+        var metrics = CreateLayoutMetrics(settings);
         var stylePayload = new
         {
             fontFamily = AppSettings.NormalizeFontFamily(settings.FontFamily),
-            fontSize = AppSettings.ClampFontSize(settings.FontSize, settings.UseSafeFontSizeRange),
-            coverSize = AppSettings.ClampCoverSize(settings.CoverSize, settings.UseSafeCoverSizeRange),
-            coverGap = AppSettings.ClampCoverGap(settings.CoverGap),
-            coverCornerRadius = AppSettings.ClampCoverCornerRadius(
-                settings.CoverCornerRadius,
-                AppSettings.ClampCoverSize(settings.CoverSize, settings.UseSafeCoverSizeRange)),
+            layoutScalePercent = metrics.ScalePercent,
+            fontSize = metrics.FontSize,
+            showCover = settings.ShowCover,
+            coverSize = metrics.CoverSize,
+            coverGap = metrics.CoverGap,
+            coverCornerRadius = metrics.CoverCornerRadius,
+            viewportDescenderBuffer = metrics.ViewportDescenderBuffer,
+            layoutHorizontalPadding = metrics.LayoutHorizontalPadding,
+            lyricsPaneTopPadding = metrics.LyricsPaneTopPadding,
+            lyricsPaneRightPadding = metrics.LyricsPaneRightPadding,
+            lyricsPaneLeftPadding = metrics.LyricsPaneLeftPadding,
+            primaryOffsetY = metrics.PrimaryOffsetY,
+            secondaryOffsetY = metrics.SecondaryOffsetY,
+            lineTextBottomPadding = metrics.LineTextBottomPadding,
+            surfaceRadius = metrics.SurfaceRadius,
+            layerTransitionOffset = metrics.LayerTransitionOffset,
+            coverFallbackFontSize = metrics.CoverFallbackFontSize,
+            spectrumWidth = metrics.SpectrumWidth,
+            spectrumHeight = metrics.SpectrumHeight,
+            spectrumGap = metrics.SpectrumGap,
+            spectrumBarWidth = metrics.SpectrumBarWidth,
+            spectrumBarHeight = metrics.SpectrumBarHeight,
+            spectrumLowHeight = metrics.SpectrumLowHeight,
+            spectrumHighHeight = metrics.SpectrumHighHeight,
+            spectrumMiddleHeight = metrics.SpectrumMiddleHeight,
             fontWeight = settings.FontWeight,
             primaryColor = ToCssColor(_primaryTextColor),
             secondaryColor = ToCssColor(_secondaryTextColor),
@@ -1275,8 +1311,20 @@ public partial class MainWindow : Window, IDisposable
 
     private void AnchorToTaskbar()
     {
-        var settings = (System.Windows.Application.Current as App)?.Settings ?? new AppSettings();
-        TaskbarPlacementService.Anchor(this, settings);
+        TaskbarPlacementService.Anchor(this, _currentSettings);
+    }
+
+    protected override void OnDpiChanged(DpiScale oldDpi, DpiScale newDpi)
+    {
+        base.OnDpiChanged(oldDpi, newDpi);
+        ApplyHostLayout(CreateLayoutMetrics(_currentSettings));
+        AnchorToTaskbar();
+        PushStyleToWebView(_currentSettings);
+    }
+
+    private LyricsLayoutMetrics CreateLayoutMetrics(AppSettings settings)
+    {
+        return LyricsLayoutMetrics.Create(settings, Media.VisualTreeHelper.GetDpi(this).DpiScaleX);
     }
 
     private void AttachToTaskbarHost()

@@ -26,6 +26,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
     private TrackOffsetQueryPayload _trackOffsetQuery = new();
     private string? _pendingPage;
     private bool _pendingFocusCurrentTrack;
+    private bool _hasPendingPreviewChanges;
 
     internal SettingsWindow(
         AppSettings settings,
@@ -80,6 +81,12 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
 
     private void SettingsWindow_Closed(object? sender, EventArgs e)
     {
+        if (_hasPendingPreviewChanges)
+        {
+            SaveSettings();
+            _hasPendingPreviewChanges = false;
+        }
+
         NativeWindowTheme.ThemeChanged -= OnWindowThemeChanged;
         _trackOffsetRefreshTimer.Stop();
         _trackOffsetRefreshTimer.Tick -= TrackOffsetRefreshTimer_Tick;
@@ -150,26 +157,57 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 break;
             case "update":
                 ApplyWebSettingUpdate(message.Key, message.Value);
-                SaveSettings();
+                await SaveSettingsAndNotifyWebAsync();
+                _hasPendingPreviewChanges = false;
                 if (IsMediaHotkeySetting(message.Key))
                 {
                     await PushSettingsToWebAsync();
                 }
+                else if (IsLyricsLayoutSetting(message.Key))
+                {
+                    await PushLyricsLayoutPreviewAsync();
+                }
+                break;
+            case "previewUpdate":
+                if (!IsPreviewableSetting(message.Key))
+                {
+                    break;
+                }
+
+                ApplyWebSettingUpdate(message.Key, message.Value);
+                _hasPendingPreviewChanges = true;
+                if (System.Windows.Application.Current is App previewApp)
+                {
+                    previewApp.PreviewSettings(_settings);
+                }
+
+                if (IsLyricsLayoutSetting(message.Key))
+                {
+                    await PushLyricsLayoutPreviewAsync();
+                }
                 break;
             case "reorderSources":
                 ApplySourceOrder(message.Value);
-                SaveSettings();
+                await SaveSettingsAndNotifyWebAsync();
                 break;
             case "resetDefaults":
                 var defaultSettings = new AppSettings();
                 App.ApplyStartupForegroundColor(defaultSettings);
                 CopySettings(defaultSettings, _settings);
-                SaveSettings();
+                await SaveSettingsAndNotifyWebAsync();
+                await PushSettingsToWebAsync();
+                break;
+            case "resetLyricsLayoutBase":
+                _settings.FontSize = AppSettings.DefaultFontSize;
+                _settings.CoverSize = AppSettings.DefaultCoverSize;
+                _settings.CoverGap = AppSettings.DefaultCoverGap;
+                _settings.CoverCornerRadius = AppSettings.DefaultCoverCornerRadius;
+                await SaveSettingsAndNotifyWebAsync();
                 await PushSettingsToWebAsync();
                 break;
             case "resetMediaHotkey":
                 ResetMediaHotkey(message.Value);
-                SaveSettings();
+                await SaveSettingsAndNotifyWebAsync();
                 await PushSettingsToWebAsync();
                 break;
             case "clearCache":
@@ -268,6 +306,20 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 settings = payload,
                 fonts = FontCatalogService.GetOptions()
             }));
+    }
+
+    private async Task PushLyricsLayoutPreviewAsync()
+    {
+        if (!_isWebReady || SettingsWebView.CoreWebView2 is null)
+        {
+            return;
+        }
+
+        await SettingsWebView.ExecuteScriptAsync(
+            WebViewMessageScriptFactory.Dispatch(
+                "settingsApp",
+                "lyricsLayoutPreview",
+                CreateLyricsLayoutPreview()));
     }
 
     public async Task ApplyExternalSettingsAsync(AppSettings settings)
@@ -532,6 +584,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
     {
         _settings.NormalizePlayerSources();
         var mediaHotkeys = _settings.GlobalMediaHotkeys ??= new GlobalMediaHotkeySettings();
+        var layoutMetrics = CreateLyricsLayoutMetrics();
         return new WebSettingsPayload
         {
             SourceRecognitionOrder = NormalizeSourceOrder(_settings.SourceRecognitionOrder),
@@ -574,12 +627,16 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             ShowLyricTranslation = _settings.ShowLyricTranslation,
             ToolWindowTheme = _settings.ToolWindowTheme,
             SpectrumDisplayMode = _settings.SpectrumDisplayMode.ToString(),
-            UseSafeFontSizeRange = _settings.UseSafeFontSizeRange,
             FontSize = _settings.FontSize,
-            UseSafeCoverSizeRange = _settings.UseSafeCoverSizeRange,
+            ShowCover = _settings.ShowCover,
             CoverSize = _settings.CoverSize,
             CoverGap = _settings.CoverGap,
             CoverCornerRadius = _settings.CoverCornerRadius,
+            LyricsLayoutScalePercent = layoutMetrics.ScalePercent,
+            EffectiveFontSize = layoutMetrics.FontSize,
+            EffectiveCoverSize = layoutMetrics.CoverSize,
+            EffectiveCoverGap = layoutMetrics.CoverGap,
+            EffectiveCoverCornerRadius = layoutMetrics.CoverCornerRadius,
             FontFamily = FontCatalogService.ResolveInstalledFamily(AppSettings.NormalizeFontFamily(_settings.FontFamily)) ?? AppSettings.BundledFontFamily,
             FontWeight = NormalizeFontWeight(_settings.FontWeight),
             ForegroundColorMode = _settings.ForegroundColorMode,
@@ -596,6 +653,30 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             AppVersion = UpdateChecker.GetCurrentVersion(),
             RepositoryUrl = UpdateChecker.RepositoryUrl
         };
+    }
+
+    private object CreateLyricsLayoutPreview()
+    {
+        var metrics = CreateLyricsLayoutMetrics();
+        return new
+        {
+            scalePercent = metrics.ScalePercent,
+            fontSize = AppSettings.ClampFontSize(_settings.FontSize),
+            coverSize = AppSettings.ClampCoverSize(_settings.CoverSize),
+            coverGap = AppSettings.ClampCoverGap(_settings.CoverGap),
+            coverCornerRadius = AppSettings.ClampCoverCornerRadius(
+                _settings.CoverCornerRadius,
+                AppSettings.ClampCoverSize(_settings.CoverSize)),
+            effectiveFontSize = metrics.FontSize,
+            effectiveCoverSize = metrics.CoverSize,
+            effectiveCoverGap = metrics.CoverGap,
+            effectiveCoverCornerRadius = metrics.CoverCornerRadius
+        };
+    }
+
+    private LyricsLayoutMetrics CreateLyricsLayoutMetrics()
+    {
+        return LyricsLayoutMetrics.Create(_settings, VisualTreeHelper.GetDpi(this).DpiScaleX);
     }
 
     private static List<string> NormalizeSourceOrder(IEnumerable<string>? order)
@@ -726,20 +807,14 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             case "forceAlwaysOnTop":
                 _settings.ForceAlwaysOnTop = ReadBool(element, _settings.ForceAlwaysOnTop);
                 break;
-            case "useSafeFontSizeRange":
-                _settings.UseSafeFontSizeRange = ReadBool(element, _settings.UseSafeFontSizeRange);
-                _settings.FontSize = AppSettings.ClampFontSize(_settings.FontSize, _settings.UseSafeFontSizeRange);
-                break;
             case "fontSize":
-                _settings.FontSize = AppSettings.ClampFontSize(ReadDouble(element, _settings.FontSize), _settings.UseSafeFontSizeRange);
+                _settings.FontSize = AppSettings.ClampFontSize(ReadDouble(element, _settings.FontSize));
                 break;
-            case "useSafeCoverSizeRange":
-                _settings.UseSafeCoverSizeRange = ReadBool(element, _settings.UseSafeCoverSizeRange);
-                _settings.CoverSize = AppSettings.ClampCoverSize(_settings.CoverSize, _settings.UseSafeCoverSizeRange);
-                _settings.CoverCornerRadius = AppSettings.ClampCoverCornerRadius(_settings.CoverCornerRadius, _settings.CoverSize);
+            case "showCover":
+                _settings.ShowCover = ReadBool(element, _settings.ShowCover);
                 break;
             case "coverSize":
-                _settings.CoverSize = AppSettings.ClampCoverSize(ReadDouble(element, _settings.CoverSize), _settings.UseSafeCoverSizeRange);
+                _settings.CoverSize = AppSettings.ClampCoverSize(ReadDouble(element, _settings.CoverSize));
                 _settings.CoverCornerRadius = AppSettings.ClampCoverCornerRadius(_settings.CoverCornerRadius, _settings.CoverSize);
                 break;
             case "coverGap":
@@ -747,6 +822,10 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 break;
             case "coverCornerRadius":
                 _settings.CoverCornerRadius = AppSettings.ClampCoverCornerRadius(ReadDouble(element, _settings.CoverCornerRadius), _settings.CoverSize);
+                break;
+            case "lyricsLayoutScalePercent":
+                _settings.LyricsLayoutScalePercent = AppSettings.ClampLyricsLayoutScalePercent(
+                    ReadDouble(element, _settings.LyricsLayoutScalePercent));
                 break;
             case "fontFamily":
                 _settings.FontFamily = AppSettings.NormalizeFontFamily(ReadString(element, _settings.FontFamily));
@@ -806,6 +885,26 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 string.Equals(definition.SettingKey, key, StringComparison.Ordinal));
     }
 
+    private static bool IsLyricsLayoutSetting(string? key)
+    {
+        return key is "fontSize" or
+            "coverSize" or
+            "coverGap" or
+            "coverCornerRadius" or
+            "lyricsLayoutScalePercent";
+    }
+
+    private static bool IsPreviewableSetting(string? key)
+    {
+        return key is
+            "backgroundOpacity" or
+            "coverGap" or
+            "coverCornerRadius" or
+            "lyricsLayoutScalePercent" or
+            "xOffset" or
+            "yOffset";
+    }
+
     private static string ReadHotkeyBinding(JsonElement element, string fallback)
     {
         var binding = ReadString(element, fallback).Trim();
@@ -844,7 +943,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
 
         _settings.ForegroundColor = $"#FF{dialog.Color.R:X2}{dialog.Color.G:X2}{dialog.Color.B:X2}";
         _settings.ForegroundColorMode = ForegroundColorMode.Custom;
-        SaveSettings();
+        await SaveSettingsAndNotifyWebAsync();
         await PushSettingsToWebAsync();
     }
 
@@ -870,7 +969,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
 
         _settings.LocalMusicFolders = NormalizeLocalMusicFolders(
             _settings.LocalMusicFolders.Append(dialog.SelectedPath));
-        SaveSettings();
+        await SaveSettingsAndNotifyWebAsync();
         await PushSettingsToWebAsync();
     }
 
@@ -968,13 +1067,29 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         });
     }
 
-    private void SaveSettings()
+    private bool SaveSettings()
     {
         if (System.Windows.Application.Current is App app)
         {
-            app.SaveSettings(_settings.Clone());
+            return app.SaveSettings(_settings.Clone());
         }
 
+        return false;
+    }
+
+    private async Task SaveSettingsAndNotifyWebAsync()
+    {
+        var success = SaveSettings();
+        if (!_isWebReady || SettingsWebView.CoreWebView2 is null)
+        {
+            return;
+        }
+
+        await SettingsWebView.ExecuteScriptAsync(
+            WebViewMessageScriptFactory.Dispatch(
+                "settingsApp",
+                "settingsSaveResult",
+                new { success }));
     }
 
     private static bool ReadBool(JsonElement element, bool fallback)
@@ -1126,9 +1241,11 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         target.UseSafeFontSizeRange = source.UseSafeFontSizeRange;
         target.FontSize = source.FontSize;
         target.UseSafeCoverSizeRange = source.UseSafeCoverSizeRange;
+        target.ShowCover = source.ShowCover;
         target.CoverSize = source.CoverSize;
         target.CoverGap = source.CoverGap;
         target.CoverCornerRadius = source.CoverCornerRadius;
+        target.LyricsLayoutScalePercent = source.LyricsLayoutScalePercent;
         target.FontFamily = source.FontFamily;
         target.FontWeight = source.FontWeight;
         target.ForegroundColorMode = source.ForegroundColorMode;
@@ -1245,12 +1362,16 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         public bool ShowLyricTranslation { get; set; }
         public ToolWindowTheme ToolWindowTheme { get; set; }
         public string SpectrumDisplayMode { get; set; } = TaskbarLyrics.App.SpectrumDisplayMode.Disabled.ToString();
-        public bool UseSafeFontSizeRange { get; set; }
         public double FontSize { get; set; }
-        public bool UseSafeCoverSizeRange { get; set; }
+        public bool ShowCover { get; set; }
         public double CoverSize { get; set; }
         public double CoverGap { get; set; }
         public double CoverCornerRadius { get; set; }
+        public double LyricsLayoutScalePercent { get; set; }
+        public double EffectiveFontSize { get; set; }
+        public double EffectiveCoverSize { get; set; }
+        public double EffectiveCoverGap { get; set; }
+        public double EffectiveCoverCornerRadius { get; set; }
         public string FontFamily { get; set; } = "";
         public string FontWeight { get; set; } = "";
         public ForegroundColorMode ForegroundColorMode { get; set; }

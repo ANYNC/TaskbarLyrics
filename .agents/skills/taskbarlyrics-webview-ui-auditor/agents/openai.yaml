@@ -1,0 +1,4 @@
+interface:
+  display_name: "TaskbarLyrics WebView UI Auditor"
+  short_description: "审查 WebView 视觉、交互、可访问性与宿主链路"
+  default_prompt: "使用 $taskbarlyrics-webview-ui-auditor 对 TaskbarLyrics WebView 界面执行只读审查。"

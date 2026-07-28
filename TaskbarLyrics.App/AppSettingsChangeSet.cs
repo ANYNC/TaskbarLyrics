@@ -7,6 +7,7 @@ internal readonly record struct AppSettingsChangeSet(
     bool LyricSyncServiceChanged,
     bool SpectrumDisplayChanged,
     bool VisualStyleChanged,
+    bool LyricsLayoutChanged,
     bool WindowLayoutChanged,
     bool GlobalMediaHotkeysChanged)
 {
@@ -17,6 +18,7 @@ internal readonly record struct AppSettingsChangeSet(
         LyricSyncServiceChanged ||
         SpectrumDisplayChanged ||
         VisualStyleChanged ||
+        LyricsLayoutChanged ||
         WindowLayoutChanged;
 
     public static AppSettingsChangeSet Create(
@@ -47,12 +49,12 @@ internal readonly record struct AppSettingsChangeSet(
             current.SpectrumDisplayMode != next.SpectrumDisplayMode;
 
         var visualStyleChanged = isInitialApplication ||
-            current.UseSafeFontSizeRange != next.UseSafeFontSizeRange ||
             current.FontSize != next.FontSize ||
-            current.UseSafeCoverSizeRange != next.UseSafeCoverSizeRange ||
+            current.ShowCover != next.ShowCover ||
             current.CoverSize != next.CoverSize ||
             current.CoverGap != next.CoverGap ||
             current.CoverCornerRadius != next.CoverCornerRadius ||
+            current.LyricsLayoutScalePercent != next.LyricsLayoutScalePercent ||
             !string.Equals(current.FontFamily, next.FontFamily, StringComparison.Ordinal) ||
             !string.Equals(current.FontWeight, next.FontWeight, StringComparison.Ordinal) ||
             current.ForegroundColorMode != next.ForegroundColorMode ||
@@ -61,6 +63,14 @@ internal readonly record struct AppSettingsChangeSet(
             current.BackgroundOpacity != next.BackgroundOpacity ||
             current.ShowBorder != next.ShowBorder ||
             current.ShowTextShadow != next.ShowTextShadow;
+
+        var lyricsLayoutChanged = isInitialApplication ||
+            current.FontSize != next.FontSize ||
+            current.ShowCover != next.ShowCover ||
+            current.CoverSize != next.CoverSize ||
+            current.CoverGap != next.CoverGap ||
+            current.CoverCornerRadius != next.CoverCornerRadius ||
+            current.LyricsLayoutScalePercent != next.LyricsLayoutScalePercent;
 
         var windowLayoutChanged = isInitialApplication ||
             current.WindowWidth != next.WindowWidth ||
@@ -79,6 +89,7 @@ internal readonly record struct AppSettingsChangeSet(
             lyricSyncServiceChanged,
             spectrumDisplayChanged,
             visualStyleChanged,
+            lyricsLayoutChanged,
             windowLayoutChanged,
             globalMediaHotkeysChanged);
     }

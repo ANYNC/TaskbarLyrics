@@ -33,6 +33,7 @@ public sealed class SettingsStore
             using var document = JsonDocument.Parse(json);
             MigrateLegacySpectrumSettings(document.RootElement, settings);
             settings.NormalizePlayerSources();
+            settings.NormalizeLyricsLayout();
             return settings;
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException)
@@ -42,12 +43,13 @@ public sealed class SettingsStore
         }
     }
 
-    public void Save(AppSettings settings)
+    public bool Save(AppSettings settings)
     {
         string? temporaryPath = null;
         try
         {
             settings.NormalizePlayerSources();
+            settings.NormalizeLyricsLayout();
             var directory = Path.GetDirectoryName(_filePath);
             if (!string.IsNullOrWhiteSpace(directory))
             {
@@ -75,10 +77,12 @@ public sealed class SettingsStore
 
             File.Move(temporaryPath, _filePath, overwrite: true);
             temporaryPath = null;
+            return true;
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException or NotSupportedException)
         {
             Log.Error($"Failed to save settings to '{_filePath}': {exception}");
+            return false;
         }
         finally
         {

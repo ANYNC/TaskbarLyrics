@@ -1,4 +1,4 @@
-﻿namespace TaskbarLyrics.App;
+namespace TaskbarLyrics.App;
 
 public enum LyricsHorizontalAnchor
 {
@@ -33,19 +33,19 @@ public sealed class AppSettings
 {
     public const int MinimumPlayerLyricOffsetMilliseconds = -5000;
     public const int MaximumPlayerLyricOffsetMilliseconds = 5000;
-    public const double SafeFontSizeMin = 10;
-    public const double SafeFontSizeMax = 24;
     public const double ExtendedFontSizeMin = 6;
     public const double ExtendedFontSizeMax = 96;
+    public const double DefaultFontSize = 14;
     public const double DefaultCoverSize = 34;
-    public const double SafeCoverSizeMin = 20;
-    public const double SafeCoverSizeMax = 40;
     public const double ExtendedCoverSizeMin = 12;
     public const double ExtendedCoverSizeMax = 200;
     public const double DefaultCoverGap = 8;
     public const double CoverGapMin = 0;
     public const double CoverGapMax = 240;
     public const double DefaultCoverCornerRadius = 6;
+    public const double DefaultLyricsLayoutScalePercent = 100;
+    public const double MinimumLyricsLayoutScalePercent = 25;
+    public const double MaximumLyricsLayoutScalePercent = 300;
 
     public const string BundledFontFamily = "Source Han Sans SC";
 
@@ -99,10 +99,12 @@ public sealed class AppSettings
 
     public SpectrumTuningSettings SpectrumTuning { get; set; } = SpectrumTuningSettings.CreateDefault();
 
+    // Retained so existing settings.json files continue to round-trip without data loss.
     public bool UseSafeFontSizeRange { get; set; } = true;
 
-    public double FontSize { get; set; } = 14;
+    public double FontSize { get; set; } = DefaultFontSize;
 
+    // Retained so existing settings.json files continue to round-trip without data loss.
     public bool UseSafeCoverSizeRange { get; set; } = true;
 
     public double CoverSize { get; set; } = DefaultCoverSize;
@@ -110,6 +112,10 @@ public sealed class AppSettings
     public double CoverGap { get; set; } = DefaultCoverGap;
 
     public double CoverCornerRadius { get; set; } = DefaultCoverCornerRadius;
+
+    public bool ShowCover { get; set; } = true;
+
+    public double LyricsLayoutScalePercent { get; set; } = DefaultLyricsLayoutScalePercent;
 
     public string FontFamily { get; set; } = DefaultFontFamily;
 
@@ -193,6 +199,15 @@ public sealed class AppSettings
         PlayerSources = normalized;
     }
 
+    public void NormalizeLyricsLayout()
+    {
+        FontSize = ClampFontSize(FontSize);
+        CoverSize = ClampCoverSize(CoverSize);
+        CoverGap = ClampCoverGap(CoverGap);
+        CoverCornerRadius = ClampCoverCornerRadius(CoverCornerRadius, CoverSize);
+        LyricsLayoutScalePercent = ClampLyricsLayoutScalePercent(LyricsLayoutScalePercent);
+    }
+
     public int GetPlayerLyricOffsetMilliseconds(string? sourceApp)
     {
         var source = NormalizePlayerSourceName(sourceApp);
@@ -260,18 +275,14 @@ public sealed class AppSettings
         };
     }
 
-    public static double ClampFontSize(double value, bool useSafeRange)
+    public static double ClampFontSize(double value)
     {
-        return useSafeRange
-            ? Math.Clamp(value, SafeFontSizeMin, SafeFontSizeMax)
-            : Math.Clamp(value, ExtendedFontSizeMin, ExtendedFontSizeMax);
+        return Math.Clamp(value, ExtendedFontSizeMin, ExtendedFontSizeMax);
     }
 
-    public static double ClampCoverSize(double value, bool useSafeRange)
+    public static double ClampCoverSize(double value)
     {
-        return useSafeRange
-            ? Math.Clamp(value, SafeCoverSizeMin, SafeCoverSizeMax)
-            : Math.Clamp(value, ExtendedCoverSizeMin, ExtendedCoverSizeMax);
+        return Math.Clamp(value, ExtendedCoverSizeMin, ExtendedCoverSizeMax);
     }
 
     public static double ClampCoverGap(double value)
@@ -283,6 +294,14 @@ public sealed class AppSettings
     {
         var maxRadius = Math.Max(0, coverSize / 2);
         return Math.Clamp(value, 0, maxRadius);
+    }
+
+    public static double ClampLyricsLayoutScalePercent(double value)
+    {
+        return Math.Clamp(
+            value,
+            MinimumLyricsLayoutScalePercent,
+            MaximumLyricsLayoutScalePercent);
     }
 }
 

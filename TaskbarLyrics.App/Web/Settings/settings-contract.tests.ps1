@@ -22,8 +22,8 @@ foreach ($page in $pages) {
 
 $settings = @(
     'enableLocalLyrics', 'localMusicFolders', 'enableGlobalMediaHotkeys', 'showLyricsOnStartup', 'showLyricTranslation',
-    'spectrumDisplayMode', 'useSafeFontSizeRange', 'fontSize',
-    'useSafeCoverSizeRange', 'coverSize', 'coverGap', 'coverCornerRadius', 'fontFamily',
+    'spectrumDisplayMode', 'lyricsLayoutScalePercent', 'fontSize', 'showCover',
+    'coverSize', 'coverGap', 'coverCornerRadius', 'fontFamily',
     'fontWeight', 'foregroundColorMode', 'showTextShadow', 'toolWindowTheme', 'showBackground',
     'backgroundOpacity', 'showBorder', 'windowWidth', 'horizontalAnchor', 'xOffset',
     'yOffset', 'forceAlwaysOnTop', 'startWithWindows', 'autoCheckUpdates'
@@ -37,10 +37,20 @@ $requiredHtml = @(
     'id="colorPopover"', 'id="colorArea"', 'id="restoreDialog"', 'id="clearDialog"',
     'id="playerSettingsDialog"', 'id="playerRecognitionToggle"', 'id="playerOffsetInput"',
     'id="currentTrackOffset"', 'id="trackOffsetList"', 'id="trackOffsetPagination"', 'id="clearTrackOffsetsDialog"',
-    'id="browseButton"', 'id="showLyricsWindowButton"', 'data-window-resize="top"'
+    'id="browseButton"', 'id="showLyricsWindowButton"', 'data-reset-layout-scale',
+    'data-reset-layout-base', 'id="layoutScalePreview"', 'data-window-resize="top"',
+    'class="slider-number-control"', 'compact-number-input', 'id="hueNumberInput"',
+    'type="range" min="-2000" max="2000" step="1" data-setting="xOffset"',
+    'type="number" min="-2000" max="2000" step="1" inputmode="numeric" data-setting="xOffset"',
+    'type="range" min="-2000" max="2000" step="1" data-setting="yOffset"',
+    'type="number" min="-2000" max="2000" step="1" inputmode="numeric" data-setting="yOffset"'
 )
 foreach ($marker in $requiredHtml) {
     if (-not $html.Contains($marker)) { $errors.Add("missing html marker: $marker") }
+}
+foreach ($key in @('lyricsLayoutScalePercent', 'coverGap', 'coverCornerRadius', 'backgroundOpacity', 'xOffset', 'yOffset')) {
+    if ([regex]::Matches($html, "type=`"range`"[^>]+data-setting=`"$key`"").Count -ne 1) { $errors.Add("missing unique slider: $key") }
+    if ([regex]::Matches($html, "type=`"number`"[^>]+data-setting=`"$key`"").Count -ne 1) { $errors.Add("missing unique numeric pair: $key") }
 }
 
 if ([regex]::IsMatch($html, '<select\b', 'IgnoreCase')) { $errors.Add('native select remains') }
@@ -59,7 +69,9 @@ $requiredScript = @(
     'function setTrackOffsetEntries', 'function requestTrackOffsetPage', 'function changeTrackOffsetPage',
     'type: "queryTrackOffsets"',
     'type: "setCurrentTrackOffset"', 'type: "setStoredTrackOffset"', 'type: "deleteTrackOffset"',
-    'function positionPopover', 'function postSourceOrder', '"ArrowDown"', '"Home"', '"Escape"'
+    'function positionPopover', 'function postSourceOrder', 'function updateLayoutPreview', 'function readSettingControlValue',
+    'function setSettingsSaveResult', 'case "settingsSaveResult"',
+    'type: "resetLyricsLayoutBase"', 'type: "previewUpdate"', '"ArrowDown"', '"Home"', '"Escape"'
 )
 foreach ($marker in $requiredScript) {
     if (-not $script.Contains($marker)) { $errors.Add("missing script marker: $marker") }
@@ -80,15 +92,27 @@ foreach ($unsupported in @('AppleMusic', 'Foobar', 'MusicBee', 'AIMP', 'VLC', 'W
     if ($script.Contains($unsupported)) { $errors.Add("unsupported source exposed: $unsupported") }
 }
 
-foreach ($marker in @('case "pickLocalFolder":', 'case "showLyricsWindow":', 'case "openSmtcMonitor":', 'case "openSpectrumTuning":', 'case "settingsPageChanged":', 'case "queryTrackOffsets":', 'case "setCurrentTrackOffset":', 'case "setStoredTrackOffset":', 'case "deleteTrackOffset":', 'case "clearTrackOffsets":', 'case "resetMediaHotkey":', 'case "windowDrag":', 'case "windowResizeStart":', 'case "windowClose":')) {
+foreach ($marker in @('case "pickLocalFolder":', 'case "showLyricsWindow":', 'case "openSmtcMonitor":', 'case "openSpectrumTuning":', 'case "settingsPageChanged":', 'case "queryTrackOffsets":', 'case "setCurrentTrackOffset":', 'case "setStoredTrackOffset":', 'case "deleteTrackOffset":', 'case "clearTrackOffsets":', 'case "resetMediaHotkey":', 'case "resetLyricsLayoutBase":', 'case "previewUpdate":', 'case "windowDrag":', 'case "windowResizeStart":', 'case "windowClose":')) {
     if (-not $settingsWindow.Contains($marker)) { $errors.Add("missing desktop message: $marker") }
 }
+if (-not $settingsWindow.Contains('"settingsSaveResult"')) { $errors.Add('missing settings save result dispatch') }
 if (-not $app.Contains('public void ShowLyricsWindow()')) { $errors.Add('missing App.ShowLyricsWindow') }
 if (-not $appSettings.Contains('public GlobalMediaHotkeySettings GlobalMediaHotkeys')) { $errors.Add('global media hotkeys settings missing') }
+if (-not $appSettings.Contains('public double LyricsLayoutScalePercent')) { $errors.Add('lyrics layout scale setting missing') }
+if (-not $appSettings.Contains('public bool ShowCover')) { $errors.Add('show cover setting missing') }
 if (-not $appSettings.Contains('public const string DefaultFontFamily = BundledFontFamily;')) { $errors.Add('bundled font is not the default') }
 if (-not $app.Contains('Settings.FontFamily = AppSettings.NormalizeFontFamily(Settings.FontFamily);')) { $errors.Add('startup font normalization missing') }
 if (-not $lyricsWindow.Contains('fontFamily = AppSettings.NormalizeFontFamily(settings.FontFamily)')) { $errors.Add('lyrics font normalization missing') }
+if (-not $lyricsWindow.Contains('showCover = settings.ShowCover')) { $errors.Add('lyrics cover visibility payload missing') }
 if (-not $lyricsWindow.Contains('WebViewMessageScriptFactory.Dispatch("taskbarLyrics", "style"')) { $errors.Add('lyrics V1 style dispatch missing') }
+
+$lyricsScript = [IO.File]::ReadAllText((Join-Path $appRoot 'Web\Lyrics\app.js'), [Text.UTF8Encoding]::new($false, $true))
+$lyricsCss = [IO.File]::ReadAllText((Join-Path $appRoot 'Web\Lyrics\style.css'), [Text.UTF8Encoding]::new($false, $true))
+if (-not $lyricsScript.Contains('root.classList.toggle("cover-hidden", payload.showCover === false)')) { $errors.Add('lyrics cover visibility behavior missing') }
+if (-not $lyricsCss.Contains('.cover-hidden :is(.cover, .cover-gap)')) { $errors.Add('lyrics hidden cover style missing') }
+
+$lyricsHtml = [IO.File]::ReadAllText((Join-Path $appRoot 'Web\Lyrics\index.html'), [Text.UTF8Encoding]::new($false, $true))
+if (-not $lyricsHtml.Contains('class="cover-gap" aria-hidden="true"')) { $errors.Add('lyrics cover gap marker missing') }
 
 if (-not $css.Contains('--background: oklch(0.145 0 0)')) { $errors.Add('neutral palette missing') }
 if ($css.Contains('Settings prototype integration: neutral Shadcn-inspired control layer.')) { $errors.Add('legacy override layer remains') }
@@ -98,6 +122,7 @@ foreach ($marker in @('.sidebar-collapsed', '.page.transitioning', '.setting-row
 if (-not $script.Contains('{ value: "Disabled"')) { $errors.Add('spectrum disabled option missing') }
 if ($html.Contains('data-setting="enableSpectrum"')) { $errors.Add('legacy spectrum switch remains') }
 if ($html.Contains('data-setting="enableSmtcTimelineMonitor"')) { $errors.Add('legacy SMTC monitor switch remains') }
+if ($html.Contains('data-setting="useSafeFontSizeRange"') -or $html.Contains('data-setting="useSafeCoverSizeRange"')) { $errors.Add('legacy visual safe-range controls remain') }
 foreach ($demoMarker in @('settingsPrototype', 'demoFonts')) {
     if ($html.Contains($demoMarker) -or $script.Contains($demoMarker)) { $errors.Add("demo marker remains: $demoMarker") }
 }

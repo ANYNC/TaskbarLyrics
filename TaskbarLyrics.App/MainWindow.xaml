@@ -21,7 +21,8 @@
             BorderBrush="Transparent"
             BorderThickness="0"
             Padding="8,3">
-        <Grid ClipToBounds="False"
+        <Grid x:Name="LyricsContentRoot"
+              ClipToBounds="False"
               MinHeight="30"
               VerticalAlignment="Stretch">
             <Grid x:Name="LyricsWebHost"

@@ -25,11 +25,27 @@
   --line-pitch: 15px;
   --current-size: 13px;
   --next-size: 12px;
-  --primary-offset-y: 1px;
-  --secondary-offset-y: 2px;
   --cover-size: 34px;
   --cover-gap: 8px;
   --cover-radius: 6px;
+  --layout-padding-inline: 4px;
+  --lyrics-pane-padding-top: 3px;
+  --lyrics-pane-padding-right: 4px;
+  --lyrics-pane-padding-left: 2px;
+  --primary-offset-y: 1px;
+  --secondary-offset-y: 2px;
+  --line-text-padding-bottom: 2px;
+  --surface-radius: 8px;
+  --layer-transition-offset: 2px;
+  --cover-fallback-font-size: 13px;
+  --spectrum-width: 210px;
+  --spectrum-height: 22px;
+  --spectrum-gap: 3px;
+  --spectrum-bar-width: 3px;
+  --spectrum-bar-height: 8px;
+  --spectrum-low-height: 6px;
+  --spectrum-high-height: 18px;
+  --spectrum-middle-height: 11px;
   --surface-color: transparent;
   --surface-shadow: none;
   --text-shadow: 0 1px 2px rgba(0, 0, 0, 0.36);
@@ -57,11 +73,11 @@ html, body {
 .layout {
   width: 100%;
   height: 100%;
-  padding: 0 4px;
+  padding: 0 var(--layout-padding-inline);
   overflow: hidden;
   background: var(--surface-color);
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--surface-radius);
   box-shadow: var(--surface-shadow);
 }
 
@@ -71,6 +87,14 @@ html, body {
   display: grid;
   grid-template-columns: var(--cover-size) var(--cover-gap) minmax(0, 1fr);
   align-items: center;
+}
+
+.cover-hidden .shell {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.cover-hidden :is(.cover, .cover-gap) {
+  display: none;
 }
 
 .cover {
@@ -100,7 +124,7 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
+  font-size: var(--cover-fallback-font-size);
   font-weight: 700;
   color: rgba(255, 255, 255, 0.96);
   user-select: none;
@@ -130,7 +154,7 @@ html, body {
   height: 100%;
   overflow: hidden;
   position: relative;
-  padding: 3px 4px 0 2px;
+  padding: var(--lyrics-pane-padding-top) var(--lyrics-pane-padding-right) 0 var(--lyrics-pane-padding-left);
 }
 
 .lyrics-layer,
@@ -145,23 +169,23 @@ html, body {
 }
 
 .lyrics-layer {
-  inset: 3px 4px 0 2px;
+  inset: var(--lyrics-pane-padding-top) var(--lyrics-pane-padding-right) 0 var(--lyrics-pane-padding-left);
   opacity: 1;
   transform: translateY(0);
 }
 
 .spectrum-layer {
-  inset: 0 4px 0 2px;
+  inset: 0 var(--lyrics-pane-padding-right) 0 var(--lyrics-pane-padding-left);
   display: flex;
   align-items: center;
   opacity: 0;
-  transform: translateY(2px);
+  transform: translateY(var(--layer-transition-offset));
   pointer-events: none;
 }
 
 .layout.spectrum-mode .lyrics-layer {
   opacity: 0;
-  transform: translateY(-2px);
+  transform: translateY(calc(-1 * var(--layer-transition-offset)));
 }
 
 .layout.spectrum-mode .spectrum-layer {
@@ -226,7 +250,7 @@ html, body {
   overflow: hidden;
   text-overflow: ellipsis;
   line-height: inherit;
-  padding-bottom: 2px;
+  padding-bottom: var(--line-text-padding-bottom);
 }
 
 .current-line {
@@ -260,18 +284,19 @@ html, body {
 }
 
 .spectrum {
-  width: min(210px, 100%);
-  height: 22px;
+  width: min(var(--spectrum-width), 100%);
+  height: var(--spectrum-height);
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: var(--spectrum-fitted-gap, var(--spectrum-gap));
   opacity: 0.92;
   transition: opacity 260ms ease;
 }
 
 .spectrum span {
-  width: 3px;
-  height: 8px;
+  width: var(--spectrum-fitted-bar-width, var(--spectrum-bar-width));
+  flex: 0 0 var(--spectrum-fitted-bar-width, var(--spectrum-bar-width));
+  height: var(--spectrum-bar-height);
   border-radius: 999px;
   background: var(--primary);
   box-shadow: var(--text-shadow);
@@ -298,17 +323,17 @@ html, body {
 
 @keyframes spectrumPulse {
   0%, 100% {
-    height: 6px;
+    height: var(--spectrum-low-height);
     transform: scaleY(0.72);
   }
 
   42% {
-    height: 18px;
+    height: var(--spectrum-high-height);
     transform: scaleY(1);
   }
 
   68% {
-    height: 11px;
+    height: var(--spectrum-middle-height);
     transform: scaleY(0.86);
   }
 }

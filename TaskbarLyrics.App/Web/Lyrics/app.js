@@ -18,6 +18,10 @@ let spectrumBarEls = Array.from(document.querySelectorAll(".spectrum span"));
 let displayedCurrent = currentLineTextEl?.textContent || "";
 let displayedNext = nextLineTextEl?.textContent || "";
 let requestedFontSize = 13;
+let viewportDescenderBufferPx = 2;
+let layoutScaleFactor = 1;
+let requestedSpectrumBarWidthPx = 3;
+let requestedSpectrumGapPx = 3;
 let rowHeightPx = 14;
 let rowGapPx = 1;
 let linePitchPx = 15;
@@ -187,9 +191,47 @@ function ensureSpectrumBarCount(value) {
   spectrumTargets = spectrumBarEls.map(() => 0);
   spectrumVisuals = spectrumBarEls.map(() => 0);
   spectrumSilence = spectrumBarEls.map(() => 0);
+  updateSpectrumGeometry();
   if (isSpectrumMode) {
     startSpectrumRenderer();
   }
+}
+
+function alignDownToPhysicalPixel(value) {
+  const pixelsPerDip = Number(window.devicePixelRatio) || 1;
+  return Math.floor(Math.max(0, value) * pixelsPerDip) / pixelsPerDip;
+}
+
+function updateSpectrumGeometry() {
+  if (!spectrumEl || spectrumBarEls.length === 0) {
+    return;
+  }
+
+  const availableWidth = spectrumEl.clientWidth;
+  if (!Number.isFinite(availableWidth) || availableWidth <= 0) {
+    return;
+  }
+
+  const barCount = spectrumBarEls.length;
+  const gapCount = Math.max(0, barCount - 1);
+  const desiredWidth = (requestedSpectrumBarWidthPx * barCount) + (requestedSpectrumGapPx * gapCount);
+  let fittedBarWidth = requestedSpectrumBarWidthPx;
+  let fittedGap = requestedSpectrumGapPx;
+
+  if (desiredWidth > availableWidth) {
+    const fitRatio = availableWidth / desiredWidth;
+    const minimumBarWidth = 1 / (Number(window.devicePixelRatio) || 1);
+    fittedBarWidth = Math.max(
+      minimumBarWidth,
+      alignDownToPhysicalPixel(requestedSpectrumBarWidthPx * fitRatio));
+    const remainingWidth = Math.max(0, availableWidth - (fittedBarWidth * barCount));
+    fittedGap = gapCount > 0
+      ? alignDownToPhysicalPixel(Math.min(requestedSpectrumGapPx, remainingWidth / gapCount))
+      : 0;
+  }
+
+  spectrumEl.style.setProperty("--spectrum-fitted-bar-width", `${fittedBarWidth}px`);
+  spectrumEl.style.setProperty("--spectrum-fitted-gap", `${fittedGap}px`);
 }
 
 function setSpectrumTargetValues(values) {
@@ -240,9 +282,9 @@ function renderSpectrumFrame(now) {
     }
 
     const level = spectrumVisuals[i];
-    const height = spectrumTuning.minHeight + (level * spectrumTuning.heightRange);
+    const height = Math.max(1, Math.round((spectrumTuning.minHeight + (level * spectrumTuning.heightRange)) * layoutScaleFactor));
     const bar = spectrumBarEls[i];
-    bar.style.height = `${height.toFixed(2)}px`;
+    bar.style.height = `${height}px`;
     bar.style.transform = "scaleY(1)";
     bar.style.opacity = spectrumTuning.opacity.toFixed(3);
   }
@@ -573,16 +615,16 @@ function updateMetrics() {
   }
 
   metricsUpdatePending = false;
-  // WPF host extends the WebView 2px downward for descender safety; exclude that buffer from row metrics.
-  const viewportDescenderBufferPx = 2;
+  // Exclude the host-provided descender buffer from row metrics.
   const measuredViewportHeight = viewportEl.clientHeight || 30;
-  const hostHeight = Math.max(26, measuredViewportHeight - viewportDescenderBufferPx);
-  rowHeightPx = Math.max(13, Math.floor(hostHeight / 2));
+  const minimumHostHeight = Math.max(2, Math.round(26 * layoutScaleFactor));
+  const hostHeight = Math.max(minimumHostHeight, measuredViewportHeight - viewportDescenderBufferPx);
+  rowHeightPx = Math.max(1, Math.floor(hostHeight / 2));
   rowGapPx = Math.max(0, hostHeight - (rowHeightPx * 2));
   linePitchPx = rowHeightPx + rowGapPx;
-  const currentSizeMax = Math.max(11.2, rowHeightPx * 0.92);
+  const currentSizeMax = Math.max(11.2 * layoutScaleFactor, rowHeightPx * 0.92);
   currentSize = Math.min(requestedFontSize, currentSizeMax);
-  const nextSize = Math.max(9, currentSize * 0.92);
+  const nextSize = Math.max(9 * layoutScaleFactor, currentSize * 0.92);
   root.style.setProperty("--row-height", `${rowHeightPx}px`);
   root.style.setProperty("--row-gap", `${rowGapPx}px`);
   root.style.setProperty("--line-pitch", `${linePitchPx}px`);
@@ -706,16 +748,21 @@ function startTransition(newCurrent, newNext, progress, currentLineIndex = -1) {
   }, transitionDurationMs + 120);
 }
 
-updateMetrics();
+function updateResponsiveLayout() {
+  updateMetrics();
+  updateSpectrumGeometry();
+}
+
+updateResponsiveLayout();
 setCurrentLine(displayedCurrent);
 setSecondaryLine(displayedNext);
 setIncomingLine("");
 updateSecondaryOpacity(0);
 
 if (typeof ResizeObserver !== "undefined") {
-  new ResizeObserver(updateMetrics).observe(layoutEl);
+  new ResizeObserver(updateResponsiveLayout).observe(layoutEl);
 } else {
-  window.addEventListener("resize", updateMetrics);
+  window.addEventListener("resize", updateResponsiveLayout);
 }
 
 const lyricsApi = {
@@ -871,25 +918,68 @@ const lyricsApi = {
     }
 
     root.style.setProperty("--font-family", payload.fontFamily || "\"SF Pro Display\", \"Segoe UI Variable Display\", \"Segoe UI Variable Text\", \"Microsoft YaHei UI\", sans-serif");
+    const layoutScalePercent = Number(payload.layoutScalePercent);
+    if (Number.isFinite(layoutScalePercent) && layoutScalePercent > 0) {
+      layoutScaleFactor = layoutScalePercent / 100;
+    }
     requestedFontSize = Number(payload.fontSize) || 13;
     root.style.setProperty("--font-size", `${requestedFontSize}px`);
-    updateMetrics();
     root.style.setProperty("--font-weight", window.taskbarLyricsState.normalizeWeight(payload.fontWeight));
+    root.classList.toggle("cover-hidden", payload.showCover === false);
 
     const coverSize = Number(payload.coverSize);
     if (Number.isFinite(coverSize) && coverSize > 0) {
       root.style.setProperty("--cover-size", `${coverSize}px`);
-      updateMetrics();
     }
     const coverGap = Number(payload.coverGap);
     if (Number.isFinite(coverGap) && coverGap >= 0) {
       root.style.setProperty("--cover-gap", `${coverGap}px`);
-      updateMetrics();
     }
     const coverCornerRadius = Number(payload.coverCornerRadius);
     if (Number.isFinite(coverCornerRadius) && coverCornerRadius >= 0) {
       root.style.setProperty("--cover-radius", `${coverCornerRadius}px`);
     }
+
+    const descenderBuffer = Number(payload.viewportDescenderBuffer);
+    if (Number.isFinite(descenderBuffer) && descenderBuffer >= 0) {
+      viewportDescenderBufferPx = descenderBuffer;
+    }
+
+    const pixelMetrics = {
+      layoutHorizontalPadding: "--layout-padding-inline",
+      lyricsPaneTopPadding: "--lyrics-pane-padding-top",
+      lyricsPaneRightPadding: "--lyrics-pane-padding-right",
+      lyricsPaneLeftPadding: "--lyrics-pane-padding-left",
+      primaryOffsetY: "--primary-offset-y",
+      secondaryOffsetY: "--secondary-offset-y",
+      lineTextBottomPadding: "--line-text-padding-bottom",
+      surfaceRadius: "--surface-radius",
+      layerTransitionOffset: "--layer-transition-offset",
+      coverFallbackFontSize: "--cover-fallback-font-size",
+      spectrumWidth: "--spectrum-width",
+      spectrumHeight: "--spectrum-height",
+      spectrumGap: "--spectrum-gap",
+      spectrumBarWidth: "--spectrum-bar-width",
+      spectrumBarHeight: "--spectrum-bar-height",
+      spectrumLowHeight: "--spectrum-low-height",
+      spectrumHighHeight: "--spectrum-high-height",
+      spectrumMiddleHeight: "--spectrum-middle-height"
+    };
+    Object.entries(pixelMetrics).forEach(([payloadKey, cssVariable]) => {
+      const value = Number(payload[payloadKey]);
+      if (Number.isFinite(value) && value >= 0) {
+        root.style.setProperty(cssVariable, `${value}px`);
+      }
+    });
+    const spectrumBarWidth = Number(payload.spectrumBarWidth);
+    if (Number.isFinite(spectrumBarWidth) && spectrumBarWidth > 0) {
+      requestedSpectrumBarWidthPx = spectrumBarWidth;
+    }
+    const spectrumGap = Number(payload.spectrumGap);
+    if (Number.isFinite(spectrumGap) && spectrumGap >= 0) {
+      requestedSpectrumGapPx = spectrumGap;
+    }
+    updateResponsiveLayout();
 
     if (payload.primaryColor && CSS.supports("color", payload.primaryColor)) {
       root.style.setProperty("--primary", payload.primaryColor);

@@ -16,6 +16,17 @@ public sealed class SettingsWebMessageRouterTests
     }
 
     [Fact]
+    public void ParseDeserializesTheV1PreviewUpdateEnvelope()
+    {
+        var message = SettingsWebMessageRouter.Parse("{\"version\":1,\"type\":\"previewUpdate\",\"payload\":{\"key\":\"xOffset\",\"value\":120}}");
+
+        Assert.NotNull(message);
+        Assert.Equal("previewUpdate", message.Type);
+        Assert.Equal("xOffset", message.Key);
+        Assert.Equal(120, message.Value!.Value.GetInt32());
+    }
+
+    [Fact]
     public void ParseWhenMessageIsEmptyReturnsNull()
     {
         Assert.Null(SettingsWebMessageRouter.Parse(""));

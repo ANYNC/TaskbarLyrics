@@ -16,6 +16,10 @@ Before acting, read both files completely:
 
 Treat root `AGENTS.md` as the entry-point policy and these references as its detailed standard.
 
+## Load the WebView UI standard when applicable
+
+When a task involves WebView interface design, CSS or visual changes, component implementation, interaction behavior, accessibility, or user-experience review, read `../../../docs/WebView界面视觉与交互规范.md` completely before planning or acting. Treat that local document as the final project authority; online Web guidelines and shadcn/ui examples are supplementary references only.
+
 ## Classify the request
 
 - For review or explanation, inspect and report evidence; do not edit.

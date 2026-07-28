@@ -21,21 +21,15 @@
       shortcuts: ["快捷键", "设置在其他应用前台时控制播放器的全局组合键。"],
       lyrics: ["歌词", "控制歌词显示、翻译和频谱策略。"],
       trackOffsets: ["单曲偏移", "调整当前歌曲同步，并管理按歌词源保存的偏移。"],
-      appearance: ["外观", "调整文字与封面，并在任务栏预览中即时检查效果。"],
+      appearance: ["外观", "调整整体尺寸与文字样式，并在歌词窗口中即时检查效果。"],
       window: ["窗口", "设置歌词窗口背景、宽度、位置与置顶行为。"],
       general: ["常规", "管理启动、后台运行和更新行为。"],
       advanced: ["高级", "用于诊断播放同步问题和维护缓存数据。"],
       about: ["关于", "查看版本、许可证与项目技术信息。"]
     };
 
-    const sizeRanges = {
-      fontSize: { safeKey: "useSafeFontSizeRange", safe: { min: 10, max: 24 }, extended: { min: 6, max: 96 } },
-      coverSize: { safeKey: "useSafeCoverSizeRange", safe: { min: 20, max: 40 }, extended: { min: 12, max: 200 } }
-    };
-
     let state = null;
     let sourceCatalog = sourceCatalogDefaults.map(item => ({ ...item, enabled: false }));
-    let saveTimer;
     let toastTimer;
     let draggedSourceId = null;
     let pageAnimations = [];
@@ -60,6 +54,9 @@
     let expandedTrackOffsetKey = null;
     let pendingDeleteTrackOffsetKey = null;
     let focusCurrentTrackOnNextRender = false;
+    const pendingRangePreviews = new Map();
+    let rangePreviewFrame = 0;
+    let announceNextLayoutPreview = false;
 
     const $ = selector => document.querySelector(selector);
     const $$ = selector => Array.from(document.querySelectorAll(selector));
@@ -454,9 +451,16 @@
     }
 
     function markSaved() {
-      clearTimeout(saveTimer);
+      $("#saveState").dataset.state = "applying";
       $("#saveState").textContent = "正在应用…";
-      saveTimer = setTimeout(() => { $("#saveState").textContent = "更改已实时应用"; }, 360);
+    }
+
+    function setSettingsSaveResult(payload = {}) {
+      const success = payload.success === true;
+      $("#saveState").dataset.state = success ? "success" : "error";
+      $("#saveState").textContent = success
+        ? "更改已实时应用"
+        : "设置已应用，但保存失败；重启后可能恢复";
     }
 
     function showToast(message) {
@@ -486,7 +490,18 @@
       }
       else if (control.type === "checkbox") control.checked = Boolean(value);
       else if (control.tagName === "TEXTAREA" && Array.isArray(value)) control.value = value.join("\n");
+      else if (Number.isFinite(Number(value)) && control.dataset.valueScale) {
+        control.value = Math.round(Number(value) * Number(control.dataset.valueScale) * 1e10) / 1e10;
+      }
       else control.value = value;
+    }
+
+    function readSettingControlValue(control) {
+      if (control.type === "checkbox") return control.checked;
+      if (control.type !== "number" && control.type !== "range") return control.value;
+      const value = Number(control.value);
+      const scale = Number(control.dataset.valueScale) || 1;
+      return value / scale;
     }
 
     function syncSliderProgress(control) {
@@ -505,7 +520,9 @@
       if (!state) return;
       $$('[data-setting]').forEach(control => control.classList.contains("select-trigger") ? syncSelectTrigger(control) : setControlValue(control, state[control.dataset.setting]));
       $$('input[type="range"][data-setting]').forEach(syncSliderProgress);
-      $$('[data-color-text="foregroundColor"]').forEach(control => { control.value = state.foregroundColor.toUpperCase(); control.classList.remove("invalid"); });
+      $$('[data-color-text="foregroundColor"]').forEach(control => {
+        if (!control.classList.contains("invalid")) control.value = state.foregroundColor.toUpperCase();
+      });
       $$('[data-color-swatch]').forEach(swatch => { swatch.style.backgroundColor = state.foregroundColor; });
     }
 
@@ -678,6 +695,19 @@
       if (returnFocus) trigger.focus({ preventScroll: true });
     }
 
+    function applySettingLocally(key, value) {
+      const previousCornerRadius = state.coverCornerRadius;
+      state[key] = value;
+      if (key === "foregroundColor") {
+        state.foregroundColor = fromArgb(value);
+        state.customForegroundColor = state.foregroundColor;
+        state.foregroundColorMode = "Custom";
+      }
+      if (key === "coverCornerRadius") state.coverCornerRadius = Math.min(state.coverCornerRadius, state.coverSize / 2);
+      syncColorMode(); applyDependencies(); syncLayoutBounds(); syncWindowBounds(); updateOutputs(); syncControls();
+      return previousCornerRadius;
+    }
+
     function commitSetting(key, value) {
       if (!state) return;
       if (key === "trackOffsetSourceFilter" || key === "trackOffsetSort") {
@@ -687,22 +717,29 @@
         requestTrackOffsetPage(1);
         return;
       }
-      const previousCornerRadius = state.coverCornerRadius;
-      state[key] = value;
-      if (key === "foregroundColor") {
-        state.foregroundColor = fromArgb(value);
-        state.customForegroundColor = state.foregroundColor;
-        state.foregroundColorMode = "Custom";
-      }
-      if (key === "coverCornerRadius") state.coverCornerRadius = Math.min(state.coverCornerRadius, state.coverSize / 2);
-      syncColorMode(); applyDependencies(); syncSizeBounds(); updateOutputs(); syncControls(); markSaved();
+      pendingRangePreviews.delete(key);
+      const previousCornerRadius = applySettingLocally(key, value);
+      if (key === "lyricsLayoutScalePercent") announceNextLayoutPreview = true;
       const payload = key === "foregroundColor" ? toArgb(state.foregroundColor) : state[key];
       bridge.post({ type: "update", key, value: payload });
-      if (key === "useSafeFontSizeRange") bridge.post({ type: "update", key: "fontSize", value: state.fontSize });
-      if (key === "useSafeCoverSizeRange") bridge.post({ type: "update", key: "coverSize", value: state.coverSize });
       if (key !== "coverCornerRadius" && previousCornerRadius !== state.coverCornerRadius) {
         bridge.post({ type: "update", key: "coverCornerRadius", value: state.coverCornerRadius });
       }
+      markSaved();
+    }
+
+    function scheduleSettingPreview(key, value) {
+      if (!state) return;
+      applySettingLocally(key, value);
+      pendingRangePreviews.set(key, state[key]);
+      if (rangePreviewFrame) return;
+      rangePreviewFrame = requestAnimationFrame(() => {
+        rangePreviewFrame = 0;
+        pendingRangePreviews.forEach((previewValue, previewKey) => {
+          bridge.post({ type: "previewUpdate", key: previewKey, value: previewValue });
+        });
+        pendingRangePreviews.clear();
+      });
     }
 
     function chooseSelectOption(index) {
@@ -742,10 +779,20 @@
       $("#colorArea").style.setProperty("--picker-hue", colorDraft.h);
       $("#hueSlider").style.setProperty("--picker-hue", colorDraft.h);
       $("#hueSlider").value = Math.round(colorDraft.h);
+      $("#hueNumberInput").value = Math.round(colorDraft.h);
       $("#colorCursor").style.left = `${colorDraft.s * 100}%`;
       $("#colorCursor").style.top = `${(1 - colorDraft.v) * 100}%`;
       $("#colorDraftPreview").style.backgroundColor = colorDraft.hex;
-      if (!options.keepInput) { $("#colorDraftInput").value = colorDraft.hex; $("#colorDraftInput").classList.remove("invalid"); }
+      if (!options.keepInput) {
+        $("#colorDraftInput").value = colorDraft.hex;
+        setColorInputValidity($("#colorDraftInput"), $("#colorDraftError"), true);
+      }
+    }
+
+    function setColorInputValidity(input, error, valid) {
+      input.classList.toggle("invalid", !valid);
+      input.setAttribute("aria-invalid", String(!valid));
+      error.hidden = valid;
     }
 
     function setColorDraftFromHex(hex) {
@@ -820,18 +867,20 @@
       $$(".caption-glyph-restore").forEach(el => el.hidden = !maximized);
     }
 
-    function syncSizeBounds() {
-      Object.entries(sizeRanges).forEach(([valueKey, config]) => {
-        const useSafeRange = Boolean(state[config.safeKey]);
-        const range = useSafeRange ? config.safe : config.extended;
-        state[valueKey] = Math.min(range.max, Math.max(range.min, Number(state[valueKey])));
-        const input = document.querySelector(`[data-setting="${valueKey}"]`);
-        input.min = range.min;
-        input.max = range.max;
-        const copy = document.querySelector(`[data-safe-copy="${valueKey}"]`);
-        copy.textContent = `${useSafeRange ? "安全" : "扩展"}范围 ${range.min}–${range.max} px`;
-      });
-      state.coverCornerRadius = Math.min(state.coverCornerRadius, state.coverSize / 2);
+    function syncLayoutBounds() {
+      state.lyricsLayoutScalePercent = Math.min(300, Math.max(25, Number(state.lyricsLayoutScalePercent) || 100));
+      state.fontSize = Math.min(96, Math.max(6, Number(state.fontSize) || 14));
+      state.coverSize = Math.min(200, Math.max(12, Number(state.coverSize) || 34));
+      state.coverGap = Math.min(240, Math.max(0, Number(state.coverGap) || 0));
+      state.coverCornerRadius = Math.min(
+        Math.max(0, Number(state.coverCornerRadius) || 0),
+        state.coverSize / 2);
+      $$('[data-setting="coverCornerRadius"]').forEach(input => { input.max = state.coverSize / 2; });
+    }
+
+    function syncWindowBounds() {
+      state.xOffset = Math.min(2000, Math.max(-2000, Number(state.xOffset) || 0));
+      state.yOffset = Math.min(2000, Math.max(-2000, Number(state.yOffset) || 0));
     }
 
     function applyDependencies() {
@@ -843,10 +892,43 @@
     }
 
     function updateOutputs() {
-      $$('[data-output]').forEach(node => {
-        const key = node.dataset.output;
-        node.textContent = key === "backgroundOpacity" ? state[key].toFixed(2) : `${state[key]} px`;
+      if ($("[data-effective-font-size]")) {
+        const showCover = state.showCover !== false;
+        $("[data-effective-font-size]").textContent = `${formatLayoutMetric(state.effectiveFontSize)} px`;
+        $("[data-effective-cover-size]").textContent = showCover
+          ? `${formatLayoutMetric(state.effectiveCoverSize)} px`
+          : "已隐藏";
+        $("[data-effective-cover-gap]").textContent = `${formatLayoutMetric(state.effectiveCoverGap)} px`;
+        $("[data-effective-cover-gap-item]").hidden = !showCover;
+      }
+    }
+
+    function formatLayoutMetric(value) {
+      const numeric = Number(value);
+      return Number.isFinite(numeric)
+        ? numeric.toLocaleString("zh-CN", { maximumFractionDigits: 2 })
+        : "--";
+    }
+
+    function updateLayoutPreview(payload = {}) {
+      if (!state) return;
+      ["scalePercent", "fontSize", "coverSize", "coverGap", "coverCornerRadius", "effectiveFontSize", "effectiveCoverSize", "effectiveCoverGap", "effectiveCoverCornerRadius"].forEach(key => {
+        const value = Number(payload[key]);
+        if (!Number.isFinite(value)) return;
+        const stateKey = key === "scalePercent" ? "lyricsLayoutScalePercent" : key;
+        state[stateKey] = value;
       });
+      syncLayoutBounds();
+      syncWindowBounds();
+      syncControls();
+      updateOutputs();
+      if (announceNextLayoutPreview) {
+        const coverAnnouncement = state.showCover === false
+          ? "封面已隐藏。"
+          : `封面 ${formatLayoutMetric(state.effectiveCoverSize)} 像素，间距 ${formatLayoutMetric(state.effectiveCoverGap)} 像素。`;
+        $("#layoutScaleAnnouncement").textContent = `歌词区域缩放已设为 ${formatLayoutMetric(state.lyricsLayoutScalePercent)}%，实际字号 ${formatLayoutMetric(state.effectiveFontSize)} 像素，${coverAnnouncement}`;
+        announceNextLayoutPreview = false;
+      }
     }
 
     function refresh() {
@@ -854,7 +936,8 @@
       renderPriority();
       renderTrackOffsets();
       if ($("#playerSettingsDialog").open) renderPlayerSettings();
-      syncSizeBounds();
+      syncLayoutBounds();
+      syncWindowBounds();
       syncColorMode();
       syncControls();
       renderMediaHotkeys();
@@ -943,6 +1026,17 @@
         const max = Number(input.max);
         const value = Math.min(max, Math.max(min, Number(state[key]) + Number(step.dataset.delta)));
         commitSetting(key, value); return;
+      }
+
+      if (event.target.closest("[data-reset-layout-scale]")) {
+        commitSetting("lyricsLayoutScalePercent", 100);
+        return;
+      }
+
+      if (event.target.closest("[data-reset-layout-base]")) {
+        bridge.post({ type: "resetLyricsLayoutBase" });
+        markSaved();
+        return;
       }
 
       const cancel = event.target.closest("[data-dialog-cancel]");
@@ -1035,6 +1129,21 @@
     });
 
     document.addEventListener("keydown", event => {
+      const themeOption = event.target.closest("[data-theme-value]");
+      if (themeOption && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) {
+        event.preventDefault();
+        const options = Array.from(themeOption.parentElement.querySelectorAll("[data-theme-value]"));
+        const current = options.indexOf(themeOption);
+        const next = event.key === "Home"
+          ? 0
+          : event.key === "End"
+            ? options.length - 1
+            : (current + (["ArrowRight", "ArrowDown"].includes(event.key) ? 1 : -1) + options.length) % options.length;
+        options[next].focus({ preventScroll: true });
+        commitSetting("toolWindowTheme", options[next].dataset.themeValue);
+        return;
+      }
+
       const trigger = event.target.closest(".select-trigger");
       if (trigger && ["ArrowDown", "ArrowUp", "Home", "End", "Enter", " "].includes(event.key)) {
         event.preventDefault();
@@ -1085,9 +1194,18 @@
       updateColorDraft();
     });
     $("#hueSlider").addEventListener("input", event => { colorDraft.h = Number(event.target.value); updateColorDraft(); });
+    $("#hueNumberInput").addEventListener("input", event => {
+      if (event.target.value === "" || !event.target.validity.valid) return;
+      colorDraft.h = Number(event.target.value);
+      updateColorDraft();
+    });
+    $("#hueNumberInput").addEventListener("change", event => {
+      colorDraft.h = Math.min(360, Math.max(0, Number(event.target.value) || 0));
+      updateColorDraft();
+    });
     $("#colorDraftInput").addEventListener("input", event => {
       const valid = /^#[0-9a-f]{6}$/i.test(event.target.value);
-      event.target.classList.toggle("invalid", !valid);
+      setColorInputValidity(event.target, $("#colorDraftError"), valid);
       if (valid) setColorDraftFromHex(event.target.value);
     });
     $("#colorPresets").addEventListener("click", event => {
@@ -1096,7 +1214,11 @@
     });
     $("#colorCancelButton").addEventListener("click", () => closeColorPopover(true));
     $("#colorApplyButton").addEventListener("click", () => {
-      if (!/^#[0-9a-f]{6}$/i.test($("#colorDraftInput").value)) { $("#colorDraftInput").classList.add("invalid"); showToast("请输入 #RRGGBB 格式的颜色值"); return; }
+      if (!/^#[0-9a-f]{6}$/i.test($("#colorDraftInput").value)) {
+        setColorInputValidity($("#colorDraftInput"), $("#colorDraftError"), false);
+        $("#colorDraftInput").focus({ preventScroll: true });
+        return;
+      }
       state.customForegroundColor = colorDraft.hex;
       state.foregroundColorMode = "Custom";
       commitSetting("foregroundColor", colorDraft.hex);
@@ -1131,7 +1253,7 @@
       const control = event.target.closest("[data-setting]");
       if (!control) return;
       const key = control.dataset.setting;
-      let value = control.type === "checkbox" ? control.checked : control.type === "number" || control.type === "range" ? Number(control.value) : control.value;
+      let value = readSettingControlValue(control);
       if (key === "localMusicFolders") value = control.value.split(/\r?\n/).map(folder => folder.trim()).filter(Boolean);
       commitSetting(key, value);
     });
@@ -1146,15 +1268,19 @@
         return;
       }
       const control = event.target.closest('input[type="range"][data-setting]');
-      if (!control) return;
-      commitSetting(control.dataset.setting, Number(control.value));
+      if (control) {
+        scheduleSettingPreview(control.dataset.setting, readSettingControlValue(control));
+        return;
+      }
+      const numberControl = event.target.closest('.slider-number-control input[type="number"][data-setting]');
+      if (!numberControl || numberControl.value === "" || !numberControl.validity.valid) return;
+      scheduleSettingPreview(numberControl.dataset.setting, readSettingControlValue(numberControl));
     });
 
     $$('[data-color-text="foregroundColor"]').forEach(input => input.addEventListener("change", () => {
       const valid = /^#[0-9a-f]{6}$/i.test(input.value);
-      input.classList.toggle("invalid", !valid);
-      if (valid) { commitSetting("foregroundColor", input.value.toUpperCase()); }
-      else { showToast("请输入 #RRGGBB 格式的颜色值"); }
+      setColorInputValidity(input, $("#foregroundColorError"), valid);
+      if (valid) commitSetting("foregroundColor", input.value.toUpperCase());
     }));
 
     $("#sidebarToggle").addEventListener("click", () => {
@@ -1236,6 +1362,12 @@
       switch (message.type) {
         case "settingsState":
           setState(message.payload?.settings ?? {}, message.payload?.fonts ?? []);
+          break;
+        case "lyricsLayoutPreview":
+          updateLayoutPreview(message.payload);
+          break;
+        case "settingsSaveResult":
+          setSettingsSaveResult(message.payload);
           break;
         case "updateStatus":
           setUpdateStatus(message.payload);

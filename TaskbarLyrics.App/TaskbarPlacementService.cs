@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
+using System.Windows.Media;
 
 namespace TaskbarLyrics.App;
 
@@ -22,7 +23,8 @@ internal sealed class TaskbarPlacementService
         var screenHeight = SystemParameters.PrimaryScreenHeight;
         const double normalTaskbarHeight = 48;
         var taskbarHeight = Math.Max(normalTaskbarHeight, screenHeight - workArea.Height);
-        window.Height = CalculateWindowHeight(settings, taskbarHeight, screenHeight);
+        var metrics = LyricsLayoutMetrics.Create(settings, VisualTreeHelper.GetDpi(window).DpiScaleY);
+        window.Height = Math.Min(metrics.DesiredWindowHeight, screenHeight);
 
         window.Left = settings.HorizontalAnchor switch
         {
@@ -31,11 +33,12 @@ internal sealed class TaskbarPlacementService
             _ => Math.Max(0, screenWidth - window.Width - 230 + settings.XOffset)
         };
 
-        var taskbarTop = screenHeight - taskbarHeight;
-        var anchorTop = window.Height <= taskbarHeight
-            ? taskbarTop + ((taskbarHeight - window.Height) / 2.0)
-            : screenHeight - window.Height;
-        window.Top = Math.Clamp(anchorTop + settings.YOffset, 0, Math.Max(0, screenHeight - window.Height));
+        var taskbarCenterY = screenHeight - (taskbarHeight / 2);
+        window.Top = CalculateVerticalPosition(
+            taskbarCenterY,
+            window.Height,
+            screenHeight,
+            settings.YOffset);
     }
 
     public static void Attach(Window window, bool forceAlwaysOnTop)
@@ -81,20 +84,17 @@ internal sealed class TaskbarPlacementService
         }
     }
 
-    private static double CalculateWindowHeight(AppSettings settings, double taskbarHeight, double screenHeight)
+    internal static double CalculateVerticalPosition(
+        double anchorCenterY,
+        double windowHeight,
+        double screenHeight,
+        double yOffset)
     {
-        var taskbarSafeHeight = Math.Clamp(taskbarHeight - 4, 36, taskbarHeight);
-        if (settings.UseSafeFontSizeRange && settings.UseSafeCoverSizeRange)
-        {
-            return taskbarSafeHeight;
-        }
-
-        var fontSize = AppSettings.ClampFontSize(settings.FontSize, settings.UseSafeFontSizeRange);
-        var coverSize = AppSettings.ClampCoverSize(settings.CoverSize, settings.UseSafeCoverSizeRange);
-        var textHeight = Math.Ceiling((fontSize * 2.15) + 12);
-        var coverHeight = Math.Ceiling(coverSize + 10);
-        var contentHeight = Math.Max(36, Math.Max(textHeight, coverHeight));
-        return Math.Clamp(contentHeight, taskbarSafeHeight, Math.Max(taskbarHeight, screenHeight * 0.6));
+        var centeredTop = anchorCenterY - (windowHeight / 2);
+        return Math.Clamp(
+            centeredTop + yOffset,
+            0,
+            Math.Max(0, screenHeight - windowHeight));
     }
 }
 

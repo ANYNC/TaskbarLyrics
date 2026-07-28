@@ -47,7 +47,7 @@ internal static class SettingsWebMessageRouter
                 return null;
             }
 
-            if (!string.Equals(message.Type, "update", StringComparison.Ordinal) ||
+            if (!IsSettingValueMessage(message.Type) ||
                 message.Payload is not { ValueKind: JsonValueKind.Object } payload ||
                 !payload.TryGetProperty("key", out var keyElement) ||
                 !payload.TryGetProperty("value", out var valueElement))
@@ -74,5 +74,10 @@ internal static class SettingsWebMessageRouter
         {
             return null;
         }
+    }
+
+    private static bool IsSettingValueMessage(string type)
+    {
+        return type is "update" or "previewUpdate";
     }
 }
