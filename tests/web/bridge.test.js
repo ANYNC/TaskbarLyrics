@@ -67,6 +67,8 @@ describe("settings WebView bridge", () => {
     dom.window.settingsApp.receive({ version: 1, type: "navigate", payload: { page: "lyrics", focusCurrentTrack: false } });
 
     expect(dom.window.document.querySelector('[data-nav="lyrics"]').classList.contains("active")).toBe(true);
+    expect(dom.window.document.querySelector('[data-nav="lyrics"]').getAttribute("aria-current")).toBe("page");
+    expect(dom.window.document.querySelector('[data-nav="sources"]').getAttribute("aria-current")).toBeNull();
   });
 
   it("uses visible navigation order for page transition direction", async () => {

@@ -389,7 +389,12 @@
 
       if (state) state.page = pageId;
       if (previousPageId !== pageId) bridge.post({ type: "settingsPageChanged", value: pageId });
-      $$('[data-nav]').forEach(button => button.classList.toggle("active", button.dataset.nav === pageId));
+      $$('[data-nav]').forEach(button => {
+        const isActive = button.dataset.nav === pageId;
+        button.classList.toggle("active", isActive);
+        if (isActive) button.setAttribute("aria-current", "page");
+        else button.removeAttribute("aria-current");
+      });
 
       pageTransitionToken += 1;
       const token = pageTransitionToken;

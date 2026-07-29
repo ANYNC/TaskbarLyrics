@@ -379,7 +379,7 @@
     .layout-scale-control > .slider-number-control { width: 100%; }
     .layout-scale-footer { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; }
     .layout-scale-footer .btn { min-height: 24px; padding-inline: 7px; }
-    .layout-scale-preview { min-width: 0; display: flex; flex-wrap: nowrap; justify-content: flex-start; gap: 10px; color: var(--muted-foreground); font-size: 11px; line-height: 1.35; text-align: left; font-variant-numeric: tabular-nums; }
+    .layout-scale-preview { min-width: 0; display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 10px; color: var(--muted-foreground); font-size: 11px; line-height: 1.35; text-align: left; font-variant-numeric: tabular-nums; }
     .layout-scale-preview span { white-space: nowrap; }
     .layout-scale-preview strong { color: var(--foreground); font-size: 11px; font-weight: 600; }
     .advanced-size-panel { min-width: 0; }
