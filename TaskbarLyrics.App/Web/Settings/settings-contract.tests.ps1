@@ -11,10 +11,11 @@ $settingsWindow = [IO.File]::ReadAllText((Join-Path $appRoot 'SettingsWindow.xam
 $app = [IO.File]::ReadAllText((Join-Path $appRoot 'App.xaml.cs'), [Text.UTF8Encoding]::new($false, $true))
 $appSettings = [IO.File]::ReadAllText((Join-Path $appRoot 'AppSettings.cs'), [Text.UTF8Encoding]::new($false, $true))
 $lyricsWindow = [IO.File]::ReadAllText((Join-Path $appRoot 'MainWindow.xaml.cs'), [Text.UTF8Encoding]::new($false, $true))
+$mediaHotkeyCatalog = [IO.File]::ReadAllText((Join-Path $appRoot 'MediaHotkeyCatalog.cs'), [Text.UTF8Encoding]::new($false, $true))
 
 $errors = [Collections.Generic.List[string]]::new()
 
-$pages = @('sources', 'shortcuts', 'lyrics', 'trackOffsets', 'appearance', 'window', 'general', 'advanced', 'about')
+$pages = @('sources', 'shortcuts', 'lyrics', 'trackOffsets', 'displayArea', 'general', 'advanced', 'about')
 foreach ($page in $pages) {
     if (-not $html.Contains("data-nav=`"$page`"")) { $errors.Add("missing nav: $page") }
     if (-not $html.Contains("data-page=`"$page`"")) { $errors.Add("missing page: $page") }
@@ -32,6 +33,23 @@ foreach ($key in $settings) {
     if (-not $html.Contains("data-setting=`"$key`"")) { $errors.Add("missing setting control: $key") }
 }
 
+$settingsWithoutDescriptions = @(
+    'showLyricsOnStartup', 'spectrumDisplayMode', 'fontFamily', 'fontWeight',
+    'foregroundColorMode', 'showTextShadow', 'showBackground', 'showBorder',
+    'startWithWindows'
+)
+foreach ($key in $settingsWithoutDescriptions) {
+    $escapedKey = [Regex]::Escape($key)
+    $descriptionFreeRow = '<div class="setting-row[^"]*"><div class="setting-label"><strong>[^<]+</strong></div>.*?data-setting="' + $escapedKey + '"'
+    if ($html -notmatch $descriptionFreeRow) {
+        $errors.Add("setting description should remain removed: $key")
+    }
+}
+
+if ($script.Contains('definition.description')) { $errors.Add('media hotkey description rendering should remain removed') }
+if ($settingsWindow.Contains('Description = definition.Description')) { $errors.Add('media hotkey description should not enter the web state payload') }
+if ($mediaHotkeyCatalog.Contains('string Description')) { $errors.Add('media hotkey catalog description field should remain removed') }
+
 $requiredHtml = @(
     'id="sourceGrid"', 'id="priorityList"', 'id="mediaHotkeyList"', 'id="selectPopover"', 'role="listbox"',
     'id="colorPopover"', 'id="colorArea"', 'id="restoreDialog"', 'id="clearDialog"',
@@ -48,7 +66,7 @@ $requiredHtml = @(
 foreach ($marker in $requiredHtml) {
     if (-not $html.Contains($marker)) { $errors.Add("missing html marker: $marker") }
 }
-foreach ($key in @('lyricsLayoutScalePercent', 'coverGap', 'coverCornerRadius', 'backgroundOpacity', 'xOffset', 'yOffset')) {
+foreach ($key in @('lyricsLayoutScalePercent', 'coverGap', 'coverCornerRadius', 'backgroundOpacity', 'xOffset', 'yOffset', 'windowWidth')) {
     if ([regex]::Matches($html, "type=`"range`"[^>]+data-setting=`"$key`"").Count -ne 1) { $errors.Add("missing unique slider: $key") }
     if ([regex]::Matches($html, "type=`"number`"[^>]+data-setting=`"$key`"").Count -ne 1) { $errors.Add("missing unique numeric pair: $key") }
 }

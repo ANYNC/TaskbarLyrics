@@ -47,6 +47,10 @@ public sealed class AppSettings
     public const double MinimumLyricsLayoutScalePercent = 25;
     public const double MaximumLyricsLayoutScalePercent = 300;
 
+    public const double DefaultWindowWidth = 420;
+    public const double MinimumWindowWidth = 320;
+    public const double MaximumWindowWidth = 1400;
+
     public const string BundledFontFamily = "Source Han Sans SC";
 
     public const string DefaultFontFamily = BundledFontFamily;
@@ -133,7 +137,7 @@ public sealed class AppSettings
 
     public bool ShowTextShadow { get; set; }
 
-    public double WindowWidth { get; set; } = 420;
+    public double WindowWidth { get; set; } = DefaultWindowWidth;
 
     public LyricsHorizontalAnchor HorizontalAnchor { get; set; } = LyricsHorizontalAnchor.Left;
 
@@ -302,6 +306,13 @@ public sealed class AppSettings
             value,
             MinimumLyricsLayoutScalePercent,
             MaximumLyricsLayoutScalePercent);
+    }
+
+    public static double ClampEffectiveWindowWidth(double baseWindowWidth, double scalePercent, double maxWidth)
+    {
+        var scale = ClampLyricsLayoutScalePercent(scalePercent) / 100.0;
+        var baseWidth = Math.Clamp(baseWindowWidth, MinimumWindowWidth, MaximumWindowWidth);
+        return Math.Clamp(baseWidth * scale, MinimumWindowWidth, maxWidth);
     }
 }
 

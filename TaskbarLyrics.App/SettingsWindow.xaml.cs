@@ -202,6 +202,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 _settings.CoverSize = AppSettings.DefaultCoverSize;
                 _settings.CoverGap = AppSettings.DefaultCoverGap;
                 _settings.CoverCornerRadius = AppSettings.DefaultCoverCornerRadius;
+                _settings.WindowWidth = AppSettings.DefaultWindowWidth;
                 await SaveSettingsAndNotifyWebAsync();
                 await PushSettingsToWebAsync();
                 break;
@@ -617,8 +618,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 Action = definition.Action.ToString(),
                 SettingKey = definition.SettingKey,
                 StatusKey = definition.StatusKey,
-                DisplayName = definition.DisplayName,
-                Description = definition.Description
+                DisplayName = definition.DisplayName
             })
             .ToList(),
             ShowLyricsOnStartup = _settings.ShowLyricsOnStartup,
@@ -637,6 +637,10 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             EffectiveCoverSize = layoutMetrics.CoverSize,
             EffectiveCoverGap = layoutMetrics.CoverGap,
             EffectiveCoverCornerRadius = layoutMetrics.CoverCornerRadius,
+            EffectiveWindowWidth = AppSettings.ClampEffectiveWindowWidth(
+                _settings.WindowWidth,
+                _settings.LyricsLayoutScalePercent,
+                SystemParameters.WorkArea.Width),
             FontFamily = FontCatalogService.ResolveInstalledFamily(AppSettings.NormalizeFontFamily(_settings.FontFamily)) ?? AppSettings.BundledFontFamily,
             FontWeight = NormalizeFontWeight(_settings.FontWeight),
             ForegroundColorMode = _settings.ForegroundColorMode,
@@ -670,7 +674,11 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             effectiveFontSize = metrics.FontSize,
             effectiveCoverSize = metrics.CoverSize,
             effectiveCoverGap = metrics.CoverGap,
-            effectiveCoverCornerRadius = metrics.CoverCornerRadius
+            effectiveCoverCornerRadius = metrics.CoverCornerRadius,
+            effectiveWindowWidth = AppSettings.ClampEffectiveWindowWidth(
+                _settings.WindowWidth,
+                _settings.LyricsLayoutScalePercent,
+                SystemParameters.WorkArea.Width)
         };
     }
 
@@ -845,7 +853,10 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 _settings.BackgroundOpacity = Math.Clamp(ReadDouble(element, _settings.BackgroundOpacity), 0, 1);
                 break;
             case "windowWidth":
-                _settings.WindowWidth = Math.Clamp(ReadDouble(element, _settings.WindowWidth), 320, 1400);
+                _settings.WindowWidth = Math.Clamp(
+                    ReadDouble(element, _settings.WindowWidth),
+                    AppSettings.MinimumWindowWidth,
+                    AppSettings.MaximumWindowWidth);
                 break;
             case "horizontalAnchor":
                 if (Enum.TryParse<LyricsHorizontalAnchor>(ReadString(element, _settings.HorizontalAnchor.ToString()), out var anchor))
@@ -891,7 +902,8 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             "coverSize" or
             "coverGap" or
             "coverCornerRadius" or
-            "lyricsLayoutScalePercent";
+            "lyricsLayoutScalePercent" or
+            "windowWidth";
     }
 
     private static bool IsPreviewableSetting(string? key)
@@ -901,6 +913,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             "coverGap" or
             "coverCornerRadius" or
             "lyricsLayoutScalePercent" or
+            "windowWidth" or
             "xOffset" or
             "yOffset";
     }
@@ -1372,6 +1385,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         public double EffectiveCoverSize { get; set; }
         public double EffectiveCoverGap { get; set; }
         public double EffectiveCoverCornerRadius { get; set; }
+        public double EffectiveWindowWidth { get; set; }
         public string FontFamily { get; set; } = "";
         public string FontWeight { get; set; } = "";
         public ForegroundColorMode ForegroundColorMode { get; set; }
@@ -1398,8 +1412,6 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         public string StatusKey { get; set; } = "";
 
         public string DisplayName { get; set; } = "";
-
-        public string Description { get; set; } = "";
     }
 
     private sealed class UpdateStatusPayload

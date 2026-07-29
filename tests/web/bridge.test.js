@@ -330,7 +330,7 @@ describe("settings WebView bridge", () => {
     const document = dom.window.document;
     const sliders = Array.from(document.querySelectorAll('input[type="range"][data-setting]'));
 
-    expect(sliders).toHaveLength(6);
+    expect(sliders).toHaveLength(7);
     sliders.forEach(slider => {
       const control = slider.closest(".slider-number-control");
       expect(control).not.toBeNull();

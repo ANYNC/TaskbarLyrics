@@ -21,9 +21,8 @@
       shortcuts: ["快捷键", "设置在其他应用前台时控制播放器的全局组合键。"],
       lyrics: ["歌词", "控制歌词显示、翻译和频谱策略。"],
       trackOffsets: ["单曲偏移", "调整当前歌曲同步，并管理按歌词源保存的偏移。"],
-      appearance: ["外观", "调整整体尺寸与文字样式，并在歌词窗口中即时检查效果。"],
-      window: ["窗口", "设置歌词窗口背景、宽度、位置与置顶行为。"],
-      general: ["常规", "管理启动、后台运行和更新行为。"],
+      displayArea: ["显示与外观", "调整歌词显示的尺寸、文字、窗口外观与位置，并在歌词窗口中即时检查效果。"],
+      general: ["常规", "管理启动行为与界面主题。"],
       advanced: ["高级", "用于诊断播放同步问题和维护缓存数据。"],
       about: ["关于", "查看版本、许可证与项目技术信息。"]
     };
@@ -531,7 +530,7 @@
       const enabled = Boolean(state.enableGlobalMediaHotkeys);
       $("#mediaHotkeyMasterStatus").textContent = enabled ? "已启用" : "已关闭";
       $("#mediaHotkeyList").innerHTML = (state.mediaHotkeys ?? []).map(definition => `
-        <div class="media-hotkey-row"><div class="setting-label"><strong>${escapeHtml(definition.displayName)}</strong><small>${escapeHtml(definition.description)}</small></div><div class="media-hotkey-controls"><button class="control media-hotkey-recorder" type="button" data-hotkey-binding="${escapeHtml(definition.settingKey)}" aria-label="录制${escapeHtml(definition.displayName)}快捷键"></button><output class="media-hotkey-status" data-hotkey-status="${escapeHtml(definition.statusKey)}"></output><button class="btn ghost small media-hotkey-reset" type="button" data-hotkey-reset="${escapeHtml(definition.action)}">恢复</button></div></div>`).join("");
+        <div class="media-hotkey-row"><div class="setting-label"><strong>${escapeHtml(definition.displayName)}</strong></div><div class="media-hotkey-controls"><button class="control media-hotkey-recorder" type="button" data-hotkey-binding="${escapeHtml(definition.settingKey)}" aria-label="录制${escapeHtml(definition.displayName)}快捷键"></button><output class="media-hotkey-status" data-hotkey-status="${escapeHtml(definition.statusKey)}"></output><button class="btn ghost small media-hotkey-reset" type="button" data-hotkey-reset="${escapeHtml(definition.action)}">恢复</button></div></div>`).join("");
       $$('[data-hotkey-binding]').forEach(button => {
         if (button !== activeHotkeyRecorder) button.textContent = state[button.dataset.hotkeyBinding] || "未设置";
       });
@@ -881,6 +880,7 @@
     function syncWindowBounds() {
       state.xOffset = Math.min(2000, Math.max(-2000, Number(state.xOffset) || 0));
       state.yOffset = Math.min(2000, Math.max(-2000, Number(state.yOffset) || 0));
+      state.windowWidth = Math.min(1400, Math.max(320, Number(state.windowWidth) || 420));
     }
 
     function applyDependencies() {
@@ -900,6 +900,7 @@
           : "已隐藏";
         $("[data-effective-cover-gap]").textContent = `${formatLayoutMetric(state.effectiveCoverGap)} px`;
         $("[data-effective-cover-gap-item]").hidden = !showCover;
+        $("[data-effective-window-width]").textContent = `${formatLayoutMetric(state.effectiveWindowWidth)} px`;
       }
     }
 
@@ -912,7 +913,7 @@
 
     function updateLayoutPreview(payload = {}) {
       if (!state) return;
-      ["scalePercent", "fontSize", "coverSize", "coverGap", "coverCornerRadius", "effectiveFontSize", "effectiveCoverSize", "effectiveCoverGap", "effectiveCoverCornerRadius"].forEach(key => {
+      ["scalePercent", "fontSize", "coverSize", "coverGap", "coverCornerRadius", "effectiveFontSize", "effectiveCoverSize", "effectiveCoverGap", "effectiveCoverCornerRadius", "effectiveWindowWidth"].forEach(key => {
         const value = Number(payload[key]);
         if (!Number.isFinite(value)) return;
         const stateKey = key === "scalePercent" ? "lyricsLayoutScalePercent" : key;

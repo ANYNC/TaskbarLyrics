@@ -128,9 +128,16 @@ public partial class MainWindow : Window, IDisposable
                 _compositionRoot.GetEnabledPlayerSources(snapshot));
         }
 
+        if (changes.WindowLayoutChanged || changes.LyricsLayoutChanged)
+        {
+            Width = AppSettings.ClampEffectiveWindowWidth(
+                snapshot.WindowWidth,
+                snapshot.LyricsLayoutScalePercent,
+                SystemParameters.WorkArea.Width);
+        }
+
         if (changes.WindowLayoutChanged)
         {
-            Width = Math.Clamp(snapshot.WindowWidth, 320, 1400);
             _forceAlwaysOnTop = snapshot.ForceAlwaysOnTop;
         }
 
