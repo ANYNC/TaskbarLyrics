@@ -107,4 +107,29 @@ public sealed class LyricsLayoutMetricsTests
 
         Assert.Equal(compactTop + 22, enlargedTop + 66);
     }
+
+    [Fact]
+    public void PhysicalDisplayMetricsAreConvertedToCurrentWindowDips()
+    {
+        var monitor = new TaskbarNativeMethods.NativeRect(0, 0, 1920, 1080);
+        var workArea = new TaskbarNativeMethods.NativeRect(0, 0, 1920, 1008);
+
+        var metrics = TaskbarPlacementService.ConvertPhysicalDisplayMetrics(monitor, workArea, 1.5);
+
+        Assert.Equal(1280, metrics.Width);
+        Assert.Equal(720, metrics.Height);
+        Assert.Equal(672, metrics.WorkAreaHeight);
+        Assert.Equal(1280, metrics.Right);
+        Assert.Equal(720, metrics.Bottom);
+    }
+
+    [Fact]
+    public void LogicalWindowBoundsAreConvertedUsingOnlyTheCurrentDpi()
+    {
+        var boundsAt100Percent = TaskbarPlacementService.ConvertLogicalWindowBounds(0, 1394, 420, 44, 1);
+        var boundsAt150Percent = TaskbarPlacementService.ConvertLogicalWindowBounds(0, 914, 420, 44, 1.5);
+
+        Assert.Equal(new TaskbarNativeBounds(0, 1394, 420, 44), boundsAt100Percent);
+        Assert.Equal(new TaskbarNativeBounds(0, 1371, 630, 66), boundsAt150Percent);
+    }
 }

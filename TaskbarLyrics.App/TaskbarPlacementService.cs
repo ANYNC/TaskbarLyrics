@@ -18,27 +18,125 @@ internal sealed class TaskbarPlacementService
 
     public static void Anchor(Window window, AppSettings settings)
     {
-        var workArea = SystemParameters.WorkArea;
-        var screenWidth = SystemParameters.PrimaryScreenWidth;
-        var screenHeight = SystemParameters.PrimaryScreenHeight;
+        var pixelsPerDip = GetPixelsPerDip(window);
+        var display = GetPrimaryDisplayMetrics(pixelsPerDip);
         const double normalTaskbarHeight = 48;
-        var taskbarHeight = Math.Max(normalTaskbarHeight, screenHeight - workArea.Height);
-        var metrics = LyricsLayoutMetrics.Create(settings, VisualTreeHelper.GetDpi(window).DpiScaleY);
-        window.Height = Math.Min(metrics.DesiredWindowHeight, screenHeight);
+        var taskbarHeight = Math.Max(normalTaskbarHeight, display.Height - display.WorkAreaHeight);
+        var metrics = LyricsLayoutMetrics.Create(settings, pixelsPerDip);
+        window.Height = Math.Min(metrics.DesiredWindowHeight, display.Height);
 
         window.Left = settings.HorizontalAnchor switch
         {
-            LyricsHorizontalAnchor.Left => Math.Max(0, settings.XOffset),
-            LyricsHorizontalAnchor.Center => ((screenWidth - window.Width) / 2.0) + settings.XOffset,
-            _ => Math.Max(0, screenWidth - window.Width - 230 + settings.XOffset)
+            LyricsHorizontalAnchor.Left => Math.Max(display.Left, display.Left + settings.XOffset),
+            LyricsHorizontalAnchor.Center => display.Left + ((display.Width - window.Width) / 2.0) + settings.XOffset,
+            _ => Math.Max(display.Left, display.Right - window.Width - 230 + settings.XOffset)
         };
 
-        var taskbarCenterY = screenHeight - (taskbarHeight / 2);
-        window.Top = CalculateVerticalPosition(
-            taskbarCenterY,
+        var taskbarCenterY = display.Bottom - (taskbarHeight / 2);
+        window.Top = display.Top + CalculateVerticalPosition(
+            taskbarCenterY - display.Top,
             window.Height,
-            screenHeight,
+            display.Height,
             settings.YOffset);
+
+        CommitNativeBounds(window, pixelsPerDip);
+    }
+
+    internal static double GetPixelsPerDip(Window window)
+    {
+        var hwnd = new WindowInteropHelper(window).Handle;
+        if (hwnd != IntPtr.Zero)
+        {
+            var dpi = TaskbarNativeMethods.GetDpiForWindow(hwnd);
+            if (dpi > 0)
+            {
+                return dpi / 96.0;
+            }
+        }
+
+        var visualScale = VisualTreeHelper.GetDpi(window).DpiScaleY;
+        return double.IsFinite(visualScale) && visualScale > 0 ? visualScale : 1;
+    }
+
+    private static TaskbarDisplayMetrics GetPrimaryDisplayMetrics(double pixelsPerDip)
+    {
+        var monitor = TaskbarNativeMethods.MonitorFromPoint(
+            new TaskbarNativeMethods.NativePoint(0, 0),
+            TaskbarNativeMethods.MONITOR_DEFAULTTOPRIMARY);
+        var monitorInfo = new TaskbarNativeMethods.MonitorInfo
+        {
+            Size = Marshal.SizeOf<TaskbarNativeMethods.MonitorInfo>()
+        };
+
+        if (monitor != IntPtr.Zero && TaskbarNativeMethods.GetMonitorInfo(monitor, ref monitorInfo))
+        {
+            return ConvertPhysicalDisplayMetrics(monitorInfo.Monitor, monitorInfo.WorkArea, pixelsPerDip);
+        }
+
+        var workArea = SystemParameters.WorkArea;
+        return new TaskbarDisplayMetrics(
+            0,
+            0,
+            SystemParameters.PrimaryScreenWidth,
+            SystemParameters.PrimaryScreenHeight,
+            workArea.Height);
+    }
+
+    private static void CommitNativeBounds(Window window, double pixelsPerDip)
+    {
+        var hwnd = new WindowInteropHelper(window).Handle;
+        if (hwnd == IntPtr.Zero)
+        {
+            return;
+        }
+
+        var bounds = ConvertLogicalWindowBounds(
+            window.Left,
+            window.Top,
+            window.Width,
+            window.Height,
+            pixelsPerDip);
+        TaskbarNativeMethods.SetWindowPos(
+            hwnd,
+            IntPtr.Zero,
+            bounds.Left,
+            bounds.Top,
+            bounds.Width,
+            bounds.Height,
+            TaskbarNativeMethods.SWP_NOZORDER |
+            TaskbarNativeMethods.SWP_NOACTIVATE);
+    }
+
+    internal static TaskbarNativeBounds ConvertLogicalWindowBounds(
+        double left,
+        double top,
+        double width,
+        double height,
+        double pixelsPerDip)
+    {
+        pixelsPerDip = double.IsFinite(pixelsPerDip) && pixelsPerDip > 0 ? pixelsPerDip : 1;
+        return new TaskbarNativeBounds(
+            AlignPhysicalPixel(left, pixelsPerDip),
+            AlignPhysicalPixel(top, pixelsPerDip),
+            Math.Max(1, AlignPhysicalPixel(width, pixelsPerDip)),
+            Math.Max(1, AlignPhysicalPixel(height, pixelsPerDip)));
+    }
+
+    private static int AlignPhysicalPixel(double value, double pixelsPerDip) =>
+        checked((int)Math.Round(value * pixelsPerDip, MidpointRounding.AwayFromZero));
+
+    internal static TaskbarDisplayMetrics ConvertPhysicalDisplayMetrics(
+        TaskbarNativeMethods.NativeRect monitor,
+        TaskbarNativeMethods.NativeRect workArea,
+        double pixelsPerDip)
+    {
+        pixelsPerDip = double.IsFinite(pixelsPerDip) && pixelsPerDip > 0 ? pixelsPerDip : 1;
+        return new TaskbarDisplayMetrics(
+            monitor.Left / pixelsPerDip,
+            monitor.Top / pixelsPerDip,
+            (monitor.Right - monitor.Left) / pixelsPerDip,
+            (monitor.Bottom - monitor.Top) / pixelsPerDip,
+            (workArea.Bottom - workArea.Top) / pixelsPerDip);
     }
 
     public static void Attach(Window window, bool forceAlwaysOnTop)
@@ -98,18 +196,73 @@ internal sealed class TaskbarPlacementService
     }
 }
 
+internal readonly record struct TaskbarDisplayMetrics(
+    double Left,
+    double Top,
+    double Width,
+    double Height,
+    double WorkAreaHeight)
+{
+    public double Right => Left + Width;
+
+    public double Bottom => Top + Height;
+}
+
+internal readonly record struct TaskbarNativeBounds(int Left, int Top, int Width, int Height);
+
 internal static class TaskbarNativeMethods
 {
     internal static readonly IntPtr HWND_TOPMOST = new(-1);
     internal static readonly IntPtr HWND_NOTOPMOST = new(-2);
     internal const uint SWP_NOSIZE = 0x0001;
     internal const uint SWP_NOMOVE = 0x0002;
+    internal const uint SWP_NOZORDER = 0x0004;
     internal const uint SWP_NOACTIVATE = 0x0010;
     internal const uint SWP_ASYNCWINDOWPOS = 0x4000;
     internal const uint SWP_SHOWWINDOW = 0x0040;
     internal const int SW_SHOWNOACTIVATE = 4;
     internal const int GWL_EXSTYLE = -20;
     internal const int WS_EX_TOOLWINDOW = 0x00000080;
+    internal const uint MONITOR_DEFAULTTOPRIMARY = 0x00000001;
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct NativePoint
+    {
+        internal NativePoint(int x, int y)
+        {
+            X = x;
+            Y = y;
+        }
+
+        internal int X;
+        internal int Y;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct NativeRect
+    {
+        internal NativeRect(int left, int top, int right, int bottom)
+        {
+            Left = left;
+            Top = top;
+            Right = right;
+            Bottom = bottom;
+        }
+
+        internal int Left;
+        internal int Top;
+        internal int Right;
+        internal int Bottom;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct MonitorInfo
+    {
+        internal int Size;
+        internal NativeRect Monitor;
+        internal NativeRect WorkArea;
+        internal uint Flags;
+    }
 
     [DllImport("user32.dll", SetLastError = true)]
     internal static extern IntPtr GetWindowLongPtr(IntPtr hWnd, int nIndex);
@@ -132,4 +285,14 @@ internal static class TaskbarNativeMethods
 
     [DllImport("user32.dll", SetLastError = true)]
     internal static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+    [DllImport("user32.dll")]
+    internal static extern uint GetDpiForWindow(IntPtr hwnd);
+
+    [DllImport("user32.dll")]
+    internal static extern IntPtr MonitorFromPoint(NativePoint point, uint flags);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool GetMonitorInfo(IntPtr monitor, ref MonitorInfo monitorInfo);
 }

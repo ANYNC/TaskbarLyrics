@@ -63,6 +63,7 @@ public partial class MainWindow : Window, IDisposable
     private FrameworkElement? _lyricsWebViewElement;
     private object? _lyricsWebViewControl;
     private CoreWebView2? _lyricsCoreWebView2;
+    private CoreWebView2Controller? _lyricsWebViewController;
     private EventInfo? _lyricsNavigationCompletedEvent;
     private Delegate? _lyricsNavigationCompletedHandler;
     private string _lastCoverVisualDiagnosticsKey = string.Empty;
@@ -74,6 +75,7 @@ public partial class MainWindow : Window, IDisposable
     private AppSettings _currentSettings = new();
     private TrackInfo? _currentTrack;
     private bool _hasAppliedSettings;
+    private int _displayLayoutRefreshPending;
     private int _isDisposed;
 
     internal MainWindow(TrackLyricOffsetStore trackLyricOffsetStore, IAppCompositionRoot compositionRoot)
@@ -102,7 +104,6 @@ public partial class MainWindow : Window, IDisposable
 
         Loaded += OnLoaded;
         SourceInitialized += OnSourceInitialized;
-        SizeChanged += (_, _) => AnchorToTaskbar();
         IsVisibleChanged += OnIsVisibleChanged;
         Closing += OnClosing;
         Closed += OnClosed;
@@ -342,6 +343,7 @@ public partial class MainWindow : Window, IDisposable
         }
 
         DetachWebViewMessageHandler();
+        DetachLyricsWebViewController();
         DetachWebViewNavigationHandler();
 
         _lyricSyncService.Dispose();
@@ -402,11 +404,7 @@ public partial class MainWindow : Window, IDisposable
 
     private void OnDisplaySettingsChanged(object? sender, EventArgs e)
     {
-        Dispatcher.Invoke(() =>
-        {
-            AnchorToTaskbar();
-            AttachToTaskbarHost();
-        });
+        QueueDisplayLayoutRefresh();
     }
 
     private async void OnTimerTick(object? sender, EventArgs e)
@@ -796,6 +794,7 @@ public partial class MainWindow : Window, IDisposable
                 coreWebView2.Settings.IsZoomControlEnabled = false;
                 coreWebView2.Settings.IsBuiltInErrorPageEnabled = false;
                 AttachWebViewMessageHandler(coreWebView2);
+                AttachLyricsWebViewController(webViewControl);
             }
 
             AttachWebViewNavigationHandler(webViewControl);
@@ -1007,6 +1006,43 @@ public partial class MainWindow : Window, IDisposable
 
         _lyricsCoreWebView2.WebMessageReceived -= OnLyricsWebViewMessageReceived;
         _lyricsCoreWebView2 = null;
+    }
+
+    private void AttachLyricsWebViewController(object webViewControl)
+    {
+        DetachLyricsWebViewController();
+
+        var webViewBaseField = webViewControl.GetType().GetField(
+            "m_webview2Base",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        var webViewBase = webViewBaseField?.GetValue(webViewControl);
+        var controllerProperty = webViewBase?.GetType().GetProperty(
+            "CoreWebView2Controller",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        if (controllerProperty?.GetValue(webViewBase) is not CoreWebView2Controller controller)
+        {
+            return;
+        }
+
+        controller.ShouldDetectMonitorScaleChanges = true;
+        controller.RasterizationScaleChanged += OnLyricsWebViewRasterizationScaleChanged;
+        _lyricsWebViewController = controller;
+    }
+
+    private void DetachLyricsWebViewController()
+    {
+        if (_lyricsWebViewController is null)
+        {
+            return;
+        }
+
+        _lyricsWebViewController.RasterizationScaleChanged -= OnLyricsWebViewRasterizationScaleChanged;
+        _lyricsWebViewController = null;
+    }
+
+    private void OnLyricsWebViewRasterizationScaleChanged(object? sender, object e)
+    {
+        QueueDisplayLayoutRefresh();
     }
 
     private void OnLyricsWebViewMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
@@ -1324,16 +1360,54 @@ public partial class MainWindow : Window, IDisposable
     protected override void OnDpiChanged(DpiScale oldDpi, DpiScale newDpi)
     {
         base.OnDpiChanged(oldDpi, newDpi);
+        QueueDisplayLayoutRefresh();
+    }
+
+    private void QueueDisplayLayoutRefresh()
+    {
+        if (Volatile.Read(ref _isDisposed) != 0 || Dispatcher.HasShutdownStarted || Dispatcher.HasShutdownFinished)
+        {
+            return;
+        }
+
+        if (Interlocked.CompareExchange(ref _displayLayoutRefreshPending, 1, 0) != 0)
+        {
+            return;
+        }
+
+        // PMv2 must finish notifying the child HWND tree and WPF must finish its render layout first.
+        Dispatcher.BeginInvoke(new Action(ApplyDisplayLayoutRefresh), DispatcherPriority.ContextIdle);
+    }
+
+    private void ApplyDisplayLayoutRefresh()
+    {
+        Interlocked.Exchange(ref _displayLayoutRefreshPending, 0);
+        if (Volatile.Read(ref _isDisposed) != 0)
+        {
+            return;
+        }
+
         ApplyHostLayout(CreateLayoutMetrics(_currentSettings));
         AnchorToTaskbar();
+        RefreshLyricsWebViewLayout();
+        AttachToTaskbarHost();
         PushStyleToWebView(_currentSettings);
-        LyricsWebHost.InvalidateArrange();
+    }
+
+    private void RefreshLyricsWebViewLayout()
+    {
+        if (_lyricsWebViewControl is null || _lyricsWebViewElement is null)
+        {
+            return;
+        }
+
+        _lyricsWebViewElement.InvalidateArrange();
         UpdateLayout();
     }
 
     private LyricsLayoutMetrics CreateLayoutMetrics(AppSettings settings)
     {
-        return LyricsLayoutMetrics.Create(settings, Media.VisualTreeHelper.GetDpi(this).DpiScaleX);
+        return LyricsLayoutMetrics.Create(settings, TaskbarPlacementService.GetPixelsPerDip(this));
     }
 
     private void AttachToTaskbarHost()
