@@ -2,12 +2,14 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Media;
+using TaskbarLyrics.Core.Utilities;
 
 namespace TaskbarLyrics.App;
 
 internal sealed class TaskbarPlacementService
 {
     private const int WmShowWindow = 0x0018;
+    private static int _hasReportedNativeBoundsCommitFailure;
 
     public uint TaskbarCreatedMessage { get; } = TaskbarNativeMethods.RegisterWindowMessage("TaskbarCreated");
 
@@ -96,7 +98,7 @@ internal sealed class TaskbarPlacementService
             window.Width,
             window.Height,
             pixelsPerDip);
-        TaskbarNativeMethods.SetWindowPos(
+        var setWindowPosSucceeded = TaskbarNativeMethods.SetWindowPos(
             hwnd,
             IntPtr.Zero,
             bounds.Left,
@@ -105,6 +107,26 @@ internal sealed class TaskbarPlacementService
             bounds.Height,
             TaskbarNativeMethods.SWP_NOZORDER |
             TaskbarNativeMethods.SWP_NOACTIVATE);
+        if (!setWindowPosSucceeded)
+        {
+            ReportNativeBoundsCommitFailure(bounds, pixelsPerDip, Marshal.GetLastWin32Error());
+        }
+    }
+
+    private static void ReportNativeBoundsCommitFailure(
+        TaskbarNativeBounds bounds,
+        double pixelsPerDip,
+        int errorCode)
+    {
+        if (Interlocked.Exchange(ref _hasReportedNativeBoundsCommitFailure, 1) != 0)
+        {
+            return;
+        }
+
+        Log.Diagnostic(
+            "DPI-WINDOW",
+            $"SetWindowPosFailed Error={errorCode} Bounds={bounds.Left},{bounds.Top},{bounds.Width},{bounds.Height} " +
+            $"PixelsPerDip={pixelsPerDip:0.####}");
     }
 
     internal static TaskbarNativeBounds ConvertLogicalWindowBounds(

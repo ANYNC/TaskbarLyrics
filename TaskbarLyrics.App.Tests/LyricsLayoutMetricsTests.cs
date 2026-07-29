@@ -123,13 +123,36 @@ public sealed class LyricsLayoutMetricsTests
         Assert.Equal(720, metrics.Bottom);
     }
 
-    [Fact]
-    public void LogicalWindowBoundsAreConvertedUsingOnlyTheCurrentDpi()
+    [Theory]
+    [InlineData(1, 1394, 420, 44)]
+    [InlineData(1.25, 1383, 525, 55)]
+    [InlineData(1.5, 1371, 630, 66)]
+    [InlineData(2, 1348, 840, 88)]
+    public void LogicalWindowBoundsStayWithinScreenAtSupportedDpiScales(
+        double pixelsPerDip,
+        int expectedTop,
+        int expectedWidth,
+        int expectedHeight)
     {
-        var boundsAt100Percent = TaskbarPlacementService.ConvertLogicalWindowBounds(0, 1394, 420, 44, 1);
-        var boundsAt150Percent = TaskbarPlacementService.ConvertLogicalWindowBounds(0, 914, 420, 44, 1.5);
+        const double physicalScreenHeight = 1440;
+        const double logicalWindowHeight = 44;
+        var logicalScreenHeight = physicalScreenHeight / pixelsPerDip;
+        var logicalTop = TaskbarPlacementService.CalculateVerticalPosition(
+            logicalScreenHeight - 24,
+            logicalWindowHeight,
+            logicalScreenHeight,
+            0);
 
-        Assert.Equal(new TaskbarNativeBounds(0, 1394, 420, 44), boundsAt100Percent);
-        Assert.Equal(new TaskbarNativeBounds(0, 1371, 630, 66), boundsAt150Percent);
+        var bounds = TaskbarPlacementService.ConvertLogicalWindowBounds(
+            0,
+            logicalTop,
+            420,
+            logicalWindowHeight,
+            pixelsPerDip);
+
+        Assert.Equal(expectedTop, bounds.Top);
+        Assert.Equal(expectedWidth, bounds.Width);
+        Assert.Equal(expectedHeight, bounds.Height);
+        Assert.InRange(bounds.Top + bounds.Height, 1, (int)physicalScreenHeight);
     }
 }

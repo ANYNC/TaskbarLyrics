@@ -75,6 +75,7 @@ public partial class MainWindow : Window, IDisposable
     private AppSettings _currentSettings = new();
     private TrackInfo? _currentTrack;
     private bool _hasAppliedSettings;
+    private bool _hasReportedWebViewControllerMonitoringFailure;
     private int _displayLayoutRefreshPending;
     private int _isDisposed;
 
@@ -1012,21 +1013,69 @@ public partial class MainWindow : Window, IDisposable
     {
         DetachLyricsWebViewController();
 
-        var webViewBaseField = webViewControl.GetType().GetField(
-            "m_webview2Base",
-            BindingFlags.Instance | BindingFlags.NonPublic);
-        var webViewBase = webViewBaseField?.GetValue(webViewControl);
-        var controllerProperty = webViewBase?.GetType().GetProperty(
-            "CoreWebView2Controller",
-            BindingFlags.Instance | BindingFlags.NonPublic);
-        if (controllerProperty?.GetValue(webViewBase) is not CoreWebView2Controller controller)
+        if (!TryGetLyricsWebViewController(webViewControl, out var controller, out var failureReason))
+        {
+            ReportWebViewControllerMonitoringFailure(webViewControl, failureReason);
+            return;
+        }
+
+        try
+        {
+            controller.ShouldDetectMonitorScaleChanges = true;
+            controller.RasterizationScaleChanged += OnLyricsWebViewRasterizationScaleChanged;
+            _lyricsWebViewController = controller;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or NotSupportedException)
+        {
+            ReportWebViewControllerMonitoringFailure(webViewControl, ex.GetType().Name);
+        }
+    }
+
+    private static bool TryGetLyricsWebViewController(
+        object webViewControl,
+        out CoreWebView2Controller controller,
+        out string failureReason)
+    {
+        controller = null!;
+        failureReason = string.Empty;
+        try
+        {
+            var webViewBaseField = webViewControl.GetType().GetField(
+                "m_webview2Base",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            var webViewBase = webViewBaseField?.GetValue(webViewControl);
+            var controllerProperty = webViewBase?.GetType().GetProperty(
+                "CoreWebView2Controller",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            if (controllerProperty?.GetValue(webViewBase) is CoreWebView2Controller resolvedController)
+            {
+                controller = resolvedController;
+                return true;
+            }
+
+            failureReason = "ControllerNotExposedByWpfHost";
+            return false;
+        }
+        catch (Exception ex) when (ex is TargetInvocationException or MemberAccessException or InvalidOperationException)
+        {
+            failureReason = ex.GetType().Name;
+            return false;
+        }
+    }
+
+    private void ReportWebViewControllerMonitoringFailure(object webViewControl, string failureReason)
+    {
+        if (_hasReportedWebViewControllerMonitoringFailure)
         {
             return;
         }
 
-        controller.ShouldDetectMonitorScaleChanges = true;
-        controller.RasterizationScaleChanged += OnLyricsWebViewRasterizationScaleChanged;
-        _lyricsWebViewController = controller;
+        _hasReportedWebViewControllerMonitoringFailure = true;
+        var assemblyVersion = webViewControl.GetType().Assembly.GetName().Version?.ToString() ?? "Unknown";
+        Log.Diagnostic(
+            "DPI-WEBVIEW",
+            $"ControllerMonitoringUnavailable Reason='{failureReason}' WebViewAssemblyVersion='{assemblyVersion}' " +
+            "Fallback='WpfDpiChangedAndDisplaySettingsRefresh'");
     }
 
     private void DetachLyricsWebViewController()
