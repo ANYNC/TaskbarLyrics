@@ -1327,6 +1327,8 @@ public partial class MainWindow : Window, IDisposable
         ApplyHostLayout(CreateLayoutMetrics(_currentSettings));
         AnchorToTaskbar();
         PushStyleToWebView(_currentSettings);
+        LyricsWebHost.InvalidateArrange();
+        UpdateLayout();
     }
 
     private LyricsLayoutMetrics CreateLayoutMetrics(AppSettings settings)
