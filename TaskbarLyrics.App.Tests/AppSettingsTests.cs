@@ -5,6 +5,21 @@ namespace TaskbarLyrics.App.Tests;
 public sealed class AppSettingsTests
 {
     [Fact]
+    public void ForegroundColorModesKeepTheirPersistedNumericValues()
+    {
+        Assert.Equal(0, (int)ForegroundColorMode.Dark);
+        Assert.Equal(1, (int)ForegroundColorMode.Light);
+        Assert.Equal(2, (int)ForegroundColorMode.Custom);
+        Assert.Equal(3, (int)ForegroundColorMode.System);
+    }
+
+    [Fact]
+    public void NewSettingsFollowTheSystemForegroundByDefault()
+    {
+        Assert.Equal(ForegroundColorMode.System, new AppSettings().ForegroundColorMode);
+    }
+
+    [Fact]
     public void ClampEffectiveWindowWidthReturnsBaseWidthAtFullScale()
     {
         Assert.Equal(420, AppSettings.ClampEffectiveWindowWidth(420, 100, 1920));

@@ -9,9 +9,10 @@ public enum LyricsHorizontalAnchor
 
 public enum ForegroundColorMode
 {
-    Dark,
-    Light,
-    Custom
+    Dark = 0,
+    Light = 1,
+    Custom = 2,
+    System = 3
 }
 
 public enum SpectrumDisplayMode
@@ -125,7 +126,7 @@ public sealed class AppSettings
 
     public string FontWeight { get; set; } = DefaultFontWeight;
 
-    public ForegroundColorMode ForegroundColorMode { get; set; } = ForegroundColorMode.Light;
+    public ForegroundColorMode ForegroundColorMode { get; set; } = ForegroundColorMode.System;
 
     public string ForegroundColor { get; set; } = LightForegroundColor;
 
