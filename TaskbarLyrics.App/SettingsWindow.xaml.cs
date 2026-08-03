@@ -159,7 +159,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 ApplyWebSettingUpdate(message.Key, message.Value);
                 await SaveSettingsAndNotifyWebAsync();
                 _hasPendingPreviewChanges = false;
-                if (IsMediaHotkeySetting(message.Key))
+                if (RequiresSettingsStateRefresh(message.Key))
                 {
                     await PushSettingsToWebAsync();
                 }
@@ -896,6 +896,11 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 string.Equals(definition.SettingKey, key, StringComparison.Ordinal));
     }
 
+    private static bool RequiresSettingsStateRefresh(string? key)
+    {
+        return key == "foregroundColorMode" || IsMediaHotkeySetting(key);
+    }
+
     private static bool IsLyricsLayoutSetting(string? key)
     {
         return key is "fontSize" or
@@ -988,12 +993,9 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
 
     private void ApplyForegroundColorMode()
     {
-        _settings.ForegroundColor = _settings.ForegroundColorMode switch
-        {
-            ForegroundColorMode.Dark => AppSettings.DarkForegroundColor,
-            ForegroundColorMode.Light => AppSettings.LightForegroundColor,
-            _ => _settings.ForegroundColor
-        };
+        ForegroundColorPolicy.ApplySelectedMode(
+            _settings,
+            App.IsSystemUiUsingLightTheme());
     }
 
     private static void ClearLyricCache()

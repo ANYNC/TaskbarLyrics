@@ -9,7 +9,7 @@
       spectrumDisplayMode: [{ value: "Disabled", label: "关闭" }, { value: "PureMusicOnly", label: "仅纯音乐时" }, { value: "PureMusicOrNoLyrics", label: "纯音乐或无歌词时" }, { value: "Always", label: "始终显示" }],
       fontFamily: [],
       fontWeight: [{ value: "Light", label: "细体" }, { value: "Normal", label: "常规" }, { value: "Medium", label: "中等" }, { value: "SemiBold", label: "半粗体" }, { value: "Bold", label: "粗体" }],
-      foregroundColorMode: [{ value: "Dark", label: "深色" }, { value: "Light", label: "浅色" }, { value: "Custom", label: "自定义" }],
+      foregroundColorMode: [{ value: "System", label: "跟随系统" }, { value: "Dark", label: "深色" }, { value: "Light", label: "浅色" }, { value: "Custom", label: "自定义" }],
       horizontalAnchor: [{ value: "Left", label: "左侧" }, { value: "Center", label: "居中" }, { value: "Right", label: "右侧" }],
       trackOffsetSourceFilter: [{ value: "All", label: "全部歌词源" }],
       trackOffsetSort: [{ value: "updated", label: "最近修改" }, { value: "title", label: "歌曲名称" }, { value: "offset", label: "偏移量" }]
@@ -836,7 +836,7 @@
       const custom = state.foregroundColorMode === "Custom";
       if (state.foregroundColorMode === "Dark") state.foregroundColor = "#111827";
       else if (state.foregroundColorMode === "Light") state.foregroundColor = "#FFFFFF";
-      else state.foregroundColor = state.customForegroundColor;
+      else if (custom) state.foregroundColor = state.customForegroundColor;
       $("[data-custom-color]").hidden = !custom;
       $("[data-preset-color]").hidden = custom;
       $("[data-custom-color]").closest(".color-mode-control").classList.toggle("is-custom", custom);

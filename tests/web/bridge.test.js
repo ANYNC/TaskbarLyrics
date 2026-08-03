@@ -418,6 +418,37 @@ describe("settings WebView bridge", () => {
     });
   });
 
+  it("keeps the host-resolved color when the foreground follows the system", async () => {
+    const { dom, script } = await createSettingsDom();
+    const document = dom.window.document;
+    const createSettings = (foregroundColorMode, foregroundColor) => ({
+      sourceRecognitionOrder: [],
+      playerLyricOffsets: {},
+      defaultPlayerLyricOffsets: {},
+      mediaHotkeys: [],
+      mediaHotkeyStatuses: {},
+      foregroundColorMode,
+      foregroundColor,
+      toolWindowTheme: "System"
+    });
+    dom.window.eval(script);
+
+    dom.window.settingsApp.receive({
+      version: 1,
+      type: "settingsState",
+      payload: { settings: createSettings("Custom", "#FF336699"), fonts: [] }
+    });
+    dom.window.settingsApp.receive({
+      version: 1,
+      type: "settingsState",
+      payload: { settings: createSettings("System", "#FF111827"), fonts: [] }
+    });
+
+    expect(document.querySelector('[data-setting="foregroundColorMode"] .select-trigger-value').textContent).toBe("跟随系统");
+    expect(document.querySelector("[data-mode-value]").textContent).toBe("#111827");
+    expect(document.querySelector("[data-custom-color]").hidden).toBe(true);
+  });
+
   it("shows the actual host save result and persistent color validation", async () => {
     const { dom, script } = await createSettingsDom();
     const document = dom.window.document;
