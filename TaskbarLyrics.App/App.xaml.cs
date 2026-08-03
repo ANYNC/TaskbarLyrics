@@ -208,61 +208,29 @@ public partial class App : System.Windows.Application, IDisposable
 
     internal static void ApplyStartupForegroundColor(AppSettings settings)
     {
-        ApplySystemThemeForegroundColor(settings, migrateLegacyCustomColor: true);
+        ForegroundColorPolicy.ApplyStartup(settings, IsSystemUiUsingLightTheme());
     }
 
-    internal static bool ApplySystemThemeForegroundColor(AppSettings settings, bool migrateLegacyCustomColor = false)
+    internal static bool ApplySystemThemeForegroundColor(AppSettings settings)
     {
-        if (migrateLegacyCustomColor && IsLegacyCustomForeground(settings.ForegroundColor))
-        {
-            settings.ForegroundColorMode = ForegroundColorMode.Custom;
-            return false;
-        }
-
-        if (settings.ForegroundColorMode == ForegroundColorMode.Custom)
-        {
-            return false;
-        }
-
-        var nextMode = IsSystemUsingLightTheme()
-            ? ForegroundColorMode.Dark
-            : ForegroundColorMode.Light;
-        var nextColor = nextMode == ForegroundColorMode.Dark
-            ? AppSettings.DarkForegroundColor
-            : AppSettings.LightForegroundColor;
-
-        var changed = settings.ForegroundColorMode != nextMode ||
-            !string.Equals(settings.ForegroundColor, nextColor, StringComparison.OrdinalIgnoreCase);
-        settings.ForegroundColorMode = nextMode;
-        settings.ForegroundColor = nextColor;
-        return changed;
+        return ForegroundColorPolicy.ApplySystemTheme(settings, IsSystemUiUsingLightTheme());
     }
 
-    private static bool IsLegacyCustomForeground(string? color)
+    internal static bool IsApplicationUsingLightTheme()
     {
-        var normalized = NormalizeColor(color);
-        return !string.Equals(normalized, AppSettings.DarkForegroundColor, StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(normalized, AppSettings.LightForegroundColor, StringComparison.OrdinalIgnoreCase);
+        return ReadLightThemePreference("AppsUseLightTheme");
     }
 
-    private static string NormalizeColor(string? color)
+    internal static bool IsSystemUiUsingLightTheme()
     {
-        if (string.IsNullOrWhiteSpace(color))
-        {
-            return AppSettings.LightForegroundColor;
-        }
-
-        var trimmed = color.Trim();
-        return trimmed.Length == 7 && trimmed.StartsWith('#')
-            ? $"#FF{trimmed[1..]}"
-            : trimmed;
+        return ReadLightThemePreference("SystemUsesLightTheme");
     }
 
-    internal static bool IsSystemUsingLightTheme()
+    private static bool ReadLightThemePreference(string valueName)
     {
         const string personalizeKey = @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize";
         using var key = Registry.CurrentUser.OpenSubKey(personalizeKey);
-        return key?.GetValue("AppsUseLightTheme") is not int value || value != 0;
+        return key?.GetValue(valueName) is not int value || value != 0;
     }
 
     private void OnUserPreferenceChanged(object sender, UserPreferenceChangedEventArgs e)

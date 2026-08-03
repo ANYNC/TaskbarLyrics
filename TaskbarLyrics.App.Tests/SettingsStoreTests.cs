@@ -5,6 +5,63 @@ namespace TaskbarLyrics.App.Tests;
 
 public sealed class SettingsStoreTests
 {
+    [Theory]
+    [InlineData(0, ForegroundColorMode.Dark)]
+    [InlineData(1, ForegroundColorMode.Light)]
+    [InlineData(2, ForegroundColorMode.Custom)]
+    public void LoadPreservesLegacyForegroundColorModeValues(
+        int persistedValue,
+        ForegroundColorMode expectedMode)
+    {
+        var directory = Path.Combine(AppContext.BaseDirectory, $"settings-store-{Guid.NewGuid():N}");
+        var filePath = Path.Combine(directory, "settings.json");
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            File.WriteAllText(filePath, $"{{\"ForegroundColorMode\":{persistedValue}}}");
+
+            var loaded = new SettingsStore(filePath).Load();
+
+            Assert.Equal(expectedMode, loaded.ForegroundColorMode);
+        }
+        finally
+        {
+            if (Directory.Exists(directory))
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void SavePersistsSystemForegroundColorModeAsTheNextEnumValue()
+    {
+        var directory = Path.Combine(AppContext.BaseDirectory, $"settings-store-{Guid.NewGuid():N}");
+        var filePath = Path.Combine(directory, "settings.json");
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            var settings = new AppSettings
+            {
+                ForegroundColorMode = ForegroundColorMode.System
+            };
+
+            var saved = new SettingsStore(filePath).Save(settings);
+
+            Assert.True(saved);
+            Assert.Contains("\"ForegroundColorMode\": 3", File.ReadAllText(filePath), StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(directory))
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+    }
+
     [Fact]
     public void SaveReplacesTheSettingsFileWithoutLeavingTemporaryFiles()
     {
@@ -104,6 +161,7 @@ public sealed class SettingsStoreTests
             Assert.Equal(34.3, loaded.CoverSize);
             Assert.Equal(AppSettings.DefaultLyricsLayoutScalePercent, loaded.LyricsLayoutScalePercent);
             Assert.True(loaded.ShowCover);
+            Assert.Equal(ForegroundColorMode.System, loaded.ForegroundColorMode);
         }
         finally
         {

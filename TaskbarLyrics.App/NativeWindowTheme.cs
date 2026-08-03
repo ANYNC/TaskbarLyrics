@@ -26,7 +26,7 @@ internal static class NativeWindowTheme
     {
         ToolWindowTheme.Light => true,
         ToolWindowTheme.Dark => false,
-        _ => App.IsSystemUsingLightTheme()
+        _ => App.IsApplicationUsingLightTheme()
     };
 
     public static void SetMode(ToolWindowTheme mode)
