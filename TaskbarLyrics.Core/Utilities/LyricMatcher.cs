@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using F23.StringSimilarity;
 using TaskbarLyrics.Core.Models;
+using TaskbarLyrics.Core.Services;
 
 namespace TaskbarLyrics.Core.Utilities;
 
@@ -15,7 +16,12 @@ public static class LyricMatcher
     // JaroWinkler 算法，适合短文本匹配
     private static readonly JaroWinkler JaroWinklerAlgo = new();
 
-    public static int Score(TrackInfo target, string resultTitle, string resultArtist, int resultDurationInSeconds = 0)
+    public static int Score(
+        TrackInfo target,
+        string resultTitle,
+        string resultArtist,
+        int resultDurationInSeconds = 0,
+        string? resultAlbum = null)
     {
         if (IsUnknownTitle(target.Title) || IsUnknownTitle(resultTitle)) return 0;
 
@@ -29,6 +35,8 @@ public static class LyricMatcher
         var normalizedResultTitle = NormalizeForSearch(resultTitle);
         var normalizedTargetArtist = NormalizeForSearch(target.Artist);
         var normalizedResultArtist = NormalizeForSearch(resultArtist);
+        var normalizedTargetAlbum = NormalizeForSearch(target.Album);
+        var normalizedResultAlbum = NormalizeForSearch(resultAlbum);
 
         double titleSim = GetStringSimilarity(normalizedTargetTitle, normalizedResultTitle);
         double artistSim = GetStringSimilarity(normalizedTargetArtist, normalizedResultArtist);
@@ -38,6 +46,7 @@ public static class LyricMatcher
             artistSim = Math.Max(artistSim, artistTokenOverlapSim);
         }
         double durationSim = GetDurationSimilarity(target.Duration.TotalSeconds, resultDurationInSeconds);
+        double albumSim = GetStringSimilarity(normalizedTargetAlbum, normalizedResultAlbum);
 
         if (!IsTitleMatchAcceptable(normalizedTargetTitle, normalizedResultTitle, titleSim))
         {
@@ -59,7 +68,8 @@ public static class LyricMatcher
         bool hasDuration = target.Duration.TotalSeconds > 0 && resultDurationInSeconds > 0;
         if (!IsQqTrack(target) &&
             hasDuration &&
-            Math.Abs(target.Duration.TotalSeconds - resultDurationInSeconds) >= 20)
+            Math.Abs(target.Duration.TotalSeconds - resultDurationInSeconds) >=
+            LyricMatchingPolicy.DurationConflictThreshold.TotalSeconds)
         {
             Log.Debug($"LyricMatcher rejected duration mismatch: {target.Duration.TotalSeconds:F0}s vs {resultDurationInSeconds}s");
             return 0;
@@ -83,7 +93,13 @@ public static class LyricMatcher
             totalScore = titleSim;
         }
 
-        Log.Debug($"LyricMatcher: TitleSim={titleSim:F2}, ArtistSim={artistSim:F2}, DurationSim={durationSim:F2} -> BaseScore={(int)Math.Round(totalScore * 100)}");
+        if (HasUsefulAlbum(normalizedTargetAlbum) && HasUsefulAlbum(normalizedResultAlbum))
+        {
+            const double AlbumWeight = 0.05;
+            totalScore = (totalScore * (1 - AlbumWeight)) + (albumSim * AlbumWeight);
+        }
+
+        Log.Debug($"LyricMatcher: TitleSim={titleSim:F2}, ArtistSim={artistSim:F2}, AlbumSim={albumSim:F2}, DurationSim={durationSim:F2} -> BaseScore={(int)Math.Round(totalScore * 100)}");
         return (int)Math.Round(totalScore * 100);
     }
 
@@ -128,6 +144,12 @@ public static class LyricMatcher
     {
         return !string.IsNullOrWhiteSpace(normalizedArtist) &&
                !string.Equals(normalizedArtist, "unknown artist", StringComparison.Ordinal);
+    }
+
+    private static bool HasUsefulAlbum(string normalizedAlbum)
+    {
+        return !string.IsNullOrWhiteSpace(normalizedAlbum) &&
+               !string.Equals(normalizedAlbum, "unknown album", StringComparison.Ordinal);
     }
 
     private static bool IsUnknownTitle(string? title)

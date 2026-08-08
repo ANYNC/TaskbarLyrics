@@ -13,13 +13,15 @@ Read this file before changing the repository. Keep user-visible behavior and st
 - Requires .NET 8 SDK, Windows x64, and Windows 11 SDK 10.0.22621.
 - Run: `dotnet run --project TaskbarLyrics.App`
 - Build: `dotnet build TaskbarLyrics.sln`
-- Full verification: `powershell -ExecutionPolicy Bypass -File scripts/verify.ps1`
+- Targeted verification while iterating: `powershell -ExecutionPolicy Bypass -File scripts/verify.ps1 -Tier Targeted -Area Core -Filter FullyQualifiedName~TestClassName`
+- Affected-project verification: `powershell -ExecutionPolicy Bypass -File scripts/verify.ps1 -Tier Project -Area Core` (areas: `Core`, `App`, `Web`, `Settings`; multiple areas are allowed)
+- Full delivery verification: `powershell -ExecutionPolicy Bypass -File scripts/verify.ps1`
 - Restart local app: `powershell -ExecutionPolicy Bypass -File scripts/restart-app.ps1`
 - Release packaging: `powershell -ExecutionPolicy Bypass -File scripts/publish-release.ps1`
 - Before handoff, also run `git diff --check`. For production code changes, require a zero-warning solution build.
 - After verification succeeds for a change that affects the runnable app, run `scripts/restart-app.ps1` and leave the app ready for user validation. Skip this for documentation-only, test-only, instruction-only, or build-only changes, or when the user opts out.
 
-The verification script runs Vitest/jsdom web tests, App tests, Core tests, the settings contract test, and `dotnet format --verify-no-changes`.
+The verification script defaults to `Full`, which runs Vitest/jsdom web tests, App tests, Core tests, the settings contract test, and `dotnet format --verify-no-changes`. Use `Targeted` for the directly affected test class or web test file while iterating, `Project` after the affected feature is complete, and `Full` only at the delivery boundary. Tests change when an observable behavior or compatibility contract changes; implementation-only refactors should preserve existing tests whenever practical.
 
 ## Solution layout
 

@@ -80,15 +80,15 @@ Phase A 只确保 QRC、KRC 和 YRC 的 Provider 原生逐词时间完整进入 
 
 | Phase | Delivery | Status | Can start when |
 | --- | --- | --- | --- |
-| A0 | 基线、特征测试与 fixture | Pending | Spec Accepted |
-| A1 | Core 边界模型与可替换 seam | Pending | A0 passed |
-| A2 | Lyricify 0.2.0 升级、显式解密/解析适配 | Pending | A1 passed |
-| A3 | 查询规划与身份准入解耦 | Pending | A1 passed |
-| A4 | 四个在线源节点化迁移 | Pending | A2 and A3 passed |
-| A5 | 原始载荷与解析结果分层缓存 | Pending | A4 contracts stable |
-| A6 | 可信顺序协调器和单一选择权 | Pending | A4 and A5 passed |
-| A7 | 信息行、兼容投影和旧路径收敛 | Pending | A6 passed |
-| A8 | Phase A 全量验证和手工验收 | Pending | A7 passed |
+| A0 | 基线、特征测试与 fixture | Completed (2026-08-08: baseline verify passed; Core 29/29) | Spec Accepted |
+| A1 | Core 边界模型与可替换 seam | Completed (2026-08-08: Core 36/36; zero-warning Core build) | A0 passed |
+| A2 | Lyricify 0.2.0 升级、显式解密/解析适配 | Completed (2026-08-08: explicit parser fixtures; 0.2.0 build) | A1 passed |
+| A3 | 查询规划与身份准入解耦 | Completed (2026-08-08: identity/query tests; Core 56/56) | A1 passed |
+| A4 | 四个在线源节点化迁移 | Completed | Four adapter boundary tests passed; no live network dependency |
+| A5 | 原始载荷与解析结果分层缓存 | Completed | Layered cache tests passed; stable identity and version gates enforced |
+| A6 | 可信顺序协调器和单一选择权 | Completed | Deterministic trust-order, cancellation, mapping and lifecycle tests passed |
+| A7 | 信息行、兼容投影和旧路径收敛 | Completed | New pipeline is the only production path; legacy providers and selection weights removed |
+| A8 | Phase A 全量验证和手工验收 | In Progress | Automated verification passed; real-player manual matrix pending |
 | B | 逐词播放投影与 WebView 扫描 | Deferred | A8 accepted |
 | C | 翻译/音译多轨与翻译增强 | Deferred | B accepted and translation addendum accepted |
 

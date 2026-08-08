@@ -34,6 +34,7 @@
         <button class="nav-item" data-nav="shortcuts" data-tooltip="快捷键" type="button"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10h.01M10 10h.01M13 10h4M7 14h6M16 14h1"/></svg><span>快捷键</span></button>
         <button class="nav-item" data-nav="trackOffsets" data-tooltip="单曲偏移" type="button"><svg viewBox="0 0 24 24"><path d="M4 7h10M4 12h16M4 17h9"/><path d="M18 15v6M15 18h6"/></svg><span>单曲偏移</span></button>
         <button class="nav-item" data-nav="advanced" data-tooltip="高级" type="button"><svg viewBox="0 0 24 24"><path d="m14 4-4 16M5 8l-3 4 3 4M19 8l3 4-3 4"/></svg><span>高级</span></button>
+        <button class="nav-item" data-nav="lyricDiagnostics" data-tooltip="歌词诊断" type="button"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4z"/><path d="M8 9h8M8 13h5"/><circle cx="17" cy="16" r="3"/><path d="m19.2 18.2 1.8 1.8"/></svg><span>歌词诊断</span></button>
         <button class="nav-item" data-nav="about" data-tooltip="关于" type="button"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg><span>关于</span></button>
       </nav>
 
@@ -202,6 +203,39 @@
               <div class="setting-row compact"><div class="setting-label"><strong>频谱调试</strong><small>打开滑块面板，实时调节频谱参数（自动保存）。</small></div><button id="spectrumTuningButton" class="btn secondary" type="button">打开调试</button></div>
             </div></section>
             <section class="panel"><div class="panel-head"><div><h2>数据维护</h2><p>清理缓存不会删除应用设置。</p></div></div><div class="settings"><div class="setting-row compact"><div class="setting-label"><strong>歌词与封面缓存</strong><small>清理后首次重新匹配可能稍慢。</small></div><button id="clearCacheButton" class="btn destructive" type="button">清除缓存</button></div></div></section>
+          </div>
+        </section>
+
+        <section class="page" data-page="lyricDiagnostics" aria-labelledby="lyricDiagnosticsHeading">
+          <div class="page-inner diagnostics-page">
+            <section class="panel diagnostics-run-panel">
+              <div class="panel-head">
+                <div><h2 id="lyricDiagnosticsHeading" tabindex="-1">歌词诊断</h2><p>针对当前 SMTC 歌曲执行一次完整检索，查看每个歌词源的候选、匹配分和终态。</p></div>
+                <button id="runLyricDiagnosticsButton" class="btn" type="button">开始诊断</button>
+              </div>
+              <div id="lyricDiagnosticsStatus" class="diagnostics-status" data-state="idle" role="status" aria-live="polite">尚未运行诊断。点击“开始诊断”获取当前歌曲的检索过程。</div>
+            </section>
+
+            <section id="lyricDiagnosticsTrackPanel" class="panel diagnostics-track-panel" hidden>
+              <div class="panel-head"><div><h2>当前歌曲</h2><p>诊断使用本次运行捕获的 SMTC 元数据，不会修改歌词缓存或设置。</p></div><span id="lyricDiagnosticsCapturedAt" class="source-count"></span></div>
+              <div id="lyricDiagnosticsTrack" class="diagnostics-track"></div>
+            </section>
+
+            <section id="lyricDiagnosticsReportPanel" class="panel" hidden>
+              <div class="panel-head"><div><h2>检索结果</h2><p>候选按歌词源分组；每项保留源返回的元数据、身份匹配分和拒绝原因。</p></div><span id="lyricDiagnosticsProviderCount" class="source-count"></span></div>
+              <div id="lyricDiagnosticsReportSummary" class="diagnostics-report-summary"></div>
+              <div id="lyricDiagnosticsProviders" class="diagnostics-providers"></div>
+            </section>
+
+            <section id="lyricDiagnosticsVariantsPanel" class="panel" hidden>
+              <div class="panel-head"><div><h2>检索变体</h2><p>当严格身份没有结果时，系统会按顺序放宽查询条件。</p></div></div>
+              <div id="lyricDiagnosticsVariants" class="diagnostics-variants"></div>
+            </section>
+
+            <section id="lyricDiagnosticsSelectionPanel" class="panel" hidden>
+              <div class="panel-head"><div><h2>最终结果</h2><p>以下是本次诊断最终采用的歌词内容；空结果表示没有通过完整校验的候选。</p></div></div>
+              <div id="lyricDiagnosticsSelection" class="diagnostics-selection"></div>
+            </section>
           </div>
         </section>
 

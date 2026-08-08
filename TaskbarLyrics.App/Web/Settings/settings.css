@@ -487,6 +487,79 @@
     .track-offset-page-button svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
     .track-offset-list .track-offset-empty { min-height: 180px; }
 
+    .diagnostics-page { min-width: 0; }
+    .diagnostics-run-panel .panel-head { align-items: center; }
+    .diagnostics-run-panel .btn { flex: 0 0 auto; min-width: 104px; }
+    .diagnostics-status { min-height: 48px; display: flex; align-items: center; gap: 8px; padding: 12px 18px; border-top: 1px solid var(--border); color: var(--muted-foreground); font-size: 11px; line-height: 1.5; }
+    .diagnostics-status::before { width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; background: var(--subtle); content: ""; }
+    .diagnostics-status[data-state="running"] { color: var(--foreground); }
+    .diagnostics-status[data-state="running"]::before { background: var(--primary); box-shadow: 0 0 0 3px color-mix(in oklch, var(--primary) 18%, transparent); }
+    .diagnostics-status[data-state="success"] { color: var(--success); }
+    .diagnostics-status[data-state="success"]::before { background: var(--success); box-shadow: 0 0 0 3px color-mix(in oklch, var(--success) 18%, transparent); }
+    .diagnostics-status[data-state="empty"],
+    .diagnostics-status[data-state="error"] { color: var(--destructive); }
+    .diagnostics-status[data-state="empty"]::before,
+    .diagnostics-status[data-state="error"]::before { background: var(--destructive); box-shadow: 0 0 0 3px var(--destructive-soft); }
+    .diagnostics-track { min-width: 0; display: grid; grid-template-columns: minmax(180px, 1.3fr) repeat(4, minmax(100px, 1fr)); gap: 12px; padding: 14px 18px; }
+    .diagnostics-track-item { min-width: 0; display: grid; align-content: start; gap: 4px; }
+    .diagnostics-track-item span { color: var(--muted-foreground); font-size: 10px; }
+    .diagnostics-track-item strong { min-width: 0; overflow: hidden; font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+    .diagnostics-track-item strong[title] { cursor: help; }
+    .diagnostics-providers { display: grid; gap: 10px; padding: 14px 18px; }
+    .diagnostics-provider { min-width: 0; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--background); }
+    .diagnostics-provider-head { min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 12px; cursor: pointer; list-style: none; }
+    .diagnostics-provider-head::-webkit-details-marker { display: none; }
+    .diagnostics-provider-head:hover { background: var(--accent); }
+    .diagnostics-provider-head:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+    .diagnostics-provider[open] > .diagnostics-provider-head { border-bottom: 1px solid var(--border); }
+    .diagnostics-provider-heading { min-width: 0; display: grid; gap: 3px; }
+    .diagnostics-provider-title { min-width: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 7px; }
+    .diagnostics-provider-title strong { font-size: 12px; }
+    .diagnostics-provider-detail { min-width: 0; margin: 3px 0 0; overflow: hidden; color: var(--muted-foreground); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+    .diagnostics-provider-toggle-meta { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; color: var(--muted-foreground); font-size: 10px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .diagnostics-provider-toggle-meta svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.5; }
+    .diagnostics-provider[open] .diagnostics-provider-toggle-meta svg { transform: rotate(90deg); }
+    .diagnostics-report-summary { display: flex; flex-wrap: wrap; gap: 5px 14px; padding: 10px 18px 0; color: var(--muted-foreground); font-size: 10px; }
+    .diagnostics-report-summary span { min-width: 0; }
+    .diagnostics-badge { display: inline-flex; align-items: center; min-height: 21px; padding: 0 7px; border: 1px solid var(--border); border-radius: 99px; background: var(--secondary); color: var(--muted-foreground); font-size: 10px; font-weight: 600; white-space: nowrap; }
+    .diagnostics-badge[data-state="selected"],
+    .diagnostics-badge[data-state="accepted"],
+    .diagnostics-badge[data-state="success"] { border-color: color-mix(in oklch, var(--success) 36%, var(--border)); background: color-mix(in oklch, var(--success) 13%, transparent); color: var(--success); }
+    .diagnostics-badge[data-state="rejected"],
+    .diagnostics-badge[data-state="error"] { border-color: color-mix(in oklch, var(--destructive) 36%, var(--border)); background: var(--destructive-soft); color: var(--destructive); }
+    .diagnostics-badge[data-state="running"] { color: var(--foreground); }
+    .diagnostics-candidates { display: grid; gap: 7px; padding: 9px 12px 12px; }
+    .diagnostics-candidate { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; padding: 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--card); }
+    .diagnostics-candidate-main { min-width: 0; display: grid; gap: 5px; }
+    .diagnostics-candidate-title { min-width: 0; display: flex; align-items: baseline; gap: 7px; }
+    .diagnostics-candidate-title strong { min-width: 0; overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+    .diagnostics-candidate-title small { flex: 0 0 auto; color: var(--muted-foreground); font-size: 10px; }
+    .diagnostics-candidate-meta { min-width: 0; display: flex; flex-wrap: wrap; gap: 4px 10px; color: var(--muted-foreground); font-size: 10px; line-height: 1.45; }
+    .diagnostics-candidate-meta span { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .diagnostics-candidate-meta code,
+    .diagnostics-selection code { font-family: Consolas, "Cascadia Mono", monospace; font-size: 10px; }
+    .diagnostics-candidate-side { display: grid; justify-items: end; align-content: start; gap: 6px; }
+    .diagnostics-score { color: var(--foreground); font-size: 12px; font-variant-numeric: tabular-nums; font-weight: 700; white-space: nowrap; }
+    .diagnostics-reasons { display: flex; flex-wrap: wrap; gap: 4px; margin: 0; padding: 0; list-style: none; }
+    .diagnostics-reasons li { padding: 3px 6px; border-radius: 4px; background: var(--destructive-soft); color: var(--destructive); font-size: 10px; line-height: 1.25; }
+    .diagnostics-candidate-empty { padding: 12px 10px; color: var(--muted-foreground); font-size: 11px; }
+    .diagnostics-variants { display: grid; gap: 7px; padding: 12px 18px 14px; }
+    .diagnostics-variant { min-width: 0; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--background); }
+    .diagnostics-variant-index { width: 22px; height: 22px; display: grid; place-items: center; border-radius: 50%; background: var(--secondary); color: var(--muted-foreground); font-size: 10px; font-variant-numeric: tabular-nums; }
+    .diagnostics-variant-copy { min-width: 0; display: grid; gap: 2px; }
+    .diagnostics-variant-copy strong { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+    .diagnostics-variant-copy small { overflow: hidden; color: var(--muted-foreground); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+    .diagnostics-variant-reasons { justify-self: end; color: var(--muted-foreground); font-size: 10px; text-align: right; }
+    .diagnostics-selection { padding: 14px 18px; }
+    .diagnostics-selection-card { display: grid; gap: 10px; padding: 13px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--background); }
+    .diagnostics-selection-card.is-selected { border-color: color-mix(in oklch, var(--success) 45%, var(--border)); background: color-mix(in oklch, var(--success) 7%, var(--background)); }
+    .diagnostics-selection-title { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+    .diagnostics-selection-title strong { font-size: 13px; }
+    .diagnostics-selection-meta { display: flex; flex-wrap: wrap; gap: 4px 14px; color: var(--muted-foreground); font-size: 10px; }
+    .diagnostics-selection-empty { display: grid; justify-items: center; gap: 5px; padding: 14px; color: var(--muted-foreground); text-align: center; }
+    .diagnostics-selection-empty strong { color: var(--foreground); font-size: 12px; }
+    .diagnostics-selection-empty small { font-size: 11px; }
+
     .about-layout { width: 100%; display: grid; gap: 16px; }
     .about-product { min-height: 116px; display: grid; grid-template-columns: 58px minmax(0, 1fr) auto; align-items: center; gap: 16px; padding: 20px; }
     .about-logo { width: 58px; height: 58px; display: grid; place-items: center; border: 1px solid var(--input); border-radius: 16px; background: var(--accent); color: var(--accent-foreground); font-weight: 700; }
@@ -557,6 +630,7 @@
       .current-track-identity { border-right: 0; border-bottom: 1px solid var(--border); }
       .track-offset-table-head, .track-offset-row { grid-template-columns: minmax(180px, 1.5fr) minmax(100px, .8fr) 105px 72px; }
       .track-offset-table-head > :nth-child(4), .track-offset-row > :nth-child(4) { display: none; }
+      .diagnostics-track { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     }
     @media (max-width: 720px) {
       .app-shell { grid-template-columns: 68px minmax(0, 1fr); }
@@ -591,6 +665,12 @@
       .track-offset-footer { grid-template-columns: 1fr auto; }
       .track-offset-footer p { grid-column: 1 / -1; }
       .track-offset-pagination { justify-self: start; }
+      .diagnostics-run-panel .panel-head { align-items: flex-start; }
+      .diagnostics-track { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .diagnostics-candidate { grid-template-columns: minmax(0, 1fr); }
+      .diagnostics-candidate-side { grid-template-columns: auto auto; justify-items: start; align-items: center; }
+      .diagnostics-variant { grid-template-columns: auto minmax(0, 1fr); }
+      .diagnostics-variant-reasons { grid-column: 2; justify-self: start; text-align: left; }
     }
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }

@@ -24,6 +24,7 @@
       displayArea: ["显示与外观", "调整歌词显示的尺寸、文字、窗口外观与位置，并在歌词窗口中即时检查效果。"],
       general: ["常规", "管理启动行为与界面主题。"],
       advanced: ["高级", "用于诊断播放同步问题和维护缓存数据。"],
+      lyricDiagnostics: ["歌词诊断", "针对当前 SMTC 歌曲查看歌词检索候选、匹配分和最终结果。"],
       about: ["关于", "查看版本、许可证与项目技术信息。"]
     };
 
@@ -56,6 +57,7 @@
     const pendingRangePreviews = new Map();
     let rangePreviewFrame = 0;
     let announceNextLayoutPreview = false;
+    let lyricDiagnosticsState = { status: "idle", track: null, report: null, message: "" };
 
     const $ = selector => document.querySelector(selector);
     const $$ = selector => Array.from(document.querySelectorAll(selector));
@@ -211,6 +213,225 @@
     function renderTrackOffsets() {
       renderCurrentTrackOffset();
       renderTrackOffsetList();
+    }
+
+    function diagnosticString(value, fallback = "--") {
+      if (value === null || value === undefined) return fallback;
+      const text = String(value).trim();
+      return text || fallback;
+    }
+
+    function diagnosticDurationSeconds(value) {
+      if (typeof value === "number" && Number.isFinite(value)) return Math.max(0, value);
+      if (typeof value !== "string") return 0;
+      const text = value.trim();
+      const numeric = Number(text);
+      if (Number.isFinite(numeric)) return Math.max(0, numeric);
+      const parts = text.split(":").map(Number);
+      if (parts.length === 3 && parts.every(Number.isFinite)) return Math.max(0, parts[0] * 3600 + parts[1] * 60 + parts[2]);
+      if (parts.length === 2 && parts.every(Number.isFinite)) return Math.max(0, parts[0] * 60 + parts[1]);
+      const iso = /^PT(?:(\d+(?:\.\d+)?)H)?(?:(\d+(?:\.\d+)?)M)?(?:(\d+(?:\.\d+)?)S)?$/i.exec(text);
+      if (iso) return Math.max(0, Number(iso[1] || 0) * 3600 + Number(iso[2] || 0) * 60 + Number(iso[3] || 0));
+      return 0;
+    }
+
+    function formatDiagnosticDuration(value) {
+      const seconds = diagnosticDurationSeconds(value);
+      if (!seconds) return "--";
+      const rounded = Math.round(seconds);
+      const minutes = Math.floor(rounded / 60);
+      const remainder = String(rounded % 60).padStart(2, "0");
+      return `${minutes}:${remainder}`;
+    }
+
+    function diagnosticArtists(value, fallback = "--") {
+      const artists = Array.isArray(value)
+        ? value.filter(item => item !== null && item !== undefined).map(item => String(item).trim()).filter(Boolean)
+        : [];
+      return artists.length ? artists.join(" / ") : fallback;
+    }
+
+    function diagnosticTrackArtist(track) {
+      return diagnosticArtists(track?.artists, diagnosticString(track?.artist));
+    }
+
+    function diagnosticProviderStateLabel(value) {
+      return ({
+        Succeeded: "成功",
+        IdentityRejected: "身份拒绝",
+        NoLyrics: "无歌词",
+        InvalidContent: "内容无效",
+        Failed: "失败",
+        TimedOut: "超时",
+        Disabled: "未启用",
+        Canceled: "已取消"
+      })[value] ?? (value ? String(value) : "未完成");
+    }
+
+    function diagnosticProviderStateClass(value) {
+      if (value === "Succeeded") return "success";
+      if (["Failed", "TimedOut", "InvalidContent", "IdentityRejected"].includes(value)) return "error";
+      return "unknown";
+    }
+
+    function formatDiagnosticTimestamp(value) {
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return "";
+      return new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(date);
+    }
+
+    function renderLyricDiagnosticsTrack(track) {
+      const panel = $("#lyricDiagnosticsTrackPanel");
+      const container = $("#lyricDiagnosticsTrack");
+      if (!track || typeof track !== "object") {
+        panel.hidden = true;
+        container.replaceChildren();
+        return;
+      }
+
+      panel.hidden = false;
+      const title = diagnosticString(track.title, "未知歌曲");
+      const sourceApp = diagnosticString(track.sourceApp);
+      const songId = diagnosticString(track.songId);
+      container.innerHTML = `
+        <div class="diagnostics-track-item"><span>歌曲</span><strong title="${escapeHtml(title)}">${escapeHtml(title)}</strong></div>
+        <div class="diagnostics-track-item"><span>歌手</span><strong title="${escapeHtml(diagnosticTrackArtist(track))}">${escapeHtml(diagnosticTrackArtist(track))}</strong></div>
+        <div class="diagnostics-track-item"><span>专辑</span><strong title="${escapeHtml(diagnosticString(track.album))}">${escapeHtml(diagnosticString(track.album))}</strong></div>
+        <div class="diagnostics-track-item"><span>播放器</span><strong title="${escapeHtml(sourceApp)}">${escapeHtml(sourceApp)}</strong></div>
+        <div class="diagnostics-track-item"><span>时长 / 歌曲 ID</span><strong title="${escapeHtml(`${formatDiagnosticDuration(track.durationSeconds ?? track.duration)} · ${songId}`)}">${escapeHtml(formatDiagnosticDuration(track.durationSeconds ?? track.duration))} · ${escapeHtml(songId)}</strong></div>`;
+    }
+
+    function renderLyricDiagnosticsProviders(report) {
+      const providers = Array.isArray(report?.providers) ? report.providers : [];
+      const container = $("#lyricDiagnosticsProviders");
+      $("#lyricDiagnosticsProviderCount").textContent = `${providers.length} 个歌词源`;
+      const summary = $("#lyricDiagnosticsReportSummary");
+      const preferredProvider = diagnosticString(report?.preferredProvider, "");
+      const musicKind = report?.isPureMusic === true ? "纯音乐" : report?.isPureMusic === false ? "常规歌曲" : "歌曲类型：未知";
+      summary.innerHTML = `<span>${musicKind}</span><span>首选来源：${escapeHtml(preferredProvider || "未指定")}</span>`;
+      if (!providers.length) {
+        container.innerHTML = `<div class="diagnostics-selection-empty"><strong>没有收到歌词源结果</strong><small>本次运行没有可展示的来源终态。</small></div>`;
+        return;
+      }
+
+      container.innerHTML = providers.map(provider => {
+        const providerId = diagnosticString(provider?.providerId, "未知来源");
+        const providerState = provider?.state ?? null;
+        const providerStateClass = diagnosticProviderStateClass(providerState);
+        const candidates = Array.isArray(provider?.candidates) ? provider.candidates : [];
+        const detail = diagnosticString(provider?.detail, "");
+        const selectedBadge = provider?.selected ? `<span class="diagnostics-badge" data-state="selected">最终采用</span>` : "";
+        const candidateMarkup = candidates.length
+          ? candidates.map(candidate => {
+            const admitted = candidate?.isAdmitted === true;
+            const score = Number.isFinite(Number(candidate?.score)) ? Number(candidate.score) : null;
+            const reasons = Array.isArray(candidate?.rejectionReasons) ? candidate.rejectionReasons.filter(Boolean) : [];
+            const metadataKeys = Array.isArray(candidate?.fetchMetadataKeys) ? candidate.fetchMetadataKeys.filter(Boolean) : [];
+            const title = diagnosticString(candidate?.title, "未知候选");
+            const artist = diagnosticArtists(candidate?.artists, "未知歌手");
+            return `<article class="diagnostics-candidate">
+              <div class="diagnostics-candidate-main">
+                <div class="diagnostics-candidate-title"><strong title="${escapeHtml(title)}">${escapeHtml(title)}</strong><small>${escapeHtml(artist)}</small></div>
+                <div class="diagnostics-candidate-meta"><span>专辑：${escapeHtml(diagnosticString(candidate?.album))}</span><span>时长：${escapeHtml(formatDiagnosticDuration(candidate?.durationSeconds ?? candidate?.duration))}</span><span>查询变体：${escapeHtml(diagnosticString(candidate?.queryVariantId))}</span><span>候选 ID：<code title="${escapeHtml(diagnosticString(candidate?.candidateId))}">${escapeHtml(diagnosticString(candidate?.candidateId))}</code></span>${metadataKeys.length ? `<span>元数据：${escapeHtml(metadataKeys.join("、"))}</span>` : ""}</div>
+                ${reasons.length ? `<ul class="diagnostics-reasons" aria-label="拒绝原因">${reasons.map(reason => `<li>${escapeHtml(reason)}</li>`).join("")}</ul>` : ""}
+              </div>
+              <div class="diagnostics-candidate-side"><span class="diagnostics-badge" data-state="${admitted ? "accepted" : "rejected"}">${admitted ? "已接纳" : "已拒绝"}</span><strong class="diagnostics-score">${score === null ? "--" : score} 分</strong></div>
+            </article>`;
+          }).join("")
+          : `<div class="diagnostics-candidate-empty">该来源没有返回候选。</div>`;
+        return `<details class="diagnostics-provider" open>
+          <summary class="diagnostics-provider-head"><span class="diagnostics-provider-heading"><span class="diagnostics-provider-title"><strong>${escapeHtml(providerId)}</strong><span class="diagnostics-badge" data-state="${providerStateClass}">${escapeHtml(diagnosticProviderStateLabel(providerState))}</span>${selectedBadge}</span>${detail ? `<span class="diagnostics-provider-detail" title="${escapeHtml(detail)}">${escapeHtml(detail)}</span>` : ""}</span><span class="diagnostics-provider-toggle-meta"><span>${candidates.length} 个候选</span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 4 4 4-4 4"></path></svg></span></summary>
+          <div class="diagnostics-candidates">${candidateMarkup}</div>
+        </details>`;
+      }).join("");
+    }
+
+    function renderLyricDiagnosticsVariants(report) {
+      const variants = Array.isArray(report?.searchVariants) ? report.searchVariants : [];
+      const panel = $("#lyricDiagnosticsVariantsPanel");
+      const container = $("#lyricDiagnosticsVariants");
+      panel.hidden = !variants.length;
+      if (!variants.length) {
+        container.replaceChildren();
+        return;
+      }
+
+      container.innerHTML = variants.map((variant, index) => {
+        const title = diagnosticString(variant?.title, "未知查询");
+        const artist = diagnosticArtists(variant?.artists, "未知歌手");
+        const reasons = Array.isArray(variant?.relaxationReasons) ? variant.relaxationReasons.filter(Boolean) : [];
+        return `<div class="diagnostics-variant"><span class="diagnostics-variant-index">${index + 1}</span><div class="diagnostics-variant-copy"><strong title="${escapeHtml(title)}">${escapeHtml(title)}</strong><small>${escapeHtml(artist)} · ${escapeHtml(diagnosticString(variant?.album))} · ${escapeHtml(formatDiagnosticDuration(variant?.durationSeconds ?? variant?.duration))}</small></div><span class="diagnostics-variant-reasons">${escapeHtml(reasons.length ? reasons.join("、") : "严格匹配")}</span></div>`;
+      }).join("");
+    }
+
+    function renderLyricDiagnosticsSelection(report) {
+      const selection = report?.selection;
+      const container = $("#lyricDiagnosticsSelection");
+      if (!selection || typeof selection !== "object") {
+        const message = diagnosticString(report?.error, "没有候选通过完整校验。");
+        container.innerHTML = `<div class="diagnostics-selection-empty"><strong>未找到可用歌词</strong><small>${escapeHtml(message)}</small></div>`;
+        return;
+      }
+
+      const diagnostics = selection.diagnostics && typeof selection.diagnostics === "object"
+        ? Object.entries(selection.diagnostics).filter(([key, value]) => key && value !== null && value !== undefined)
+        : [];
+      const diagnosticsMarkup = diagnostics.length
+        ? `<div class="diagnostics-selection-meta">${diagnostics.map(([key, value]) => `<span>${escapeHtml(key)}：<code>${escapeHtml(value)}</code></span>`).join("")}</div>`
+        : "";
+      container.innerHTML = `<div class="diagnostics-selection-card is-selected"><div class="diagnostics-selection-title"><strong>${escapeHtml(diagnosticString(selection.providerId, "未知来源"))}</strong><span class="diagnostics-badge" data-state="selected">已采用</span></div><div class="diagnostics-selection-meta"><span>候选 ID：<code>${escapeHtml(diagnosticString(selection.candidateId))}</code></span><span>获取方式：${escapeHtml(diagnosticString(selection.acquisition))}</span><span>格式：${escapeHtml(diagnosticString(selection.format))}</span><span>时序：${escapeHtml(diagnosticString(selection.timingKind))} / ${escapeHtml(diagnosticString(selection.timingProvenance))}</span><span>歌词行数：${escapeHtml(diagnosticString(selection.lineCount, "0"))}</span></div>${diagnosticsMarkup}</div>`;
+    }
+
+    function renderLyricDiagnosticsState() {
+      const current = lyricDiagnosticsState;
+      const status = $("#lyricDiagnosticsStatus");
+      const button = $("#runLyricDiagnosticsButton");
+      const reportPanel = $("#lyricDiagnosticsReportPanel");
+      const selectionPanel = $("#lyricDiagnosticsSelectionPanel");
+      const report = current.report;
+      const track = current.track ?? report?.effectiveTrack ?? report?.originalTrack;
+      const title = diagnosticString(track?.title, "当前歌曲");
+      let message = "尚未运行诊断。点击“开始诊断”获取当前歌曲的检索过程。";
+      if (current.status === "running") message = `正在诊断“${title}”……`;
+      else if (current.status === "success") message = report?.selection ? "诊断完成，已找到可用歌词。" : "诊断完成，但没有候选通过完整校验。";
+      else if (current.status === "empty") message = diagnosticString(current.message, "当前没有可诊断的 SMTC 歌曲。");
+      else if (current.status === "error") message = diagnosticString(current.message, "歌词诊断失败，请稍后重试。");
+      status.dataset.state = current.status;
+      status.textContent = message;
+      button.disabled = current.status === "running";
+      button.setAttribute("aria-busy", String(current.status === "running"));
+      button.innerHTML = current.status === "running" ? '<span class="spinner" aria-hidden="true"></span>诊断中……' : current.status === "idle" ? "开始诊断" : "重新诊断";
+
+      renderLyricDiagnosticsTrack(track);
+      reportPanel.hidden = !report || current.status !== "success";
+      selectionPanel.hidden = !report || current.status !== "success";
+      if (report && current.status === "success") {
+        const capturedAt = formatDiagnosticTimestamp(report.capturedAtUtc);
+        $("#lyricDiagnosticsCapturedAt").textContent = capturedAt ? `捕获于 ${capturedAt}` : "";
+        renderLyricDiagnosticsProviders(report);
+        renderLyricDiagnosticsVariants(report);
+        renderLyricDiagnosticsSelection(report);
+      } else {
+        $("#lyricDiagnosticsCapturedAt").textContent = "";
+        $("#lyricDiagnosticsProviderCount").textContent = "";
+        $("#lyricDiagnosticsReportSummary").replaceChildren();
+        $("#lyricDiagnosticsProviders").replaceChildren();
+        $("#lyricDiagnosticsVariantsPanel").hidden = true;
+        $("#lyricDiagnosticsVariants").replaceChildren();
+        $("#lyricDiagnosticsSelection").replaceChildren();
+      }
+    }
+
+    function setLyricDiagnosticsState(payload = {}) {
+      const status = ["running", "success", "empty", "error"].includes(payload?.status) ? payload.status : "error";
+      const report = status === "success" && payload.report && typeof payload.report === "object" ? payload.report : null;
+      lyricDiagnosticsState = {
+        status: status === "success" && !report ? "error" : status,
+        track: payload.track && typeof payload.track === "object" ? payload.track : null,
+        report,
+        message: diagnosticString(payload.message, status === "success" && !report ? "诊断结果无效。" : "")
+      };
+      renderLyricDiagnosticsState();
     }
 
     function changeTrackOffsetPage(delta) {
@@ -1328,6 +1549,11 @@
     $$('[data-show-lyrics-window]').forEach(button => button.addEventListener("click", () => bridge.post({ type: "showLyricsWindow" })));
     $("#smtcMonitorButton").addEventListener("click", () => bridge.post({ type: "openSmtcMonitor" }));
     $("#spectrumTuningButton").addEventListener("click", () => bridge.post({ type: "openSpectrumTuning" }));
+    $("#runLyricDiagnosticsButton").addEventListener("click", () => {
+      if (lyricDiagnosticsState.status === "running") return;
+      setLyricDiagnosticsState({ status: "running" });
+      bridge.post({ type: "runLyricDiagnostics" });
+    });
     const openRepository = () => { if (repositoryUrl) bridge.post({ type: "openExternalLink", value: repositoryUrl }); };
     $("#repositoryButton").addEventListener("click", openRepository);
     $$('[data-repository-link]').forEach(button => button.addEventListener("click", openRepository));
@@ -1386,6 +1612,9 @@
           break;
         case "trackOffsetSaveStatus":
           setTrackOffsetSaveStatus(message.payload);
+          break;
+        case "lyricDiagnosticsState":
+          setLyricDiagnosticsState(message.payload);
           break;
         case "navigate":
           navigateToPage(message.payload?.page, Boolean(message.payload?.focusCurrentTrack));

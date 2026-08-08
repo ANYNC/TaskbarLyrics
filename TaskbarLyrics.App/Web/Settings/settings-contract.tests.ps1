@@ -15,7 +15,7 @@ $mediaHotkeyCatalog = [IO.File]::ReadAllText((Join-Path $appRoot 'MediaHotkeyCat
 
 $errors = [Collections.Generic.List[string]]::new()
 
-$pages = @('sources', 'shortcuts', 'lyrics', 'trackOffsets', 'displayArea', 'general', 'advanced', 'about')
+$pages = @('sources', 'shortcuts', 'lyrics', 'trackOffsets', 'displayArea', 'general', 'advanced', 'lyricDiagnostics', 'about')
 foreach ($page in $pages) {
     if (-not $html.Contains("data-nav=`"$page`"")) { $errors.Add("missing nav: $page") }
     if (-not $html.Contains("data-page=`"$page`"")) { $errors.Add("missing page: $page") }
@@ -55,6 +55,8 @@ $requiredHtml = @(
     'id="colorPopover"', 'id="colorArea"', 'id="restoreDialog"', 'id="clearDialog"',
     'id="playerSettingsDialog"', 'id="playerRecognitionToggle"', 'id="playerOffsetInput"',
     'id="currentTrackOffset"', 'id="trackOffsetList"', 'id="trackOffsetPagination"', 'id="clearTrackOffsetsDialog"',
+    'id="runLyricDiagnosticsButton"', 'id="lyricDiagnosticsStatus"', 'id="lyricDiagnosticsReportSummary"', 'id="lyricDiagnosticsProviders"',
+    'id="lyricDiagnosticsSelection"',
     'id="browseButton"', 'id="showLyricsWindowButton"', 'data-reset-layout-scale',
     'data-reset-layout-base', 'id="layoutScalePreview"', 'data-window-resize="top"',
     'class="slider-number-control"', 'compact-number-input', 'id="hueNumberInput"',
@@ -78,6 +80,7 @@ $requiredScript = @(
     'window.settingsApp = { receive }', 'function receive(message)',
     'type: "reorderSources"', 'type: "pickLocalFolder"', 'type: "showLyricsWindow"',
     'type: "openSmtcMonitor"', 'type: "openSpectrumTuning"',
+    'type: "runLyricDiagnostics"',
     'type: "windowDrag"', 'type: "windowResizeStart"', 'type: "windowMinimize"', 'type: "windowMaximize"', 'type: "windowClose"',
     'function openSelect', 'function closeSelect', 'function rgbToHex', 'function toArgb',
     'function activatePage', 'function renderSources', 'function renderPriority', 'function setWindowState',
@@ -85,6 +88,8 @@ $requiredScript = @(
     'function renderMediaHotkeys', 'function beginHotkeyRecording', 'function getRecordedHotkey', 'type: "resetMediaHotkey"',
     'function renderTrackOffsets', 'function commitCurrentTrackOffset', 'function setCurrentTrackOffsetData',
     'function setTrackOffsetEntries', 'function requestTrackOffsetPage', 'function changeTrackOffsetPage',
+    'function setLyricDiagnosticsState', 'function renderLyricDiagnosticsProviders',
+    'function renderLyricDiagnosticsVariants', 'function renderLyricDiagnosticsSelection',
     'type: "queryTrackOffsets"',
     'type: "setCurrentTrackOffset"', 'type: "setStoredTrackOffset"', 'type: "deleteTrackOffset"',
     'function positionPopover', 'function postSourceOrder', 'function updateLayoutPreview', 'function readSettingControlValue',
@@ -110,10 +115,11 @@ foreach ($unsupported in @('AppleMusic', 'Foobar', 'MusicBee', 'AIMP', 'VLC', 'W
     if ($script.Contains($unsupported)) { $errors.Add("unsupported source exposed: $unsupported") }
 }
 
-foreach ($marker in @('case "pickLocalFolder":', 'case "showLyricsWindow":', 'case "openSmtcMonitor":', 'case "openSpectrumTuning":', 'case "settingsPageChanged":', 'case "queryTrackOffsets":', 'case "setCurrentTrackOffset":', 'case "setStoredTrackOffset":', 'case "deleteTrackOffset":', 'case "clearTrackOffsets":', 'case "resetMediaHotkey":', 'case "resetLyricsLayoutBase":', 'case "previewUpdate":', 'case "windowDrag":', 'case "windowResizeStart":', 'case "windowClose":')) {
+foreach ($marker in @('case "pickLocalFolder":', 'case "showLyricsWindow":', 'case "openSmtcMonitor":', 'case "openSpectrumTuning":', 'case "runLyricDiagnostics":', 'case "settingsPageChanged":', 'case "queryTrackOffsets":', 'case "setCurrentTrackOffset":', 'case "setStoredTrackOffset":', 'case "deleteTrackOffset":', 'case "clearTrackOffsets":', 'case "resetMediaHotkey":', 'case "resetLyricsLayoutBase":', 'case "previewUpdate":', 'case "windowDrag":', 'case "windowResizeStart":', 'case "windowClose":')) {
     if (-not $settingsWindow.Contains($marker)) { $errors.Add("missing desktop message: $marker") }
 }
 if (-not $settingsWindow.Contains('"settingsSaveResult"')) { $errors.Add('missing settings save result dispatch') }
+if (-not $settingsWindow.Contains('"lyricDiagnosticsState"')) { $errors.Add('missing lyric diagnostics state dispatch') }
 if (-not $app.Contains('public void ShowLyricsWindow()')) { $errors.Add('missing App.ShowLyricsWindow') }
 if (-not $appSettings.Contains('public GlobalMediaHotkeySettings GlobalMediaHotkeys')) { $errors.Add('global media hotkeys settings missing') }
 if (-not $appSettings.Contains('public double LyricsLayoutScalePercent')) { $errors.Add('lyrics layout scale setting missing') }

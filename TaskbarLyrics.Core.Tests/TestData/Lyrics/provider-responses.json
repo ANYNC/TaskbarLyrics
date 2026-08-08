@@ -1,0 +1,27 @@
+{
+  "QQMusic": {
+    "search": [
+      { "providerId": "QQMusic", "candidateId": "qq-a0-001", "title": "A0 Fixture", "artist": "Synthetic Artist" },
+      { "providerId": "QQMusic", "candidateId": "qq-a0-002", "title": "A0 Fixture (Live)", "artist": "Synthetic Artist" }
+    ],
+    "payload": { "candidateId": "qq-a0-001", "format": "QRC", "lyrics": "qrc-provider-supplied.qrc", "translation": "A0 embedded translation" }
+  },
+  "Kugou": {
+    "search": [
+      { "providerId": "Kugou", "candidateId": "kugou-a0-001", "title": "A0 Fixture", "artist": "Synthetic Artist" }
+    ],
+    "payload": { "candidateId": "kugou-a0-001", "format": "KRC", "lyrics": "krc-provider-supplied.krc", "translation": "A0 embedded translation" }
+  },
+  "Netease": {
+    "search": [
+      { "providerId": "Netease", "candidateId": "netease-a0-001", "title": "A0 Fixture", "artist": "Synthetic Artist" }
+    ],
+    "payload": { "candidateId": "netease-a0-001", "format": "YRC", "lyrics": "yrc-provider-supplied.yrc", "translation": "A0 embedded translation" }
+  },
+  "LRCLIB": {
+    "search": [
+      { "providerId": "LRCLIB", "candidateId": "lrclib-a0-001", "title": "A0 Fixture", "artist": "Synthetic Artist" }
+    ],
+    "payload": { "candidateId": "lrclib-a0-001", "format": "LRC", "lyrics": "baseline.lrc", "instrumental": false }
+  }
+}

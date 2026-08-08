@@ -366,7 +366,7 @@ public partial class App : System.Windows.Application, IDisposable
             return;
         }
 
-        if (_trackLyricOffsetStore is null)
+        if (_trackLyricOffsetStore is null || _compositionRoot is null)
         {
             return;
         }
@@ -375,7 +375,8 @@ public partial class App : System.Windows.Application, IDisposable
             Settings.Clone(),
             _trackLyricOffsetStore,
             () => _lyricsWindowHost?.GetCurrentTrackLyricsContextAsync()
-                ?? Task.FromResult<CurrentTrackLyricsContext?>(null));
+                ?? Task.FromResult<CurrentTrackLyricsContext?>(null),
+            _compositionRoot.CreateLyricDiagnosticRunner);
         _settingsWindow.Closed += SettingsWindow_Closed;
         _settingsWindow.Show();
         if (!string.IsNullOrWhiteSpace(pageId))

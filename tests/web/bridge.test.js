@@ -71,6 +71,102 @@ describe("settings WebView bridge", () => {
     expect(dom.window.document.querySelector('[data-nav="sources"]').getAttribute("aria-current")).toBeNull();
   });
 
+  it("runs one lyric diagnostics request and exposes the running track", async () => {
+    const { dom, sent, script } = await createSettingsDom();
+    const document = dom.window.document;
+    dom.window.eval(script);
+
+    document.querySelector('[data-nav="lyricDiagnostics"]').click();
+    expect(document.querySelector('[data-page="lyricDiagnostics"]').classList.contains("active")).toBe(true);
+
+    document.querySelector("#runLyricDiagnosticsButton").click();
+    expect(sent.at(-1)).toEqual({
+      version: 1,
+      type: "runLyricDiagnostics",
+      payload: {}
+    });
+    expect(document.querySelector("#runLyricDiagnosticsButton").disabled).toBe(true);
+
+    dom.window.settingsApp.receive({
+      version: 1,
+      type: "lyricDiagnosticsState",
+      payload: {
+        status: "running",
+        track: { title: "Song", artist: "Artist", album: "Album", sourceApp: "QQMusic", durationSeconds: 201, songId: "song-1" }
+      }
+    });
+
+    expect(document.querySelector("#lyricDiagnosticsStatus").dataset.state).toBe("running");
+    expect(document.querySelector("#lyricDiagnosticsStatus").textContent).toContain("Song");
+    expect(document.querySelector("#lyricDiagnosticsTrackPanel").hidden).toBe(false);
+    expect(document.querySelector("#lyricDiagnosticsTrack").textContent).toContain("QQMusic");
+  });
+
+  it("renders diagnostic providers, rejected candidates, and the final selection", async () => {
+    const { dom, script } = await createSettingsDom();
+    const document = dom.window.document;
+    dom.window.eval(script);
+
+    dom.window.settingsApp.receive({
+      version: 1,
+      type: "lyricDiagnosticsState",
+      payload: {
+        status: "success",
+        report: {
+          capturedAtUtc: "2026-08-08T10:20:30Z",
+          originalTrack: { title: "Original", artist: "Artist", album: "Album", sourceApp: "QQMusic", durationSeconds: 200, songId: "song-1" },
+          effectiveTrack: { title: "Effective", artist: "Artist", album: "Album", sourceApp: "QQMusic", durationSeconds: 200, songId: "song-1" },
+          preferredProvider: "QQMusic",
+          searchVariants: [{ id: "strict", title: "Effective", artists: ["Artist"], album: "Album", durationSeconds: 200, relaxationReasons: [] }],
+          providers: [
+            {
+              providerId: "QQMusic",
+              state: "Succeeded",
+              detail: "selected candidate",
+              selected: true,
+              candidates: [{ candidateId: "qq-1", title: "<unsafe>", artists: ["Artist"], album: "Album", durationSeconds: 198, queryVariantId: "strict", fetchMetadataKeys: ["tokenType"], isAdmitted: false, score: 61, rejectionReasons: ["below-admission-threshold"] }]
+            },
+            { providerId: "Netease", state: "NoLyrics", detail: "not found", selected: false, candidates: [] }
+          ],
+          selection: { providerId: "QQMusic", candidateId: "qq-2", acquisition: "Remote", format: "Lrc", timingKind: "Timed", timingProvenance: "Provider", lineCount: 42, diagnostics: { elapsedMs: "84" } },
+          error: null
+        }
+      }
+    });
+
+    expect(document.querySelector("#lyricDiagnosticsStatus").dataset.state).toBe("success");
+    expect(document.querySelector("#lyricDiagnosticsProviderCount").textContent).toBe("2 个歌词源");
+    expect(document.querySelector("#lyricDiagnosticsReportSummary").textContent).toContain("首选来源：");
+    expect(document.querySelector(".diagnostics-candidate").textContent).toContain("below-admission-threshold");
+    expect(document.querySelector(".diagnostics-candidate").textContent).toContain("61 分");
+    const providerDetails = [...document.querySelectorAll(".diagnostics-provider")];
+    expect(providerDetails).toHaveLength(2);
+    expect(providerDetails.every(provider => provider.open)).toBe(true);
+    expect(providerDetails[0].querySelector(".diagnostics-provider-toggle-meta").textContent).toContain("1 个候选");
+    providerDetails[0].querySelector("summary").click();
+    expect(providerDetails[0].open).toBe(false);
+    expect(document.querySelector(".diagnostics-candidate strong").textContent).toBe("<unsafe>");
+    expect(document.querySelector(".diagnostics-candidate").innerHTML).not.toContain("<strong><unsafe>");
+    expect(document.querySelector(".diagnostics-selection-card").textContent).toContain("QQMusic");
+    expect(document.querySelector("#lyricDiagnosticsVariantsPanel").hidden).toBe(false);
+  });
+
+  it("shows empty and error diagnostic states without stale report content", async () => {
+    const { dom, script } = await createSettingsDom();
+    const document = dom.window.document;
+    dom.window.eval(script);
+
+    dom.window.settingsApp.receive({ version: 1, type: "lyricDiagnosticsState", payload: { status: "empty", message: "没有当前歌曲" } });
+    expect(document.querySelector("#lyricDiagnosticsStatus").dataset.state).toBe("empty");
+    expect(document.querySelector("#lyricDiagnosticsStatus").textContent).toBe("没有当前歌曲");
+    expect(document.querySelector("#lyricDiagnosticsReportPanel").hidden).toBe(true);
+
+    dom.window.settingsApp.receive({ version: 1, type: "lyricDiagnosticsState", payload: { status: "error", message: "runner failed" } });
+    expect(document.querySelector("#lyricDiagnosticsStatus").dataset.state).toBe("error");
+    expect(document.querySelector("#lyricDiagnosticsStatus").textContent).toBe("runner failed");
+    expect(document.querySelector("#lyricDiagnosticsTrackPanel").hidden).toBe(true);
+  });
+
   it("uses visible navigation order for page transition direction", async () => {
     const { dom, script } = await createSettingsDom();
     const document = dom.window.document;

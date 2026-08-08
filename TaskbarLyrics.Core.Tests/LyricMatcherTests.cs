@@ -36,6 +36,28 @@ public sealed class LyricMatcherTests
         Assert.Equal(0, score);
     }
 
+    [Fact]
+    public void ScoreUsesAlbumAsLowWeightEvidenceWithoutHardRejection()
+    {
+        var track = CreateTrack("Midnight City", "M83", 244);
+
+        var matchingAlbum = LyricMatcher.Score(
+            track,
+            "Midnight City",
+            "M83",
+            244,
+            "Album");
+        var differentAlbum = LyricMatcher.Score(
+            track,
+            "Midnight City",
+            "M83",
+            244,
+            "Compilation");
+
+        Assert.Equal(100, matchingAlbum);
+        Assert.InRange(differentAlbum, 90, 99);
+    }
+
     private static TrackInfo CreateTrack(string title, string artist, int durationSeconds) => new(
         "track-id",
         title,

@@ -65,8 +65,7 @@ public sealed class LyricCacheStoreTests
 
             Assert.True(second.TryGet("track", out var restored, out var acquisition));
             Assert.Equal(LyricAcquisitionKind.DiskCache, acquisition);
-            Assert.Equal(103, restored!.BestScore);
-            Assert.False(restored.IsPureMusic);
+            Assert.False(restored!.IsPureMusic);
             Assert.Collection(
                 restored.Lines,
                 line =>

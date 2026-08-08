@@ -18,6 +18,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
     private readonly AppSettings _settings;
     private readonly TrackLyricOffsetStore _trackLyricOffsetStore;
     private readonly Func<Task<CurrentTrackLyricsContext?>> _getCurrentTrackLyricsContext;
+    private readonly Func<LyricDiagnosticRunner> _createLyricDiagnosticRunner;
     private readonly DispatcherTimer _trackOffsetRefreshTimer;
     private bool _isWebReady;
     private bool _isTrackOffsetRefreshRunning;
@@ -27,17 +28,20 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
     private string? _pendingPage;
     private bool _pendingFocusCurrentTrack;
     private bool _hasPendingPreviewChanges;
+    private CancellationTokenSource? _lyricDiagnosticsCancellation;
 
     internal SettingsWindow(
         AppSettings settings,
         TrackLyricOffsetStore trackLyricOffsetStore,
-        Func<Task<CurrentTrackLyricsContext?>> getCurrentTrackLyricsContext)
+        Func<Task<CurrentTrackLyricsContext?>> getCurrentTrackLyricsContext,
+        Func<LyricDiagnosticRunner> createLyricDiagnosticRunner)
     {
         InitializeComponent();
         AppIconProvider.ApplyWindowIcon(this);
         _settings = settings;
         _trackLyricOffsetStore = trackLyricOffsetStore;
         _getCurrentTrackLyricsContext = getCurrentTrackLyricsContext;
+        _createLyricDiagnosticRunner = createLyricDiagnosticRunner;
         _trackOffsetRefreshTimer = new DispatcherTimer(DispatcherPriority.Background)
         {
             Interval = TimeSpan.FromMilliseconds(600)
@@ -88,6 +92,9 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         }
 
         NativeWindowTheme.ThemeChanged -= OnWindowThemeChanged;
+        var diagnosticsCancellation = Interlocked.Exchange(ref _lyricDiagnosticsCancellation, null);
+        diagnosticsCancellation?.Cancel();
+        diagnosticsCancellation?.Dispose();
         _trackOffsetRefreshTimer.Stop();
         _trackOffsetRefreshTimer.Tick -= TrackOffsetRefreshTimer_Tick;
 
@@ -226,6 +233,9 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                     app.OpenSpectrumTuningWindow();
                 }
                 break;
+            case "runLyricDiagnostics":
+                await RunLyricDiagnosticsAsync();
+                break;
             case "trackOffsetsPageActivated":
                 _isTrackOffsetsPageActive = true;
                 await PushCurrentTrackOffsetDataToWebAsync(force: true);
@@ -321,6 +331,88 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 "settingsApp",
                 "lyricsLayoutPreview",
                 CreateLyricsLayoutPreview()));
+    }
+
+    private async Task RunLyricDiagnosticsAsync()
+    {
+        var cancellation = new CancellationTokenSource();
+        var previousCancellation = Interlocked.Exchange(
+            ref _lyricDiagnosticsCancellation,
+            cancellation);
+        previousCancellation?.Cancel();
+        previousCancellation?.Dispose();
+
+        try
+        {
+            var context = await _getCurrentTrackLyricsContext();
+            cancellation.Token.ThrowIfCancellationRequested();
+            if (context is null ||
+                string.IsNullOrWhiteSpace(context.Track.Title) ||
+                string.Equals(context.Track.Title, "Unknown Title", StringComparison.OrdinalIgnoreCase))
+            {
+                await PushLyricDiagnosticsStateAsync(new
+                {
+                    status = "empty",
+                    message = "未检测到可检索的当前歌曲，请先开始播放。"
+                });
+                return;
+            }
+
+            var track = context.Track;
+            await PushLyricDiagnosticsStateAsync(new
+            {
+                status = "running",
+                track = new
+                {
+                    track.Title,
+                    track.Artist,
+                    track.Album,
+                    track.SourceApp,
+                    durationSeconds = track.Duration.TotalSeconds,
+                    track.SongId
+                }
+            });
+            var runner = _createLyricDiagnosticRunner();
+            var report = await runner.RunAsync(track, cancellation.Token);
+            cancellation.Token.ThrowIfCancellationRequested();
+            await PushLyricDiagnosticsStateAsync(new
+            {
+                status = "success",
+                report
+            });
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception)
+        {
+            Log.Warn($"Lyric diagnostics failed: {exception.Message}");
+            await PushLyricDiagnosticsStateAsync(new
+            {
+                status = "error",
+                message = "歌词诊断失败，请稍后重试。"
+            });
+        }
+        finally
+        {
+            if (ReferenceEquals(
+                    Interlocked.CompareExchange(ref _lyricDiagnosticsCancellation, null, cancellation),
+                    cancellation))
+            {
+                cancellation.Dispose();
+            }
+        }
+    }
+
+    private async Task PushLyricDiagnosticsStateAsync(object payload)
+    {
+        if (!_isWebReady || SettingsWebView.CoreWebView2 is null)
+        {
+            return;
+        }
+
+        await SettingsWebView.ExecuteScriptAsync(
+            WebViewMessageScriptFactory.Dispatch("settingsApp", "lyricDiagnosticsState", payload));
     }
 
     public async Task ApplyExternalSettingsAsync(AppSettings settings)
@@ -1000,8 +1092,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
 
     private static void ClearLyricCache()
     {
-        LyricProviderBase.ClearCache();
-        GenericSmtcLyricProvider.ClearCache();
+        LyricPipelineCache.ClearDefault();
     }
 
     private async Task CheckForUpdatesAsync()

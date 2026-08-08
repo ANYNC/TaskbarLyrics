@@ -16,6 +16,8 @@ internal interface IAppCompositionRoot
         AppSettings settings,
         TrackLyricOffsetStore trackLyricOffsetStore);
 
+    LyricDiagnosticRunner CreateLyricDiagnosticRunner();
+
     LocalMediaCoverProvider? CreateLocalMediaCoverProvider(AppSettings settings);
 
     IReadOnlyCollection<string> GetEnabledPlayerSources(AppSettings settings);
@@ -33,27 +35,46 @@ internal sealed class AppCompositionRoot : IAppCompositionRoot
         AppSettings settings,
         TrackLyricOffsetStore trackLyricOffsetStore)
     {
-        var providers = new List<ILyricProvider>
-        {
-            new GenericSmtcLyricProvider()
-        };
-
-        if (settings.EnableLocalLyrics && settings.LocalMusicFolders.Count > 0)
-        {
-            providers.Add(new LocalLyricProvider(settings.LocalMusicFolders));
-        }
-
-        // Player recognition switches must not disable fallback lyric providers.
-        providers.Add(new LyricifyLyricProvider("Netease", Lyricify.Lyrics.Searchers.Searchers.Netease));
-        providers.Add(new LyricifyLyricProvider("QQMusic", Lyricify.Lyrics.Searchers.Searchers.QQMusic));
-        providers.Add(new LyricifyLyricProvider("Kugou", Lyricify.Lyrics.Searchers.Searchers.Kugou));
+        var coordinator = CreateLyricResolutionCoordinator(settings);
         return new LyricSyncService(
-            new LyricProviderRegistry(providers),
+            coordinator,
             _ => settings.ShowLyricTranslation,
             sourceApp => TimeSpan.FromMilliseconds(settings.GetPlayerLyricOffsetMilliseconds(sourceApp)),
             (track, lyricSource) => TimeSpan.FromMilliseconds(
                 trackLyricOffsetStore.GetOffsetMilliseconds(track, lyricSource)));
     }
+
+    internal static LyricResolutionCoordinator CreateLyricResolutionCoordinator(AppSettings settings)
+    {
+        var sources = new ILyricSource[]
+        {
+            new QqMusicLyricSource(),
+            new KugouLyricSource(),
+            new NeteaseLyricSource(),
+            new LrcLibLyricSource()
+        };
+        var localProvider = settings.EnableLocalLyrics && settings.LocalMusicFolders.Count > 0
+            ? new LocalLyricProvider(settings.LocalMusicFolders)
+            : null;
+        var cache = LyricPipelineCache.CreateDefault();
+        return new LyricResolutionCoordinator(
+            sources,
+            [new LyricifyPayloadDecoder()],
+            [new LyricifyPayloadParser()],
+            cache,
+            localProvider: localProvider);
+    }
+
+    public LyricDiagnosticRunner CreateLyricDiagnosticRunner() =>
+        new(
+            [
+                new QqMusicLyricSource(),
+                new KugouLyricSource(),
+                new NeteaseLyricSource(),
+                new LrcLibLyricSource()
+            ],
+            [new LyricifyPayloadDecoder()],
+            [new LyricifyPayloadParser()]);
 
     public LocalMediaCoverProvider? CreateLocalMediaCoverProvider(AppSettings settings)
     {

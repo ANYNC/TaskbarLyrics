@@ -11,6 +11,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TaskbarLyrics.App.Tests", "
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TaskbarLyrics.Core.Tests", "TaskbarLyrics.Core.Tests\TaskbarLyrics.Core.Tests.csproj", "{D2C1793D-5846-4554-AB44-FEBA0DBEDCA2}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TaskbarLyrics.Diagnostics", "TaskbarLyrics.Diagnostics\TaskbarLyrics.Diagnostics.csproj", "{C58EB97C-72F6-4AC5-BBF0-C320FA651152}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -36,5 +38,9 @@ Global
 		{D2C1793D-5846-4554-AB44-FEBA0DBEDCA2}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D2C1793D-5846-4554-AB44-FEBA0DBEDCA2}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D2C1793D-5846-4554-AB44-FEBA0DBEDCA2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C58EB97C-72F6-4AC5-BBF0-C320FA651152}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C58EB97C-72F6-4AC5-BBF0-C320FA651152}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C58EB97C-72F6-4AC5-BBF0-C320FA651152}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C58EB97C-72F6-4AC5-BBF0-C320FA651152}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

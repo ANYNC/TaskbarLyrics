@@ -9,11 +9,13 @@ public sealed class LyricSyncService : IDisposable
     public const string SearchingText = "正在检索歌词...";
     public const string NoLyricsText = "暂未找到歌词";
     private static readonly TimeSpan StartupLineGuardPositionThreshold = TimeSpan.FromMilliseconds(500);
+    private static readonly TimeSpan DefaultMetadataStabilizationDelay = TimeSpan.FromMilliseconds(750);
 
-    private readonly ILyricProviderRegistry _registry;
+    private readonly ILyricResolutionCoordinator _coordinator;
     private readonly Func<string?, bool> _shouldShowTranslation;
     private readonly Func<string?, TimeSpan> _getPlayerLeadTime;
     private readonly Func<TrackInfo?, string?, TimeSpan> _getTrackLeadTime;
+    private readonly TimeSpan _metadataStabilizationDelay;
     private TrackInfo? _currentTrack;
     private string? _currentTrackId;
     private LyricDocument? _currentDocument;
@@ -25,8 +27,10 @@ public sealed class LyricSyncService : IDisposable
     private CancellationTokenSource? _searchCts;
     private Task? _searchTask;
     private bool _isDisposed;
+    private bool _durationCorrectionConsumed;
     private int _lastEmittedLineIndex = -1;
     private long _documentLoadedTicks;
+    private TimeSpan? _lastSearchDuration;
 
     public string? CurrentLyricSourceApp => _currentLyricSourceApp;
     public LyricAcquisitionKind CurrentLyricAcquisition => _currentLyricAcquisition;
@@ -34,15 +38,23 @@ public sealed class LyricSyncService : IDisposable
     public DateTimeOffset? CurrentLyricResolvedAtUtc => _currentLyricResolvedAtUtc;
 
     public LyricSyncService(
-        ILyricProviderRegistry registry,
+        ILyricResolutionCoordinator coordinator,
         Func<string?, bool>? shouldShowTranslation = null,
         Func<string?, TimeSpan>? getPlayerLeadTime = null,
-        Func<TrackInfo?, string?, TimeSpan>? getTrackLeadTime = null)
+        Func<TrackInfo?, string?, TimeSpan>? getTrackLeadTime = null,
+        TimeSpan? metadataStabilizationDelay = null)
     {
-        _registry = registry;
+        _coordinator = coordinator ?? throw new ArgumentNullException(nameof(coordinator));
         _shouldShowTranslation = shouldShowTranslation ?? (_ => true);
         _getPlayerLeadTime = getPlayerLeadTime ?? (_ => TimeSpan.Zero);
         _getTrackLeadTime = getTrackLeadTime ?? ((_, _) => TimeSpan.Zero);
+        _metadataStabilizationDelay = metadataStabilizationDelay ?? DefaultMetadataStabilizationDelay;
+        if (_metadataStabilizationDelay < TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(metadataStabilizationDelay),
+                "Metadata stabilization delay cannot be negative.");
+        }
     }
 
     public Task<LyricDisplayFrame> GetDisplayFrameAsync(PlaybackSnapshot snapshot)
@@ -57,6 +69,8 @@ public sealed class LyricSyncService : IDisposable
             _currentLyricAcquisition = LyricAcquisitionKind.Unknown;
             _currentLyricFetchElapsedMilliseconds = 0;
             _currentLyricResolvedAtUtc = null;
+            _lastSearchDuration = null;
+            _durationCorrectionConsumed = false;
             _lastEmittedLineIndex = -1;
             return Task.FromResult(new LyricDisplayFrame("", "", "", 0, -1));
         }
@@ -71,8 +85,25 @@ public sealed class LyricSyncService : IDisposable
             _currentLyricAcquisition = LyricAcquisitionKind.Searching;
             _currentLyricFetchElapsedMilliseconds = 0;
             _currentLyricResolvedAtUtc = null;
+            _lastSearchDuration = null;
+            _durationCorrectionConsumed = false;
             _lastEmittedLineIndex = -1;
-            _searchTask = UpdateLyricsAsync(snapshot.Track, trackId);
+            StartLyricsUpdate(trackId);
+        }
+        else
+        {
+            _currentTrack = snapshot.Track;
+            if (ShouldCorrectDuration(snapshot.Track.Duration))
+            {
+                _durationCorrectionConsumed = true;
+                _currentDocument = null;
+                _currentLyricSourceApp = null;
+                _currentLyricAcquisition = LyricAcquisitionKind.Searching;
+                _currentLyricFetchElapsedMilliseconds = 0;
+                _currentLyricResolvedAtUtc = null;
+                _lastEmittedLineIndex = -1;
+                StartLyricsUpdate(trackId);
+            }
         }
 
         if (_currentDocument == null || _currentDocument.Lines.Count == 0)
@@ -170,33 +201,42 @@ public sealed class LyricSyncService : IDisposable
         ));
     }
 
-    private async Task UpdateLyricsAsync(TrackInfo track, string trackId)
+    private void StartLyricsUpdate(string trackId)
     {
-        // Cancel any ongoing search for the previous track immediately
         CancelPendingSearch();
         _searchCts = new CancellationTokenSource();
         var cts = _searchCts;
-
         _isUpdating = true;
+        _searchTask = UpdateLyricsAsync(trackId, cts);
+    }
 
+    private async Task UpdateLyricsAsync(string trackId, CancellationTokenSource cts)
+    {
+        TrackInfo? searchTrack = null;
         try
         {
-            var results = await _registry.ResolveLyricsAsync(track, cts.Token);
+            await Task.Delay(_metadataStabilizationDelay, cts.Token);
+            if (_currentTrackId != trackId || _currentTrack is not { } track)
+            {
+                return;
+            }
+
+            searchTrack = track;
+            _lastSearchDuration = NormalizeDuration(track.Duration);
+            var resolved = await _coordinator.ResolveAsync(track, cts.Token);
 
             if (cts.IsCancellationRequested) return;
-            // Pick the best match
-            var bestResult = results
-                .Where(r => r.Document != null && r.Document.Lines.Count > 0)
-                .OrderByDescending(r => r.Document!.BestScore)
-                .ThenBy(r => r.SourceApp == "QQMusic" || r.SourceApp == "Netease" ? 0 : 1)
-                .FirstOrDefault();
-
-            if (bestResult != null && _currentTrackId == trackId)
+            var document = resolved is null
+                ? null
+                : ResolvedLyricsCompatibilityProjector.ToLyricDocument(
+                    resolved,
+                    includeInformationLines: false);
+            if (resolved is not null && document is { Lines.Count: > 0 } && _currentTrackId == trackId)
             {
-                _currentDocument = bestResult.Document;
-                _currentLyricSourceApp = bestResult.SourceApp;
-                _currentLyricAcquisition = bestResult.Acquisition;
-                _currentLyricFetchElapsedMilliseconds = bestResult.ElapsedMilliseconds;
+                _currentDocument = document;
+                _currentLyricSourceApp = resolved.ProviderId.Value;
+                _currentLyricAcquisition = resolved.Acquisition;
+                _currentLyricFetchElapsedMilliseconds = ReadElapsedMilliseconds(resolved.Diagnostics);
                 _currentLyricResolvedAtUtc = DateTimeOffset.UtcNow;
                 _documentLoadedTicks = Environment.TickCount64;
                 _lastEmittedLineIndex = -1;
@@ -214,7 +254,7 @@ public sealed class LyricSyncService : IDisposable
         }
         catch (Exception exception)
         {
-            Log.Warn($"Lyrics update failed for '{track.Title}' - '{track.Artist}': {exception}");
+            Log.Warn($"Lyrics update failed for '{searchTrack?.Title}' - '{searchTrack?.Artist}': {exception}");
             if (_currentTrackId == trackId)
             {
                 _currentLyricAcquisition = LyricAcquisitionKind.NotFound;
@@ -234,11 +274,33 @@ public sealed class LyricSyncService : IDisposable
         }
     }
 
+    private bool ShouldCorrectDuration(TimeSpan latestDuration)
+    {
+        if (_durationCorrectionConsumed || _lastSearchDuration is not { } searchedDuration)
+        {
+            return false;
+        }
+
+        var normalizedLatestDuration = NormalizeDuration(latestDuration);
+        if (normalizedLatestDuration <= TimeSpan.Zero)
+        {
+            return false;
+        }
+
+        return searchedDuration <= TimeSpan.Zero ||
+               (normalizedLatestDuration - searchedDuration).Duration() >=
+               LyricMatchingPolicy.DurationConflictThreshold;
+    }
+
+    private static TimeSpan NormalizeDuration(TimeSpan duration)
+    {
+        return duration < TimeSpan.Zero ? TimeSpan.Zero : duration;
+    }
+
     public static string BuildStableTrackIdentity(TrackInfo track)
     {
-        // SMTC metadata can arrive in waves: SongId and Duration are often filled
-        // or corrected after lyrics have already loaded. They should not reset the
-        // lyric document for the same visible song.
+        // Keep the visible-song identity stable while SMTC fills SongId and Duration.
+        // A material Duration correction is handled separately and at most once.
         return $"{NormalizeIdentityPart(track.SourceApp)}|{NormalizeIdentityPart(track.Title)}|{NormalizeIdentityPart(track.Artist)}";
     }
 
@@ -247,6 +309,14 @@ public sealed class LyricSyncService : IDisposable
         return string.IsNullOrWhiteSpace(value)
             ? string.Empty
             : value.Trim().ToUpperInvariant();
+    }
+
+    private static long ReadElapsedMilliseconds(IReadOnlyDictionary<string, string> diagnostics)
+    {
+        return diagnostics.TryGetValue("elapsedMs", out var value) &&
+               long.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, out var elapsed)
+            ? Math.Max(0, elapsed)
+            : 0;
     }
 
     private bool CanShowTranslation()
@@ -293,7 +363,7 @@ public sealed class LyricSyncService : IDisposable
 
         _isDisposed = true;
         CancelPendingSearch();
-        _registry.Dispose();
+        _coordinator.Dispose();
     }
 
 }

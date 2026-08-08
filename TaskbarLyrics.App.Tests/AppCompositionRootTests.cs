@@ -1,3 +1,5 @@
+using TaskbarLyrics.Core.Models;
+using TaskbarLyrics.Core.Services;
 using Xunit;
 
 namespace TaskbarLyrics.App.Tests;
@@ -27,5 +29,22 @@ public sealed class AppCompositionRootTests
         var sources = new AppCompositionRoot().GetEnabledPlayerSources(settings);
 
         Assert.Equal(["Netease", "Spotify"], sources);
+    }
+
+    [Fact]
+    public void CreateLyricResolutionCoordinatorRegistersOnlyNewTrustOrderedSources()
+    {
+        using var coordinator = AppCompositionRoot
+            .CreateLyricResolutionCoordinator(new AppSettings());
+
+        Assert.Equal(KnownLyricProviders.OnlineTrustOrder, coordinator.ProviderTrustOrder);
+    }
+
+    [Fact]
+    public void CreateLyricDiagnosticRunnerRegistersEveryOnlineSourceInTrustOrder()
+    {
+        var runner = new AppCompositionRoot().CreateLyricDiagnosticRunner();
+
+        Assert.Equal(KnownLyricProviders.OnlineTrustOrder, runner.ProviderTrustOrder);
     }
 }

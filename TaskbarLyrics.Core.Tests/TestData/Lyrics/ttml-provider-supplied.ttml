@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<tt xmlns="http://www.w3.org/ns/ttml" xmlns:tl="urn:taskbarlyrics:test">
+  <body>
+    <div>
+      <p xml:id="line-1" begin="00:00:01.000" end="00:00:02.800">
+        <span begin="00:00:01.000" end="00:00:01.300">ttml</span>
+        <span begin="00:00:01.300" end="00:00:01.300">zero</span>
+        <span begin="00:00:01.300" end="00:00:02.800">fixture</span>
+      </p>
+      <p xml:id="info-1" begin="00:00:03.000" end="00:00:03.500" tl:information-line="true">metadata line</p>
+      <p xml:id="line-2" begin="00:00:04.000" end="00:00:05.000">line timed fallback</p>
+    </div>
+  </body>
+</tt>
