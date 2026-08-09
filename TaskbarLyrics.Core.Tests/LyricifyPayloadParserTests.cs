@@ -13,7 +13,7 @@ public sealed class LyricifyPayloadParserTests
         var payload = CreatePayload(
             LyricPayloadFormat.Lrc,
             ReadFixture("baseline.lrc"),
-            "[offset:+250]\n[00:01.00]translated fixture line");
+            "[offset:+250]\n[00:01.00]translated fixture line\n[00:03.00]//");
 
         var parsed = await parser.ParseAsync(payload);
 
@@ -26,6 +26,7 @@ public sealed class LyricifyPayloadParserTests
         Assert.Equal(TimeSpan.FromMilliseconds(4250), parsed.Lines[2].StartTime);
         Assert.Equal("alpha fixture line", parsed.Lines[0].Text);
         Assert.Equal("translated fixture line", parsed.Lines[0].Translation);
+        Assert.Null(parsed.Lines[1].Translation);
         Assert.All(parsed.Lines, line => Assert.Empty(line.Segments));
     }
 

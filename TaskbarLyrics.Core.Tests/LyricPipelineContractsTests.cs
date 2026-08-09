@@ -106,6 +106,35 @@ public sealed class LyricPipelineContractsTests
                 "   "));
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("//")]
+    [InlineData("///")]
+    public void ParsedLyricLineNormalizesMissingTranslationMarkers(string? translation)
+    {
+        var line = new ParsedLyricLine(
+            TimeSpan.Zero,
+            TimeSpan.FromSeconds(1),
+            "original",
+            translation);
+
+        Assert.Null(line.Translation);
+    }
+
+    [Fact]
+    public void ParsedLyricLinePreservesRealTranslationContainingSlashes()
+    {
+        var line = new ParsedLyricLine(
+            TimeSpan.Zero,
+            TimeSpan.FromSeconds(1),
+            "original",
+            "AC/DC translation");
+
+        Assert.Equal("AC/DC translation", line.Translation);
+    }
+
     [Fact]
     public void ParsedLyricsPreservesMixedGranularityAndProviderTimingProvenance()
     {

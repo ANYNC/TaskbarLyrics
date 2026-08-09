@@ -7,7 +7,7 @@ namespace TaskbarLyrics.Core.Services;
 
 public sealed class LyricResolutionCoordinator : ILyricResolutionCoordinator
 {
-    private const string NormalizationVersion = "1";
+    private const string NormalizationVersion = "2";
 
     private readonly Dictionary<string, ILyricSource> _sources;
     private readonly IReadOnlyList<ILyricPayloadDecoder> _decoders;

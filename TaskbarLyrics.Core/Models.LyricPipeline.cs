@@ -301,9 +301,20 @@ public sealed record ParsedLyricLine
         StartTime = startTime;
         EndTime = endTime;
         Text = text.Trim();
-        Translation = string.IsNullOrWhiteSpace(translation) ? null : translation.Trim();
+        Translation = NormalizeTranslation(translation);
         Segments = orderedSegments;
         IsInformationLine = isInformationLine;
+    }
+
+    private static string? NormalizeTranslation(string? translation)
+    {
+        if (string.IsNullOrWhiteSpace(translation))
+        {
+            return null;
+        }
+
+        var normalized = translation.Trim();
+        return normalized is "//" or "///" ? null : normalized;
     }
 
     public TimeSpan StartTime { get; }

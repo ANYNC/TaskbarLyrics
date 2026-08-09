@@ -115,6 +115,14 @@ function toDisplayLine(line, fallback = " ") {
   return text.length > 0 ? text : fallback;
 }
 
+function resolveTranslationDisplay(line) {
+  const text = (line ?? "").toString().trim();
+  return {
+    text: text.length > 0 ? text : "...",
+    isPlaceholder: text.length === 0
+  };
+}
+
 function setTrackOffset(rowCount) {
   const offset = snapToPhysicalPixel(-linePitchPx * rowCount);
   if (offset === 0) {
@@ -282,7 +290,13 @@ function updateTransitionWordScanProgress(progress, allowSmoothing = true) {
 }
 
 function setSecondaryLine(line) {
-  const safe = toDisplayLine(line, " ");
+  const translationDisplay = isTranslationMode
+    ? resolveTranslationDisplay(line)
+    : null;
+  const safe = translationDisplay?.text ?? toDisplayLine(line, " ");
+  nextLineEl.classList.toggle(
+    "translation-placeholder",
+    translationDisplay?.isPlaceholder === true);
   setLineText(nextLineEl, nextLineTextEl, nextLineScanTextEl, safe);
   displayedNext = safe;
 }
@@ -303,6 +317,7 @@ function setTranslationMode(enabled) {
 }
 
 function setIncomingTranslationPair(original, translation, wordScanProgress) {
+  const translationDisplay = resolveTranslationDisplay(translation);
   setLineText(
     incomingTranslationOriginalLineEl,
     incomingTranslationOriginalTextEl,
@@ -312,7 +327,10 @@ function setIncomingTranslationPair(original, translation, wordScanProgress) {
     incomingTranslationLineEl,
     incomingTranslationTextEl,
     null,
-    toDisplayLine(translation, " "));
+    translationDisplay.text);
+  incomingTranslationLineEl.classList.toggle(
+    "translation-placeholder",
+    translationDisplay.isPlaceholder);
   setLineWordScanProgress(incomingTranslationOriginalLineEl, wordScanProgress, false);
 }
 
@@ -323,6 +341,7 @@ function clearIncomingTranslationPair() {
   setLineWordScanProgress(incomingTranslationOriginalLineEl, null);
   setLineText(incomingTranslationOriginalLineEl, incomingTranslationOriginalTextEl, incomingTranslationOriginalScanTextEl, " ");
   setLineText(incomingTranslationLineEl, incomingTranslationTextEl, null, " ");
+  incomingTranslationLineEl.classList.remove("translation-placeholder");
 }
 
 function updateSecondaryOpacity(progress) {
@@ -823,8 +842,25 @@ function applyFrame(
   const p = clamp01(progress);
 
   if (useTranslationPair !== isTranslationMode) {
+    const shouldAnimateSearchResult =
+      useTranslationPair &&
+      isSearchingLine(displayedCurrent) &&
+      !isSearchingLine(safeCurrent);
     cancelActiveTransition();
     setTranslationMode(useTranslationPair);
+    if (shouldAnimateSearchResult) {
+      startTransition(
+        safeCurrent,
+        safeNext,
+        p,
+        currentLineIndex,
+        wordScanProgress,
+        currentTranslation,
+        nextTranslation,
+        useTranslationPair);
+      return;
+    }
+
     setCurrentLine(safeCurrent);
     setWordScanProgress(wordScanProgress, false);
     setSecondaryLine(visibleSecondary);

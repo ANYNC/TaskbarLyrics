@@ -316,6 +316,7 @@ describe("lyrics responsive layout", () => {
     const incomingOriginalScanText = document.querySelector("#incomingTranslationOriginalScanText");
     const incomingOriginalViewport = incomingOriginalLine.querySelector(".line-text-viewport");
     const incomingOriginalStack = incomingOriginalLine.querySelector(".line-text-stack");
+    const incomingTranslationLine = document.querySelector("#incomingTranslationLine");
     const incomingTranslationText = document.querySelector("#incomingTranslationText");
     expect(currentLineViewport).not.toBeNull();
     expect(currentLineStack).not.toBeNull();
@@ -333,6 +334,7 @@ describe("lyrics responsive layout", () => {
     expect(style).toContain("--translation: rgba(255, 255, 255, 0.70)");
     expect(style).toMatch(/\.layout\.translation-mode \.track > \.next-line:not\(\.incoming-line\)[\s\S]*color:\s*var\(--translation\)/s);
     expect(style).toMatch(/\.translation-line\s*\{[^}]*color:\s*var\(--translation\)/s);
+    expect(style).toMatch(/\.translation-line\.translation-placeholder\s*\{[^}]*opacity:\s*0\.55/s);
     expect(style).toMatch(/\.track\.animating\s*\{[^}]*transition:\s*transform 560ms cubic-bezier\(0\.22, 0\.72, 0\.24, 1\)/s);
     const translationTrackRule = style.match(/\.track\.animating\.translation-pair-animating\s*\{([^}]*)\}/s)?.[1] ?? "";
     expect(translationTrackRule).toContain("transition-duration: 760ms");
@@ -370,6 +372,10 @@ describe("lyrics responsive layout", () => {
 
     receive("Line one", "Line two", 0, 0.25, "译一", "译二", true);
     expect(layout.classList.contains("translation-mode")).toBe(true);
+    expect(incomingPair.classList.contains("preparing")).toBe(false);
+    expect(incomingPair.classList.contains("entering")).toBe(false);
+    expect(track.classList.contains("animating")).toBe(false);
+    expect(track.classList.contains("translation-pair-animating")).toBe(false);
     expect(currentLineText.textContent).toBe("Line one");
     expect(currentLineScanText.textContent).toBe("Line one");
     expect(currentLine.classList.contains("word-scanning")).toBe(true);
@@ -381,7 +387,8 @@ describe("lyrics responsive layout", () => {
     expect(nextLineStack.style.getPropertyValue("--line-scroll-offset")).toBe("");
 
     receive("Line one", "Line two", 0, 0.5, "", "译二", true);
-    expect(nextLineText.textContent.trim()).toBe("");
+    expect(nextLineText.textContent).toBe("…");
+    expect(nextLine.classList.contains("translation-placeholder")).toBe(true);
     expect(currentLineScanText.textContent).toBe(currentLineText.textContent);
 
     receive("Line two", "Line three", 1, 0.4, "译二", "译三", true);
@@ -389,6 +396,7 @@ describe("lyrics responsive layout", () => {
     expect(incomingOriginalText.textContent).toBe("Line two");
     expect(incomingOriginalScanText.textContent).toBe("Line two");
     expect(incomingTranslationText.textContent).toBe("译二");
+    expect(incomingTranslationLine.classList.contains("translation-placeholder")).toBe(false);
     expect(incomingOriginalLine.classList.contains("word-scanning")).toBe(true);
     expect(incomingOriginalLine.classList.contains("horizontal-scrolling")).toBe(true);
     expect(incomingOriginalStack.style.getPropertyValue("--line-scroll-offset")).toBe("-55px");
@@ -442,8 +450,10 @@ describe("lyrics responsive layout", () => {
     expect(nextLine.classList.contains("word-scanning")).toBe(false);
 
     prefersReducedMotion = true;
-    receive("Line three", "Line four", 2, 0.2, "译三", "译四", true);
+    receive("Line three", "Line four", 2, 0.2, "", "译四", true);
     expect(incomingPair.classList.contains("preparing")).toBe(true);
+    expect(incomingTranslationText.textContent).toBe("…");
+    expect(incomingTranslationLine.classList.contains("translation-placeholder")).toBe(true);
     const reducedMotionStart = pendingAnimationFrames.shift();
     expect(reducedMotionStart).toBeTypeOf("function");
     reducedMotionStart(0);
@@ -458,6 +468,8 @@ describe("lyrics responsive layout", () => {
     expect(track.classList.contains("translation-pair-animating")).toBe(false);
     expect(incomingPair.classList.contains("preparing")).toBe(false);
     expect(incomingPair.classList.contains("entering")).toBe(false);
+    expect(nextLineText.textContent).toBe("…");
+    expect(nextLine.classList.contains("translation-placeholder")).toBe(true);
 
     receive("Line three", "Line four", 2, 0.2, "", "", false);
     expect(layout.classList.contains("translation-mode")).toBe(false);
@@ -465,12 +477,118 @@ describe("lyrics responsive layout", () => {
     expect(incomingPair.classList.contains("entering")).toBe(false);
     expect(track.classList.contains("translation-pair-leaving")).toBe(false);
     expect(currentLineText.textContent).toBe("Line three");
+    expect(nextLine.classList.contains("translation-placeholder")).toBe(false);
     expect(nextLineText.textContent).toBe("Line four");
     expect(currentLine.classList.contains("word-scanning")).toBe(true);
     expect(nextLine.classList.contains("word-scanning")).toBe(false);
     while (pendingAnimationFrames.length > 0) {
       pendingAnimationFrames.shift()(0);
     }
+  });
+
+  it("animates a translation result out of the search state", async () => {
+    const [html, state, script, style] = await Promise.all([
+      read("TaskbarLyrics.App/Web/Lyrics/index.html"),
+      read("TaskbarLyrics.App/Web/Lyrics/state.js"),
+      read("TaskbarLyrics.App/Web/Lyrics/app.js"),
+      read("TaskbarLyrics.App/Web/Lyrics/style.css")
+    ]);
+    const searchingLine = "\u6b63\u5728\u68c0\u7d22\u6b4c\u8bcd...";
+    const searchingHtml = html
+      .replace(/TaskbarLyrics started/g, searchingLine)
+      .replace(/Waiting for lyrics\.\.\./g, " ");
+    const dom = new JSDOM(searchingHtml.replace("{{STYLE_CSS}}", "").replace("{{APP_JS}}", ""), {
+      runScripts: "outside-only"
+    });
+    dom.window.CSS = { supports: () => true };
+    const pendingAnimationFrames = [];
+    dom.window.requestAnimationFrame = callback => {
+      pendingAnimationFrames.push(callback);
+      return pendingAnimationFrames.length;
+    };
+    dom.window.cancelAnimationFrame = () => {};
+    dom.window.eval(state);
+    dom.window.eval(script);
+
+    const document = dom.window.document;
+    const layout = document.querySelector("#layout");
+    const track = document.querySelector("#track");
+    const currentLineText = document.querySelector("#currentLineText");
+    const nextLineText = document.querySelector("#nextLineText");
+    const incomingPair = document.querySelector("#incomingTranslationPair");
+    expect(currentLineText.textContent).toBe(searchingLine);
+    expect(nextLineText.textContent.trim()).toBe("");
+    expect(style).toMatch(/\.track\.animating\.translation-pair-animating\s*\{[^}]*transition-duration:\s*760ms/s);
+
+    const receive = (translationMode, current, next, currentTranslation, nextTranslation) =>
+      dom.window.taskbarLyrics.receive({
+        version: 1,
+        type: "lyrics",
+        payload: {
+          current,
+          next,
+          progress: 0.25,
+          currentLineIndex: 0,
+          trackId: "",
+          isPureMusic: false,
+          isPlaying: true,
+          wordScanProgress: 0.4,
+          currentTranslation,
+          nextTranslation,
+          translationMode
+        }
+      });
+
+    receive(true, "Found line", "Following line", "Translated line", "Following translation");
+    expect(layout.classList.contains("translation-mode")).toBe(true);
+    expect(currentLineText.textContent).toBe(searchingLine);
+    expect(nextLineText.textContent.trim()).toBe("");
+    expect(incomingPair.classList.contains("preparing")).toBe(true);
+    expect(track.classList.contains("animating")).toBe(false);
+    expect(track.classList.contains("translation-pair-animating")).toBe(false);
+
+    const enterFrame = pendingAnimationFrames.shift();
+    expect(enterFrame).toBeTypeOf("function");
+    enterFrame(0);
+    expect(currentLineText.textContent).toBe(searchingLine);
+    expect(incomingPair.classList.contains("entering")).toBe(true);
+    expect(track.classList.contains("animating")).toBe(true);
+    expect(track.classList.contains("translation-pair-animating")).toBe(true);
+
+    const offsetFrame = pendingAnimationFrames.shift();
+    expect(offsetFrame).toBeTypeOf("function");
+    offsetFrame(0);
+    expect(currentLineText.textContent).toBe(searchingLine);
+    expect(track.style.transform).toMatch(/^translateY\(-\d+(?:\.\d+)?px\)$/);
+
+    const transitionEnd = new dom.window.Event("transitionend", { bubbles: true });
+    Object.defineProperty(transitionEnd, "propertyName", { value: "transform" });
+    track.dispatchEvent(transitionEnd);
+
+    expect(currentLineText.textContent).toBe("Found line");
+    expect(nextLineText.textContent).toBe("Translated line");
+    expect(incomingPair.classList.contains("preparing")).toBe(false);
+    expect(incomingPair.classList.contains("entering")).toBe(false);
+    expect(track.classList.contains("animating")).toBe(false);
+    expect(track.classList.contains("translation-pair-animating")).toBe(false);
+    expect(track.style.transform).toBe("");
+
+    // A normal lyric line still toggles translation mode in place.
+    receive(false, "Found line", "Following line", "Translated line", "Following translation");
+    expect(layout.classList.contains("translation-mode")).toBe(false);
+    expect(currentLineText.textContent).toBe("Found line");
+    expect(nextLineText.textContent).toBe("Following line");
+    expect(incomingPair.classList.contains("preparing")).toBe(false);
+    expect(incomingPair.classList.contains("entering")).toBe(false);
+    expect(track.classList.contains("animating")).toBe(false);
+
+    receive(true, "Found line", "Following line", "Translated line", "Following translation");
+    expect(layout.classList.contains("translation-mode")).toBe(true);
+    expect(currentLineText.textContent).toBe("Found line");
+    expect(nextLineText.textContent).toBe("Translated line");
+    expect(incomingPair.classList.contains("preparing")).toBe(false);
+    expect(incomingPair.classList.contains("entering")).toBe(false);
+    expect(track.classList.contains("animating")).toBe(false);
   });
 
   it("keeps every spectrum bar visible when scaled geometry exceeds the viewport", async () => {

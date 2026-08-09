@@ -362,6 +362,11 @@ html, body {
   top: var(--secondary-offset-y);
 }
 
+.layout.translation-mode .track > .next-line.translation-placeholder:not(.incoming-line),
+.translation-line.translation-placeholder {
+  opacity: 0.55;
+}
+
 .layout.translation-mode .incoming-line {
   display: none;
 }
