@@ -129,6 +129,12 @@ describe("settings WebView bridge", () => {
 
     const spectrumTrigger = document.querySelector('[data-setting="spectrumDisplayMode"]');
     const consentDialog = document.querySelector("#spectrumAudioConsentDialog");
+    const showConsentDialog = consentDialog.showModal.bind(consentDialog);
+    let focusWhenConsentOpened = null;
+    consentDialog.showModal = function showModal() {
+      focusWhenConsentOpened = document.activeElement;
+      showConsentDialog();
+    };
     const beforeSelection = sent.length;
     dom.window.settingsApp.receive({
       version: 1,
@@ -141,11 +147,15 @@ describe("settings WebView bridge", () => {
     consentDialog.dispatchEvent(new dom.window.Event("animationend"));
 
     spectrumTrigger.click();
+    focusWhenConsentOpened = null;
     document.querySelector('#selectListbox [data-option-index="1"]').click();
 
     expect(consentDialog.open).toBe(true);
+    expect(focusWhenConsentOpened).toBe(spectrumTrigger);
     expect(sent.slice(beforeSelection)).toEqual([]);
     expect(spectrumTrigger.querySelector(".select-trigger-value").textContent).toContain("关闭");
+    expect(document.querySelector("#spectrumTuningButton").disabled).toBe(true);
+    expect(document.querySelector("#spectrumTuningDescription").textContent).toContain("“歌词”页");
 
     consentDialog.querySelector('[data-dialog-cancel="spectrumAudioConsentDialog"]').click();
     consentDialog.dispatchEvent(new dom.window.Event("animationend"));
@@ -179,6 +189,8 @@ describe("settings WebView bridge", () => {
     });
     expect(consentDialog.open).toBe(false);
     expect(document.querySelector("#revokeSpectrumAudioAccessButton").hidden).toBe(false);
+    expect(document.querySelector("#spectrumTuningButton").disabled).toBe(false);
+    expect(document.querySelector("#spectrumTuningDescription").textContent).toContain("实时调节频谱参数");
   });
 
   it("renders spectrum capture states and posts recovery commands", async () => {
@@ -224,10 +236,34 @@ describe("settings WebView bridge", () => {
     });
     expect(failureDialog.open).toBe(true);
     expect(document.querySelector("#spectrumCaptureFailureMessage").textContent).toBe("capture blocked");
+    expect(status.dataset.state).toBe("blocked");
+    expect(document.querySelector("#retrySpectrumAudioAccessButton").hidden).toBe(false);
 
+    failureDialog.dispatchEvent(new dom.window.Event("cancel", { cancelable: true }));
+    failureDialog.dispatchEvent(new dom.window.Event("animationend"));
+    expect(failureDialog.open).toBe(false);
+    expect(document.querySelector("#retrySpectrumAudioAccessButton").hidden).toBe(false);
+
+    document.querySelector("#retrySpectrumAudioAccessButton").click();
+    expect(sent.at(-1)).toEqual({ version: 1, type: "retrySpectrumCapture", payload: {} });
+    expect(status.dataset.state).toBe("waiting");
+    expect(status.textContent).toBe("正在重试系统音频采集…");
+    expect(document.querySelector("#retrySpectrumAudioAccessButton").hidden).toBe(true);
+
+    dom.window.settingsApp.receive({
+      version: 1,
+      type: "spectrumCaptureState",
+      payload: { state: "blocked", message: "capture blocked again" }
+    });
     document.querySelector("#retrySpectrumCaptureButton").click();
     expect(sent.at(-1)).toEqual({ version: 1, type: "retrySpectrumCapture", payload: {} });
+    failureDialog.dispatchEvent(new dom.window.Event("animationend"));
 
+    dom.window.settingsApp.receive({
+      version: 1,
+      type: "spectrumCaptureState",
+      payload: { state: "blocked", message: "capture still blocked" }
+    });
     document.querySelector("#disableSpectrumButton").click();
     expect(sent.at(-1)).toEqual({ version: 1, type: "disableSpectrum", payload: {} });
 
@@ -268,6 +304,7 @@ describe("settings WebView bridge", () => {
 
   it("renders diagnostic providers, rejected candidates, and the final selection", async () => {
     const { dom, script } = await createSettingsDom();
+    const css = await read("TaskbarLyrics.App/Web/Settings/settings.css");
     const document = dom.window.document;
     dom.window.eval(script);
 
@@ -288,11 +325,11 @@ describe("settings WebView bridge", () => {
               state: "Succeeded",
               detail: "selected candidate",
               selected: true,
-              candidates: [{ candidateId: "qq-1", title: "<unsafe>", artists: ["Artist"], album: "Album", durationSeconds: 198, queryVariantId: "strict", fetchMetadataKeys: ["tokenType"], isAdmitted: false, score: 61, rejectionReasons: ["below-admission-threshold"] }]
+              candidates: [{ candidateId: "qq-1", title: "<unsafe>", artists: ["Artist with an intentionally long diagnostic display name"], album: "Album", durationSeconds: 198, queryVariantId: "strict", fetchMetadataKeys: ["tokenType"], isAdmitted: false, score: 61, rejectionReasons: ["below-admission-threshold"] }]
             },
             { providerId: "Netease", state: "NoLyrics", detail: "not found", selected: false, candidates: [] }
           ],
-          selection: { providerId: "QQMusic", candidateId: "qq-2", acquisition: "Remote", format: "Lrc", timingKind: "Timed", timingProvenance: "Provider", lineCount: 42, diagnostics: { elapsedMs: "84" } },
+          selection: { providerId: "QQMusic", candidateId: "qq-2-with-a-very-long-unbroken-diagnostic-identity", acquisition: "Remote", format: "Lrc", timingKind: "Timed", timingProvenance: "Provider", lineCount: 42, diagnostics: { elapsedMs: "84" } },
           error: null
         }
       }
@@ -311,8 +348,11 @@ describe("settings WebView bridge", () => {
     expect(providerDetails[0].open).toBe(false);
     expect(document.querySelector(".diagnostics-candidate strong").textContent).toBe("<unsafe>");
     expect(document.querySelector(".diagnostics-candidate").innerHTML).not.toContain("<strong><unsafe>");
+    expect(document.querySelector(".diagnostics-candidate-title small").getAttribute("title")).toContain("intentionally long");
     expect(document.querySelector(".diagnostics-selection-card").textContent).toContain("QQMusic");
     expect(document.querySelector("#lyricDiagnosticsVariantsPanel").hidden).toBe(false);
+    expect(css).toMatch(/\.diagnostics-candidate-title small\s*\{[^}]*min-width:\s*0;[^}]*text-overflow:\s*ellipsis/s);
+    expect(css).toMatch(/\.diagnostics-selection-meta (?:span|code)[\s\S]*overflow-wrap:\s*anywhere/s);
   });
 
   it("shows empty and error diagnostic states without stale report content", async () => {

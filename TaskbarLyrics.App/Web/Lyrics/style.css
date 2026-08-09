@@ -463,6 +463,10 @@ html, body {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .line.word-scan-smoothing {
+    transition: none;
+  }
+
   .track.animating.translation-pair-animating {
     transition: none;
     will-change: auto;

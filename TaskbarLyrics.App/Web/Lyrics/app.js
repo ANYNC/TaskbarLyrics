@@ -93,6 +93,10 @@ function clamp01(value) {
   return Math.max(0, Math.min(1, parsed));
 }
 
+function prefersReducedMotion() {
+  return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
+}
+
 function normalizeWordScanProgress(value) {
   if (value === null || value === undefined || value === "") {
     return null;
@@ -118,7 +122,7 @@ function toDisplayLine(line, fallback = " ") {
 function resolveTranslationDisplay(line) {
   const text = (line ?? "").toString().trim();
   return {
-    text: text.length > 0 ? text : "...",
+    text: text.length > 0 ? text : "…",
     isPlaceholder: text.length === 0
   };
 }
@@ -262,6 +266,7 @@ function setLineWordScanProgress(lineElement, progress, allowSmoothing = true) {
       normalized > 0 &&
       normalized < 1 &&
       isPlaybackPlaying &&
+      !prefersReducedMotion() &&
       allowSmoothing &&
       isContinuousProgress);
   if (normalized === null) {
@@ -1198,7 +1203,7 @@ function startTranslationPairTransition(
       }
 
       setTrackOffset(2);
-      if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+      if (prefersReducedMotion()) {
         window.requestAnimationFrame(finish);
       }
     });

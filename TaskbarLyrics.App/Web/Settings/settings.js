@@ -333,7 +333,7 @@
             const artist = diagnosticArtists(candidate?.artists, "未知歌手");
             return `<article class="diagnostics-candidate">
               <div class="diagnostics-candidate-main">
-                <div class="diagnostics-candidate-title"><strong title="${escapeHtml(title)}">${escapeHtml(title)}</strong><small>${escapeHtml(artist)}</small></div>
+                <div class="diagnostics-candidate-title"><strong title="${escapeHtml(title)}">${escapeHtml(title)}</strong><small title="${escapeHtml(artist)}">${escapeHtml(artist)}</small></div>
                 <div class="diagnostics-candidate-meta"><span>专辑：${escapeHtml(diagnosticString(candidate?.album))}</span><span>时长：${escapeHtml(formatDiagnosticDuration(candidate?.durationSeconds ?? candidate?.duration))}</span><span>查询变体：${escapeHtml(diagnosticString(candidate?.queryVariantId))}</span><span>候选 ID：<code title="${escapeHtml(diagnosticString(candidate?.candidateId))}">${escapeHtml(diagnosticString(candidate?.candidateId))}</code></span>${metadataKeys.length ? `<span>元数据：${escapeHtml(metadataKeys.join("、"))}</span>` : ""}</div>
                 ${reasons.length ? `<ul class="diagnostics-reasons" aria-label="拒绝原因">${reasons.map(reason => `<li>${escapeHtml(reason)}</li>`).join("")}</ul>` : ""}
               </div>
@@ -710,6 +710,7 @@
       if (!state) return;
       const granted = Boolean(state.spectrumAudioAccessGranted);
       const modeEnabled = state.spectrumDisplayMode !== "Disabled";
+      const captureBlocked = spectrumCaptureState.state === "blocked" && granted && modeEnabled;
       const status = $("#spectrumAudioAccessStatus");
       const fallbackMessage = granted
         ? modeEnabled
@@ -718,8 +719,15 @@
         : "尚未允许读取系统播放声音。";
       status.textContent = spectrumCaptureState.message || fallbackMessage;
       status.dataset.state = spectrumCaptureState.state || (granted ? "waiting" : "notGranted");
+      $("#retrySpectrumAudioAccessButton").hidden = !captureBlocked;
       $("#revokeSpectrumAudioAccessButton").hidden = !granted;
-      $("#spectrumTuningButton").disabled = !granted || !modeEnabled;
+      const tuningAvailable = granted && modeEnabled;
+      $("#spectrumTuningButton").disabled = !tuningAvailable;
+      $("#spectrumTuningDescription").textContent = tuningAvailable
+        ? "打开滑块面板，实时调节频谱参数（自动保存）。"
+        : granted
+          ? "请先在“歌词”页将“显示频谱”改为非关闭模式。"
+          : "请先在“歌词”页启用频谱并允许读取系统播放声音。";
     }
 
     function requestSpectrumDisplayMode(mode) {
@@ -1022,8 +1030,12 @@
       const key = activeSelectTrigger.dataset.setting;
       const option = (selectOptions[key] ?? [])[index];
       if (!option) return;
-      if (key === "spectrumDisplayMode") requestSpectrumDisplayMode(option.value);
-      else commitSetting(key, option.value);
+      if (key === "spectrumDisplayMode") {
+        closeSelect(true);
+        requestSpectrumDisplayMode(option.value);
+        return;
+      }
+      commitSetting(key, option.value);
       closeSelect(true);
     }
 
@@ -1584,10 +1596,12 @@
       bridge.post({ type: "revokeSpectrumAudioAccess" });
       markSaved();
     });
-    $("#retrySpectrumCaptureButton").addEventListener("click", () => {
+    $$('[data-retry-spectrum-capture]').forEach(button => button.addEventListener("click", () => {
+      spectrumCaptureState = { state: "waiting", message: "正在重试系统音频采集…" };
+      renderSpectrumAudioAccess();
       closeDialogWithAnimation($("#spectrumCaptureFailureDialog"));
       bridge.post({ type: "retrySpectrumCapture" });
-    });
+    }));
     $("#disableSpectrumButton").addEventListener("click", () => {
       closeDialogWithAnimation($("#spectrumCaptureFailureDialog"));
       bridge.post({ type: "disableSpectrum" });

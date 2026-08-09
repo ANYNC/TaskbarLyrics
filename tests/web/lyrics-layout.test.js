@@ -31,6 +31,7 @@ describe("lyrics responsive layout", () => {
     expect(style).toMatch(/\.line\.horizontal-scrolling \.line-text-stack\s*\{[^}]*transform:\s*translateX\(var\(--line-scroll-offset\)\)/s);
     expect(style).toMatch(/\.line\.horizontal-scrolling \.line-text\s*\{[^}]*text-overflow:\s*clip/s);
     expect(style).toMatch(/\.line\.horizontal-scrolling\.word-scan-smoothing \.line-text-stack\s*\{[^}]*transition:\s*transform 90ms linear;[^}]*will-change:\s*transform/s);
+    expect(style).toMatch(/@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*\.line\.word-scan-smoothing\s*\{[^}]*transition:\s*none/s);
     expect(style).toMatch(/@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*\.line\.horizontal-scrolling\.word-scan-smoothing \.line-text-stack\s*\{[^}]*transition:\s*none;[^}]*will-change:\s*auto/s);
     expect(style).toContain("--primary: rgba(255, 255, 255, 1)");
     expect(style).toContain("--secondary: rgba(255, 255, 255, 0.60)");
@@ -160,6 +161,49 @@ describe("lyrics responsive layout", () => {
     receiveLyrics(0.5, false);
     expect(currentLine.classList.contains("horizontal-scrolling")).toBe(false);
     expect(currentLineStack.style.getPropertyValue("--line-scroll-offset")).toBe("");
+  });
+
+  it("disables word-scan interpolation when reduced motion is requested", async () => {
+    const [html, state, script] = await Promise.all([
+      read("TaskbarLyrics.App/Web/Lyrics/index.html"),
+      read("TaskbarLyrics.App/Web/Lyrics/state.js"),
+      read("TaskbarLyrics.App/Web/Lyrics/app.js")
+    ]);
+    const dom = new JSDOM(html.replace("{{STYLE_CSS}}", "").replace("{{APP_JS}}", ""), {
+      runScripts: "outside-only"
+    });
+    dom.window.CSS = { supports: () => true };
+    dom.window.matchMedia = query => ({
+      matches: query.includes("prefers-reduced-motion"),
+      addEventListener() {},
+      removeEventListener() {}
+    });
+    dom.window.requestAnimationFrame = () => 1;
+    dom.window.cancelAnimationFrame = () => {};
+    dom.window.eval(state);
+    dom.window.eval(script);
+
+    const receiveLyrics = wordScanProgress => dom.window.taskbarLyrics.receive({
+      version: 1,
+      type: "lyrics",
+      payload: {
+        current: "Reduced motion line",
+        next: "Next line",
+        progress: 0.5,
+        currentLineIndex: 0,
+        trackId: "",
+        isPureMusic: false,
+        isPlaying: true,
+        wordScanProgress
+      }
+    });
+
+    receiveLyrics(0);
+    receiveLyrics(0.1);
+    const currentLine = dom.window.document.querySelector("#currentLine");
+    expect(currentLine.classList.contains("word-scanning")).toBe(true);
+    expect(currentLine.classList.contains("word-scan-smoothing")).toBe(false);
+    expect(currentLine.style.getPropertyValue("--word-scan-progress")).toBe("10.000%");
   });
 
   it("carries word-scan progress through queued line transitions", async () => {
@@ -387,7 +431,7 @@ describe("lyrics responsive layout", () => {
     expect(nextLineStack.style.getPropertyValue("--line-scroll-offset")).toBe("");
 
     receive("Line one", "Line two", 0, 0.5, "", "译二", true);
-    expect(nextLineText.textContent).toBe("...");
+    expect(nextLineText.textContent).toBe("…");
     expect(nextLine.classList.contains("translation-placeholder")).toBe(true);
     expect(currentLineScanText.textContent).toBe(currentLineText.textContent);
 
@@ -452,7 +496,7 @@ describe("lyrics responsive layout", () => {
     prefersReducedMotion = true;
     receive("Line three", "Line four", 2, 0.2, "", "译四", true);
     expect(incomingPair.classList.contains("preparing")).toBe(true);
-    expect(incomingTranslationText.textContent).toBe("...");
+    expect(incomingTranslationText.textContent).toBe("…");
     expect(incomingTranslationLine.classList.contains("translation-placeholder")).toBe(true);
     const reducedMotionStart = pendingAnimationFrames.shift();
     expect(reducedMotionStart).toBeTypeOf("function");
@@ -468,7 +512,7 @@ describe("lyrics responsive layout", () => {
     expect(track.classList.contains("translation-pair-animating")).toBe(false);
     expect(incomingPair.classList.contains("preparing")).toBe(false);
     expect(incomingPair.classList.contains("entering")).toBe(false);
-    expect(nextLineText.textContent).toBe("...");
+    expect(nextLineText.textContent).toBe("…");
     expect(nextLine.classList.contains("translation-placeholder")).toBe(true);
 
     receive("Line three", "Line four", 2, 0.2, "", "", false);
