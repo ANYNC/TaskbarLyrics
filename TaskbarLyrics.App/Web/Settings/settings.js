@@ -58,6 +58,8 @@
     let rangePreviewFrame = 0;
     let announceNextLayoutPreview = false;
     let lyricDiagnosticsState = { status: "idle", track: null, report: null, message: "" };
+    let pendingSpectrumDisplayMode = null;
+    let spectrumCaptureState = { state: "disabled", message: "" };
 
     const $ = selector => document.querySelector(selector);
     const $$ = selector => Array.from(document.querySelectorAll(selector));
@@ -704,6 +706,54 @@
       setTimeout(() => { if (dialog.classList.contains("closing")) { dialog.removeEventListener("animationend", finish); dialog.classList.remove("closing"); dialog.close(); } }, 400);
     }
 
+    function renderSpectrumAudioAccess() {
+      if (!state) return;
+      const granted = Boolean(state.spectrumAudioAccessGranted);
+      const modeEnabled = state.spectrumDisplayMode !== "Disabled";
+      const status = $("#spectrumAudioAccessStatus");
+      const fallbackMessage = granted
+        ? modeEnabled
+          ? "已允许；仅在频谱需要显示时读取系统播放声音。"
+          : "已允许；频谱关闭时不会读取系统播放声音。"
+        : "尚未允许读取系统播放声音。";
+      status.textContent = spectrumCaptureState.message || fallbackMessage;
+      status.dataset.state = spectrumCaptureState.state || (granted ? "waiting" : "notGranted");
+      $("#revokeSpectrumAudioAccessButton").hidden = !granted;
+      $("#spectrumTuningButton").disabled = !granted || !modeEnabled;
+    }
+
+    function requestSpectrumDisplayMode(mode) {
+      if (!state || !selectOptions.spectrumDisplayMode.some(option => option.value === mode)) return;
+      if (mode === "Disabled") {
+        spectrumCaptureState = { state: "disabled", message: "频谱已关闭，不会读取系统播放声音。" };
+        commitSetting("spectrumDisplayMode", mode);
+        return;
+      }
+      if (state.spectrumAudioAccessGranted) {
+        spectrumCaptureState = { state: "waiting", message: "已允许；仅在频谱需要显示时读取系统播放声音。" };
+        commitSetting("spectrumDisplayMode", mode);
+        return;
+      }
+
+      pendingSpectrumDisplayMode = mode;
+      const dialog = $("#spectrumAudioConsentDialog");
+      if (!dialog.open) dialog.showModal();
+    }
+
+    function setSpectrumCaptureState(payload = {}) {
+      const allowedStates = ["notGranted", "disabled", "waiting", "capturing", "blocked"];
+      spectrumCaptureState = {
+        state: allowedStates.includes(payload.state) ? payload.state : "waiting",
+        message: typeof payload.message === "string" ? payload.message : ""
+      };
+      renderSpectrumAudioAccess();
+      if (spectrumCaptureState.state === "blocked" && state?.spectrumAudioAccessGranted && state.spectrumDisplayMode !== "Disabled") {
+        $("#spectrumCaptureFailureMessage").textContent = spectrumCaptureState.message || "系统音频采集被系统或安全软件阻止，歌词显示不受影响。";
+        const dialog = $("#spectrumCaptureFailureDialog");
+        if (!dialog.open) dialog.showModal();
+      }
+    }
+
     function setControlValue(control, value) {
       if (control.classList.contains("theme-segmented")) {
         control.value = value;
@@ -929,7 +979,7 @@
         state.foregroundColorMode = "Custom";
       }
       if (key === "coverCornerRadius") state.coverCornerRadius = Math.min(state.coverCornerRadius, state.coverSize / 2);
-      syncColorMode(); applyDependencies(); syncLayoutBounds(); syncWindowBounds(); updateOutputs(); syncControls();
+      syncColorMode(); applyDependencies(); syncLayoutBounds(); syncWindowBounds(); updateOutputs(); syncControls(); renderSpectrumAudioAccess();
       return previousCornerRadius;
     }
 
@@ -972,7 +1022,8 @@
       const key = activeSelectTrigger.dataset.setting;
       const option = (selectOptions[key] ?? [])[index];
       if (!option) return;
-      commitSetting(key, option.value);
+      if (key === "spectrumDisplayMode") requestSpectrumDisplayMode(option.value);
+      else commitSetting(key, option.value);
       closeSelect(true);
     }
 
@@ -1169,6 +1220,7 @@
       syncControls();
       renderMediaHotkeys();
       applyDependencies();
+      renderSpectrumAudioAccess();
       updateOutputs();
       activatePage(state.page, false);
     }
@@ -1519,6 +1571,28 @@
     $("#clearCacheButton").addEventListener("click", () => $("#clearDialog").showModal());
     $("#confirmRestore").addEventListener("click", () => { closeDialogWithAnimation($("#restoreDialog")); resetState(); });
     $("#confirmClear").addEventListener("click", () => { closeDialogWithAnimation($("#clearDialog")); bridge.post({ type: "clearCache" }); showToast("歌词与封面缓存已清理"); });
+    $("#confirmSpectrumAudioAccess").addEventListener("click", () => {
+      const mode = pendingSpectrumDisplayMode;
+      if (!mode) return;
+      pendingSpectrumDisplayMode = null;
+      closeDialogWithAnimation($("#spectrumAudioConsentDialog"));
+      bridge.post({ type: "confirmSpectrumAudioAccess", value: mode });
+      markSaved();
+    });
+    $("#spectrumAudioConsentDialog").addEventListener("close", () => { pendingSpectrumDisplayMode = null; });
+    $("#revokeSpectrumAudioAccessButton").addEventListener("click", () => {
+      bridge.post({ type: "revokeSpectrumAudioAccess" });
+      markSaved();
+    });
+    $("#retrySpectrumCaptureButton").addEventListener("click", () => {
+      closeDialogWithAnimation($("#spectrumCaptureFailureDialog"));
+      bridge.post({ type: "retrySpectrumCapture" });
+    });
+    $("#disableSpectrumButton").addEventListener("click", () => {
+      closeDialogWithAnimation($("#spectrumCaptureFailureDialog"));
+      bridge.post({ type: "disableSpectrum" });
+      markSaved();
+    });
     $("#trackOffsetPreviousPage").addEventListener("click", () => changeTrackOffsetPage(-1));
     $("#trackOffsetNextPage").addEventListener("click", () => changeTrackOffsetPage(1));
     $("#clearTrackOffsetsButton").addEventListener("click", () => $("#clearTrackOffsetsDialog").showModal());
@@ -1615,6 +1689,12 @@
           break;
         case "lyricDiagnosticsState":
           setLyricDiagnosticsState(message.payload);
+          break;
+        case "requestSpectrumDisplayMode":
+          requestSpectrumDisplayMode(message.payload?.mode);
+          break;
+        case "spectrumCaptureState":
+          setSpectrumCaptureState(message.payload);
           break;
         case "navigate":
           navigateToPage(message.payload?.page, Boolean(message.payload?.focusCurrentTrack));

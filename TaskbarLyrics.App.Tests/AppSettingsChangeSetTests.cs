@@ -121,6 +121,28 @@ public sealed class AppSettingsChangeSetTests
     }
 
     [Fact]
+    public void CreateWhenSpectrumAudioAccessChangesReappliesSpectrumWithoutRebuildingOtherServices()
+    {
+        var current = new AppSettings();
+        var next = current.Clone();
+        next.SpectrumAudioAccessGranted = true;
+
+        var changes = AppSettingsChangeSet.Create(current, next);
+
+        Assert.True(changes.SpectrumDisplayChanged);
+        Assert.True(changes.RequiresLyricsWindowApply);
+        Assert.False(changes.PlayerRecognitionChanged);
+        Assert.False(changes.LocalMediaLibraryChanged);
+        Assert.False(changes.LyricSyncServiceChanged);
+        Assert.False(changes.WordScanningChanged);
+        Assert.False(changes.TranslationDisplayChanged);
+        Assert.False(changes.VisualStyleChanged);
+        Assert.False(changes.LyricsLayoutChanged);
+        Assert.False(changes.WindowLayoutChanged);
+        Assert.False(changes.GlobalMediaHotkeysChanged);
+    }
+
+    [Fact]
     public void CreateWhenHotkeyChangesDoesNotApplyLyricsWindow()
     {
         var current = new AppSettings();

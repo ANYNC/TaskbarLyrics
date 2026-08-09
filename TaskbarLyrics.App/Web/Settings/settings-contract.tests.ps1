@@ -34,7 +34,7 @@ foreach ($key in $settings) {
 }
 
 $settingsWithoutDescriptions = @(
-    'showLyricsOnStartup', 'spectrumDisplayMode', 'fontFamily', 'fontWeight',
+    'showLyricsOnStartup', 'fontFamily', 'fontWeight',
     'foregroundColorMode', 'showTextShadow', 'showBackground', 'showBorder',
     'startWithWindows'
 )
@@ -56,7 +56,9 @@ $requiredHtml = @(
     'id="playerSettingsDialog"', 'id="playerRecognitionToggle"', 'id="playerOffsetInput"',
     'id="currentTrackOffset"', 'id="trackOffsetList"', 'id="trackOffsetPagination"', 'id="clearTrackOffsetsDialog"',
     'id="runLyricDiagnosticsButton"', 'id="lyricDiagnosticsStatus"', 'id="lyricDiagnosticsReportSummary"', 'id="lyricDiagnosticsProviders"',
-    'id="lyricDiagnosticsSelection"',
+    'id="lyricDiagnosticsSelection"', 'id="spectrumAudioAccessStatus"', 'id="revokeSpectrumAudioAccessButton"',
+    'id="spectrumAudioConsentDialog"', 'id="confirmSpectrumAudioAccess"',
+    'id="spectrumCaptureFailureDialog"', 'id="retrySpectrumCaptureButton"', 'id="disableSpectrumButton"',
     'id="browseButton"', 'id="showLyricsWindowButton"', 'data-reset-layout-scale',
     'data-reset-layout-base', 'id="layoutScalePreview"', 'data-window-resize="top"',
     'class="slider-number-control"', 'compact-number-input', 'id="hueNumberInput"',
@@ -80,6 +82,8 @@ $requiredScript = @(
     'window.settingsApp = { receive }', 'function receive(message)',
     'type: "reorderSources"', 'type: "pickLocalFolder"', 'type: "showLyricsWindow"',
     'type: "openSmtcMonitor"', 'type: "openSpectrumTuning"',
+    'type: "confirmSpectrumAudioAccess"', 'type: "revokeSpectrumAudioAccess"',
+    'type: "retrySpectrumCapture"', 'type: "disableSpectrum"',
     'type: "runLyricDiagnostics"',
     'type: "windowDrag"', 'type: "windowResizeStart"', 'type: "windowMinimize"', 'type: "windowMaximize"', 'type: "windowClose"',
     'function openSelect', 'function closeSelect', 'function rgbToHex', 'function toArgb',
@@ -115,15 +119,18 @@ foreach ($unsupported in @('AppleMusic', 'Foobar', 'MusicBee', 'AIMP', 'VLC', 'W
     if ($script.Contains($unsupported)) { $errors.Add("unsupported source exposed: $unsupported") }
 }
 
-foreach ($marker in @('case "pickLocalFolder":', 'case "showLyricsWindow":', 'case "openSmtcMonitor":', 'case "openSpectrumTuning":', 'case "runLyricDiagnostics":', 'case "settingsPageChanged":', 'case "queryTrackOffsets":', 'case "setCurrentTrackOffset":', 'case "setStoredTrackOffset":', 'case "deleteTrackOffset":', 'case "clearTrackOffsets":', 'case "resetMediaHotkey":', 'case "resetLyricsLayoutBase":', 'case "previewUpdate":', 'case "windowDrag":', 'case "windowResizeStart":', 'case "windowClose":')) {
+foreach ($marker in @('case "pickLocalFolder":', 'case "showLyricsWindow":', 'case "openSmtcMonitor":', 'case "openSpectrumTuning":', 'case "confirmSpectrumAudioAccess":', 'case "revokeSpectrumAudioAccess":', 'case "retrySpectrumCapture":', 'case "disableSpectrum":', 'case "runLyricDiagnostics":', 'case "settingsPageChanged":', 'case "queryTrackOffsets":', 'case "setCurrentTrackOffset":', 'case "setStoredTrackOffset":', 'case "deleteTrackOffset":', 'case "clearTrackOffsets":', 'case "resetMediaHotkey":', 'case "resetLyricsLayoutBase":', 'case "previewUpdate":', 'case "windowDrag":', 'case "windowResizeStart":', 'case "windowClose":')) {
     if (-not $settingsWindow.Contains($marker)) { $errors.Add("missing desktop message: $marker") }
 }
 if (-not $settingsWindow.Contains('"settingsSaveResult"')) { $errors.Add('missing settings save result dispatch') }
 if (-not $settingsWindow.Contains('"lyricDiagnosticsState"')) { $errors.Add('missing lyric diagnostics state dispatch') }
+if (-not $settingsWindow.Contains('"requestSpectrumDisplayMode"')) { $errors.Add('missing spectrum mode request dispatch') }
+if (-not $settingsWindow.Contains('"spectrumCaptureState"')) { $errors.Add('missing spectrum capture state dispatch') }
 if (-not $app.Contains('public void ShowLyricsWindow()')) { $errors.Add('missing App.ShowLyricsWindow') }
 if (-not $appSettings.Contains('public GlobalMediaHotkeySettings GlobalMediaHotkeys')) { $errors.Add('global media hotkeys settings missing') }
 if (-not $appSettings.Contains('public double LyricsLayoutScalePercent')) { $errors.Add('lyrics layout scale setting missing') }
 if (-not $appSettings.Contains('public bool ShowCover')) { $errors.Add('show cover setting missing') }
+if (-not $appSettings.Contains('public bool SpectrumAudioAccessGranted')) { $errors.Add('spectrum audio access setting missing') }
 if (-not $appSettings.Contains('public const string DefaultFontFamily = BundledFontFamily;')) { $errors.Add('bundled font is not the default') }
 if (-not $app.Contains('Settings.FontFamily = AppSettings.NormalizeFontFamily(Settings.FontFamily);')) { $errors.Add('startup font normalization missing') }
 if (-not $lyricsWindow.Contains('fontFamily = AppSettings.NormalizeFontFamily(settings.FontFamily)')) { $errors.Add('lyrics font normalization missing') }

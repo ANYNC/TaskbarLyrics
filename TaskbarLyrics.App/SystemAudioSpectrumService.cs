@@ -19,16 +19,16 @@ public sealed class SystemAudioSpectrumService : IDisposable
     private static readonly Guid IAudioCaptureClientId = new("C8ADBD64-E71E-48a0-A4DE-185C395CD317");
     private static readonly Guid IeeeFloatSubFormat = new("00000003-0000-0010-8000-00aa00389b71");
 
+    private readonly object _lifecycleSync = new();
     private readonly object _sync = new();
     private readonly float[] _ringBuffer = new float[RingBufferSize];
     private float[] _smoothedBars = new float[SpectrumTuningSettings.DefaultBarCount];
-    private readonly CancellationTokenSource _cts = new();
+    private CancellationTokenSource? _captureCancellation;
     private Thread? _captureThread;
     private int _writeIndex;
     private int _sampleRate = 48000;
     private float _adaptivePeak = 0.035f;
     private SpectrumTuningSettings _tuningSettings = SpectrumTuningSettings.CreateDefault();
-    private bool _isStarted;
     private volatile bool _isAvailable;
     private int _diagnosticSampleRate;
     private int _diagnosticChannels;
@@ -36,6 +36,7 @@ public sealed class SystemAudioSpectrumService : IDisposable
     private DateTimeOffset? _lastAudioUtc;
     private string _diagnosticFormat = "Waiting";
     private string _lastError = string.Empty;
+    private bool _disposed;
 
     public bool IsAvailable => _isAvailable;
 
@@ -103,19 +104,32 @@ public sealed class SystemAudioSpectrumService : IDisposable
 
     public void Start()
     {
-        if (_isStarted)
+        lock (_lifecycleSync)
         {
-            return;
-        }
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            if (_captureCancellation is not null)
+            {
+                return;
+            }
 
-        _isStarted = true;
-        _captureThread = new Thread(CaptureLoop)
+            _captureCancellation = new CancellationTokenSource();
+            var cancellationToken = _captureCancellation.Token;
+            _captureThread = new Thread(() => CaptureLoop(cancellationToken))
+            {
+                IsBackground = true,
+                Name = "TaskbarLyrics Audio Spectrum"
+            };
+            _captureThread.SetApartmentState(ApartmentState.MTA);
+            _captureThread.Start();
+        }
+    }
+
+    public void Stop()
+    {
+        lock (_lifecycleSync)
         {
-            IsBackground = true,
-            Name = "TaskbarLyrics Audio Spectrum"
-        };
-        _captureThread.SetApartmentState(ApartmentState.MTA);
-        _captureThread.Start();
+            StopCaptureSession();
+        }
     }
 
     public float[] GetSpectrum()
@@ -161,13 +175,13 @@ public sealed class SystemAudioSpectrumService : IDisposable
         return bars;
     }
 
-    private void CaptureLoop()
+    private void CaptureLoop(CancellationToken cancellationToken)
     {
-        while (!_cts.IsCancellationRequested)
+        while (!cancellationToken.IsCancellationRequested)
         {
             try
             {
-                RunCaptureSession();
+                RunCaptureSession(cancellationToken);
             }
             catch (Exception ex)
             {
@@ -176,16 +190,18 @@ public sealed class SystemAudioSpectrumService : IDisposable
                 {
                     _lastError = $"{ex.GetType().Name}: {ex.Message}";
                 }
+
+                break;
             }
 
-            if (!_cts.IsCancellationRequested)
+            if (!cancellationToken.IsCancellationRequested)
             {
-                _cts.Token.WaitHandle.WaitOne(TimeSpan.FromSeconds(1));
+                cancellationToken.WaitHandle.WaitOne(TimeSpan.FromMilliseconds(100));
             }
         }
     }
 
-    private void RunCaptureSession()
+    private void RunCaptureSession(CancellationToken cancellationToken)
     {
         IMMDeviceEnumerator? enumerator = null;
         IMMDevice? device = null;
@@ -231,7 +247,7 @@ public sealed class SystemAudioSpectrumService : IDisposable
             }
 
             var nextDefaultDeviceCheck = Environment.TickCount64 + DefaultDeviceCheckIntervalMs;
-            while (!_cts.IsCancellationRequested)
+            while (!cancellationToken.IsCancellationRequested)
             {
                 DrainCaptureClient(captureClient, format);
                 var now = Environment.TickCount64;
@@ -244,7 +260,7 @@ public sealed class SystemAudioSpectrumService : IDisposable
                     }
                 }
 
-                _cts.Token.WaitHandle.WaitOne(15);
+                cancellationToken.WaitHandle.WaitOne(15);
             }
         }
         finally
@@ -571,13 +587,50 @@ public sealed class SystemAudioSpectrumService : IDisposable
 
     public void Dispose()
     {
-        _cts.Cancel();
-        if (_captureThread is not null && _captureThread.IsAlive)
+        lock (_lifecycleSync)
         {
-            _captureThread.Join(500);
+            if (_disposed)
+            {
+                return;
+            }
+
+            _disposed = true;
+            StopCaptureSession();
         }
 
-        _cts.Dispose();
+        GC.SuppressFinalize(this);
+    }
+
+    private void StopCaptureSession()
+    {
+        var cancellation = _captureCancellation;
+        var captureThread = _captureThread;
+        _captureCancellation = null;
+        _captureThread = null;
+
+        cancellation?.Cancel();
+        if (captureThread is not null && captureThread.IsAlive)
+        {
+            captureThread.Join(500);
+        }
+
+        if (captureThread is null || !captureThread.IsAlive)
+        {
+            cancellation?.Dispose();
+        }
+        _isAvailable = false;
+        lock (_sync)
+        {
+            Array.Clear(_ringBuffer);
+            Array.Clear(_smoothedBars);
+            _writeIndex = 0;
+            _diagnosticSampleRate = 0;
+            _diagnosticChannels = 0;
+            _diagnosticInputPeak = 0;
+            _lastAudioUtc = null;
+            _diagnosticFormat = "Waiting";
+            _lastError = string.Empty;
+        }
     }
 
     private sealed class AudioFormat

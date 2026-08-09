@@ -55,7 +55,8 @@ internal readonly record struct AppSettingsChangeSet(
             current.ShowLyricTranslation != next.ShowLyricTranslation;
 
         var spectrumDisplayChanged = isInitialApplication ||
-            current.SpectrumDisplayMode != next.SpectrumDisplayMode;
+            current.SpectrumDisplayMode != next.SpectrumDisplayMode ||
+            current.SpectrumAudioAccessGranted != next.SpectrumAudioAccessGranted;
 
         var visualStyleChanged = isInitialApplication ||
             current.FontSize != next.FontSize ||

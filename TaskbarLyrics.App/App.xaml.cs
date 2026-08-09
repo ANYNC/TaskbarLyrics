@@ -124,6 +124,11 @@ public partial class App : System.Windows.Application, IDisposable
     {
         var currentSettings = Settings;
         var nextSettings = settings.Clone();
+        if (!nextSettings.SpectrumAudioAccessGranted)
+        {
+            nextSettings.SpectrumDisplayMode = SpectrumDisplayMode.Disabled;
+        }
+
         nextSettings.SpectrumTuning = Settings.SpectrumTuning.Clone();
         nextSettings.GlobalMediaHotkeys ??= new GlobalMediaHotkeySettings();
         var changes = AppSettingsChangeSet.Create(currentSettings, nextSettings);
@@ -279,10 +284,23 @@ public partial class App : System.Windows.Application, IDisposable
 
     private void SetSpectrumDisplayMode(SpectrumDisplayMode mode)
     {
+        if (mode != SpectrumDisplayMode.Disabled && !Settings.SpectrumAudioAccessGranted)
+        {
+            OpenSettingsWindow("lyrics", focusCurrentTrack: false);
+            if (_settingsWindow is not null)
+            {
+                TaskObserver.Observe(
+                    _settingsWindow.RequestSpectrumDisplayModeAsync(mode),
+                    "spectrum audio access confirmation");
+            }
+
+            return;
+        }
+
         Settings.SpectrumDisplayMode = mode;
 
         _settingsStore?.Save(Settings);
-        _lyricsWindowHost?.SetSpectrumDisplayMode(mode);
+        _lyricsWindowHost?.ApplySettings(Settings);
         if (_settingsWindow is not null)
         {
             TaskObserver.Observe(
@@ -434,6 +452,17 @@ public partial class App : System.Windows.Application, IDisposable
 
     public void OpenSpectrumTuningWindow()
     {
+        if (!Settings.SpectrumAudioAccessGranted)
+        {
+            SetSpectrumDisplayMode(SpectrumDisplayMode.PureMusicOrNoLyrics);
+            return;
+        }
+
+        if (Settings.SpectrumDisplayMode == SpectrumDisplayMode.Disabled)
+        {
+            SetSpectrumDisplayMode(SpectrumDisplayMode.PureMusicOrNoLyrics);
+        }
+
         if (_spectrumTuningWindow is { IsVisible: true })
         {
             _lyricsWindowHost?.SetSpectrumPreviewEnabled(true);
@@ -468,6 +497,11 @@ public partial class App : System.Windows.Application, IDisposable
             _spectrumTuningWindow.Closed -= SpectrumTuningWindow_Closed;
             _spectrumTuningWindow = null;
         }
+    }
+
+    public void RetrySpectrumCapture()
+    {
+        _lyricsWindowHost?.RetrySpectrumCapture();
     }
 
     private void ExitApplication()

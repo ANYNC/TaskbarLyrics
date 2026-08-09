@@ -39,6 +39,17 @@ async function createSettingsDom({ deferAnimationFrames = false } = {}) {
   };
 }
 
+function enableDialogDomSupport(dom) {
+  dom.window.HTMLElement.prototype.scrollIntoView = () => {};
+  dom.window.HTMLDialogElement.prototype.showModal = function showModal() {
+    this.open = true;
+  };
+  dom.window.HTMLDialogElement.prototype.close = function close() {
+    this.open = false;
+    this.dispatchEvent(new dom.window.Event("close"));
+  };
+}
+
 describe("settings WebView bridge", () => {
   it("sends every command in the V1 envelope", async () => {
     const { dom, sent } = await createSettingsDom();
@@ -100,6 +111,128 @@ describe("settings WebView bridge", () => {
       payload: { settings: { enableWordScanning: true }, fonts: [] }
     });
     expect(toggle.checked).toBe(true);
+  });
+
+  it("requires consent before changing an unauthorized spectrum mode", async () => {
+    const { dom, sent, script } = await createSettingsDom();
+    enableDialogDomSupport(dom);
+    const document = dom.window.document;
+    dom.window.eval(script);
+    dom.window.settingsApp.receive({
+      version: 1,
+      type: "settingsState",
+      payload: {
+        settings: { spectrumDisplayMode: "Disabled", spectrumAudioAccessGranted: false },
+        fonts: []
+      }
+    });
+
+    const spectrumTrigger = document.querySelector('[data-setting="spectrumDisplayMode"]');
+    const consentDialog = document.querySelector("#spectrumAudioConsentDialog");
+    const beforeSelection = sent.length;
+    dom.window.settingsApp.receive({
+      version: 1,
+      type: "requestSpectrumDisplayMode",
+      payload: { mode: "Always" }
+    });
+    expect(consentDialog.open).toBe(true);
+    expect(sent.slice(beforeSelection)).toEqual([]);
+    consentDialog.querySelector('[data-dialog-cancel="spectrumAudioConsentDialog"]').click();
+    consentDialog.dispatchEvent(new dom.window.Event("animationend"));
+
+    spectrumTrigger.click();
+    document.querySelector('#selectListbox [data-option-index="1"]').click();
+
+    expect(consentDialog.open).toBe(true);
+    expect(sent.slice(beforeSelection)).toEqual([]);
+    expect(spectrumTrigger.querySelector(".select-trigger-value").textContent).toContain("关闭");
+
+    consentDialog.querySelector('[data-dialog-cancel="spectrumAudioConsentDialog"]').click();
+    consentDialog.dispatchEvent(new dom.window.Event("animationend"));
+    expect(sent.slice(beforeSelection)).toEqual([]);
+
+    spectrumTrigger.click();
+    document.querySelector('#selectListbox [data-option-index="1"]').click();
+    document.querySelector("#confirmSpectrumAudioAccess").click();
+    expect(sent.at(-1)).toEqual({
+      version: 1,
+      type: "confirmSpectrumAudioAccess",
+      payload: "PureMusicOnly"
+    });
+
+    consentDialog.dispatchEvent(new dom.window.Event("animationend"));
+    dom.window.settingsApp.receive({
+      version: 1,
+      type: "settingsState",
+      payload: {
+        settings: { spectrumDisplayMode: "Always", spectrumAudioAccessGranted: true },
+        fonts: []
+      }
+    });
+
+    spectrumTrigger.click();
+    document.querySelector('#selectListbox [data-option-index="1"]').click();
+    expect(sent.at(-1)).toEqual({
+      version: 1,
+      type: "update",
+      payload: { key: "spectrumDisplayMode", value: "PureMusicOnly" }
+    });
+    expect(consentDialog.open).toBe(false);
+    expect(document.querySelector("#revokeSpectrumAudioAccessButton").hidden).toBe(false);
+  });
+
+  it("renders spectrum capture states and posts recovery commands", async () => {
+    const { dom, sent, script } = await createSettingsDom();
+    enableDialogDomSupport(dom);
+    const document = dom.window.document;
+    dom.window.eval(script);
+    dom.window.settingsApp.receive({
+      version: 1,
+      type: "settingsState",
+      payload: {
+        settings: { spectrumDisplayMode: "Always", spectrumAudioAccessGranted: true },
+        fonts: []
+      }
+    });
+
+    const status = document.querySelector("#spectrumAudioAccessStatus");
+    const failureDialog = document.querySelector("#spectrumCaptureFailureDialog");
+    dom.window.settingsApp.receive({
+      version: 1,
+      type: "spectrumCaptureState",
+      payload: { state: "capturing", message: "capture ready" }
+    });
+    expect(status.dataset.state).toBe("capturing");
+    expect(status.textContent).toBe("capture ready");
+
+    dom.window.settingsApp.receive({
+      version: 1,
+      type: "requestSpectrumDisplayMode",
+      payload: { mode: "PureMusicOnly" }
+    });
+    expect(failureDialog.open).toBe(false);
+    expect(sent.at(-1)).toEqual({
+      version: 1,
+      type: "update",
+      payload: { key: "spectrumDisplayMode", value: "PureMusicOnly" }
+    });
+
+    dom.window.settingsApp.receive({
+      version: 1,
+      type: "spectrumCaptureState",
+      payload: { state: "blocked", message: "capture blocked" }
+    });
+    expect(failureDialog.open).toBe(true);
+    expect(document.querySelector("#spectrumCaptureFailureMessage").textContent).toBe("capture blocked");
+
+    document.querySelector("#retrySpectrumCaptureButton").click();
+    expect(sent.at(-1)).toEqual({ version: 1, type: "retrySpectrumCapture", payload: {} });
+
+    document.querySelector("#disableSpectrumButton").click();
+    expect(sent.at(-1)).toEqual({ version: 1, type: "disableSpectrum", payload: {} });
+
+    document.querySelector("#revokeSpectrumAudioAccessButton").click();
+    expect(sent.at(-1)).toEqual({ version: 1, type: "revokeSpectrumAudioAccess", payload: {} });
   });
 
   it("runs one lyric diagnostics request and exposes the running track", async () => {

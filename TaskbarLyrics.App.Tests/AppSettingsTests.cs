@@ -20,6 +20,15 @@ public sealed class AppSettingsTests
     }
 
     [Fact]
+    public void NewSettingsDisableSpectrumAndDoNotGrantAudioAccess()
+    {
+        var settings = new AppSettings();
+
+        Assert.Equal(SpectrumDisplayMode.Disabled, settings.SpectrumDisplayMode);
+        Assert.False(settings.SpectrumAudioAccessGranted);
+    }
+
+    [Fact]
     public void ClampEffectiveWindowWidthReturnsBaseWidthAtFullScale()
     {
         Assert.Equal(420, AppSettings.ClampEffectiveWindowWidth(420, 100, 1920));

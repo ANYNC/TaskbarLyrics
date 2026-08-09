@@ -49,9 +49,10 @@ public partial class MainWindow : Window, IDisposable
     private string _currentCoverFallbackColorCss = "rgba(67, 160, 71, 1)";
     private string? _lastLocalCoverLookupTrackId;
     private DateTimeOffset _nextLocalCoverLookupUtc;
-    private SpectrumDisplayMode _spectrumDisplayMode = SpectrumDisplayMode.PureMusicOrNoLyrics;
+    private SpectrumDisplayMode _spectrumDisplayMode = SpectrumDisplayMode.Disabled;
     private float[] _spectrumSilence = new float[SpectrumTuningSettings.DefaultBarCount];
     private bool _spectrumPreviewEnabled;
+    private bool _isSpectrumCaptureRequested;
     private SmtcTimelineMonitorWindow? _smtcTimelineMonitorWindow;
     private bool _isWebViewReady;
     private bool _isWebViewInitializing;
@@ -172,6 +173,12 @@ public partial class MainWindow : Window, IDisposable
         if (changes.SpectrumDisplayChanged)
         {
             _spectrumDisplayMode = snapshot.SpectrumDisplayMode;
+            if (_spectrumDisplayMode == SpectrumDisplayMode.Disabled)
+            {
+                _isCurrentFramePureMusic = false;
+            }
+
+            UpdateSpectrumCaptureState();
         }
 
         if (changes.WindowLayoutChanged || changes.LyricsLayoutChanged)
@@ -261,11 +268,10 @@ public partial class MainWindow : Window, IDisposable
         AnchorToTaskbar();
         AttachToTaskbarHost();
         await EnsureLyricsWebViewReadyAsync();
-        _audioSpectrumService.Start();
         ApplySpectrumTuning(_spectrumTuningSettings);
         PushCurrentLyricsToWebView();
         _timer.Start();
-        _spectrumTimer.Start();
+        UpdateSpectrumCaptureState();
     }
 
     private void OnSourceInitialized(object? sender, EventArgs e)
@@ -286,11 +292,6 @@ public partial class MainWindow : Window, IDisposable
             {
                 _timer.Start();
             }
-            if (!_spectrumTimer.IsEnabled)
-            {
-                _spectrumTimer.Start();
-            }
-
             AnchorToTaskbar();
             AttachToTaskbarHost();
         }
@@ -300,11 +301,9 @@ public partial class MainWindow : Window, IDisposable
             {
                 _timer.Stop();
             }
-            if (_spectrumTimer.IsEnabled && !_spectrumPreviewEnabled)
-            {
-                _spectrumTimer.Stop();
-            }
         }
+
+        UpdateSpectrumCaptureState();
     }
 
     private void OnClosing(object? sender, CancelEventArgs e)
@@ -452,6 +451,7 @@ public partial class MainWindow : Window, IDisposable
 
             _isCurrentFramePureMusic = ShouldShowSpectrum(frame);
             _isCurrentPlaybackPlaying = snapshot.IsPlaying;
+            UpdateSpectrumCaptureState();
             var wordScanProgress = _currentSettings.EnableWordScanning
                 ? frame.WordScanProgress
                 : null;
@@ -477,6 +477,7 @@ public partial class MainWindow : Window, IDisposable
             _lastWordScanProgress = null;
             _isCurrentFramePureMusic = false;
             _isCurrentPlaybackPlaying = false;
+            UpdateSpectrumCaptureState();
             PushCurrentLyricsToWebView();
             Debug.WriteLine(ex);
         }
@@ -506,23 +507,19 @@ public partial class MainWindow : Window, IDisposable
     public void SetSpectrumPreviewEnabled(bool enabled)
     {
         _spectrumPreviewEnabled = enabled;
-        if (enabled)
-        {
-            _audioSpectrumService.Start();
-            if (!_spectrumTimer.IsEnabled)
-            {
-                _spectrumTimer.Start();
-            }
-        }
-        else if (!IsVisible && _spectrumTimer.IsEnabled)
-        {
-            _spectrumTimer.Stop();
-        }
+        UpdateSpectrumCaptureState();
     }
 
-    public void SetSpectrumDisplayMode(SpectrumDisplayMode mode)
+    public void RetrySpectrumCapture()
     {
-        _spectrumDisplayMode = mode;
+        if (!_isSpectrumCaptureRequested)
+        {
+            return;
+        }
+
+        _audioSpectrumService.Stop();
+        PublishSpectrumDiagnostics(_spectrumSilence, _audioSpectrumService.GetDiagnostics());
+        _audioSpectrumService.Start();
     }
 
     private bool ShouldShowSpectrum(LyricDisplayFrame frame)
@@ -540,6 +537,39 @@ public partial class MainWindow : Window, IDisposable
     {
         return frame.CurrentLineIndex < 0 &&
             string.Equals(frame.CurrentLine, LyricSyncService.NoLyricsText, StringComparison.Ordinal);
+    }
+
+    private void UpdateSpectrumCaptureState()
+    {
+        var shouldCapture = SpectrumCapturePolicy.ShouldCapture(
+            _currentSettings.SpectrumAudioAccessGranted,
+            _spectrumPreviewEnabled,
+            IsVisible,
+            _isCurrentFramePureMusic);
+        if (shouldCapture == _isSpectrumCaptureRequested)
+        {
+            return;
+        }
+
+        _isSpectrumCaptureRequested = shouldCapture;
+        if (shouldCapture)
+        {
+            _audioSpectrumService.Start();
+            if (!_spectrumTimer.IsEnabled)
+            {
+                _spectrumTimer.Start();
+            }
+
+            return;
+        }
+
+        if (_spectrumTimer.IsEnabled)
+        {
+            _spectrumTimer.Stop();
+        }
+
+        _audioSpectrumService.Stop();
+        PublishSpectrumDiagnostics(_spectrumSilence, _audioSpectrumService.GetDiagnostics());
     }
 
     private void OnSpectrumTimerTick(object? sender, EventArgs e)

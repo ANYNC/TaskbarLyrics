@@ -22,12 +22,15 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
     private readonly DispatcherTimer _trackOffsetRefreshTimer;
     private bool _isWebReady;
     private bool _isTrackOffsetRefreshRunning;
+    private bool _isRuntimeStateRefreshRunning;
     private bool _isTrackOffsetsPageActive;
     private string _lastCurrentTrackOffsetPayloadJson = string.Empty;
     private TrackOffsetQueryPayload _trackOffsetQuery = new();
     private string? _pendingPage;
     private bool _pendingFocusCurrentTrack;
     private bool _hasPendingPreviewChanges;
+    private SpectrumDisplayMode? _pendingSpectrumDisplayMode;
+    private string _lastSpectrumCaptureStateJson = string.Empty;
     private CancellationTokenSource? _lyricDiagnosticsCancellation;
 
     internal SettingsWindow(
@@ -161,6 +164,8 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 await PushSettingsToWebAsync();
                 await PushWindowStateToWebAsync();
                 await PushPendingNavigationAsync();
+                await PushPendingSpectrumDisplayModeAsync();
+                await PushSpectrumCaptureStateAsync(force: true);
                 break;
             case "update":
                 ApplyWebSettingUpdate(message.Key, message.Value);
@@ -232,6 +237,22 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 {
                     app.OpenSpectrumTuningWindow();
                 }
+                break;
+            case "confirmSpectrumAudioAccess":
+                await ConfirmSpectrumAudioAccessAsync(message.Value);
+                break;
+            case "revokeSpectrumAudioAccess":
+                await RevokeSpectrumAudioAccessAsync();
+                break;
+            case "retrySpectrumCapture":
+                if (System.Windows.Application.Current is App retryApp)
+                {
+                    retryApp.RetrySpectrumCapture();
+                    await PushSpectrumRetryingStateAsync();
+                }
+                break;
+            case "disableSpectrum":
+                await DisableSpectrumAsync();
                 break;
             case "runLyricDiagnostics":
                 await RunLyricDiagnosticsAsync();
@@ -421,6 +442,17 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         await PushSettingsToWebAsync();
     }
 
+    public async Task RequestSpectrumDisplayModeAsync(SpectrumDisplayMode mode)
+    {
+        if (mode == SpectrumDisplayMode.Disabled)
+        {
+            return;
+        }
+
+        _pendingSpectrumDisplayMode = mode;
+        await PushPendingSpectrumDisplayModeAsync();
+    }
+
     public async Task NavigateToPageAsync(string pageId, bool focusCurrentTrack = false)
     {
         _pendingPage = pageId;
@@ -430,7 +462,26 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
 
     private void TrackOffsetRefreshTimer_Tick(object? sender, EventArgs e)
     {
-        TaskObserver.Observe(RefreshCurrentTrackOffsetAsync(), "settings track offset refresh");
+        TaskObserver.Observe(RefreshRuntimeStateAsync(), "settings runtime state refresh");
+    }
+
+    private async Task RefreshRuntimeStateAsync()
+    {
+        if (_isRuntimeStateRefreshRunning)
+        {
+            return;
+        }
+
+        _isRuntimeStateRefreshRunning = true;
+        try
+        {
+            await PushSpectrumCaptureStateAsync();
+            await RefreshCurrentTrackOffsetAsync();
+        }
+        finally
+        {
+            _isRuntimeStateRefreshRunning = false;
+        }
     }
 
     private async Task RefreshCurrentTrackOffsetAsync()
@@ -629,6 +680,110 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             }));
     }
 
+    private async Task PushPendingSpectrumDisplayModeAsync()
+    {
+        if (!_isWebReady ||
+            SettingsWebView.CoreWebView2 is null ||
+            _pendingSpectrumDisplayMode is not { } mode)
+        {
+            return;
+        }
+
+        await SettingsWebView.ExecuteScriptAsync(
+            WebViewMessageScriptFactory.Dispatch("settingsApp", "requestSpectrumDisplayMode", new
+            {
+                mode = mode.ToString()
+            }));
+        _pendingSpectrumDisplayMode = null;
+    }
+
+    private async Task PushSpectrumCaptureStateAsync(bool force = false)
+    {
+        if (!_isWebReady || SettingsWebView.CoreWebView2 is null)
+        {
+            return;
+        }
+
+        var diagnostics = SpectrumDiagnosticsState.Current;
+        var state = !_settings.SpectrumAudioAccessGranted
+            ? "notGranted"
+            : _settings.SpectrumDisplayMode == SpectrumDisplayMode.Disabled
+                ? "disabled"
+                : !string.IsNullOrWhiteSpace(diagnostics.LastError)
+                    ? "blocked"
+                    : diagnostics.IsCaptureAvailable
+                        ? "capturing"
+                        : "waiting";
+        var message = state switch
+        {
+            "notGranted" => "尚未允许读取系统播放声音。",
+            "disabled" => "频谱已关闭，不会读取系统播放声音。",
+            "blocked" => "系统音频采集被系统或安全软件阻止。",
+            "capturing" => "正在读取系统播放声音并生成频谱。",
+            _ => "已允许；仅在频谱需要显示时读取系统播放声音。"
+        };
+        var payload = new { state, message };
+        var json = JsonSerializer.Serialize(payload, SettingsWebJson.Options);
+        if (!force && string.Equals(json, _lastSpectrumCaptureStateJson, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _lastSpectrumCaptureStateJson = json;
+        await SettingsWebView.ExecuteScriptAsync(
+            WebViewMessageScriptFactory.Dispatch("settingsApp", "spectrumCaptureState", payload));
+    }
+
+    private async Task PushSpectrumRetryingStateAsync()
+    {
+        if (!_isWebReady || SettingsWebView.CoreWebView2 is null)
+        {
+            return;
+        }
+
+        var payload = new
+        {
+            state = "waiting",
+            message = "正在重新连接系统音频…"
+        };
+        _lastSpectrumCaptureStateJson = JsonSerializer.Serialize(payload, SettingsWebJson.Options);
+        await SettingsWebView.ExecuteScriptAsync(
+            WebViewMessageScriptFactory.Dispatch("settingsApp", "spectrumCaptureState", payload));
+    }
+
+    private async Task ConfirmSpectrumAudioAccessAsync(JsonElement? value)
+    {
+        if (value is null ||
+            !Enum.TryParse<SpectrumDisplayMode>(ReadString(value.Value, string.Empty), true, out var mode) ||
+            mode == SpectrumDisplayMode.Disabled)
+        {
+            return;
+        }
+
+        _settings.SpectrumAudioAccessGranted = true;
+        _settings.SpectrumDisplayMode = mode;
+        await SaveSettingsAndNotifyWebAsync();
+        await PushSettingsToWebAsync();
+        await PushSpectrumCaptureStateAsync(force: true);
+    }
+
+    private async Task RevokeSpectrumAudioAccessAsync()
+    {
+        _settings.SpectrumAudioAccessGranted = false;
+        _settings.SpectrumDisplayMode = SpectrumDisplayMode.Disabled;
+        await SaveSettingsAndNotifyWebAsync();
+        await PushSettingsToWebAsync();
+        await PushSpectrumCaptureStateAsync(force: true);
+    }
+
+    private async Task DisableSpectrumAsync()
+    {
+        _settings.SpectrumDisplayMode = SpectrumDisplayMode.Disabled;
+        await SaveSettingsAndNotifyWebAsync();
+        await PushSettingsToWebAsync();
+        await PushSpectrumCaptureStateAsync(force: true);
+    }
+
     private static int ReadOffsetMilliseconds(JsonElement? value, int fallback)
     {
         if (value is null)
@@ -720,6 +875,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             EnableWordScanning = _settings.EnableWordScanning,
             ToolWindowTheme = _settings.ToolWindowTheme,
             SpectrumDisplayMode = _settings.SpectrumDisplayMode.ToString(),
+            SpectrumAudioAccessGranted = _settings.SpectrumAudioAccessGranted,
             FontSize = _settings.FontSize,
             ShowCover = _settings.ShowCover,
             CoverSize = _settings.CoverSize,
@@ -896,7 +1052,10 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 var spectrumDisplayMode = ReadString(element, SpectrumDisplayMode.Disabled.ToString());
                 if (Enum.TryParse<SpectrumDisplayMode>(spectrumDisplayMode, true, out var parsedSpectrumDisplayMode))
                 {
-                    _settings.SpectrumDisplayMode = parsedSpectrumDisplayMode;
+                    _settings.SpectrumDisplayMode = parsedSpectrumDisplayMode == SpectrumDisplayMode.Disabled ||
+                        _settings.SpectrumAudioAccessGranted
+                            ? parsedSpectrumDisplayMode
+                            : SpectrumDisplayMode.Disabled;
                 }
                 break;
             case "showBackground":
@@ -994,7 +1153,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
 
     private static bool RequiresSettingsStateRefresh(string? key)
     {
-        return key == "foregroundColorMode" || IsMediaHotkeySetting(key);
+        return key is "foregroundColorMode" or "spectrumDisplayMode" || IsMediaHotkeySetting(key);
     }
 
     private static bool IsLyricsLayoutSetting(string? key)
@@ -1349,6 +1508,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         target.EnableWordScanning = source.EnableWordScanning;
         target.ToolWindowTheme = source.ToolWindowTheme;
         target.SpectrumDisplayMode = source.SpectrumDisplayMode;
+        target.SpectrumAudioAccessGranted = source.SpectrumAudioAccessGranted;
         target.UseSafeFontSizeRange = source.UseSafeFontSizeRange;
         target.FontSize = source.FontSize;
         target.UseSafeCoverSizeRange = source.UseSafeCoverSizeRange;
@@ -1474,6 +1634,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         public bool EnableWordScanning { get; set; }
         public ToolWindowTheme ToolWindowTheme { get; set; }
         public string SpectrumDisplayMode { get; set; } = TaskbarLyrics.App.SpectrumDisplayMode.Disabled.ToString();
+        public bool SpectrumAudioAccessGranted { get; set; }
         public double FontSize { get; set; }
         public bool ShowCover { get; set; }
         public double CoverSize { get; set; }

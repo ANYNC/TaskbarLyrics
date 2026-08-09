@@ -102,7 +102,9 @@ public sealed class AppSettings
 
     public ToolWindowTheme ToolWindowTheme { get; set; } = ToolWindowTheme.System;
 
-    public SpectrumDisplayMode SpectrumDisplayMode { get; set; } = SpectrumDisplayMode.PureMusicOrNoLyrics;
+    public SpectrumDisplayMode SpectrumDisplayMode { get; set; } = SpectrumDisplayMode.Disabled;
+
+    public bool SpectrumAudioAccessGranted { get; set; }
 
     public SpectrumTuningSettings SpectrumTuning { get; set; } = SpectrumTuningSettings.CreateDefault();
 

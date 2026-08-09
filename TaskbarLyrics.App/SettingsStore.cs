@@ -32,6 +32,7 @@ public sealed class SettingsStore
             var settings = JsonSerializer.Deserialize<AppSettings>(json) ?? new AppSettings();
             using var document = JsonDocument.Parse(json);
             MigrateLegacySpectrumSettings(document.RootElement, settings);
+            MigrateSpectrumAudioAccess(document.RootElement, settings);
             settings.NormalizePlayerSources();
             settings.NormalizeLyricsLayout();
             return settings;
@@ -112,5 +113,16 @@ public sealed class SettingsStore
         {
             settings.SpectrumDisplayMode = SpectrumDisplayMode.Disabled;
         }
+    }
+
+    private static void MigrateSpectrumAudioAccess(JsonElement root, AppSettings settings)
+    {
+        if (root.TryGetProperty(nameof(AppSettings.SpectrumAudioAccessGranted), out _))
+        {
+            return;
+        }
+
+        settings.SpectrumAudioAccessGranted = false;
+        settings.SpectrumDisplayMode = SpectrumDisplayMode.Disabled;
     }
 }

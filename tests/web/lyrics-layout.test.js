@@ -387,7 +387,7 @@ describe("lyrics responsive layout", () => {
     expect(nextLineStack.style.getPropertyValue("--line-scroll-offset")).toBe("");
 
     receive("Line one", "Line two", 0, 0.5, "", "译二", true);
-    expect(nextLineText.textContent).toBe("…");
+    expect(nextLineText.textContent).toBe("...");
     expect(nextLine.classList.contains("translation-placeholder")).toBe(true);
     expect(currentLineScanText.textContent).toBe(currentLineText.textContent);
 
@@ -452,7 +452,7 @@ describe("lyrics responsive layout", () => {
     prefersReducedMotion = true;
     receive("Line three", "Line four", 2, 0.2, "", "译四", true);
     expect(incomingPair.classList.contains("preparing")).toBe(true);
-    expect(incomingTranslationText.textContent).toBe("…");
+    expect(incomingTranslationText.textContent).toBe("...");
     expect(incomingTranslationLine.classList.contains("translation-placeholder")).toBe(true);
     const reducedMotionStart = pendingAnimationFrames.shift();
     expect(reducedMotionStart).toBeTypeOf("function");
@@ -468,7 +468,7 @@ describe("lyrics responsive layout", () => {
     expect(track.classList.contains("translation-pair-animating")).toBe(false);
     expect(incomingPair.classList.contains("preparing")).toBe(false);
     expect(incomingPair.classList.contains("entering")).toBe(false);
-    expect(nextLineText.textContent).toBe("…");
+    expect(nextLineText.textContent).toBe("...");
     expect(nextLine.classList.contains("translation-placeholder")).toBe(true);
 
     receive("Line three", "Line four", 2, 0.2, "", "", false);

@@ -259,6 +259,36 @@ public sealed class SettingsStoreTests
         }
     }
 
+    [Theory]
+    [InlineData("{\"SpectrumDisplayMode\":2}", SpectrumDisplayMode.Disabled, false)]
+    [InlineData("{\"SpectrumDisplayMode\":2,\"SpectrumAudioAccessGranted\":true}", SpectrumDisplayMode.Always, true)]
+    public void LoadMigratesSpectrumAudioAccessAndPreservesAuthorizedMode(
+        string json,
+        SpectrumDisplayMode expectedMode,
+        bool expectedAccess)
+    {
+        var directory = Path.Combine(AppContext.BaseDirectory, $"settings-store-{Guid.NewGuid():N}");
+        var filePath = Path.Combine(directory, "settings.json");
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            File.WriteAllText(filePath, json);
+
+            var loaded = new SettingsStore(filePath).Load();
+
+            Assert.Equal(expectedMode, loaded.SpectrumDisplayMode);
+            Assert.Equal(expectedAccess, loaded.SpectrumAudioAccessGranted);
+        }
+        finally
+        {
+            if (Directory.Exists(directory))
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+    }
+
     [Fact]
     public void SaveWhenCalledConcurrentlyKeepsAValidSettingsFile()
     {
