@@ -63,6 +63,7 @@ public sealed class LyricSearchPlannerTests
     [InlineData("Remix")]
     [InlineData("Acoustic")]
     [InlineData("Instrumental")]
+    [InlineData("Karaoke")]
     public void RelaxedQueryStillUsesOriginalVersionIdentityForAdmission(string versionMarker)
     {
         var track = new TrackInfo(
@@ -90,6 +91,55 @@ public sealed class LyricSearchPlannerTests
         Assert.False(evaluation.IsAdmitted);
         Assert.Equal(0, evaluation.Score);
         Assert.Contains("identity-conflict", evaluation.RejectionReasons);
+    }
+
+    [Theory]
+    [InlineData("Run Away With Me", "Run Away With Me (Simlish Version)")]
+    [InlineData("Run Away With Me (Simlish Version)", "Run Away With Me")]
+    public void IdentityEvaluationRejectsMismatchedSimlishVersions(
+        string originalTitle,
+        string candidateTitle)
+    {
+        var identity = CreateIdentity(originalTitle);
+        var evaluation = LyricIdentityEvaluator.Evaluate(
+            identity,
+            CreateIdentityCandidate(identity, candidateTitle));
+
+        Assert.False(evaluation.IsAdmitted);
+        Assert.Equal(0, evaluation.Score);
+        Assert.Contains("identity-conflict", evaluation.RejectionReasons);
+    }
+
+    [Fact]
+    public void IdentityEvaluationAllowsCandidatesWhenBothTitlesAreSimlish()
+    {
+        var identity = CreateIdentity("Run Away With Me (Simlish Version)");
+
+        var evaluation = LyricIdentityEvaluator.Evaluate(
+            identity,
+            CreateIdentityCandidate(identity, "Run Away With Me (Simlish Version)"));
+
+        Assert.True(evaluation.IsAdmitted);
+        Assert.InRange(evaluation.Score, 95, 100);
+        Assert.Empty(evaluation.RejectionReasons);
+    }
+
+    [Theory]
+    [InlineData("Run Away With Me", "Run Away With Me (Deluxe Edition)")]
+    [InlineData("Run Away With Me (Deluxe Edition)", "Run Away With Me")]
+    [InlineData("Run Away With Me", "Run Away With Me (Remastered 2024)")]
+    public void IdentityEvaluationDoesNotRejectOrdinaryBracketedMetadata(
+        string originalTitle,
+        string candidateTitle)
+    {
+        var identity = CreateIdentity(originalTitle);
+        var evaluation = LyricIdentityEvaluator.Evaluate(
+            identity,
+            CreateIdentityCandidate(identity, candidateTitle));
+
+        Assert.True(evaluation.IsAdmitted);
+        Assert.InRange(evaluation.Score, 95, 100);
+        Assert.Empty(evaluation.RejectionReasons);
     }
 
     [Fact]
@@ -186,6 +236,27 @@ public sealed class LyricSearchPlannerTests
         ["Score artist"],
         "Score album",
         TimeSpan.FromSeconds(200),
+        "exact",
+        new Dictionary<string, string>());
+
+    private static TrackIdentity CreateIdentity(string title) =>
+        TrackIdentity.FromTrackInfo(new TrackInfo(
+            "identity-track",
+            title,
+            "Run Away With Me artist",
+            "Identity album",
+            "Spotify",
+            TimeSpan.FromSeconds(210)));
+
+    private static SourceTrackCandidate CreateIdentityCandidate(
+        TrackIdentity identity,
+        string title) => new(
+        KnownLyricProviders.QQMusic,
+        "identity-candidate",
+        title,
+        identity.Artists,
+        identity.Album,
+        identity.Duration,
         "exact",
         new Dictionary<string, string>());
 }

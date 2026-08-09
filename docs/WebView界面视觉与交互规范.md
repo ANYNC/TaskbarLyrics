@@ -142,7 +142,8 @@
 | `--font-family` | 思源黑体、SF Pro、Segoe UI Variable、微软雅黑回退栈 | 歌词字体 |
 | `--font-size` / `--font-weight` | `13px` / `500` | 用户请求的基础字号与字重 |
 | `--primary` | `rgba(255, 255, 255, 1)` | 当前行 |
-| `--secondary` | `rgba(255, 255, 255, 0.68)` | 下一行 |
+| `--secondary` | `rgba(255, 255, 255, 0.60)` | 下一行 |
+| `--translation` | `rgba(255, 255, 255, 0.70)` | 翻译行 |
 | `--row-height` / `--row-gap` | `14px` / `1px` | 双行排版基线 |
 | `--current-size` / `--next-size` | `13px` / `12px` | 两行层级 |
 | `--cover-size` / `--cover-gap` | `34px` / `8px` | 封面布局 |

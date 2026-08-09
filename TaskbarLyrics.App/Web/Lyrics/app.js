@@ -5,8 +5,16 @@ const currentLineEl = document.getElementById("currentLine");
 const nextLineEl = document.getElementById("nextLine");
 const incomingLineEl = document.getElementById("incomingLine");
 const currentLineTextEl = document.getElementById("currentLineText");
+const currentLineScanTextEl = document.getElementById("currentLineScanText");
 const nextLineTextEl = document.getElementById("nextLineText");
+const nextLineScanTextEl = document.getElementById("nextLineScanText");
 const incomingLineTextEl = document.getElementById("incomingLineText");
+const incomingTranslationPairEl = document.getElementById("incomingTranslationPair");
+const incomingTranslationOriginalLineEl = document.getElementById("incomingTranslationOriginalLine");
+const incomingTranslationOriginalTextEl = document.getElementById("incomingTranslationOriginalText");
+const incomingTranslationOriginalScanTextEl = document.getElementById("incomingTranslationOriginalScanText");
+const incomingTranslationLineEl = document.getElementById("incomingTranslationLine");
+const incomingTranslationTextEl = document.getElementById("incomingTranslationText");
 const coverEl = document.getElementById("cover");
 const coverImageEl = document.getElementById("coverImage");
 const coverImageNextEl = document.getElementById("coverImageNext");
@@ -32,17 +40,25 @@ let transitionOpacityAnimation = 0;
 let transitionGeneration = 0;
 let transitionStartTime = 0;
 let transitionBaseNextOpacity = 0.72;
-let transitionBaseNextFontSize = 12;
-let transitionTargetCurrentFontSize = 13;
+let transitionPromotedLine = "";
+let transitionPromotedLineIndex = -1;
+let transitionWordScanProgress = null;
+let transitionUsesTranslationPair = false;
+let isPlaybackPlaying = false;
+let isTranslationMode = false;
 let secondaryOpacity = 0.72;
 let lastLineProgress = Number.NaN;
 let lastCurrentLineIndex = -1;
 let lastTrackId = "";
 let metricsUpdatePending = false;
+const lineScrollElements = new WeakMap();
+const horizontalScrollMetrics = new WeakMap();
 const transitionDurationMs = 560;
+const translationPairTransitionDurationMs = 760;
 const trackSwitchSearchMinVisibleMs = 900;
 const coverSwapDelayMs = 180;
 const coverSwitchMinVisibleMs = 420;
+const horizontalScrollAnchorRatio = 0.65;
 const SEARCHING_TEXT = "\u6b63\u5728\u68c0\u7d22\u6b4c\u8bcd...";
 const LEGACY_SEARCHING_TEXT = "\u6b63\u5728\u5339\u914d\u6b4c\u8bcd...";
 let trackSwitchSearchStartedAt = 0;
@@ -77,6 +93,15 @@ function clamp01(value) {
   return Math.max(0, Math.min(1, parsed));
 }
 
+function normalizeWordScanProgress(value) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? clamp01(parsed) : null;
+}
+
 function normalizeTrackId(trackId) {
   if (trackId === null || trackId === undefined) {
     return "";
@@ -91,32 +116,221 @@ function toDisplayLine(line, fallback = " ") {
 }
 
 function setTrackOffset(rowCount) {
-  trackEl.style.transform = `translateY(${-linePitchPx * rowCount}px)`;
+  const offset = snapToPhysicalPixel(-linePitchPx * rowCount);
+  if (offset === 0) {
+    trackEl.style.removeProperty("transform");
+    return;
+  }
+
+  trackEl.style.transform = `translateY(${offset}px)`;
+}
+
+function snapToPhysicalPixel(value) {
+  const devicePixelRatio = Number(window.devicePixelRatio) || 1;
+  return Math.round(value * devicePixelRatio) / devicePixelRatio;
+}
+
+function getLineScrollElements(lineElement) {
+  if (!lineElement) {
+    return null;
+  }
+
+  const cached = lineScrollElements.get(lineElement);
+  if (cached) {
+    return cached;
+  }
+
+  const textViewport = lineElement.querySelector(".line-text-viewport");
+  const textStack = lineElement.querySelector(".line-text-stack");
+  const baseText = lineElement.querySelector(".line-text-base");
+  if (!textViewport || !textStack || !baseText) {
+    return null;
+  }
+
+  const elements = { textViewport, textStack, baseText };
+  lineScrollElements.set(lineElement, elements);
+  return elements;
+}
+
+function clearLineHorizontalScroll(lineElement, discardMetrics = true) {
+  if (!lineElement) {
+    return;
+  }
+
+  if (discardMetrics) {
+    horizontalScrollMetrics.delete(lineElement);
+  }
+  lineElement.classList.remove("horizontal-scrolling");
+  getLineScrollElements(lineElement)?.textStack.style.removeProperty("--line-scroll-offset");
+}
+
+function measureLineHorizontalScroll(lineElement) {
+  const cached = horizontalScrollMetrics.get(lineElement);
+  if (cached) {
+    return cached;
+  }
+
+  const elements = getLineScrollElements(lineElement);
+  if (!elements) {
+    return null;
+  }
+
+  const viewportWidth = elements.textViewport.clientWidth;
+  const contentWidth = elements.baseText.scrollWidth;
+  const metrics = {
+    textStack: elements.textStack,
+    viewportWidth,
+    contentWidth,
+    overflowWidth: Math.max(0, contentWidth - viewportWidth)
+  };
+  if (viewportWidth > 0 && contentWidth > 0) {
+    horizontalScrollMetrics.set(lineElement, metrics);
+  }
+  return metrics;
+}
+
+function updateLineHorizontalScroll(lineElement, normalizedProgress) {
+  if (normalizedProgress === null) {
+    clearLineHorizontalScroll(lineElement);
+    return;
+  }
+
+  const metrics = measureLineHorizontalScroll(lineElement);
+  if (!metrics || metrics.viewportWidth <= 0 || metrics.overflowWidth < 0.5) {
+    clearLineHorizontalScroll(lineElement, false);
+    return;
+  }
+
+  const scanHeadPosition = normalizedProgress * metrics.contentWidth;
+  const anchorPosition = metrics.viewportWidth * horizontalScrollAnchorRatio;
+  const rawOffset = Math.max(0, Math.min(metrics.overflowWidth, scanHeadPosition - anchorPosition));
+  const offset = snapToPhysicalPixel(rawOffset);
+  lineElement.classList.add("horizontal-scrolling");
+  metrics.textStack.style.setProperty("--line-scroll-offset", `${offset === 0 ? 0 : -offset}px`);
+}
+
+function refreshLineHorizontalScroll(lineElement) {
+  horizontalScrollMetrics.delete(lineElement);
+  const progress = Number.parseFloat(
+    lineElement.style.getPropertyValue("--word-scan-progress")) / 100;
+  updateLineHorizontalScroll(lineElement, Number.isFinite(progress) ? clamp01(progress) : null);
+}
+
+function setLineText(lineElement, baseTextElement, scanTextElement, text) {
+  const isChanged = baseTextElement?.textContent !== text ||
+    (scanTextElement && scanTextElement.textContent !== text);
+  if (!isChanged) {
+    return;
+  }
+
+  clearLineHorizontalScroll(lineElement);
+  if (baseTextElement) {
+    baseTextElement.textContent = text;
+  }
+  if (scanTextElement) {
+    scanTextElement.textContent = text;
+  }
 }
 
 function setCurrentLine(line) {
   const safe = toDisplayLine(line, SEARCHING_TEXT);
-  if (currentLineTextEl) {
-    currentLineTextEl.textContent = safe;
-  }
+  setLineText(currentLineEl, currentLineTextEl, currentLineScanTextEl, safe);
   displayedCurrent = safe;
+}
+
+function setLineWordScanProgress(lineElement, progress, allowSmoothing = true) {
+  const normalized = normalizeWordScanProgress(progress);
+  const isScanning = normalized !== null;
+  const previousProgress = Number.parseFloat(
+    lineElement.style.getPropertyValue("--word-scan-progress")) / 100;
+  const isContinuousProgress = Number.isFinite(previousProgress) &&
+    normalized !== null &&
+    normalized >= previousProgress - 0.02 &&
+    normalized - previousProgress <= 0.35;
+  lineElement.classList.toggle("word-scanning", isScanning);
+  lineElement.classList.toggle(
+    "word-scan-smoothing",
+    isScanning &&
+      normalized > 0 &&
+      normalized < 1 &&
+      isPlaybackPlaying &&
+      allowSmoothing &&
+      isContinuousProgress);
+  if (normalized === null) {
+    lineElement.style.removeProperty("--word-scan-progress");
+    updateLineHorizontalScroll(lineElement, null);
+    return;
+  }
+
+  lineElement.style.setProperty("--word-scan-progress", `${(normalized * 100).toFixed(3)}%`);
+  updateLineHorizontalScroll(lineElement, normalized);
+}
+
+function setWordScanProgress(progress, allowSmoothing = true) {
+  setLineWordScanProgress(currentLineEl, progress, allowSmoothing);
+}
+
+function updateTransitionWordScanProgress(progress, allowSmoothing = true) {
+  transitionWordScanProgress = progress;
+  const targetLine = transitionUsesTranslationPair
+    ? incomingTranslationOriginalLineEl
+    : nextLineEl;
+  setLineWordScanProgress(targetLine, progress, allowSmoothing);
+  trackEl.classList.toggle(
+    "word-scan-transition",
+    !transitionUsesTranslationPair && normalizeWordScanProgress(progress) !== null);
 }
 
 function setSecondaryLine(line) {
   const safe = toDisplayLine(line, " ");
-  if (nextLineTextEl) {
-    nextLineTextEl.textContent = safe;
-  }
+  setLineText(nextLineEl, nextLineTextEl, nextLineScanTextEl, safe);
   displayedNext = safe;
 }
 
 function setIncomingLine(line) {
-  if (incomingLineTextEl) {
-    incomingLineTextEl.textContent = toDisplayLine(line, " ");
+  setLineText(incomingLineEl, incomingLineTextEl, null, toDisplayLine(line, " "));
+}
+
+function setTranslationMode(enabled) {
+  isTranslationMode = Boolean(enabled);
+  layoutEl.classList.toggle("translation-mode", isTranslationMode);
+  if (isTranslationMode) {
+    setLineWordScanProgress(nextLineEl, null);
+    nextLineEl.style.opacity = "";
+  } else {
+    clearIncomingTranslationPair();
   }
 }
 
+function setIncomingTranslationPair(original, translation, wordScanProgress) {
+  setLineText(
+    incomingTranslationOriginalLineEl,
+    incomingTranslationOriginalTextEl,
+    incomingTranslationOriginalScanTextEl,
+    toDisplayLine(original, SEARCHING_TEXT));
+  setLineText(
+    incomingTranslationLineEl,
+    incomingTranslationTextEl,
+    null,
+    toDisplayLine(translation, " "));
+  setLineWordScanProgress(incomingTranslationOriginalLineEl, wordScanProgress, false);
+}
+
+function clearIncomingTranslationPair() {
+  incomingTranslationPairEl.classList.remove("preparing", "entering", "no-anim");
+  incomingTranslationPairEl.style.opacity = "";
+  incomingTranslationPairEl.style.transform = "";
+  setLineWordScanProgress(incomingTranslationOriginalLineEl, null);
+  setLineText(incomingTranslationOriginalLineEl, incomingTranslationOriginalTextEl, incomingTranslationOriginalScanTextEl, " ");
+  setLineText(incomingTranslationLineEl, incomingTranslationTextEl, null, " ");
+}
+
 function updateSecondaryOpacity(progress) {
+  if (isTranslationMode) {
+    nextLineEl.style.opacity = "";
+    return;
+  }
+
   const p = clamp01(progress);
   const target = 0.58 + ((1 - p) * 0.16);
   secondaryOpacity += (target - secondaryOpacity) * 0.28;
@@ -126,11 +340,6 @@ function updateSecondaryOpacity(progress) {
 function easeOutCubic(t) {
   const x = 1 - clamp01(t);
   return 1 - (x * x * x);
-}
-
-function getSizeEase(t) {
-  // Follow the same direction as slide easing, but settle slightly earlier to reduce tail-end perceptual jumps.
-  return easeOutCubic(clamp01(t / 0.86));
 }
 
 function getFadeOutEase(t) {
@@ -462,7 +671,15 @@ function shouldHoldAfterSearch(frame) {
 function applyFrameAfterSearchDwell(frame) {
   clearDelayedFrameTimer();
   if (!shouldHoldAfterSearch(frame)) {
-    applyFrame(frame.current, frame.next, frame.progress, frame.currentLineIndex);
+    applyFrame(
+      frame.current,
+      frame.next,
+      frame.progress,
+      frame.currentLineIndex,
+      frame.wordScanProgress,
+      frame.currentTranslation,
+      frame.nextTranslation,
+      frame.translationMode);
     return;
   }
 
@@ -471,7 +688,15 @@ function applyFrameAfterSearchDwell(frame) {
   delayedFrameTimer = window.setTimeout(() => {
     delayedFrameTimer = 0;
     trackSwitchSearchStartedAt = 0;
-    applyFrame(frame.current, frame.next, frame.progress, frame.currentLineIndex);
+    applyFrame(
+      frame.current,
+      frame.next,
+      frame.progress,
+      frame.currentLineIndex,
+      frame.wordScanProgress,
+      frame.currentTranslation,
+      frame.nextTranslation,
+      frame.translationMode);
   }, delay);
 }
 
@@ -487,19 +712,39 @@ function cancelActiveTransition() {
   queuedFrame = null;
   trackEl.classList.add("no-anim");
   trackEl.classList.remove("animating");
+  trackEl.classList.remove("translation-pair-animating");
   currentLineEl.classList.remove("leaving");
   nextLineEl.classList.remove("promoting");
+  setLineWordScanProgress(nextLineEl, null);
+  trackEl.classList.remove("word-scan-transition");
+  transitionPromotedLine = "";
+  transitionPromotedLineIndex = -1;
+  transitionWordScanProgress = null;
+  transitionUsesTranslationPair = false;
   setTrackOffset(0);
   currentLineEl.style.opacity = "";
   nextLineEl.style.opacity = "";
   nextLineEl.style.fontSize = "";
+  nextLineEl.style.removeProperty("transform");
+  nextLineEl.style.removeProperty("--promotion-scale");
   incomingLineEl.style.opacity = secondaryOpacity.toFixed(3);
+  clearIncomingTranslationPair();
   void trackEl.offsetHeight;
   trackEl.classList.remove("no-anim");
 }
 
-function resetForTrackSwitch(safeCurrent, safeNext, progress, currentLineIndex, trackId) {
+function resetForTrackSwitch(
+  safeCurrent,
+  safeNext,
+  progress,
+  currentLineIndex,
+  trackId,
+  wordScanProgress,
+  currentTranslation,
+  nextTranslation,
+  translationMode) {
   cancelActiveTransition();
+  setTranslationMode(false);
   lastTrackId = trackId;
   lastCurrentLineIndex = -1;
   lastLineProgress = 0;
@@ -509,15 +754,33 @@ function resetForTrackSwitch(safeCurrent, safeNext, progress, currentLineIndex, 
   const hasLyricFrame = Number.isInteger(currentLineIndex) && currentLineIndex >= 0 && !isSearchingLine(safeCurrent);
 
   if (!isSearchingLine(displayedCurrent)) {
-    startTransition(SEARCHING_TEXT, " ", 0, -1);
+    startTransition(SEARCHING_TEXT, " ", 0, -1, null);
     if (hasLyricFrame) {
-      queuedFrame = { current: safeCurrent, next: safeNext, progress, currentLineIndex };
+      queuedFrame = {
+        current: safeCurrent,
+        next: safeNext,
+        progress,
+        currentLineIndex,
+        wordScanProgress,
+        currentTranslation,
+        nextTranslation,
+        translationMode
+      };
     }
   } else {
     setSecondaryLine(" ");
     updateSecondaryOpacity(0);
     if (hasLyricFrame) {
-      applyFrameAfterSearchDwell({ current: safeCurrent, next: safeNext, progress, currentLineIndex });
+      applyFrameAfterSearchDwell({
+        current: safeCurrent,
+        next: safeNext,
+        progress,
+        currentLineIndex,
+        wordScanProgress,
+        currentTranslation,
+        nextTranslation,
+        translationMode
+      });
     }
   }
 }
@@ -530,15 +793,12 @@ function runTransitionOpacityAnimation(now) {
 
   const elapsed = Math.max(0, now - transitionStartTime);
   const t = clamp01(elapsed / transitionDurationMs);
-  const e = easeOutCubic(t);
-  const sizeE = getSizeEase(t);
   const fadeOutE = getFadeOutEase(t);
   const fadeInE = getFadeInEase(t);
 
   currentLineEl.style.opacity = String(0.98 + ((0.16 - 0.98) * fadeOutE));
   nextLineEl.style.opacity = String(transitionBaseNextOpacity + ((0.98 - transitionBaseNextOpacity) * fadeInE));
   incomingLineEl.style.opacity = secondaryOpacity.toFixed(3);
-  nextLineEl.style.fontSize = `${(transitionBaseNextFontSize + ((transitionTargetCurrentFontSize - transitionBaseNextFontSize) * sizeE)).toFixed(3)}px`;
 
   if (t < 1) {
     transitionOpacityAnimation = window.requestAnimationFrame(runTransitionOpacityAnimation);
@@ -547,23 +807,72 @@ function runTransitionOpacityAnimation(now) {
   }
 }
 
-function applyFrame(safeCurrent, safeNext, progress, currentLineIndex) {
-  if (isTransitioning) {
-    queuedFrame = { current: safeCurrent, next: safeNext, progress, currentLineIndex };
+function applyFrame(
+  safeCurrent,
+  safeNext,
+  progress,
+  currentLineIndex,
+  wordScanProgress,
+  currentTranslation = "",
+  nextTranslation = "",
+  translationMode = false) {
+  const useTranslationPair = Boolean(translationMode);
+  const visibleSecondary = useTranslationPair
+    ? toDisplayLine(currentTranslation, " ")
+    : safeNext;
+  const p = clamp01(progress);
+
+  if (useTranslationPair !== isTranslationMode) {
+    cancelActiveTransition();
+    setTranslationMode(useTranslationPair);
+    setCurrentLine(safeCurrent);
+    setWordScanProgress(wordScanProgress, false);
+    setSecondaryLine(visibleSecondary);
+    updateSecondaryOpacity(p);
+    lastCurrentLineIndex = Number.isInteger(currentLineIndex) ? currentLineIndex : -1;
+    lastLineProgress = p;
     return;
   }
 
-  const p = clamp01(progress);
+  if (isTransitioning) {
+    queuedFrame = {
+      current: safeCurrent,
+      next: safeNext,
+      progress,
+      currentLineIndex,
+      wordScanProgress,
+      currentTranslation,
+      nextTranslation,
+      translationMode: useTranslationPair
+    };
+    const updatesPromotedLine = transitionPromotedLineIndex >= 0
+      ? currentLineIndex === transitionPromotedLineIndex
+      : safeCurrent === transitionPromotedLine;
+    if (updatesPromotedLine) {
+      updateTransitionWordScanProgress(wordScanProgress);
+    }
+    return;
+  }
+
   const hasLineIndex = Number.isInteger(currentLineIndex) && currentLineIndex >= 0;
 
   if (hasLineIndex) {
     if (!Number.isInteger(lastCurrentLineIndex) || lastCurrentLineIndex < 0) {
       // If we were in a non-lyric state, slide into the first line smoothly.
       if (isSearchingLine(displayedCurrent)) {
-        startTransition(safeCurrent, safeNext, p, currentLineIndex);
+        startTransition(
+          safeCurrent,
+          safeNext,
+          p,
+          currentLineIndex,
+          wordScanProgress,
+          currentTranslation,
+          nextTranslation,
+          useTranslationPair);
       } else {
         setCurrentLine(safeCurrent);
-        setSecondaryLine(safeNext);
+        setWordScanProgress(wordScanProgress, false);
+        setSecondaryLine(visibleSecondary);
         updateSecondaryOpacity(p);
       }
       lastCurrentLineIndex = currentLineIndex;
@@ -572,12 +881,21 @@ function applyFrame(safeCurrent, safeNext, progress, currentLineIndex) {
     }
 
     if (currentLineIndex !== lastCurrentLineIndex) {
-      startTransition(safeCurrent, safeNext, p, currentLineIndex);
+      startTransition(
+        safeCurrent,
+        safeNext,
+        p,
+        currentLineIndex,
+        wordScanProgress,
+        currentTranslation,
+        nextTranslation,
+        useTranslationPair);
     } else {
       if (safeCurrent !== displayedCurrent) {
         setCurrentLine(safeCurrent);
       }
-      setSecondaryLine(safeNext);
+      setWordScanProgress(wordScanProgress);
+      setSecondaryLine(visibleSecondary);
       updateSecondaryOpacity(p);
     }
 
@@ -588,10 +906,10 @@ function applyFrame(safeCurrent, safeNext, progress, currentLineIndex) {
   const isRepeatedPromotionCandidate =
     safeCurrent === displayedCurrent &&
     displayedNext === displayedCurrent &&
-    safeNext !== displayedNext;
+    visibleSecondary !== displayedNext;
   const isUnchangedTextFrame =
     safeCurrent === displayedCurrent &&
-    safeNext === displayedNext;
+    visibleSecondary === displayedNext;
   const wrappedProgressForSameText =
     isUnchangedTextFrame &&
     Number.isFinite(lastLineProgress) &&
@@ -599,9 +917,18 @@ function applyFrame(safeCurrent, safeNext, progress, currentLineIndex) {
     lastLineProgress > 0.62;
 
   if (safeCurrent !== displayedCurrent || isRepeatedPromotionCandidate || wrappedProgressForSameText) {
-    startTransition(safeCurrent, safeNext, p, -1);
+    startTransition(
+      safeCurrent,
+      safeNext,
+      p,
+      -1,
+      wordScanProgress,
+      currentTranslation,
+      nextTranslation,
+      useTranslationPair);
   } else {
-    setSecondaryLine(safeNext);
+    setWordScanProgress(wordScanProgress);
+    setSecondaryLine(visibleSecondary);
     updateSecondaryOpacity(p);
   }
 
@@ -631,20 +958,28 @@ function updateMetrics() {
   root.style.setProperty("--current-size", `${currentSize.toFixed(2)}px`);
   root.style.setProperty("--next-size", `${nextSize.toFixed(2)}px`);
   setTrackOffset(0);
+  refreshLineHorizontalScroll(currentLineEl);
 }
 
-function finalizeTransition(promotedCurrent, upcomingNext, progress, promotedLineIndex = -1) {
+function finalizeTransition(promotedCurrent, upcomingNext, progress, promotedLineIndex = -1, wordScanProgress = null) {
   const incomingEndOpacity = Number.parseFloat(window.getComputedStyle(incomingLineEl).opacity || "0.72");
 
   // Freeze transitions while swapping layers to avoid visible "grow then shrink" rebound.
   trackEl.classList.add("no-anim");
   stopTransitionOpacityAnimation();
   setCurrentLine(promotedCurrent);
+  setWordScanProgress(wordScanProgress, false);
   setSecondaryLine(upcomingNext);
+  setLineWordScanProgress(nextLineEl, null);
   setIncomingLine("");
   trackEl.classList.remove("animating");
   currentLineEl.classList.remove("leaving");
   nextLineEl.classList.remove("promoting");
+  trackEl.classList.remove("word-scan-transition");
+  transitionPromotedLine = "";
+  transitionPromotedLineIndex = -1;
+  transitionWordScanProgress = null;
+  transitionUsesTranslationPair = false;
   setTrackOffset(0);
   // Reset inline opacity channels while transitions are disabled; otherwise a brief flash can appear.
   currentLineEl.style.opacity = "";
@@ -652,6 +987,8 @@ function finalizeTransition(promotedCurrent, upcomingNext, progress, promotedLin
   secondaryOpacity = Number.isFinite(incomingEndOpacity) ? incomingEndOpacity : 0.72;
   incomingLineEl.style.opacity = "";
   nextLineEl.style.fontSize = "";
+  nextLineEl.style.removeProperty("transform");
+  nextLineEl.style.removeProperty("--promotion-scale");
   updateSecondaryOpacity(progress);
   void trackEl.offsetHeight;
   trackEl.classList.remove("no-anim");
@@ -671,35 +1008,201 @@ function finalizeTransition(promotedCurrent, upcomingNext, progress, promotedLin
   }
 }
 
-function startTransition(newCurrent, newNext, progress, currentLineIndex = -1) {
+function startTransition(
+  newCurrent,
+  newNext,
+  progress,
+  currentLineIndex = -1,
+  wordScanProgress = null,
+  currentTranslation = "",
+  nextTranslation = "",
+  translationMode = false) {
   if (isTransitioning) {
-    queuedFrame = { current: newCurrent, next: newNext, progress, currentLineIndex };
+    queuedFrame = {
+      current: newCurrent,
+      next: newNext,
+      progress,
+      currentLineIndex,
+      wordScanProgress,
+      currentTranslation,
+      nextTranslation,
+      translationMode
+    };
     return;
   }
+
+  if (translationMode) {
+    startTranslationPairTransition(
+      newCurrent,
+      currentTranslation,
+      progress,
+      currentLineIndex,
+      wordScanProgress);
+    return;
+  }
+
+  startStandardTransition(newCurrent, newNext, progress, currentLineIndex, wordScanProgress);
+}
+
+function finalizeTranslationPairTransition(
+  promotedCurrent,
+  promotedTranslation,
+  progress,
+  promotedLineIndex,
+  wordScanProgress) {
+  trackEl.classList.add("no-anim");
+  incomingTranslationPairEl.classList.add("no-anim");
+  stopTransitionOpacityAnimation();
+  setCurrentLine(promotedCurrent);
+  setWordScanProgress(wordScanProgress, false);
+  setSecondaryLine(promotedTranslation);
+  setLineWordScanProgress(nextLineEl, null);
+  trackEl.classList.remove("translation-pair-animating", "animating", "word-scan-transition");
+  currentLineEl.classList.remove("leaving");
+  nextLineEl.classList.remove("promoting");
+  transitionPromotedLine = "";
+  transitionPromotedLineIndex = -1;
+  transitionWordScanProgress = null;
+  transitionUsesTranslationPair = false;
+  setTrackOffset(0);
+  currentLineEl.style.opacity = "";
+  nextLineEl.style.opacity = "";
+  clearIncomingTranslationPair();
+  void trackEl.offsetHeight;
+  trackEl.classList.remove("no-anim");
+  isTransitioning = false;
+  lastLineProgress = clamp01(progress);
+  if (Number.isInteger(promotedLineIndex) && promotedLineIndex >= 0) {
+    lastCurrentLineIndex = promotedLineIndex;
+  }
+  if (metricsUpdatePending) {
+    updateMetrics();
+  }
+
+  if (queuedFrame) {
+    const frame = queuedFrame;
+    queuedFrame = null;
+    applyFrameAfterSearchDwell(frame);
+  }
+}
+
+function startTranslationPairTransition(
+  newCurrent,
+  currentTranslation,
+  progress,
+  currentLineIndex,
+  wordScanProgress) {
+  isTransitioning = true;
+  transitionUsesTranslationPair = true;
+  const generation = ++transitionGeneration;
+  const promoted = toDisplayLine(newCurrent, SEARCHING_TEXT);
+  const promotedTranslation = toDisplayLine(currentTranslation, " ");
+  transitionPromotedLine = promoted;
+  transitionPromotedLineIndex = currentLineIndex;
+  transitionWordScanProgress = wordScanProgress;
+  stopTransitionOpacityAnimation();
+
+  trackEl.classList.add("no-anim");
+  trackEl.classList.remove("animating", "translation-pair-animating");
+  currentLineEl.classList.remove("leaving");
+  nextLineEl.classList.remove("promoting");
+  setTrackOffset(0);
+  clearIncomingTranslationPair();
+  incomingTranslationPairEl.classList.add("preparing", "no-anim");
+  setIncomingTranslationPair(promoted, promotedTranslation, wordScanProgress);
+  currentLineEl.style.opacity = "";
+  nextLineEl.style.opacity = "";
+  void incomingTranslationPairEl.offsetHeight;
+  trackEl.classList.remove("no-anim");
+  incomingTranslationPairEl.classList.remove("no-anim");
+
+  let hasFinished = false;
+  const finish = () => {
+    if (hasFinished) {
+      return;
+    }
+
+    hasFinished = true;
+    trackEl.removeEventListener("transitionend", onTransitionEnd);
+    if (generation !== transitionGeneration) {
+      return;
+    }
+
+    if (transitionFallbackTimer) {
+      window.clearTimeout(transitionFallbackTimer);
+      transitionFallbackTimer = 0;
+    }
+    finalizeTranslationPairTransition(
+      promoted,
+      promotedTranslation,
+      progress,
+      currentLineIndex,
+      transitionWordScanProgress);
+  };
+  const onTransitionEnd = (event) => {
+    if (!event || event.target !== trackEl || event.propertyName !== "transform") {
+      return;
+    }
+
+    finish();
+  };
+
+  trackEl.addEventListener("transitionend", onTransitionEnd);
+  window.requestAnimationFrame(() => {
+    if (generation !== transitionGeneration) {
+      return;
+    }
+
+    incomingTranslationPairEl.classList.remove("preparing");
+    incomingTranslationPairEl.classList.add("entering");
+    trackEl.classList.add("translation-pair-animating", "animating");
+    window.requestAnimationFrame(() => {
+      if (generation !== transitionGeneration) {
+        return;
+      }
+
+      setTrackOffset(2);
+      if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+        window.requestAnimationFrame(finish);
+      }
+    });
+  });
+  transitionFallbackTimer = window.setTimeout(finish, translationPairTransitionDurationMs + 120);
+}
+
+function startStandardTransition(newCurrent, newNext, progress, currentLineIndex = -1, wordScanProgress = null) {
+  transitionUsesTranslationPair = false;
 
   isTransitioning = true;
   const generation = ++transitionGeneration;
   const promoted = toDisplayLine(newCurrent, SEARCHING_TEXT);
   const upcoming = toDisplayLine(newNext, " ");
+  transitionPromotedLine = promoted;
+  transitionPromotedLineIndex = currentLineIndex;
+  transitionWordScanProgress = wordScanProgress;
   transitionBaseNextOpacity = secondaryOpacity;
-  transitionBaseNextFontSize = Number.parseFloat(window.getComputedStyle(nextLineEl).fontSize || "12");
-  transitionTargetCurrentFontSize = Number.parseFloat(window.getComputedStyle(currentLineEl).fontSize || "13");
+  const nextFontSize = Number.parseFloat(window.getComputedStyle(nextLineEl).fontSize || "12");
+  const currentFontSize = Number.parseFloat(window.getComputedStyle(currentLineEl).fontSize || "13");
+  const promotionStartScale = currentFontSize > 0
+    ? clamp01(nextFontSize / currentFontSize)
+    : 1;
   transitionStartTime = 0;
   stopTransitionOpacityAnimation();
 
-  // Start from baseline state first so promoting font-size always animates from second-line size.
+  // Render with final font metrics from the start, then animate only the visual scale.
   trackEl.classList.add("no-anim");
   trackEl.classList.remove("animating");
   currentLineEl.classList.remove("leaving");
   nextLineEl.classList.remove("promoting");
   setTrackOffset(0);
-  if (nextLineTextEl) {
-    nextLineTextEl.textContent = promoted;
-  }
+  setLineText(nextLineEl, nextLineTextEl, nextLineScanTextEl, promoted);
   setIncomingLine(upcoming);
   currentLineEl.style.opacity = "";
   nextLineEl.style.opacity = "";
-  nextLineEl.style.fontSize = `${transitionBaseNextFontSize.toFixed(3)}px`;
+  nextLineEl.style.fontSize = `${currentFontSize.toFixed(3)}px`;
+  nextLineEl.style.setProperty("--promotion-scale", promotionStartScale.toFixed(6));
+  nextLineEl.style.transform = "scale(var(--promotion-scale))";
+  updateTransitionWordScanProgress(wordScanProgress, false);
   incomingLineEl.style.opacity = secondaryOpacity.toFixed(3);
   void trackEl.offsetHeight;
   trackEl.classList.remove("no-anim");
@@ -718,7 +1221,7 @@ function startTransition(newCurrent, newNext, progress, currentLineIndex = -1) {
       window.clearTimeout(transitionFallbackTimer);
       transitionFallbackTimer = 0;
     }
-    finalizeTransition(promoted, upcoming, progress, currentLineIndex);
+    finalizeTransition(promoted, upcoming, progress, currentLineIndex, transitionWordScanProgress);
   };
 
   trackEl.addEventListener("transitionend", onTransitionEnd);
@@ -731,6 +1234,8 @@ function startTransition(newCurrent, newNext, progress, currentLineIndex = -1) {
     transitionOpacityAnimation = window.requestAnimationFrame(runTransitionOpacityAnimation);
     currentLineEl.classList.add("leaving");
     nextLineEl.classList.add("promoting");
+    nextLineEl.style.setProperty("--promotion-scale", "1");
+    nextLineEl.style.removeProperty("transform");
     trackEl.classList.add("animating");
     window.requestAnimationFrame(() => {
       if (generation === transitionGeneration) {
@@ -744,7 +1249,7 @@ function startTransition(newCurrent, newNext, progress, currentLineIndex = -1) {
       return;
     }
 
-    finalizeTransition(promoted, upcoming, progress, currentLineIndex);
+    finalizeTransition(promoted, upcoming, progress, currentLineIndex, transitionWordScanProgress);
   }, transitionDurationMs + 120);
 }
 
@@ -754,7 +1259,9 @@ function updateResponsiveLayout() {
 }
 
 updateResponsiveLayout();
+setTranslationMode(false);
 setCurrentLine(displayedCurrent);
+setWordScanProgress(null);
 setSecondaryLine(displayedNext);
 setIncomingLine("");
 updateSecondaryOpacity(0);
@@ -765,10 +1272,29 @@ if (typeof ResizeObserver !== "undefined") {
   window.addEventListener("resize", updateResponsiveLayout);
 }
 
+if (document.fonts?.ready) {
+  document.fonts.ready.then(updateResponsiveLayout).catch(() => {});
+}
+
 const lyricsApi = {
-  setLyrics(current, next, progress, currentLineIndex, trackId, isPureMusic, isPlaying) {
+  setLyrics(
+    current,
+    next,
+    progress,
+    currentLineIndex,
+    trackId,
+    isPureMusic,
+    isPlaying,
+    wordScanProgress,
+    currentTranslation,
+    nextTranslation,
+    translationMode) {
+    isPlaybackPlaying = Boolean(isPlaying);
     const safeCurrent = toDisplayLine(current, SEARCHING_TEXT);
     const safeNext = toDisplayLine(next, " ");
+    const safeCurrentTranslation = toDisplayLine(currentTranslation, " ");
+    const safeNextTranslation = toDisplayLine(nextTranslation, " ");
+    const useTranslationPair = Boolean(translationMode);
     const p = clamp01(progress);
     const lineIndex = Number(currentLineIndex);
     const normalizedTrackId = normalizeTrackId(trackId);
@@ -781,8 +1307,10 @@ const lyricsApi = {
       }
 
       cancelActiveTransition();
+      setTranslationMode(false);
       trackSwitchSearchStartedAt = 0;
       setCurrentLine(safeCurrent);
+      setWordScanProgress(null);
       setSecondaryLine(" ");
       setIncomingLine("");
       lastCurrentLineIndex = Number.isInteger(lineIndex) ? lineIndex : -1;
@@ -798,7 +1326,16 @@ const lyricsApi = {
     clearSpectrumBars();
 
     if (normalizedTrackId.length > 0 && normalizedTrackId !== lastTrackId) {
-      resetForTrackSwitch(safeCurrent, safeNext, p, lineIndex, normalizedTrackId);
+      resetForTrackSwitch(
+        safeCurrent,
+        safeNext,
+        p,
+        lineIndex,
+        normalizedTrackId,
+        wordScanProgress,
+        safeCurrentTranslation,
+        safeNextTranslation,
+        useTranslationPair);
       return;
     }
 
@@ -806,7 +1343,15 @@ const lyricsApi = {
       lastTrackId = normalizedTrackId;
     }
 
-    applyFrame(safeCurrent, safeNext, p, lineIndex);
+    applyFrame(
+      safeCurrent,
+      safeNext,
+      p,
+      lineIndex,
+      wordScanProgress,
+      safeCurrentTranslation,
+      safeNextTranslation,
+      useTranslationPair);
   },
 
   setSpectrum(values) {
@@ -989,6 +1534,10 @@ const lyricsApi = {
       root.style.setProperty("--secondary", payload.secondaryColor);
     }
 
+    if (payload.translationColor && CSS.supports("color", payload.translationColor)) {
+      root.style.setProperty("--translation", payload.translationColor);
+    }
+
     if (payload.surfaceColor && CSS.supports("background-color", payload.surfaceColor)) {
       root.style.setProperty("--surface-color", payload.surfaceColor);
     }
@@ -1016,7 +1565,11 @@ window.taskbarLyrics = {
           payload?.currentLineIndex,
           payload?.trackId,
           payload?.isPureMusic,
-          payload?.isPlaying);
+          payload?.isPlaying,
+          payload?.wordScanProgress,
+          payload?.currentTranslation,
+          payload?.nextTranslation,
+          payload?.translationMode);
         break;
       case "cover":
         lyricsApi.setCover(payload?.dataUri, payload?.fallbackText, payload?.fallbackColor, payload?.trackId);

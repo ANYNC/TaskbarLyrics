@@ -12,13 +12,13 @@ public sealed class LyricSyncService : IDisposable
     private static readonly TimeSpan DefaultMetadataStabilizationDelay = TimeSpan.FromMilliseconds(750);
 
     private readonly ILyricResolutionCoordinator _coordinator;
-    private readonly Func<string?, bool> _shouldShowTranslation;
     private readonly Func<string?, TimeSpan> _getPlayerLeadTime;
     private readonly Func<TrackInfo?, string?, TimeSpan> _getTrackLeadTime;
     private readonly TimeSpan _metadataStabilizationDelay;
     private TrackInfo? _currentTrack;
     private string? _currentTrackId;
     private LyricDocument? _currentDocument;
+    private bool _currentDocumentHasTranslation;
     private string? _currentLyricSourceApp;
     private LyricAcquisitionKind _currentLyricAcquisition = LyricAcquisitionKind.Unknown;
     private long _currentLyricFetchElapsedMilliseconds;
@@ -39,13 +39,11 @@ public sealed class LyricSyncService : IDisposable
 
     public LyricSyncService(
         ILyricResolutionCoordinator coordinator,
-        Func<string?, bool>? shouldShowTranslation = null,
         Func<string?, TimeSpan>? getPlayerLeadTime = null,
         Func<TrackInfo?, string?, TimeSpan>? getTrackLeadTime = null,
         TimeSpan? metadataStabilizationDelay = null)
     {
         _coordinator = coordinator ?? throw new ArgumentNullException(nameof(coordinator));
-        _shouldShowTranslation = shouldShowTranslation ?? (_ => true);
         _getPlayerLeadTime = getPlayerLeadTime ?? (_ => TimeSpan.Zero);
         _getTrackLeadTime = getTrackLeadTime ?? ((_, _) => TimeSpan.Zero);
         _metadataStabilizationDelay = metadataStabilizationDelay ?? DefaultMetadataStabilizationDelay;
@@ -65,6 +63,7 @@ public sealed class LyricSyncService : IDisposable
             _currentTrack = null;
             _currentTrackId = null;
             _currentDocument = null;
+            _currentDocumentHasTranslation = false;
             _currentLyricSourceApp = null;
             _currentLyricAcquisition = LyricAcquisitionKind.Unknown;
             _currentLyricFetchElapsedMilliseconds = 0;
@@ -81,6 +80,7 @@ public sealed class LyricSyncService : IDisposable
             _currentTrack = snapshot.Track;
             _currentTrackId = trackId;
             _currentDocument = null;
+            _currentDocumentHasTranslation = false;
             _currentLyricSourceApp = null;
             _currentLyricAcquisition = LyricAcquisitionKind.Searching;
             _currentLyricFetchElapsedMilliseconds = 0;
@@ -97,6 +97,7 @@ public sealed class LyricSyncService : IDisposable
             {
                 _durationCorrectionConsumed = true;
                 _currentDocument = null;
+                _currentDocumentHasTranslation = false;
                 _currentLyricSourceApp = null;
                 _currentLyricAcquisition = LyricAcquisitionKind.Searching;
                 _currentLyricFetchElapsedMilliseconds = 0;
@@ -145,39 +146,27 @@ public sealed class LyricSyncService : IDisposable
         {
             // If before first line, show the first line as prepared current
             var firstLine = lines[0];
-            string firstText = firstLine.Text;
-            if (CanShowTranslation() && !string.IsNullOrWhiteSpace(firstLine.Translation))
-            {
-                firstText += " (" + firstLine.Translation + ")";
-            }
-
+            var firstText = firstLine.Text;
             var nextTxt = lines.Count > 1 ? lines[1].Text : "";
-            if (CanShowTranslation() && lines.Count > 1 && !string.IsNullOrWhiteSpace(lines[1].Translation))
-            {
-                nextTxt += " (" + lines[1].Translation + ")";
-            }
 
-            return Task.FromResult(new LyricDisplayFrame(firstText, nextTxt, _currentTrack?.Title ?? "", 0, 0, _currentDocument.IsPureMusic));
+            return Task.FromResult(new LyricDisplayFrame(
+                firstText,
+                nextTxt,
+                _currentTrack?.Title ?? "",
+                0,
+                0,
+                _currentDocument.IsPureMusic,
+                CalculateWordScanProgress(firstLine, position, firstLine.Text.Length),
+                firstLine.Translation,
+                lines.Count > 1 ? lines[1].Translation : null,
+                _currentDocumentHasTranslation));
         }
 
         var currentLine = lines[displayIdx];
         var nextLine = (displayIdx + 1 < lines.Count) ? lines[displayIdx + 1] : null;
 
-        // Smart text merging: if translation exists, append it.
-        // This ensures the "NextLine" correctly shows the next lyric for animation,
-        // while still making translations visible in the taskbar's limited space.
-        string currentText = currentLine.Text;
-        if (CanShowTranslation() && !string.IsNullOrWhiteSpace(currentLine.Translation))
-        {
-            // We use a small space and parens for a clean look in the taskbar
-            currentText += " (" + currentLine.Translation + ")";
-        }
-
-        string nextText = nextLine?.Text ?? "";
-        if (CanShowTranslation() && nextLine != null && !string.IsNullOrWhiteSpace(nextLine.Translation))
-        {
-            nextText += " (" + nextLine.Translation + ")";
-        }
+        var currentText = currentLine.Text;
+        var nextText = nextLine?.Text ?? "";
 
         // Calculate progress within line for syllable animation
         double progress = 0;
@@ -197,7 +186,11 @@ public sealed class LyricSyncService : IDisposable
             _currentTrack?.Title ?? "",
             progress,
             displayIdx,
-            _currentDocument.IsPureMusic
+            _currentDocument.IsPureMusic,
+            CalculateWordScanProgress(currentLine, position, currentLine.Text.Length),
+            currentLine.Translation,
+            nextLine?.Translation,
+            _currentDocumentHasTranslation
         ));
     }
 
@@ -234,6 +227,8 @@ public sealed class LyricSyncService : IDisposable
             if (resolved is not null && document is { Lines.Count: > 0 } && _currentTrackId == trackId)
             {
                 _currentDocument = document;
+                _currentDocumentHasTranslation = document.Lines.Any(
+                    line => !string.IsNullOrWhiteSpace(line.Translation));
                 _currentLyricSourceApp = resolved.ProviderId.Value;
                 _currentLyricAcquisition = resolved.Acquisition;
                 _currentLyricFetchElapsedMilliseconds = ReadElapsedMilliseconds(resolved.Diagnostics);
@@ -319,9 +314,91 @@ public sealed class LyricSyncService : IDisposable
             : 0;
     }
 
-    private bool CanShowTranslation()
+    private static double? CalculateWordScanProgress(
+        LyricLine line,
+        TimeSpan position,
+        int displayTextLength)
     {
-        return _shouldShowTranslation(_currentLyricSourceApp);
+        if (line.Syllables is not { Count: > 0 } syllables)
+        {
+            return null;
+        }
+
+        var elapsed = position - line.Timestamp;
+        double scannedTextLength = 0;
+        var textSearchIndex = 0;
+        var hasUsableSyllable = false;
+        var lastUsableSyllableEnd = TimeSpan.Zero;
+        foreach (var syllable in syllables)
+        {
+            var syllableText = syllable.Text;
+            if (string.IsNullOrEmpty(syllableText))
+            {
+                continue;
+            }
+
+            var syllableTextLength = syllableText.Length;
+
+            var syllableTextIndex = line.Text.IndexOf(
+                syllableText,
+                textSearchIndex,
+                StringComparison.Ordinal);
+            if (syllableTextIndex < 0)
+            {
+                syllableTextIndex = Math.Min(textSearchIndex, line.Text.Length);
+            }
+
+            syllableTextLength = Math.Min(
+                syllableTextLength,
+                line.Text.Length - syllableTextIndex);
+            if (syllableTextLength <= 0)
+            {
+                continue;
+            }
+
+            hasUsableSyllable = true;
+            lastUsableSyllableEnd = syllable.RelativeOffset +
+                (syllable.Duration > TimeSpan.Zero ? syllable.Duration : TimeSpan.Zero);
+
+            if (elapsed <= syllable.RelativeOffset)
+            {
+                break;
+            }
+
+            if (syllable.Duration <= TimeSpan.Zero)
+            {
+                scannedTextLength = syllableTextIndex + syllableTextLength;
+                textSearchIndex = syllableTextIndex + syllableTextLength;
+                continue;
+            }
+
+            var syllableProgress = Math.Clamp(
+                (elapsed - syllable.RelativeOffset).TotalMilliseconds /
+                syllable.Duration.TotalMilliseconds,
+                0,
+                1);
+            scannedTextLength = syllableTextIndex + (syllableTextLength * syllableProgress);
+            if (syllableProgress < 1)
+            {
+                break;
+            }
+
+            textSearchIndex = syllableTextIndex + syllableTextLength;
+        }
+
+        if (!hasUsableSyllable)
+        {
+            return null;
+        }
+
+        if (scannedTextLength >= textSearchIndex &&
+            textSearchIndex > 0 &&
+            elapsed >= lastUsableSyllableEnd)
+        {
+            return 1;
+        }
+
+        return Math.Clamp(scannedTextLength / Math.Max(1, displayTextLength), 0, 1);
     }
 
     private static int FindCurrentLineIndex(IReadOnlyList<LyricLine> lines, TimeSpan position)

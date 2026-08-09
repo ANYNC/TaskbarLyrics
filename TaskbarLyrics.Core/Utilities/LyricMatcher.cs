@@ -11,7 +11,11 @@ public static class LyricMatcher
 {
     private static readonly Regex BracketSuffixRegex = new(@"\s*[\(\[\{（【].*?[\)\]\}）】]\s*", RegexOptions.Compiled);
     private static readonly Regex FeatureSuffixRegex = new(@"\s+(feat\.?|ft\.?|with)\s+.*$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
-    private static readonly string[] ConflictKeywords = { "live", "remix", "acoustic", "demo", "instrumental", "vma", "award", "现场", "演唱会", "颁奖", "典礼" };
+    private static readonly string[] ConflictKeywords =
+    {
+        "live", "remix", "acoustic", "demo", "instrumental", "karaoke", "simlish",
+        "vma", "award", "现场", "演唱会", "颁奖", "典礼"
+    };
 
     // JaroWinkler 算法，适合短文本匹配
     private static readonly JaroWinkler JaroWinklerAlgo = new();

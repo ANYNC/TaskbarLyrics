@@ -6,6 +6,35 @@ namespace TaskbarLyrics.App.Tests;
 public sealed class SettingsStoreTests
 {
     [Theory]
+    [InlineData("{}", true)]
+    [InlineData("{\"EnableWordScanning\":false}", false)]
+    [InlineData("{\"EnableWordScanning\":true}", true)]
+    public void LoadPreservesWordScanningDefaultAndExplicitValue(
+        string json,
+        bool expectedEnabled)
+    {
+        var directory = Path.Combine(AppContext.BaseDirectory, $"settings-store-{Guid.NewGuid():N}");
+        var filePath = Path.Combine(directory, "settings.json");
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            File.WriteAllText(filePath, json);
+
+            var loaded = new SettingsStore(filePath).Load();
+
+            Assert.Equal(expectedEnabled, loaded.EnableWordScanning);
+        }
+        finally
+        {
+            if (Directory.Exists(directory))
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+    }
+
+    [Theory]
     [InlineData(0, ForegroundColorMode.Dark)]
     [InlineData(1, ForegroundColorMode.Light)]
     [InlineData(2, ForegroundColorMode.Custom)]

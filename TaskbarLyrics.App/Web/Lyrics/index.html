@@ -20,9 +20,44 @@
         <div id="lyricsLayer" class="lyrics-layer">
           <div id="viewport" class="viewport">
             <div id="track" class="track">
-              <div id="currentLine" class="line current-line"><span id="currentLineText" class="line-text">TaskbarLyrics started</span></div>
-              <div id="nextLine" class="line next-line"><span id="nextLineText" class="line-text">Waiting for lyrics...</span></div>
-              <div id="incomingLine" class="line next-line incoming-line"><span id="incomingLineText" class="line-text"> </span></div>
+              <div id="currentLine" class="line current-line">
+                <span class="line-text-viewport">
+                  <span class="line-text-stack">
+                    <span id="currentLineText" class="line-text line-text-base">TaskbarLyrics started</span>
+                    <span id="currentLineScanText" class="line-text line-text-scan" aria-hidden="true">TaskbarLyrics started</span>
+                  </span>
+                </span>
+              </div>
+              <div id="nextLine" class="line next-line">
+                <span class="line-text-viewport">
+                  <span class="line-text-stack">
+                    <span id="nextLineText" class="line-text line-text-base">Waiting for lyrics...</span>
+                    <span id="nextLineScanText" class="line-text line-text-scan" aria-hidden="true">Waiting for lyrics...</span>
+                  </span>
+                </span>
+              </div>
+              <div id="incomingLine" class="line next-line incoming-line">
+                <span class="line-text-viewport">
+                  <span class="line-text-stack"><span id="incomingLineText" class="line-text line-text-base"> </span></span>
+                </span>
+              </div>
+              <div id="incomingTranslationPair" class="incoming-translation-pair" aria-hidden="true">
+                <div id="incomingTranslationOriginalLine" class="line current-line">
+                  <span class="line-text-viewport">
+                    <span class="line-text-stack">
+                      <span id="incomingTranslationOriginalText" class="line-text line-text-base"> </span>
+                      <span id="incomingTranslationOriginalScanText" class="line-text line-text-scan" aria-hidden="true"> </span>
+                    </span>
+                  </span>
+                </div>
+                <div id="incomingTranslationLine" class="line translation-line">
+                  <span class="line-text-viewport">
+                    <span class="line-text-stack">
+                      <span id="incomingTranslationText" class="line-text line-text-base"> </span>
+                    </span>
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
         </div>

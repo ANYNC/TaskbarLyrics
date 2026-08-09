@@ -90,6 +90,37 @@ public sealed class AppSettingsChangeSetTests
     }
 
     [Fact]
+    public void CreateWhenWordScanningChangesReappliesLyricsWindowWithoutRebuildingService()
+    {
+        var current = new AppSettings();
+        var next = current.Clone();
+        next.EnableWordScanning = false;
+
+        var changes = AppSettingsChangeSet.Create(current, next);
+
+        Assert.True(changes.WordScanningChanged);
+        Assert.True(changes.RequiresLyricsWindowApply);
+        Assert.False(changes.LyricSyncServiceChanged);
+    }
+
+    [Fact]
+    public void CreateWhenTranslationDisplayChangesReappliesLyricsWindowWithoutRebuildingService()
+    {
+        var current = new AppSettings
+        {
+            ShowLyricTranslation = false
+        };
+        var next = current.Clone();
+        next.ShowLyricTranslation = true;
+
+        var changes = AppSettingsChangeSet.Create(current, next);
+
+        Assert.True(changes.TranslationDisplayChanged);
+        Assert.True(changes.RequiresLyricsWindowApply);
+        Assert.False(changes.LyricSyncServiceChanged);
+    }
+
+    [Fact]
     public void CreateWhenHotkeyChangesDoesNotApplyLyricsWindow()
     {
         var current = new AppSettings();

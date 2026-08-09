@@ -38,7 +38,6 @@ internal sealed class AppCompositionRoot : IAppCompositionRoot
         var coordinator = CreateLyricResolutionCoordinator(settings);
         return new LyricSyncService(
             coordinator,
-            _ => settings.ShowLyricTranslation,
             sourceApp => TimeSpan.FromMilliseconds(settings.GetPlayerLyricOffsetMilliseconds(sourceApp)),
             (track, lyricSource) => TimeSpan.FromMilliseconds(
                 trackLyricOffsetStore.GetOffsetMilliseconds(track, lyricSource)));

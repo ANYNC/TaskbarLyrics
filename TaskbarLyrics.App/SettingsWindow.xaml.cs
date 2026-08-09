@@ -717,6 +717,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             StartWithWindows = _settings.StartWithWindows,
             AutoCheckUpdates = _settings.AutoCheckUpdates,
             ShowLyricTranslation = _settings.ShowLyricTranslation,
+            EnableWordScanning = _settings.EnableWordScanning,
             ToolWindowTheme = _settings.ToolWindowTheme,
             SpectrumDisplayMode = _settings.SpectrumDisplayMode.ToString(),
             FontSize = _settings.FontSize,
@@ -881,6 +882,9 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 break;
             case "showLyricTranslation":
                 _settings.ShowLyricTranslation = ReadBool(element, _settings.ShowLyricTranslation);
+                break;
+            case "enableWordScanning":
+                _settings.EnableWordScanning = ReadBool(element, _settings.EnableWordScanning);
                 break;
             case "toolWindowTheme":
                 if (Enum.TryParse<ToolWindowTheme>(ReadString(element, _settings.ToolWindowTheme.ToString()), true, out var toolWindowTheme))
@@ -1342,6 +1346,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         target.LastUpdateCheckUtc = source.LastUpdateCheckUtc;
         target.LastNotifiedUpdateVersion = source.LastNotifiedUpdateVersion;
         target.ShowLyricTranslation = source.ShowLyricTranslation;
+        target.EnableWordScanning = source.EnableWordScanning;
         target.ToolWindowTheme = source.ToolWindowTheme;
         target.SpectrumDisplayMode = source.SpectrumDisplayMode;
         target.UseSafeFontSizeRange = source.UseSafeFontSizeRange;
@@ -1466,6 +1471,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         public bool StartWithWindows { get; set; }
         public bool AutoCheckUpdates { get; set; }
         public bool ShowLyricTranslation { get; set; }
+        public bool EnableWordScanning { get; set; }
         public ToolWindowTheme ToolWindowTheme { get; set; }
         public string SpectrumDisplayMode { get; set; } = TaskbarLyrics.App.SpectrumDisplayMode.Disabled.ToString();
         public double FontSize { get; set; }

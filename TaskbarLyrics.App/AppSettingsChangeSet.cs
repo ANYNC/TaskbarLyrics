@@ -5,6 +5,8 @@ internal readonly record struct AppSettingsChangeSet(
     bool PlayerRecognitionChanged,
     bool LocalMediaLibraryChanged,
     bool LyricSyncServiceChanged,
+    bool WordScanningChanged,
+    bool TranslationDisplayChanged,
     bool SpectrumDisplayChanged,
     bool VisualStyleChanged,
     bool LyricsLayoutChanged,
@@ -16,6 +18,8 @@ internal readonly record struct AppSettingsChangeSet(
         PlayerRecognitionChanged ||
         LocalMediaLibraryChanged ||
         LyricSyncServiceChanged ||
+        WordScanningChanged ||
+        TranslationDisplayChanged ||
         SpectrumDisplayChanged ||
         VisualStyleChanged ||
         LyricsLayoutChanged ||
@@ -42,8 +46,13 @@ internal readonly record struct AppSettingsChangeSet(
 
         var lyricSyncServiceChanged = isInitialApplication ||
             localMediaLibraryChanged ||
-            current.ShowLyricTranslation != next.ShowLyricTranslation ||
             !AreSamePlayerSourceSettings(current.PlayerSources, next.PlayerSources);
+
+        var wordScanningChanged = isInitialApplication ||
+            current.EnableWordScanning != next.EnableWordScanning;
+
+        var translationDisplayChanged = isInitialApplication ||
+            current.ShowLyricTranslation != next.ShowLyricTranslation;
 
         var spectrumDisplayChanged = isInitialApplication ||
             current.SpectrumDisplayMode != next.SpectrumDisplayMode;
@@ -87,6 +96,8 @@ internal readonly record struct AppSettingsChangeSet(
             playerRecognitionChanged,
             localMediaLibraryChanged,
             lyricSyncServiceChanged,
+            wordScanningChanged,
+            translationDisplayChanged,
             spectrumDisplayChanged,
             visualStyleChanged,
             lyricsLayoutChanged,

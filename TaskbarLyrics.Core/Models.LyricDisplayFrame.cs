@@ -6,4 +6,8 @@ public sealed record LyricDisplayFrame(
     string Title,
     double LineProgress = 0.0,
     int CurrentLineIndex = -1,
-    bool IsPureMusic = false);
+    bool IsPureMusic = false,
+    double? WordScanProgress = null,
+    string? CurrentTranslation = null,
+    string? NextTranslation = null,
+    bool HasTrackTranslation = false);

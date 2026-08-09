@@ -32,10 +32,16 @@ public partial class MainWindow : Window, IDisposable
     private readonly TaskbarPlacementService _taskbarPlacementService = new();
     private LocalMediaCoverProvider? _localMediaCoverProvider;
     private Media.Color _primaryTextColor = Media.Colors.White;
-    private Media.Color _secondaryTextColor = Media.Color.FromArgb(190, 255, 255, 255);
+    private Media.Color _secondaryTextColor = ForegroundColorPolicy.CreateSecondaryColor(Media.Colors.White);
+    private Media.Color _translationTextColor = ForegroundColorPolicy.CreateTranslationColor(Media.Colors.White);
     private LyricSyncService _lyricSyncService;
     private string _currentLine = "TaskbarLyrics 已启动";
     private string _nextLine = "等待歌词...";
+    private string _currentTranslation = string.Empty;
+    private string _nextTranslation = string.Empty;
+    private bool _hasTrackTranslation;
+    private double _lastLineProgress;
+    private double? _lastWordScanProgress;
     private string? _lastCoverTrackId;
     private string? _currentCoverVisualTrackId;
     private string? _currentCoverDataUri;
@@ -179,7 +185,7 @@ public partial class MainWindow : Window, IDisposable
             PushStyleToWebView(snapshot);
         }
 
-        PushLyricsToWebView(_currentLine, _nextLine, 0, _lastWebCurrentLineIndex, _lastWebTrackId, false, false);
+        PushCurrentLyricsToWebView();
     }
 
     private void ReconfigureLocalMedia(AppSettings settings)
@@ -205,11 +211,8 @@ public partial class MainWindow : Window, IDisposable
             _primaryTextColor = Media.Colors.White;
         }
 
-        _secondaryTextColor = Media.Color.FromArgb(
-            (byte)Math.Clamp((int)(_primaryTextColor.A * 0.76), 0, 255),
-            _primaryTextColor.R,
-            _primaryTextColor.G,
-            _primaryTextColor.B);
+        _secondaryTextColor = ForegroundColorPolicy.CreateSecondaryColor(_primaryTextColor);
+        _translationTextColor = ForegroundColorPolicy.CreateTranslationColor(_primaryTextColor);
         // Keep the WPF host transparent; the WebView draws the optional surface.
         RootBorder.Background = Media.Brushes.Transparent;
         RootBorder.BorderBrush = Media.Brushes.Transparent;
@@ -260,7 +263,7 @@ public partial class MainWindow : Window, IDisposable
         await EnsureLyricsWebViewReadyAsync();
         _audioSpectrumService.Start();
         ApplySpectrumTuning(_spectrumTuningSettings);
-        PushLyricsToWebView(_currentLine, _nextLine, 0, _lastWebCurrentLineIndex, _lastWebTrackId, false, false);
+        PushCurrentLyricsToWebView();
         _timer.Start();
         _spectrumTimer.Start();
     }
@@ -447,19 +450,34 @@ public partial class MainWindow : Window, IDisposable
                 ? string.Empty
                 : LyricSyncService.BuildStableTrackIdentity(snapshot.Track);
 
-            UpdateLyricLines(current, next, frame.LineProgress);
             _isCurrentFramePureMusic = ShouldShowSpectrum(frame);
             _isCurrentPlaybackPlaying = snapshot.IsPlaying;
-            PushLyricsToWebView(current, next, frame.LineProgress, frame.CurrentLineIndex, _lastWebTrackId, _isCurrentFramePureMusic, snapshot.IsPlaying);
+            var wordScanProgress = _currentSettings.EnableWordScanning
+                ? frame.WordScanProgress
+                : null;
+            UpdateLyricLines(
+                current,
+                next,
+                frame.CurrentTranslation,
+                frame.NextTranslation,
+                frame.HasTrackTranslation,
+                frame.LineProgress,
+                wordScanProgress);
+            PushCurrentLyricsToWebView();
         }
         catch (Exception ex)
         {
             Log.Error($"Lyrics timer tick failed: {ex}");
             _currentLine = $"歌词服务异常: {ex.Message}";
             _nextLine = string.Empty;
+            _currentTranslation = string.Empty;
+            _nextTranslation = string.Empty;
+            _hasTrackTranslation = false;
+            _lastLineProgress = 0;
+            _lastWordScanProgress = null;
             _isCurrentFramePureMusic = false;
             _isCurrentPlaybackPlaying = false;
-            PushLyricsToWebView(_currentLine, _nextLine, 0, _lastWebCurrentLineIndex, _lastWebTrackId, false, false);
+            PushCurrentLyricsToWebView();
             Debug.WriteLine(ex);
         }
         finally
@@ -631,10 +649,22 @@ public partial class MainWindow : Window, IDisposable
             $"Title='{snapshot.Track.Title}', Artist='{snapshot.Track.Artist}', App='{snapshot.Track.SourceApp}', Playing={snapshot.IsPlaying}, Pos={snapshot.Position}, CoverLen={snapshot.CoverImageBytes?.Length ?? 0}, LyricSource='{lyricSource}'");
     }
 
-    private void UpdateLyricLines(string current, string next, double lineProgress)
+    private void UpdateLyricLines(
+        string current,
+        string next,
+        string? currentTranslation,
+        string? nextTranslation,
+        bool hasTrackTranslation,
+        double lineProgress,
+        double? wordScanProgress)
     {
         _currentLine = current;
         _nextLine = next;
+        _currentTranslation = currentTranslation ?? string.Empty;
+        _nextTranslation = nextTranslation ?? string.Empty;
+        _hasTrackTranslation = hasTrackTranslation;
+        _lastLineProgress = lineProgress;
+        _lastWordScanProgress = wordScanProgress;
     }
 
     private void UpdateCover(PlaybackSnapshot snapshot)
@@ -816,7 +846,7 @@ public partial class MainWindow : Window, IDisposable
         }
     }
 
-    private void PushLyricsToWebView(string current, string next, double lineProgress, int currentLineIndex, string? trackId, bool isPureMusic, bool isPlaying)
+    private void PushCurrentLyricsToWebView()
     {
         if (!_isWebViewReady || !_isWebDocumentReady || _isShowingWebErrorPage)
         {
@@ -824,13 +854,17 @@ public partial class MainWindow : Window, IDisposable
         }
 
         var script = LyricsWebViewScriptFactory.SetLyrics(
-            current,
-            next,
-            lineProgress,
-            currentLineIndex,
-            trackId,
-            isPureMusic,
-            isPlaying);
+            _currentLine,
+            _nextLine,
+            _lastLineProgress,
+            _lastWebCurrentLineIndex,
+            _lastWebTrackId,
+            _isCurrentFramePureMusic,
+            _isCurrentPlaybackPlaying,
+            _lastWordScanProgress,
+            _currentTranslation,
+            _nextTranslation,
+            _currentSettings.ShowLyricTranslation && _hasTrackTranslation);
         TaskObserver.Observe(ExecuteWebScriptAsync(script), "lyrics web view update");
     }
 
@@ -986,7 +1020,7 @@ public partial class MainWindow : Window, IDisposable
             PushStyleToWebView(_currentSettings);
         }
 
-        PushLyricsToWebView(_currentLine, _nextLine, 0, _lastWebCurrentLineIndex, _lastWebTrackId, false, false);
+        PushCurrentLyricsToWebView();
         PushCoverToWebView();
         PushSpectrumTuningToWebView(_spectrumTuningSettings);
     }
@@ -1174,6 +1208,7 @@ public partial class MainWindow : Window, IDisposable
             fontWeight = settings.FontWeight,
             primaryColor = ToCssColor(_primaryTextColor),
             secondaryColor = ToCssColor(_secondaryTextColor),
+            translationColor = ToCssColor(_translationTextColor),
             surfaceColor = settings.ShowBackground
                 ? $"rgba(18, 18, 24, {Math.Clamp(settings.BackgroundOpacity, 0, 1).ToString("0.####", CultureInfo.InvariantCulture)})"
                 : "transparent",

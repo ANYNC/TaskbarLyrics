@@ -71,6 +71,37 @@ describe("settings WebView bridge", () => {
     expect(dom.window.document.querySelector('[data-nav="sources"]').getAttribute("aria-current")).toBeNull();
   });
 
+  it("echoes the word-scanning setting and posts V1 updates", async () => {
+    const { dom, sent, script } = await createSettingsDom();
+    const document = dom.window.document;
+    dom.window.eval(script);
+
+    dom.window.settingsApp.receive({
+      version: 1,
+      type: "settingsState",
+      payload: { settings: { enableWordScanning: true }, fonts: [] }
+    });
+
+    const toggle = document.querySelector('input[data-setting="enableWordScanning"]');
+    expect(toggle).not.toBeNull();
+    expect(toggle.checked).toBe(true);
+
+    toggle.checked = false;
+    toggle.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+    expect(sent.at(-1)).toEqual({
+      version: 1,
+      type: "update",
+      payload: { key: "enableWordScanning", value: false }
+    });
+
+    dom.window.settingsApp.receive({
+      version: 1,
+      type: "settingsState",
+      payload: { settings: { enableWordScanning: true }, fonts: [] }
+    });
+    expect(toggle.checked).toBe(true);
+  });
+
   it("runs one lyric diagnostics request and exposes the running track", async () => {
     const { dom, sent, script } = await createSettingsDom();
     const document = dom.window.document;

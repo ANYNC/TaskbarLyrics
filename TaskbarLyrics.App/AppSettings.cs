@@ -98,6 +98,8 @@ public sealed class AppSettings
 
     public bool ShowLyricTranslation { get; set; }
 
+    public bool EnableWordScanning { get; set; } = true;
+
     public ToolWindowTheme ToolWindowTheme { get; set; } = ToolWindowTheme.System;
 
     public SpectrumDisplayMode SpectrumDisplayMode { get; set; } = SpectrumDisplayMode.PureMusicOrNoLyrics;
@@ -244,10 +246,10 @@ public sealed class AppSettings
     {
         return NormalizePlayerSourceName(sourceApp) switch
         {
-            "QQMusic" => 350,
+            "QQMusic" => 0,
             "Netease" => 0,
-            "Kugou" => 100,
-            "Spotify" => 300,
+            "Kugou" => 0,
+            "Spotify" => 0,
             _ => 0
         };
     }

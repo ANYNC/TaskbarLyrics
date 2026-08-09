@@ -22,7 +22,7 @@ foreach ($page in $pages) {
 }
 
 $settings = @(
-    'enableLocalLyrics', 'localMusicFolders', 'enableGlobalMediaHotkeys', 'showLyricsOnStartup', 'showLyricTranslation',
+    'enableLocalLyrics', 'localMusicFolders', 'enableGlobalMediaHotkeys', 'showLyricsOnStartup', 'showLyricTranslation', 'enableWordScanning',
     'spectrumDisplayMode', 'lyricsLayoutScalePercent', 'fontSize', 'showCover',
     'coverSize', 'coverGap', 'coverCornerRadius', 'fontFamily',
     'fontWeight', 'foregroundColorMode', 'showTextShadow', 'toolWindowTheme', 'showBackground',

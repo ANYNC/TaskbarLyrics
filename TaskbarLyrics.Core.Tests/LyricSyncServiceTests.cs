@@ -17,7 +17,6 @@ public sealed class LyricSyncServiceTests
             new ParsedLyricLine(TimeSpan.FromSeconds(20), null, "Outro")));
         using var service = new LyricSyncService(
             coordinator,
-            shouldShowTranslation: _ => true,
             getPlayerLeadTime: _ => TimeSpan.FromMilliseconds(500),
             getTrackLeadTime: (_, _) => TimeSpan.FromMilliseconds(500),
             metadataStabilizationDelay: TimeSpan.Zero);
@@ -28,8 +27,11 @@ public sealed class LyricSyncServiceTests
 
         var frame = await service.GetDisplayFrameAsync(snapshot);
 
-        Assert.Equal("Verse (主歌)", frame.CurrentLine);
+        Assert.Equal("Verse", frame.CurrentLine);
+        Assert.Equal("主歌", frame.CurrentTranslation);
         Assert.Equal("Outro", frame.NextLine);
+        Assert.Null(frame.NextTranslation);
+        Assert.True(frame.HasTrackTranslation);
         Assert.Equal(1, frame.CurrentLineIndex);
         Assert.Equal(0, frame.LineProgress);
         Assert.Equal(1, coordinator.ResolveCallCount);
@@ -59,6 +61,130 @@ public sealed class LyricSyncServiceTests
         Assert.NotEqual("Lyrics provided by Example", frame.CurrentLine);
         Assert.NotEqual("Lyrics provided by Example", frame.NextLine);
         Assert.Equal(1, coordinator.ResolveCallCount);
+    }
+
+    [Fact]
+    public async Task GetDisplayFrameAsyncCalculatesContinuousWordScanProgressAndRecalculatesAfterSeek()
+    {
+        var coordinator = new ImmediateCoordinator(CreateResolved(
+            "word-scan",
+            new ParsedLyricLine(
+                TimeSpan.Zero,
+                TimeSpan.FromSeconds(3),
+                "Hi there",
+                segments:
+                [
+                    new ParsedLyricSegment(TimeSpan.Zero, TimeSpan.FromSeconds(1), "Hi"),
+                    new ParsedLyricSegment(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(3), "there")
+                ])));
+        using var service = new LyricSyncService(
+            coordinator,
+            metadataStabilizationDelay: TimeSpan.Zero);
+        var track = CreateTrack();
+
+        await service.GetDisplayFrameAsync(new PlaybackSnapshot(true, TimeSpan.Zero, track));
+        await coordinator.SearchStarted.Task.WaitAsync(TimeSpan.FromSeconds(1));
+        await Task.Delay(20);
+
+        var firstSegmentHalf = await service.GetDisplayFrameAsync(
+            new PlaybackSnapshot(true, TimeSpan.FromMilliseconds(500), track));
+        var secondSegmentHalf = await service.GetDisplayFrameAsync(
+            new PlaybackSnapshot(true, TimeSpan.FromSeconds(2), track));
+        var seekBack = await service.GetDisplayFrameAsync(
+            new PlaybackSnapshot(false, TimeSpan.FromMilliseconds(250), track));
+        var completed = await service.GetDisplayFrameAsync(
+            new PlaybackSnapshot(true, TimeSpan.FromSeconds(3), track));
+
+        Assert.Equal(1d / 8d, firstSegmentHalf.WordScanProgress!.Value, precision: 6);
+        Assert.Equal(5.5d / 8d, secondSegmentHalf.WordScanProgress!.Value, precision: 6);
+        Assert.Equal(0.5d / 8d, seekBack.WordScanProgress!.Value, precision: 6);
+        Assert.Equal(1d, completed.WordScanProgress!.Value);
+    }
+
+    [Fact]
+    public async Task GetDisplayFrameAsyncLimitsWordScanProgressToOriginalTextWhenTranslationIsShown()
+    {
+        var coordinator = new ImmediateCoordinator(CreateResolved(
+            "word-scan-translation",
+            new ParsedLyricLine(
+                TimeSpan.Zero,
+                TimeSpan.FromSeconds(1),
+                "Hi",
+                translation: "TR",
+                segments: [new ParsedLyricSegment(TimeSpan.Zero, TimeSpan.FromSeconds(1), "Hi")])));
+        using var service = new LyricSyncService(
+            coordinator,
+            metadataStabilizationDelay: TimeSpan.Zero);
+        var track = CreateTrack();
+
+        await service.GetDisplayFrameAsync(new PlaybackSnapshot(true, TimeSpan.Zero, track));
+        await coordinator.SearchStarted.Task.WaitAsync(TimeSpan.FromSeconds(1));
+        await Task.Delay(20);
+
+        var half = await service.GetDisplayFrameAsync(
+            new PlaybackSnapshot(true, TimeSpan.FromMilliseconds(500), track));
+        var completed = await service.GetDisplayFrameAsync(
+            new PlaybackSnapshot(true, TimeSpan.FromSeconds(1), track));
+
+        Assert.Equal("Hi", half.CurrentLine);
+        Assert.Equal("TR", half.CurrentTranslation);
+        Assert.Equal(1d / 2d, half.WordScanProgress!.Value, precision: 6);
+        Assert.True(half.HasTrackTranslation);
+        Assert.Equal("TR", completed.CurrentTranslation);
+        Assert.Equal(1d, completed.WordScanProgress!.Value);
+    }
+
+    [Fact]
+    public async Task GetDisplayFrameAsyncReturnsStructuredTranslationsAndStableTrackMarker()
+    {
+        var coordinator = new ImmediateCoordinator(CreateResolved(
+            "translation-structure",
+            new ParsedLyricLine(TimeSpan.Zero, null, "One", translation: "一"),
+            new ParsedLyricLine(TimeSpan.FromSeconds(10), null, "Two"),
+            new ParsedLyricLine(TimeSpan.FromSeconds(20), null, "Three", translation: "三")));
+        using var service = new LyricSyncService(
+            coordinator,
+            metadataStabilizationDelay: TimeSpan.Zero);
+        var track = CreateTrack();
+
+        await service.GetDisplayFrameAsync(new PlaybackSnapshot(true, TimeSpan.Zero, track));
+        await coordinator.SearchStarted.Task.WaitAsync(TimeSpan.FromSeconds(1));
+        await Task.Delay(20);
+
+        var first = await service.GetDisplayFrameAsync(new PlaybackSnapshot(true, TimeSpan.Zero, track));
+        var middle = await service.GetDisplayFrameAsync(new PlaybackSnapshot(true, TimeSpan.FromSeconds(10), track));
+        var last = await service.GetDisplayFrameAsync(new PlaybackSnapshot(true, TimeSpan.FromSeconds(20), track));
+
+        Assert.Equal("一", first.CurrentTranslation);
+        Assert.Null(first.NextTranslation);
+        Assert.True(first.HasTrackTranslation);
+        Assert.Null(middle.CurrentTranslation);
+        Assert.Equal("三", middle.NextTranslation);
+        Assert.True(middle.HasTrackTranslation);
+        Assert.Equal("三", last.CurrentTranslation);
+        Assert.Null(last.NextTranslation);
+        Assert.True(last.HasTrackTranslation);
+    }
+
+    [Fact]
+    public async Task GetDisplayFrameAsyncLeavesWordScanProgressNullWithoutSyllableData()
+    {
+        var coordinator = new ImmediateCoordinator(CreateResolved(
+            "word-scan-empty",
+            new ParsedLyricLine(TimeSpan.Zero, TimeSpan.FromSeconds(1), "Line without segments")));
+        using var service = new LyricSyncService(
+            coordinator,
+            metadataStabilizationDelay: TimeSpan.Zero);
+        var track = CreateTrack();
+
+        await service.GetDisplayFrameAsync(new PlaybackSnapshot(true, TimeSpan.Zero, track));
+        await coordinator.SearchStarted.Task.WaitAsync(TimeSpan.FromSeconds(1));
+        await Task.Delay(20);
+
+        var frame = await service.GetDisplayFrameAsync(
+            new PlaybackSnapshot(true, TimeSpan.FromMilliseconds(500), track));
+
+        Assert.Null(frame.WordScanProgress);
     }
 
     [Fact]

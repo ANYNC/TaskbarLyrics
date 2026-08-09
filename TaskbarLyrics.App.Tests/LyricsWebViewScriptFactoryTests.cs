@@ -24,6 +24,61 @@ public sealed class LyricsWebViewScriptFactoryTests
     }
 
     [Fact]
+    public void SetLyricsClampsWordScanProgressAndEmitsNullWhenUnavailable()
+    {
+        var clampedHigh = LyricsWebViewScriptFactory.SetLyrics(
+            "current",
+            "next",
+            0,
+            0,
+            "track",
+            isPureMusic: false,
+            isPlaying: true,
+            wordScanProgress: 1.5);
+        var clampedLow = LyricsWebViewScriptFactory.SetLyrics(
+            "current",
+            "next",
+            0,
+            0,
+            "track",
+            isPureMusic: false,
+            isPlaying: true,
+            wordScanProgress: -0.5);
+        var unavailable = LyricsWebViewScriptFactory.SetLyrics(
+            "current",
+            "next",
+            0,
+            0,
+            "track",
+            isPureMusic: false,
+            isPlaying: true);
+
+        Assert.Contains("\"wordScanProgress\":1", clampedHigh);
+        Assert.Contains("\"wordScanProgress\":0", clampedLow);
+        Assert.Contains("\"wordScanProgress\":null", unavailable);
+    }
+
+    [Fact]
+    public void SetLyricsEmitsStructuredTranslationPayloadFields()
+    {
+        var script = LyricsWebViewScriptFactory.SetLyrics(
+            "current",
+            "next",
+            0.5,
+            2,
+            "track",
+            isPureMusic: false,
+            isPlaying: true,
+            currentTranslation: "translated current",
+            nextTranslation: "translated next",
+            translationMode: true);
+
+        Assert.Contains("\"currentTranslation\":\"translated current\"", script);
+        Assert.Contains("\"nextTranslation\":\"translated next\"", script);
+        Assert.Contains("\"translationMode\":true", script);
+    }
+
+    [Fact]
     public void SetSpectrumClampsEveryBar()
     {
         var script = LyricsWebViewScriptFactory.SetSpectrum([-1, 0.5f, 2]);

@@ -9,7 +9,11 @@ internal static class LyricsWebViewScriptFactory
         int currentLineIndex,
         string? trackId,
         bool isPureMusic,
-        bool isPlaying)
+        bool isPlaying,
+        double? wordScanProgress = null,
+        string? currentTranslation = null,
+        string? nextTranslation = null,
+        bool translationMode = false)
     {
         return WebViewMessageScriptFactory.Dispatch("taskbarLyrics", "lyrics", new
         {
@@ -19,7 +23,13 @@ internal static class LyricsWebViewScriptFactory
             currentLineIndex,
             trackId = trackId ?? string.Empty,
             isPureMusic,
-            isPlaying
+            isPlaying,
+            currentTranslation = currentTranslation ?? string.Empty,
+            nextTranslation = nextTranslation ?? string.Empty,
+            translationMode,
+            wordScanProgress = wordScanProgress.HasValue
+                ? Math.Clamp(wordScanProgress.Value, 0, 1)
+                : (double?)null
         });
     }
 

@@ -1,9 +1,48 @@
+using System.Windows.Media;
 using Xunit;
 
 namespace TaskbarLyrics.App.Tests;
 
 public sealed class ForegroundColorPolicyTests
 {
+    [Theory]
+    [InlineData(255, 153)]
+    [InlineData(128, 76)]
+    public void CreateSecondaryColorPreservesPrimaryRgbAndScalesAlphaByByteTruncated60Percent(
+        int primaryAlpha,
+        int expectedSecondaryAlpha)
+    {
+        var primary = Color.FromArgb((byte)primaryAlpha, 12, 34, 56);
+
+        var secondary = ForegroundColorPolicy.CreateSecondaryColor(primary);
+
+        Assert.Equal((byte)12, primary.R);
+        Assert.Equal((byte)34, primary.G);
+        Assert.Equal((byte)56, primary.B);
+        Assert.Equal((byte)primaryAlpha, primary.A);
+        Assert.Equal(primary.R, secondary.R);
+        Assert.Equal(primary.G, secondary.G);
+        Assert.Equal(primary.B, secondary.B);
+        Assert.Equal((byte)expectedSecondaryAlpha, secondary.A);
+    }
+
+    [Theory]
+    [InlineData(255, 178)]
+    [InlineData(128, 89)]
+    public void CreateTranslationColorPreservesPrimaryRgbAndScalesAlphaByByteTruncated70Percent(
+        int primaryAlpha,
+        int expectedTranslationAlpha)
+    {
+        var primary = Color.FromArgb((byte)primaryAlpha, 12, 34, 56);
+
+        var translation = ForegroundColorPolicy.CreateTranslationColor(primary);
+
+        Assert.Equal(primary.R, translation.R);
+        Assert.Equal(primary.G, translation.G);
+        Assert.Equal(primary.B, translation.B);
+        Assert.Equal((byte)expectedTranslationAlpha, translation.A);
+    }
+
     [Theory]
     [InlineData(ForegroundColorMode.Dark, AppSettings.DarkForegroundColor)]
     [InlineData(ForegroundColorMode.Light, AppSettings.LightForegroundColor)]

@@ -2,6 +2,9 @@ namespace TaskbarLyrics.App;
 
 internal static class ForegroundColorPolicy
 {
+    private const double SecondaryTextOpacityRatio = 0.60;
+    private const double TranslationTextOpacityRatio = 0.70;
+
     public static bool ApplyStartup(AppSettings settings, bool systemUsesLightTheme)
     {
         ArgumentNullException.ThrowIfNull(settings);
@@ -49,6 +52,27 @@ internal static class ForegroundColorPolicy
 
         settings.ForegroundColor = nextColor;
         return true;
+    }
+
+    public static System.Windows.Media.Color CreateSecondaryColor(System.Windows.Media.Color primaryColor)
+    {
+        return CreateAlphaScaledColor(primaryColor, SecondaryTextOpacityRatio);
+    }
+
+    public static System.Windows.Media.Color CreateTranslationColor(System.Windows.Media.Color primaryColor)
+    {
+        return CreateAlphaScaledColor(primaryColor, TranslationTextOpacityRatio);
+    }
+
+    private static System.Windows.Media.Color CreateAlphaScaledColor(
+        System.Windows.Media.Color primaryColor,
+        double opacityRatio)
+    {
+        return System.Windows.Media.Color.FromArgb(
+            (byte)Math.Clamp((int)(primaryColor.A * opacityRatio), 0, 255),
+            primaryColor.R,
+            primaryColor.G,
+            primaryColor.B);
     }
 
     private static bool IsLegacyCustomForeground(string? color)
