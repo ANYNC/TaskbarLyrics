@@ -33,6 +33,8 @@ public partial class TrayMenuWindow : Window
     private static readonly IntPtr TopMostWindow = new(-1);
 
     private readonly Action _toggleLyricsWindow;
+    private readonly Action _toggleTranslation;
+    private readonly Action _toggleWordScanning;
     private readonly Action<SpectrumDisplayMode> _setSpectrumDisplayMode;
     private readonly SpectrumDisplayMode _spectrumDisplayMode;
     private readonly Action _openCurrentTrackOffsetSettings;
@@ -49,6 +51,10 @@ public partial class TrayMenuWindow : Window
     public TrayMenuWindow(
         Action toggleLyricsWindow,
         string toggleLyricsHotkey,
+        Action toggleTranslation,
+        string toggleTranslationHotkey,
+        Action toggleWordScanning,
+        string toggleWordScanningHotkey,
         Action<SpectrumDisplayMode> setSpectrumDisplayMode,
         SpectrumDisplayMode spectrumDisplayMode,
         Action openCurrentTrackOffsetSettings,
@@ -63,6 +69,16 @@ public partial class TrayMenuWindow : Window
         _toggleLyricsWindow = toggleLyricsWindow;
         ToggleLyricsHotkeyText.Text = toggleLyricsHotkey;
         ToggleLyricsHotkeyText.Visibility = string.IsNullOrWhiteSpace(toggleLyricsHotkey)
+            ? Visibility.Collapsed
+            : Visibility.Visible;
+        _toggleTranslation = toggleTranslation;
+        ToggleTranslationHotkeyText.Text = toggleTranslationHotkey;
+        ToggleTranslationHotkeyText.Visibility = string.IsNullOrWhiteSpace(toggleTranslationHotkey)
+            ? Visibility.Collapsed
+            : Visibility.Visible;
+        _toggleWordScanning = toggleWordScanning;
+        ToggleWordScanningHotkeyText.Text = toggleWordScanningHotkey;
+        ToggleWordScanningHotkeyText.Visibility = string.IsNullOrWhiteSpace(toggleWordScanningHotkey)
             ? Visibility.Collapsed
             : Visibility.Visible;
         _setSpectrumDisplayMode = setSpectrumDisplayMode;
@@ -334,6 +350,16 @@ public partial class TrayMenuWindow : Window
     private void ToggleLyricsButton_Click(object sender, RoutedEventArgs e)
     {
         InvokeCommand(_toggleLyricsWindow);
+    }
+
+    private void ToggleTranslationButton_Click(object sender, RoutedEventArgs e)
+    {
+        InvokeCommand(_toggleTranslation);
+    }
+
+    private void ToggleWordScanningButton_Click(object sender, RoutedEventArgs e)
+    {
+        InvokeCommand(_toggleWordScanning);
     }
 
     private void SpectrumMenuButton_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e)

@@ -13,6 +13,10 @@ public sealed class TrayService : IDisposable
     public TrayService(
         Action toggleLyricsWindow,
         Func<string> getToggleLyricsHotkey,
+        Action toggleTranslation,
+        Func<string> getToggleTranslationHotkey,
+        Action toggleWordScanning,
+        Func<string> getToggleWordScanningHotkey,
         Action<SpectrumDisplayMode> setSpectrumDisplayMode,
         Func<SpectrumDisplayMode> getSpectrumDisplayMode,
         Action openCurrentTrackOffsetSettings,
@@ -39,6 +43,10 @@ public sealed class TrayService : IDisposable
                     ShowMenu(
                         toggleLyricsWindow,
                         getToggleLyricsHotkey(),
+                        toggleTranslation,
+                        getToggleTranslationHotkey(),
+                        toggleWordScanning,
+                        getToggleWordScanningHotkey(),
                         setSpectrumDisplayMode,
                         getSpectrumDisplayMode(),
                         openCurrentTrackOffsetSettings,
@@ -75,6 +83,10 @@ public sealed class TrayService : IDisposable
     private void ShowMenu(
         Action toggleLyricsWindow,
         string toggleLyricsHotkey,
+        Action toggleTranslation,
+        string toggleTranslationHotkey,
+        Action toggleWordScanning,
+        string toggleWordScanningHotkey,
         Action<SpectrumDisplayMode> setSpectrumDisplayMode,
         SpectrumDisplayMode spectrumDisplayMode,
         Action openCurrentTrackOffsetSettings,
@@ -88,6 +100,10 @@ public sealed class TrayService : IDisposable
         _menuWindow = new TrayMenuWindow(
             toggleLyricsWindow,
             toggleLyricsHotkey,
+            toggleTranslation,
+            toggleTranslationHotkey,
+            toggleWordScanning,
+            toggleWordScanningHotkey,
             setSpectrumDisplayMode,
             spectrumDisplayMode,
             openCurrentTrackOffsetSettings,

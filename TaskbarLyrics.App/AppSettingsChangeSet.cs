@@ -167,6 +167,8 @@ internal readonly record struct AppSettingsChangeSet(
             string.Equals(currentSettings.NextTrack, nextSettings.NextTrack, StringComparison.Ordinal) &&
             string.Equals(currentSettings.SeekBackward, nextSettings.SeekBackward, StringComparison.Ordinal) &&
             string.Equals(currentSettings.SeekForward, nextSettings.SeekForward, StringComparison.Ordinal) &&
-            string.Equals(currentSettings.ToggleLyricsVisibility, nextSettings.ToggleLyricsVisibility, StringComparison.Ordinal);
+            string.Equals(currentSettings.ToggleLyricsVisibility, nextSettings.ToggleLyricsVisibility, StringComparison.Ordinal) &&
+            string.Equals(currentSettings.ToggleTranslation, nextSettings.ToggleTranslation, StringComparison.Ordinal) &&
+            string.Equals(currentSettings.ToggleWordScanning, nextSettings.ToggleWordScanning, StringComparison.Ordinal);
     }
 }

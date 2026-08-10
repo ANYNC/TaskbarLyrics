@@ -82,6 +82,14 @@ public partial class App : System.Windows.Application, IDisposable
             () => Settings.GlobalMediaHotkeys is { Enabled: true } hotkeys
                 ? hotkeys.ToggleLyricsVisibility
                 : string.Empty,
+            () => ToggleMediaHotkeyAction(MediaHotkeyAction.ToggleTranslation),
+            () => Settings.GlobalMediaHotkeys is { Enabled: true } hotkeys
+                ? hotkeys.ToggleTranslation
+                : string.Empty,
+            () => ToggleMediaHotkeyAction(MediaHotkeyAction.ToggleWordScanning),
+            () => Settings.GlobalMediaHotkeys is { Enabled: true } hotkeys
+                ? hotkeys.ToggleWordScanning
+                : string.Empty,
             SetSpectrumDisplayMode,
             () => Settings.SpectrumDisplayMode,
             OpenCurrentTrackOffsetSettings,
@@ -138,6 +146,12 @@ public partial class App : System.Windows.Application, IDisposable
         if (changes.RequiresLyricsWindowApply)
         {
             _lyricsWindowHost?.ApplySettings(Settings);
+            if (_settingsWindow is not null)
+            {
+                TaskObserver.Observe(
+                    _settingsWindow.ApplyExternalSettingsAsync(Settings.Clone()),
+                    "settings window state update");
+            }
         }
 
         if (changes.GlobalMediaHotkeysChanged)
@@ -164,7 +178,9 @@ public partial class App : System.Windows.Application, IDisposable
                 ["previousTrack"] = "未注册",
                 ["nextTrack"] = "未注册",
                 ["seekBackward"] = "未注册",
-                ["seekForward"] = "未注册"
+                ["seekForward"] = "未注册",
+                ["toggleTranslation"] = "未注册",
+                ["toggleWordScanning"] = "未注册"
             };
     }
 
@@ -314,6 +330,13 @@ public partial class App : System.Windows.Application, IDisposable
         _lyricsWindowHost?.OpenSmtcTimelineMonitorWindow();
     }
 
+    private void ToggleMediaHotkeyAction(MediaHotkeyAction action)
+    {
+        TaskObserver.Observe(
+            ExecuteMediaHotkeyAsync(action, CancellationToken.None),
+            $"hotkey {action}");
+    }
+
     private Task ExecuteMediaHotkeyAsync(MediaHotkeyAction action, CancellationToken cancellationToken)
     {
         if (IsExiting || cancellationToken.IsCancellationRequested)
@@ -333,6 +356,22 @@ public partial class App : System.Windows.Application, IDisposable
         if (action == MediaHotkeyAction.ToggleLyricsVisibility)
         {
             ToggleLyricsWindow();
+            return Task.CompletedTask;
+        }
+
+        if (action == MediaHotkeyAction.ToggleTranslation)
+        {
+            var toggled = Settings.Clone();
+            toggled.ShowLyricTranslation = !Settings.ShowLyricTranslation;
+            SaveSettings(toggled);
+            return Task.CompletedTask;
+        }
+
+        if (action == MediaHotkeyAction.ToggleWordScanning)
+        {
+            var toggled = Settings.Clone();
+            toggled.EnableWordScanning = !Settings.EnableWordScanning;
+            SaveSettings(toggled);
             return Task.CompletedTask;
         }
 

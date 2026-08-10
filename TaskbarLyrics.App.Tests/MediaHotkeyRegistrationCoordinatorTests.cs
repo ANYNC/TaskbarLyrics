@@ -19,7 +19,7 @@ public sealed class MediaHotkeyRegistrationCoordinatorTests
         var statuses = coordinator.GetStatusSnapshot();
         Assert.Equal(MediaHotkeyRegistrationStatus.Duplicate, statuses["previousTrack"]);
         Assert.Equal(MediaHotkeyRegistrationStatus.Duplicate, statuses["nextTrack"]);
-        Assert.Equal(4, registrar.RegistrationAttempts.Count);
+        Assert.Equal(6, registrar.RegistrationAttempts.Count);
         Assert.False(coordinator.TryGetRegisteredAction(
             MediaHotkeyRegistrationCoordinator.GetHotkeyId(MediaHotkeyAction.PreviousTrack),
             out _));
@@ -40,7 +40,7 @@ public sealed class MediaHotkeyRegistrationCoordinatorTests
         var statuses = coordinator.GetStatusSnapshot();
         Assert.Equal(MediaHotkeyRegistrationStatus.Occupied, statuses["togglePlayPause"]);
         Assert.False(coordinator.TryGetRegisteredAction(rejectedId, out _));
-        Assert.Equal(6, registrar.RegistrationAttempts.Count);
+        Assert.Equal(8, registrar.RegistrationAttempts.Count);
     }
 
     [Fact]
@@ -52,7 +52,7 @@ public sealed class MediaHotkeyRegistrationCoordinatorTests
         coordinator.Apply(new GlobalMediaHotkeySettings());
         coordinator.Apply(new GlobalMediaHotkeySettings { Enabled = false });
 
-        Assert.Equal(6, registrar.UnregisteredIds.Count);
+        Assert.Equal(8, registrar.UnregisteredIds.Count);
         Assert.All(coordinator.GetStatusSnapshot().Values, status =>
             Assert.Equal(MediaHotkeyRegistrationStatus.Disabled, status));
     }

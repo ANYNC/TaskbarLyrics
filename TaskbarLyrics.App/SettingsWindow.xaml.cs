@@ -857,6 +857,8 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             HotkeySeekBackward = mediaHotkeys.SeekBackward,
             HotkeySeekForward = mediaHotkeys.SeekForward,
             HotkeyToggleLyricsVisibility = mediaHotkeys.ToggleLyricsVisibility,
+            HotkeyToggleTranslation = mediaHotkeys.ToggleTranslation,
+            HotkeyToggleWordScanning = mediaHotkeys.ToggleWordScanning,
             MediaHotkeyStatuses = (System.Windows.Application.Current as App)?.GetMediaHotkeyStatuses()
                 .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal)
                 ?? new Dictionary<string, string>(StringComparer.Ordinal),
@@ -1625,6 +1627,8 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         public string HotkeySeekBackward { get; set; } = "";
         public string HotkeySeekForward { get; set; } = "";
         public string HotkeyToggleLyricsVisibility { get; set; } = "";
+        public string HotkeyToggleTranslation { get; set; } = "";
+        public string HotkeyToggleWordScanning { get; set; } = "";
         public Dictionary<string, string> MediaHotkeyStatuses { get; set; } = new(StringComparer.Ordinal);
         public List<WebMediaHotkeyDefinition> MediaHotkeys { get; set; } = [];
         public bool ShowLyricsOnStartup { get; set; }

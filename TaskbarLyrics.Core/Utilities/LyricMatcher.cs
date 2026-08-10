@@ -52,32 +52,9 @@ public static class LyricMatcher
         double durationSim = GetDurationSimilarity(target.Duration.TotalSeconds, resultDurationInSeconds);
         double albumSim = GetStringSimilarity(normalizedTargetAlbum, normalizedResultAlbum);
 
-        if (!IsTitleMatchAcceptable(normalizedTargetTitle, normalizedResultTitle, titleSim))
-        {
-            Log.Debug($"LyricMatcher rejected title mismatch: '{target.Title}' vs '{resultTitle}' ({titleSim:F2})");
-            return 0;
-        }
-
         bool hasTargetArtist = HasUsefulArtist(normalizedTargetArtist);
         bool hasResultArtist = HasUsefulArtist(normalizedResultArtist);
-        if (hasTargetArtist &&
-            hasResultArtist &&
-            artistSim < 0.45 &&
-            !HasArtistOverlap(normalizedTargetArtist, normalizedResultArtist))
-        {
-            Log.Debug($"LyricMatcher rejected artist mismatch: '{target.Artist}' vs '{resultArtist}' ({artistSim:F2})");
-            return 0;
-        }
-
         bool hasDuration = target.Duration.TotalSeconds > 0 && resultDurationInSeconds > 0;
-        if (!IsQqTrack(target) &&
-            hasDuration &&
-            Math.Abs(target.Duration.TotalSeconds - resultDurationInSeconds) >=
-            LyricMatchingPolicy.DurationConflictThreshold.TotalSeconds)
-        {
-            Log.Debug($"LyricMatcher rejected duration mismatch: {target.Duration.TotalSeconds:F0}s vs {resultDurationInSeconds}s");
-            return 0;
-        }
 
         double totalScore;
         if (hasTargetArtist && hasResultArtist && hasDuration)
@@ -133,17 +110,6 @@ public static class LyricMatcher
         return 1.0 - ((diff - PerfectTolerance) / (MaxTolerance - PerfectTolerance));
     }
 
-    private static bool IsTitleMatchAcceptable(string targetTitle, string resultTitle, double similarity)
-    {
-        if (string.IsNullOrWhiteSpace(targetTitle) || string.IsNullOrWhiteSpace(resultTitle)) return false;
-        if (similarity >= 0.72) return true;
-
-        return targetTitle.Length >= 3 &&
-               resultTitle.Length >= 3 &&
-               (targetTitle.Contains(resultTitle, StringComparison.Ordinal) ||
-                resultTitle.Contains(targetTitle, StringComparison.Ordinal));
-    }
-
     private static bool HasUsefulArtist(string normalizedArtist)
     {
         return !string.IsNullOrWhiteSpace(normalizedArtist) &&
@@ -160,18 +126,6 @@ public static class LyricMatcher
     {
         return string.IsNullOrWhiteSpace(title) ||
                string.Equals(title.Trim(), "Unknown Title", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static bool HasArtistOverlap(string targetArtist, string resultArtist)
-    {
-        return targetArtist.Contains(resultArtist, StringComparison.Ordinal) ||
-               resultArtist.Contains(targetArtist, StringComparison.Ordinal) ||
-               GetTokenOverlapSimilarity(targetArtist, resultArtist) > 0;
-    }
-
-    private static bool IsQqTrack(TrackInfo target)
-    {
-        return string.Equals(target.SourceApp, "QQMusic", StringComparison.OrdinalIgnoreCase);
     }
 
     private static double GetTokenOverlapSimilarity(string s1, string s2)

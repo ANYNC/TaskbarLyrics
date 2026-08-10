@@ -69,7 +69,25 @@ internal static class MediaHotkeyCatalog
             "Alt+Shift+D",
             RegistrationIdBase + (int)MediaHotkeyAction.ToggleLyricsVisibility,
             settings => settings.ToggleLyricsVisibility,
-            (settings, value) => settings.ToggleLyricsVisibility = value)
+            (settings, value) => settings.ToggleLyricsVisibility = value),
+        new(
+            MediaHotkeyAction.ToggleTranslation,
+            "hotkeyToggleTranslation",
+            "toggleTranslation",
+            "开启/关闭翻译",
+            "Alt+Shift+T",
+            RegistrationIdBase + (int)MediaHotkeyAction.ToggleTranslation,
+            settings => settings.ToggleTranslation,
+            (settings, value) => settings.ToggleTranslation = value),
+        new(
+            MediaHotkeyAction.ToggleWordScanning,
+            "hotkeyToggleWordScanning",
+            "toggleWordScanning",
+            "开启/关闭逐词扫描",
+            "Alt+Shift+S",
+            RegistrationIdBase + (int)MediaHotkeyAction.ToggleWordScanning,
+            settings => settings.ToggleWordScanning,
+            (settings, value) => settings.ToggleWordScanning = value)
     ];
 
     public static MediaHotkeyDefinition Get(MediaHotkeyAction action) =>

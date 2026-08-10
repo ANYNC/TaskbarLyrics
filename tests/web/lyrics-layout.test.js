@@ -272,7 +272,7 @@ describe("lyrics responsive layout", () => {
     const initialFontSize = nextLine.style.fontSize;
     expect(initialFontSize).toBe("13px");
     expect(Number.parseFloat(nextLine.style.getPropertyValue("--promotion-scale"))).toBeCloseTo(12 / 13, 3);
-    expect(nextLine.style.transform).toBe("scale(var(--promotion-scale))");
+    expect(nextLine.style.transform).toBe("translateY(0px) scale(var(--promotion-scale))");
     expect(track.classList.contains("animating")).toBe(false);
     const startTransitionFrame = pendingAnimationFrames.shift();
     expect(startTransitionFrame).toBeTypeOf("function");

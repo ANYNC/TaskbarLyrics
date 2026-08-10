@@ -8,7 +8,7 @@ namespace TaskbarLyrics.Core.Tests;
 public sealed class LyricResolutionCoordinatorTests
 {
     [Fact]
-    public async Task OnlineSelectionUsesFixedTrustOrderRegardlessOfCompletionOrderAndScore()
+    public async Task OnlineSelectionPrefersHighestScoreAcrossAllSources()
     {
         var track = CreateTrack("Trust Song");
         var qq = CreateValidSource(
@@ -31,12 +31,56 @@ public sealed class LyricResolutionCoordinatorTests
         var resolved = await coordinator.ResolveAsync(track);
 
         Assert.NotNull(resolved);
-        Assert.Equal(KnownLyricProviders.QQMusic, resolved!.ProviderId);
-        Assert.Equal("lyrics:QQMusic:Trust Song", resolved.Content.Lines[0].Text);
-        Assert.True(int.Parse(
-            resolved.Diagnostics["identityScore"],
-            System.Globalization.CultureInfo.InvariantCulture) < 100);
+        Assert.Equal(KnownLyricProviders.Kugou, resolved!.ProviderId);
+        Assert.Equal("lyrics:Kugou:Trust Song", resolved.Content.Lines[0].Text);
         Assert.All(new[] { qq, kugou, netease, lrclib }, source => Assert.Equal(1, source.SearchCalls));
+    }
+
+    [Fact]
+    public async Task PrimarySourceImmediateAcceptanceWhenScoreAtLeast95()
+    {
+        var track = CreateTrack("Perfect Song");
+        var qq = CreateValidSource(KnownLyricProviders.QQMusic);
+        var kugou = CreateValidSource(
+            KnownLyricProviders.Kugou,
+            searchDelay: TimeSpan.FromMilliseconds(200));
+        var netease = CreateNoLyricsSource(KnownLyricProviders.Netease);
+        var lrclib = CreateNoLyricsSource(KnownLyricProviders.LrcLib);
+
+        using var coordinator = CreateCoordinator([qq, kugou, netease, lrclib]);
+
+        var resolved = await coordinator.ResolveAsync(track);
+
+        Assert.NotNull(resolved);
+        Assert.Equal(KnownLyricProviders.QQMusic, resolved!.ProviderId);
+        var score = int.Parse(
+            resolved.Diagnostics["identityScore"],
+            System.Globalization.CultureInfo.InvariantCulture);
+        Assert.True(score >= LyricMatchingPolicy.ImmediateAcceptanceScore);
+    }
+
+    [Fact]
+    public async Task PrimarySourceBelowImmediateThresholdFallsBackToCrossSourceComparison()
+    {
+        var track = CreateTrack("Edge Song");
+        var qq = CreateValidSource(
+            KnownLyricProviders.QQMusic,
+            candidateTitle: "Edge Songs",
+            candidateDuration: track.Duration - TimeSpan.FromSeconds(8));
+        var kugou = CreateValidSource(KnownLyricProviders.Kugou);
+        var netease = CreateNoLyricsSource(KnownLyricProviders.Netease);
+        var lrclib = CreateNoLyricsSource(KnownLyricProviders.LrcLib);
+
+        using var coordinator = CreateCoordinator([qq, kugou, netease, lrclib]);
+
+        var resolved = await coordinator.ResolveAsync(track);
+
+        Assert.NotNull(resolved);
+        Assert.Equal(KnownLyricProviders.Kugou, resolved!.ProviderId);
+        var qqScore = int.Parse(
+            resolved.Diagnostics["identityScore"],
+            System.Globalization.CultureInfo.InvariantCulture);
+        Assert.True(qqScore >= LyricMatchingPolicy.MinimumAcceptedMatchScore);
     }
 
     [Fact]

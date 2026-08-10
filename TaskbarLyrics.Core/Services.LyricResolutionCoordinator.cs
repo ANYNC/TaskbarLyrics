@@ -254,26 +254,53 @@ public sealed class LyricResolutionCoordinator : ILyricResolutionCoordinator
             StringComparer.OrdinalIgnoreCase);
         TrackSourceBatch(tasks.Values);
 
-        ResolvedLyrics? selected = null;
+        var primaryProviderId = _trustPolicy.Order[0];
+
+        if (!_completeAllSourcesForTrace)
+        {
+            var primaryOutcome = await tasks[primaryProviderId.Value];
+            if (primaryOutcome.State == LyricSourceTerminalState.Succeeded &&
+                primaryOutcome.Lyrics is not null &&
+                TryGetIdentityScore(primaryOutcome.Lyrics, out var primaryScore) &&
+                primaryScore >= LyricMatchingPolicy.ImmediateAcceptanceScore)
+            {
+                batchCancellation.Cancel();
+                return primaryOutcome.Lyrics;
+            }
+        }
+
+        var outcomes = new List<(LyricProviderId ProviderId, SourceOutcome Outcome)>();
         foreach (var providerId in _trustPolicy.Order)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var outcome = await tasks[providerId.Value];
-            if (outcome.State != LyricSourceTerminalState.Succeeded || outcome.Lyrics is null)
+            var outcome = tasks[providerId.Value];
+            if (!outcome.IsCompleted)
             {
-                continue;
+                await outcome;
             }
-
-            if (!_completeAllSourcesForTrace)
+            if (outcome.Result is { State: LyricSourceTerminalState.Succeeded, Lyrics: not null } result)
             {
-                batchCancellation.Cancel();
-                return outcome.Lyrics;
+                outcomes.Add((providerId, outcome.Result));
             }
-
-            selected ??= outcome.Lyrics;
         }
 
-        return selected;
+        if (outcomes.Count == 0)
+        {
+            return null;
+        }
+
+        return outcomes
+            .OrderByDescending(entry => TryGetIdentityScore(entry.Outcome.Lyrics!, out var score) ? score : 0)
+            .ThenBy(entry => Array.IndexOf(_trustPolicy.Order.ToArray(), entry.ProviderId))
+            .First()
+            .Outcome.Lyrics;
+    }
+
+    private static bool TryGetIdentityScore(ResolvedLyrics lyrics, out int score)
+    {
+        score = 0;
+        return lyrics.Diagnostics.TryGetValue("identityScore", out var value) &&
+               int.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, out score);
     }
 
     private async Task<SourceOutcome> ResolveSourceWithTraceAsync(

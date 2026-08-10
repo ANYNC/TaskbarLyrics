@@ -10,7 +10,9 @@ public enum MediaHotkeyAction
     NextTrack,
     SeekBackward,
     SeekForward,
-    ToggleLyricsVisibility
+    ToggleLyricsVisibility,
+    ToggleTranslation,
+    ToggleWordScanning
 }
 
 public sealed class GlobalMediaHotkeySettings
@@ -29,6 +31,10 @@ public sealed class GlobalMediaHotkeySettings
 
     public string ToggleLyricsVisibility { get; set; } = MediaHotkeyCatalog.Get(MediaHotkeyAction.ToggleLyricsVisibility).DefaultBinding;
 
+    public string ToggleTranslation { get; set; } = MediaHotkeyCatalog.Get(MediaHotkeyAction.ToggleTranslation).DefaultBinding;
+
+    public string ToggleWordScanning { get; set; } = MediaHotkeyCatalog.Get(MediaHotkeyAction.ToggleWordScanning).DefaultBinding;
+
     public GlobalMediaHotkeySettings Clone() => new()
     {
         Enabled = Enabled,
@@ -37,7 +43,9 @@ public sealed class GlobalMediaHotkeySettings
         NextTrack = NextTrack,
         SeekBackward = SeekBackward,
         SeekForward = SeekForward,
-        ToggleLyricsVisibility = ToggleLyricsVisibility
+        ToggleLyricsVisibility = ToggleLyricsVisibility,
+        ToggleTranslation = ToggleTranslation,
+        ToggleWordScanning = ToggleWordScanning
     };
 
     public string GetBinding(MediaHotkeyAction action) => MediaHotkeyCatalog.Get(action).ReadBinding(this);

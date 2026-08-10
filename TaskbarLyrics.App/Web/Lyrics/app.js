@@ -55,6 +55,8 @@ const lineScrollElements = new WeakMap();
 const horizontalScrollMetrics = new WeakMap();
 const transitionDurationMs = 560;
 const translationPairTransitionDurationMs = 760;
+const currentLineRestOpacity = 0.98;
+const leavingLineOpacity = 0.16;
 const trackSwitchSearchMinVisibleMs = 900;
 const coverSwapDelayMs = 180;
 const coverSwitchMinVisibleMs = 420;
@@ -820,8 +822,8 @@ function runTransitionOpacityAnimation(now) {
   const fadeOutE = getFadeOutEase(t);
   const fadeInE = getFadeInEase(t);
 
-  currentLineEl.style.opacity = String(0.98 + ((0.16 - 0.98) * fadeOutE));
-  nextLineEl.style.opacity = String(transitionBaseNextOpacity + ((0.98 - transitionBaseNextOpacity) * fadeInE));
+  currentLineEl.style.opacity = String(currentLineRestOpacity + ((leavingLineOpacity - currentLineRestOpacity) * fadeOutE));
+  nextLineEl.style.opacity = String(transitionBaseNextOpacity + ((currentLineRestOpacity - transitionBaseNextOpacity) * fadeInE));
   incomingLineEl.style.opacity = secondaryOpacity.toFixed(3);
 
   if (t < 1) {
@@ -1008,6 +1010,9 @@ function finalizeTransition(promotedCurrent, upcomingNext, progress, promotedLin
   // Freeze transitions while swapping layers to avoid visible "grow then shrink" rebound.
   trackEl.classList.add("no-anim");
   stopTransitionOpacityAnimation();
+  currentLineEl.style.opacity = String(leavingLineOpacity);
+  nextLineEl.style.opacity = String(currentLineRestOpacity);
+  void trackEl.offsetHeight;
   setCurrentLine(promotedCurrent);
   setWordScanProgress(wordScanProgress, false);
   setSecondaryLine(upcomingNext);
@@ -1242,7 +1247,7 @@ function startStandardTransition(newCurrent, newNext, progress, currentLineIndex
   nextLineEl.style.opacity = "";
   nextLineEl.style.fontSize = `${currentFontSize.toFixed(3)}px`;
   nextLineEl.style.setProperty("--promotion-scale", promotionStartScale.toFixed(6));
-  nextLineEl.style.transform = "scale(var(--promotion-scale))";
+  nextLineEl.style.transform = "translateY(0px) scale(var(--promotion-scale))";
   updateTransitionWordScanProgress(wordScanProgress, false);
   incomingLineEl.style.opacity = secondaryOpacity.toFixed(3);
   void trackEl.offsetHeight;

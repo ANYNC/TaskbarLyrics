@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:primitives="clr-namespace:System.Windows.Controls.Primitives;assembly=PresentationFramework"
         Width="210"
-        Height="226"
+        Height="290"
         WindowStyle="None"
         ResizeMode="NoResize"
         ShowInTaskbar="False"
@@ -105,6 +105,8 @@
                     <RowDefinition Height="32" />
                     <RowDefinition Height="32" />
                     <RowDefinition Height="32" />
+                    <RowDefinition Height="32" />
+                    <RowDefinition Height="32" />
                     <RowDefinition Height="1" />
                     <RowDefinition Height="32" />
                 </Grid.RowDefinitions>
@@ -133,8 +135,56 @@
                     </Grid>
                 </Button>
 
+                <Button Grid.Row="4"
+                        Style="{StaticResource TrayMenuButtonStyle}"
+                        Click="ToggleTranslationButton_Click">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="开启/关闭翻译"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TrayMenuTextBrush}"
+                                   FontFamily="Microsoft YaHei UI"
+                                   FontSize="12.5"
+                                   TextTrimming="CharacterEllipsis" />
+                        <TextBlock x:Name="ToggleTranslationHotkeyText"
+                                   Grid.Column="1"
+                                   Margin="8,0,0,0"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TrayMenuMutedTextBrush}"
+                                   FontFamily="Microsoft YaHei UI"
+                                   FontSize="9.5" />
+                    </Grid>
+                </Button>
+
+                <Button Grid.Row="5"
+                        Style="{StaticResource TrayMenuButtonStyle}"
+                        Click="ToggleWordScanningButton_Click">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="开启/关闭逐词扫描"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TrayMenuTextBrush}"
+                                   FontFamily="Microsoft YaHei UI"
+                                   FontSize="12.5"
+                                   TextTrimming="CharacterEllipsis" />
+                        <TextBlock x:Name="ToggleWordScanningHotkeyText"
+                                   Grid.Column="1"
+                                   Margin="8,0,0,0"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TrayMenuMutedTextBrush}"
+                                   FontFamily="Microsoft YaHei UI"
+                                   FontSize="9.5" />
+                    </Grid>
+                </Button>
+
                 <Button x:Name="SpectrumMenuButton"
-                        Grid.Row="4"
+                        Grid.Row="6"
                         Style="{StaticResource TrayMenuButtonStyle}"
                         Click="SpectrumMenuButton_Click"
                         MouseEnter="SpectrumMenuButton_MouseEnter"
@@ -180,7 +230,7 @@
                                FontSize="12.5" />
                 </Button>
 
-                <Button Grid.Row="5"
+                <Button Grid.Row="7"
                         Style="{StaticResource TrayMenuButtonStyle}"
                         Click="TrackOffsetButton_Click">
                     <TextBlock Text="调整当前歌曲偏移"
@@ -190,7 +240,7 @@
                                FontSize="12.5" />
                 </Button>
 
-                <Button Grid.Row="6"
+                <Button Grid.Row="8"
                         Style="{StaticResource TrayMenuButtonStyle}"
                         Click="SettingsButton_Click">
                     <TextBlock Text="设置"
@@ -200,12 +250,12 @@
                                FontSize="12.5" />
                 </Button>
 
-                <Border Grid.Row="7"
+                <Border Grid.Row="9"
                         Height="1"
                         VerticalAlignment="Center"
                         Background="{DynamicResource TrayMenuSeparatorBrush}" />
 
-                <Button Grid.Row="8"
+                <Button Grid.Row="10"
                         Style="{StaticResource TrayMenuButtonStyle}"
                         Tag="Bottom"
                         Click="ExitButton_Click">

@@ -11,7 +11,7 @@ internal sealed record LyricsLayoutMetrics
     private const double BaseLyricsPaneRightPadding = 4;
     private const double BaseLyricsPaneLeftPadding = 2;
     private const double BasePrimaryOffsetY = 1;
-    private const double BaseSecondaryOffsetY = 2;
+    private const double BaseSecondaryOffsetY = 1;
     private const double BaseLineTextBottomPadding = 2;
     private const double BaseSurfaceRadius = 8;
     private const double BaseLayerTransitionOffset = 2;

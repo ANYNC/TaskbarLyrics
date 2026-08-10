@@ -1,4 +1,5 @@
 using TaskbarLyrics.Core.Models;
+using TaskbarLyrics.Core.Services;
 using TaskbarLyrics.Core.Utilities;
 using Xunit;
 
@@ -27,13 +28,15 @@ public sealed class LyricMatcherTests
     }
 
     [Fact]
-    public void ScoreWhenNonQqMusicDurationDiffersByTwentySecondsRejectsTheMatch()
+    public void ScoreWhenNonQqMusicDurationDiffersByTwentySecondsReducesScoreButDoesNotReject()
     {
         var track = CreateTrack("Midnight City", "M83", 244);
 
         var score = LyricMatcher.Score(track, "Midnight City", "M83", 270);
 
-        Assert.Equal(0, score);
+        // Duration difference >= 10s zeroes the duration component, but title+artist still score.
+        Assert.InRange(score, 1, 100);
+        Assert.True(score < 100);
     }
 
     [Fact]
