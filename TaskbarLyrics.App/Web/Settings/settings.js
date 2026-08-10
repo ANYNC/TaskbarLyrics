@@ -337,7 +337,7 @@
                 <div class="diagnostics-candidate-meta"><span>专辑：${escapeHtml(diagnosticString(candidate?.album))}</span><span>时长：${escapeHtml(formatDiagnosticDuration(candidate?.durationSeconds ?? candidate?.duration))}</span><span>查询变体：${escapeHtml(diagnosticString(candidate?.queryVariantId))}</span><span>候选 ID：<code title="${escapeHtml(diagnosticString(candidate?.candidateId))}">${escapeHtml(diagnosticString(candidate?.candidateId))}</code></span>${metadataKeys.length ? `<span>元数据：${escapeHtml(metadataKeys.join("、"))}</span>` : ""}</div>
                 ${reasons.length ? `<ul class="diagnostics-reasons" aria-label="拒绝原因">${reasons.map(reason => `<li>${escapeHtml(reason)}</li>`).join("")}</ul>` : ""}
               </div>
-              <div class="diagnostics-candidate-side"><span class="diagnostics-badge" data-state="${admitted ? "accepted" : "rejected"}">${admitted ? "已接纳" : "已拒绝"}</span><strong class="diagnostics-score">${score === null ? "--" : score} 分</strong></div>
+              <div class="diagnostics-candidate-side"><span class="diagnostics-badge" data-state="${admitted ? "accepted" : "rejected"}">${admitted ? "已接纳" : "已拒绝"}</span>${admitted && candidate?.isHighConfidence ? '<span class="diagnostics-badge" data-state="high-confidence">高置信</span>' : ""}<strong class="diagnostics-score">${score === null ? "--" : score} 分</strong></div>
             </article>`;
           }).join("")
           : `<div class="diagnostics-candidate-empty">该来源没有返回候选。</div>`;

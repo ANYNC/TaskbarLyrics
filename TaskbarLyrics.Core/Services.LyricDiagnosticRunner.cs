@@ -141,6 +141,7 @@ public sealed class LyricDiagnosticRunner
                 trace.Candidate.QueryVariantId,
                 trace.Candidate.FetchMetadata.Keys.Order(StringComparer.Ordinal).ToArray(),
                 trace.Evaluation.IsAdmitted,
+                trace.Evaluation.IsAdmitted && trace.Evaluation.Score >= LyricMatchingPolicy.ImmediateAcceptanceScore,
                 trace.Evaluation.Score,
                 trace.Evaluation.RejectionReasons);
 

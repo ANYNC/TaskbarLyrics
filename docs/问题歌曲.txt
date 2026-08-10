@@ -1,19 +1,6 @@
-1.
-Captured(UTC):     2026-06-12 13:20:56.246
-SourceAppId:       cloudmusic.exe
-NormalizedSource:  Netease
-ResolvedSource:    Netease
-LyricSource:       
-IsPlaying:         True
-IsFallback:        False
+Title:              Stay In The Night（Ft.Belle）
+Artist:             Clear Sky
 
-RawPosition:       00:06.750
-LastUpdatedTime:   2026-06-12 21:20:56.076
-LastUpdateAge:     00:00.169
-Extrapolated:      00:06.919
-Extrapolated-Raw:  00:00.169
-SelectedPosition:  00:06.919
-Strategy:          CommonExtrapolated
-
-Title:             Stay In The Night（Ft.Belle）
-Artist:            Clear Sky
+SourceAppId:        cloudmusic.exe
+ResolvedSource:     Netease
+原因：音源歌词缺失

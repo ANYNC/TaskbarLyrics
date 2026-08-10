@@ -355,6 +355,69 @@ describe("settings WebView bridge", () => {
     expect(css).toMatch(/\.diagnostics-selection-meta (?:span|code)[\s\S]*overflow-wrap:\s*anywhere/s);
   });
 
+  it("marks high-confidence candidates and reflects trust-priority selection", async () => {
+    const { dom, script } = await createSettingsDom();
+    const document = dom.window.document;
+    dom.window.eval(script);
+
+    dom.window.settingsApp.receive({
+      version: 1,
+      type: "lyricDiagnosticsState",
+      payload: {
+        status: "success",
+        report: {
+          capturedAtUtc: "2026-08-10T12:00:00Z",
+          originalTrack: { title: "Priority Song", artist: "Artist", album: "Album", sourceApp: "QQMusic", durationSeconds: 200, songId: "song-1" },
+          preferredProvider: null,
+          searchVariants: [{ id: "exact", title: "Priority Song", artists: ["Artist"], album: "Album", durationSeconds: 200, relaxationReasons: [] }],
+          providers: [
+            {
+              providerId: "QQMusic",
+              state: "Succeeded",
+              detail: null,
+              selected: false,
+              candidates: [{ candidateId: "qq-1", title: "Priority Songs", artists: ["Artist"], album: "Album", durationSeconds: 192, queryVariantId: "exact", fetchMetadataKeys: [], isAdmitted: true, isHighConfidence: false, score: 84, rejectionReasons: [] }]
+            },
+            {
+              providerId: "Kugou",
+              state: "Succeeded",
+              detail: null,
+              selected: true,
+              candidates: [{ candidateId: "kugou-1", title: "Priority Song", artists: ["Artist"], album: "Album", durationSeconds: 200, queryVariantId: "exact", fetchMetadataKeys: [], isAdmitted: true, isHighConfidence: true, score: 96, rejectionReasons: [] }]
+            },
+            {
+              providerId: "Netease",
+              state: "Succeeded",
+              detail: null,
+              selected: false,
+              candidates: [{ candidateId: "netease-1", title: "Priority Song", artists: ["Artist"], album: "Album", durationSeconds: 200, queryVariantId: "exact", fetchMetadataKeys: [], isAdmitted: true, isHighConfidence: true, score: 100, rejectionReasons: [] }]
+            }
+          ],
+          selection: { providerId: "Kugou", candidateId: "kugou-1", acquisition: "Remote", format: "Lrc", timingKind: "Timed", timingProvenance: "Provider", lineCount: 30, diagnostics: { identityScore: "96" } },
+          error: null
+        }
+      }
+    });
+
+    const providers = [...document.querySelectorAll(".diagnostics-provider")];
+    expect(providers).toHaveLength(3);
+
+    const kugouProvider = providers.find(p => p.querySelector(".diagnostics-provider-title strong").textContent === "Kugou");
+    expect(kugouProvider.querySelector('[data-state="selected"]').textContent).toBe("最终采用");
+
+    const highConfidenceBadges = document.querySelectorAll('[data-state="high-confidence"]');
+    expect(highConfidenceBadges).toHaveLength(2);
+    expect([...highConfidenceBadges].every(badge => badge.textContent === "高置信")).toBe(true);
+
+    const qqCandidate = providers.find(p => p.querySelector(".diagnostics-provider-title strong").textContent === "QQMusic").querySelector(".diagnostics-candidate-side");
+    expect(qqCandidate.querySelector('[data-state="high-confidence"]')).toBeNull();
+    expect(qqCandidate.querySelector(".diagnostics-score").textContent).toBe("84 分");
+
+    const selectionText = document.querySelector(".diagnostics-selection-card").textContent;
+    expect(selectionText).toContain("Kugou");
+    expect(document.querySelector("#lyricDiagnosticsReportSummary").textContent).toContain("首选来源：未指定");
+  });
+
   it("shows empty and error diagnostic states without stale report content", async () => {
     const { dom, script } = await createSettingsDom();
     const document = dom.window.document;

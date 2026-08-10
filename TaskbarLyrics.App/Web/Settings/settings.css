@@ -529,6 +529,7 @@
     .diagnostics-badge[data-state="success"] { border-color: color-mix(in oklch, var(--success) 36%, var(--border)); background: color-mix(in oklch, var(--success) 13%, transparent); color: var(--success); }
     .diagnostics-badge[data-state="rejected"],
     .diagnostics-badge[data-state="error"] { border-color: color-mix(in oklch, var(--destructive) 36%, var(--border)); background: var(--destructive-soft); color: var(--destructive); }
+    .diagnostics-badge[data-state="high-confidence"] { border-color: color-mix(in oklch, var(--primary) 36%, var(--border)); background: color-mix(in oklch, var(--primary) 10%, transparent); color: var(--foreground); }
     .diagnostics-badge[data-state="running"] { color: var(--foreground); }
     .diagnostics-candidates { display: grid; gap: 7px; padding: 9px 12px 12px; }
     .diagnostics-candidate { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; padding: 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--card); }

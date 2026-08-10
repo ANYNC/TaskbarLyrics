@@ -289,11 +289,26 @@ public sealed class LyricResolutionCoordinator : ILyricResolutionCoordinator
             return null;
         }
 
-        return outcomes
-            .OrderByDescending(entry => TryGetIdentityScore(entry.Outcome.Lyrics!, out var score) ? score : 0)
-            .ThenBy(entry => Array.IndexOf(_trustPolicy.Order.ToArray(), entry.ProviderId))
+        return SelectBestOutcome(outcomes);
+    }
+
+    private ResolvedLyrics SelectBestOutcome(
+        IReadOnlyList<(LyricProviderId ProviderId, SourceOutcome Outcome)> outcomes)
+    {
+        var trustOrder = _trustPolicy.Order.ToArray();
+
+        var highConfidence = outcomes
+            .Where(entry => TryGetIdentityScore(entry.Outcome.Lyrics!, out var score) &&
+                            score >= LyricMatchingPolicy.ImmediateAcceptanceScore)
+            .ToArray();
+
+        var pool = highConfidence.Length > 0 ? highConfidence : outcomes;
+
+        return pool
+            .OrderBy(entry => Array.IndexOf(trustOrder, entry.ProviderId))
+            .ThenByDescending(entry => TryGetIdentityScore(entry.Outcome.Lyrics!, out var score) ? score : 0)
             .First()
-            .Outcome.Lyrics;
+            .Outcome.Lyrics!;
     }
 
     private static bool TryGetIdentityScore(ResolvedLyrics lyrics, out int score)

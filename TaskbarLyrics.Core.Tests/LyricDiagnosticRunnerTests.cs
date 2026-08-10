@@ -77,12 +77,14 @@ public sealed class LyricDiagnosticRunnerTests
         var provider = Assert.Single(report.Providers);
         var rejected = Assert.Single(provider.Candidates, candidate => candidate.CandidateId == "rejected");
         Assert.False(rejected.IsAdmitted);
+        Assert.False(rejected.IsHighConfidence);
         Assert.True(rejected.Score < LyricMatchingPolicy.MinimumAcceptedMatchScore);
         Assert.Contains("below-admission-threshold", rejected.RejectionReasons);
         Assert.Collection(rejected.FetchMetadataKeys, key => Assert.Equal("rejected-key", key));
 
         var admitted = Assert.Single(provider.Candidates, candidate => candidate.CandidateId == "admitted");
         Assert.True(admitted.IsAdmitted);
+        Assert.True(admitted.IsHighConfidence);
         Assert.True(admitted.Score >= LyricMatchingPolicy.MinimumAcceptedMatchScore);
         Assert.Collection(
             admitted.FetchMetadataKeys,

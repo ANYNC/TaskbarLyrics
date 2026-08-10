@@ -35,6 +35,7 @@ public sealed record LyricDiagnosticCandidate(
     string QueryVariantId,
     IReadOnlyList<string> FetchMetadataKeys,
     bool IsAdmitted,
+    bool IsHighConfidence,
     int Score,
     IReadOnlyList<string> RejectionReasons);
 
