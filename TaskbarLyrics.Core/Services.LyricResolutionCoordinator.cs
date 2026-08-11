@@ -11,7 +11,7 @@ public sealed class LyricResolutionCoordinator : ILyricResolutionCoordinator
 
     private readonly Dictionary<string, ILyricSource> _sources;
     private readonly IReadOnlyList<ILyricPayloadDecoder> _decoders;
-    private readonly IReadOnlyList<ILyricPayloadParser> _parsers;
+    private readonly ILyricPayloadParser[] _parsers;
     private readonly IReadOnlyDictionary<string, SemaphoreSlim> _sourceGates;
     private readonly ILyricMappingResolver _mappingResolver;
     private readonly ILyricPipelineCache _cache;
@@ -60,7 +60,7 @@ public sealed class LyricResolutionCoordinator : ILyricResolutionCoordinator
             StringComparer.OrdinalIgnoreCase);
         _decoders = decoders.ToArray();
         _parsers = parsers.ToArray();
-        if (_parsers.Count == 0)
+        if (_parsers.Length == 0)
         {
             throw new ArgumentException("At least one lyric parser is required.", nameof(parsers));
         }

@@ -198,7 +198,7 @@ public sealed class LyricifyPayloadParser : ILyricPayloadParser
             .ToList();
     }
 
-    private static LyricTimingKind DetermineTimingKind(IReadOnlyList<ParsedLyricLine> lines)
+    private static LyricTimingKind DetermineTimingKind(List<ParsedLyricLine> lines)
     {
         var segmentedLines = lines.Where(line => line.Segments.Count > 0).ToArray();
         if (segmentedLines.Length == 0)

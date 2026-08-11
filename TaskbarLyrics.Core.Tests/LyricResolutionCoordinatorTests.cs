@@ -242,6 +242,108 @@ public sealed class LyricResolutionCoordinatorTests
     }
 
     [Fact]
+    public async Task LocalSyllablesSurviveSemanticAndCompatibilityProjection()
+    {
+        var lineStart = TimeSpan.FromSeconds(10);
+        var local = new TestProvider(
+            "Local",
+            (_, _) => Task.FromResult<LyricDocument?>(
+                new LyricDocument(
+                [
+                    new LyricLine(
+                        lineStart,
+                        "one two",
+                        "translation",
+                        [
+                            new LyricSyllable(TimeSpan.Zero, TimeSpan.FromMilliseconds(200), "one"),
+                            new LyricSyllable(TimeSpan.FromMilliseconds(200), TimeSpan.FromMilliseconds(300), "two")
+                        ]),
+                    new LyricLine(TimeSpan.FromSeconds(11), "next")
+                ])));
+        var sources = CreateValidSources();
+
+        using var coordinator = CreateCoordinator(sources, localProvider: local);
+
+        var resolved = await coordinator.ResolveAsync(CreateTrack("Local Syllable Song"));
+
+        Assert.NotNull(resolved);
+        Assert.Equal(LyricTimingKind.Mixed, resolved!.Content.TimingKind);
+        Assert.Equal(LyricTimingProvenance.Unknown, resolved.Content.TimingProvenance);
+        var parsedLine = resolved.Content.Lines[0];
+        Assert.Equal(TimeSpan.FromSeconds(11), parsedLine.EndTime);
+        Assert.Equal("translation", parsedLine.Translation);
+        Assert.Collection(parsedLine.Segments,
+            segment =>
+            {
+                Assert.Equal(lineStart, segment.StartTime);
+                Assert.Equal(lineStart + TimeSpan.FromMilliseconds(200), segment.EndTime);
+                Assert.Equal("one", segment.Text);
+            },
+            segment =>
+            {
+                Assert.Equal(lineStart + TimeSpan.FromMilliseconds(200), segment.StartTime);
+                Assert.Equal(lineStart + TimeSpan.FromMilliseconds(500), segment.EndTime);
+                Assert.Equal("two", segment.Text);
+            });
+
+        var compatibleDocument = ResolvedLyricsCompatibilityProjector.ToLyricDocument(resolved);
+        var compatibleLine = compatibleDocument.Lines[0];
+        Assert.Collection(compatibleLine.Syllables!,
+            syllable =>
+            {
+                Assert.Equal(TimeSpan.Zero, syllable.RelativeOffset);
+                Assert.Equal(TimeSpan.FromMilliseconds(200), syllable.Duration);
+                Assert.Equal("one", syllable.Text);
+            },
+            syllable =>
+            {
+                Assert.Equal(TimeSpan.FromMilliseconds(200), syllable.RelativeOffset);
+                Assert.Equal(TimeSpan.FromMilliseconds(300), syllable.Duration);
+                Assert.Equal("two", syllable.Text);
+            });
+    }
+
+    [Fact]
+    public async Task InvalidLocalSyllableMakesSemanticProjectionAtomicPerLine()
+    {
+        var lineStart = TimeSpan.FromSeconds(10);
+        var local = new TestProvider(
+            "Local",
+            (_, _) => Task.FromResult<LyricDocument?>(
+                new LyricDocument(
+                [
+                    new LyricLine(
+                        lineStart,
+                        "one two",
+                        "translation",
+                        [
+                            new LyricSyllable(TimeSpan.Zero, TimeSpan.FromMilliseconds(200), "one"),
+                            new LyricSyllable(TimeSpan.FromMilliseconds(200), TimeSpan.FromMilliseconds(300), "two"),
+                            new LyricSyllable(TimeSpan.FromMilliseconds(-1), TimeSpan.FromMilliseconds(100), "negative offset"),
+                            new LyricSyllable(TimeSpan.FromMilliseconds(500), TimeSpan.Zero, "zero duration"),
+                            new LyricSyllable(TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(100), " "),
+                            new LyricSyllable(TimeSpan.FromMilliseconds(900), TimeSpan.FromMilliseconds(200), "past line end")
+                        ]),
+                    new LyricLine(TimeSpan.FromSeconds(11), "next")
+                ])));
+        var sources = CreateValidSources();
+
+        using var coordinator = CreateCoordinator(sources, localProvider: local);
+
+        var resolved = await coordinator.ResolveAsync(CreateTrack("Invalid Local Syllable Song"));
+
+        Assert.NotNull(resolved);
+        Assert.Equal(LyricTimingKind.LineTimed, resolved!.Content.TimingKind);
+        var parsedLine = resolved.Content.Lines[0];
+        Assert.Equal(TimeSpan.FromSeconds(11), parsedLine.EndTime);
+        Assert.Equal("translation", parsedLine.Translation);
+        Assert.Empty(parsedLine.Segments);
+
+        var compatibleDocument = ResolvedLyricsCompatibilityProjector.ToLyricDocument(resolved);
+        Assert.Null(compatibleDocument.Lines[0].Syllables);
+    }
+
+    [Fact]
     public async Task PureMusicMappingShortCircuitDoesNotCallLocalOrOnlineSources()
     {
         var track = CreateTrack("Pure Music Song");

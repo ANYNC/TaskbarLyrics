@@ -58,6 +58,19 @@ The verification script defaults to `Full`, which runs Vitest/jsdom web tests, A
 - When multiple approaches are valid, explain the relevant trade-offs and make a clear recommendation instead of giving unqualified agreement.
 - If the user knowingly accepts a reversible trade-off that does not violate safety or repository contracts, follow that decision and report the remaining risk honestly.
 
+## Sol + Luna development mode
+
+- Use Sol as the primary agent for requirement interpretation, technical and architectural decisions, task decomposition, cross-module coordination, risk trade-offs, final integration, and delivery acceptance.
+- Use the project-scoped `luna_worker` as the primary coding executor for clearly bounded production-code and test-code work. This includes implementing decided behavior, fixing located defects, performing local behavior-preserving refactors, adding or updating directly related tests, and running targeted verification.
+- Delegate automatically only when the task has a clear objective, file or module ownership, preserved behavior, acceptance criteria, and verification target, and when the expected execution work is large enough to justify the extra agent startup, context transfer, and result-integration cost.
+- Do not delegate trivial one-step edits, work Sol can complete directly with less total effort, final review, tightly coupled work that needs continuous shared context, or open-ended product, architecture, protocol, persistence, migration, or security decisions.
+- Before spawning `luna_worker`, Sol must provide a self-contained minimal delegation packet containing the objective, allowed ownership boundary, already-decided implementation constraints, behavior that must remain stable, prohibited scope, targeted verification, known workspace changes, and relevant evidence. Do not paste the full `AGENTS.md`, skill instructions, or unrelated conversation history into the packet.
+- Use the smallest context fork that still makes the delegation packet complete. Treat automatically loaded `AGENTS.md` guidance as already available; do not reopen it merely to restate it. Mandatory skill and reference reads still apply exactly as their higher-priority instructions require.
+- Prefer one bounded deliverable per worker. Run multiple workers in parallel only when their tasks are independent and their write ownership does not overlap; never assign multiple write agents to the same files or a highly coupled behavior path.
+- `luna_worker` must not spawn additional subagents unless Sol explicitly delegates that authority. It may make reversible local implementation choices inside its boundary, but must return behavior, architecture, compatibility, persistence, security, ownership, and scope-expansion decisions to Sol with evidence and a recommendation.
+- Sol should not repeat implementation-level exploration or targeted checks already completed by Luna when the handoff includes current, sufficient evidence. Sol must still inspect the actual diff, resolve escalated decisions, run required integration and delivery verification, update the engineering change record when required, restart the runnable app when required, and own the final user-facing answer.
+- If a task is not suitable for delegation, Sol completes it directly. Optimize for total verified outcome and protected primary-agent context, not for maximizing the number of subagents.
+
 ## Change discipline
 
 - Inspect `git status` before editing and preserve unrelated user changes.

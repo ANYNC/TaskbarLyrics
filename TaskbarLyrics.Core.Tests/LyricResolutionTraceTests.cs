@@ -209,7 +209,7 @@ public sealed class LyricResolutionTraceTests
             get { lock (_syncRoot) return _candidates.ToArray(); }
         }
 
-        public IReadOnlyList<LyricResolutionSourceTrace> Sources
+        public LyricResolutionSourceTrace[] Sources
         {
             get { lock (_syncRoot) return _sources.ToArray(); }
         }
@@ -244,7 +244,7 @@ public sealed class LyricResolutionTraceTests
             var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(2);
             while (DateTime.UtcNow < deadline)
             {
-                if (Sources.Count >= expectedCount)
+                if (Sources.Length >= expectedCount)
                 {
                     return;
                 }
@@ -252,7 +252,7 @@ public sealed class LyricResolutionTraceTests
                 await Task.Delay(10);
             }
 
-            Assert.Equal(expectedCount, Sources.Count);
+            Assert.Equal(expectedCount, Sources.Length);
         }
     }
 

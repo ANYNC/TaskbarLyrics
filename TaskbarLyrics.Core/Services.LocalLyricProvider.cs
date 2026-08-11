@@ -33,6 +33,10 @@ public sealed class LocalLyricProvider : ILyricProvider, IDisposable
 
     private static readonly Regex InlineTagRegex = new(@"<[^>]+>", RegexOptions.Compiled);
 
+    private static readonly Regex EnhancedLrcBoundaryRegex = new(
+        @"<(?<minutes>\d+):(?<seconds>\d+)(?:[\.:](?<fraction>\d{1,3}))?>",
+        RegexOptions.Compiled);
+
     private static readonly Regex CreditRegex = new(
         @"^\s*(作词|作曲|编曲|词|曲|Composer|Lyricist|Lyrics?|Music|Arranger|Producer|Written\s+by|Composed\s+by)\s*[:：]",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
@@ -401,7 +405,8 @@ public sealed class LocalLyricProvider : ILyricProvider, IDisposable
             }
 
             var textStart = matches[^1].Index + matches[^1].Length;
-            var text = textStart < line.Length ? CleanText(line[textStart..]) : string.Empty;
+            var sourceText = textStart < line.Length ? line[textStart..] : string.Empty;
+            var text = CleanText(sourceText);
             if (string.IsNullOrWhiteSpace(text))
             {
                 continue;
@@ -420,7 +425,10 @@ public sealed class LocalLyricProvider : ILyricProvider, IDisposable
                     continue;
                 }
 
-                rawLines.Add(new LyricLine(timestamp, text));
+                rawLines.Add(new LyricLine(
+                    timestamp,
+                    text,
+                    Syllables: TryParseEnhancedLrcSyllables(sourceText, timestamp, offsetMs)));
             }
         }
 
@@ -448,6 +456,120 @@ public sealed class LocalLyricProvider : ILyricProvider, IDisposable
             2 => int.Parse(fractionRaw, CultureInfo.InvariantCulture) * 10,
             _ => int.Parse(fractionRaw[..3], CultureInfo.InvariantCulture)
         };
+    }
+
+    private static List<LyricSyllable>? TryParseEnhancedLrcSyllables(
+        string sourceText,
+        TimeSpan lineTimestamp,
+        int offsetMs)
+    {
+        var boundaries = EnhancedLrcBoundaryRegex.Matches(sourceText);
+        if (boundaries.Count == 0 || !AreEnhancedBoundarySpansComplete(sourceText, boundaries))
+        {
+            return null;
+        }
+
+        var syllables = new List<LyricSyllable>();
+        var cursor = lineTimestamp;
+        var textStart = 0;
+        foreach (Match boundaryMatch in boundaries)
+        {
+            if (!TryParseEnhancedLrcBoundary(boundaryMatch, offsetMs, out var boundary) ||
+                boundary < cursor)
+            {
+                return null;
+            }
+
+            var fragment = CleanText(sourceText[textStart..boundaryMatch.Index]);
+            if (!string.IsNullOrWhiteSpace(fragment))
+            {
+                if (boundary == cursor)
+                {
+                    return null;
+                }
+
+                syllables.Add(new LyricSyllable(
+                    cursor - lineTimestamp,
+                    boundary - cursor,
+                    fragment));
+            }
+
+            cursor = boundary;
+            textStart = boundaryMatch.Index + boundaryMatch.Length;
+        }
+
+        return string.IsNullOrWhiteSpace(CleanText(sourceText[textStart..])) && syllables.Count > 0
+            ? syllables
+            : null;
+    }
+
+    private static bool AreEnhancedBoundarySpansComplete(
+        string sourceText,
+        MatchCollection boundaries)
+    {
+        var inlineTags = InlineTagRegex.Matches(sourceText);
+        if (inlineTags.Count != boundaries.Count)
+        {
+            return false;
+        }
+
+        var cursor = 0;
+        for (var index = 0; index < boundaries.Count; index++)
+        {
+            var boundary = boundaries[index];
+            var inlineTag = inlineTags[index];
+            if (boundary.Index != inlineTag.Index ||
+                boundary.Length != inlineTag.Length ||
+                boundary.Index < cursor)
+            {
+                return false;
+            }
+
+            var textBeforeBoundary = sourceText[cursor..boundary.Index];
+            if (textBeforeBoundary.Contains('<') || textBeforeBoundary.Contains('>'))
+            {
+                return false;
+            }
+
+            cursor = boundary.Index + boundary.Length;
+        }
+
+        var textAfterBoundaries = sourceText[cursor..];
+        return !textAfterBoundaries.Contains('<') && !textAfterBoundaries.Contains('>');
+    }
+
+    private static bool TryParseEnhancedLrcBoundary(
+        Match boundaryMatch,
+        int offsetMs,
+        out TimeSpan timestamp)
+    {
+        timestamp = TimeSpan.Zero;
+        if (!int.TryParse(boundaryMatch.Groups["minutes"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var minutes) ||
+            !int.TryParse(boundaryMatch.Groups["seconds"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var seconds))
+        {
+            return false;
+        }
+
+        try
+        {
+            timestamp = new TimeSpan(0, 0, minutes, seconds, ParseMilliseconds(boundaryMatch.Groups["fraction"].Value))
+                .Add(TimeSpan.FromMilliseconds(offsetMs));
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            return false;
+        }
+        catch (OverflowException)
+        {
+            return false;
+        }
+
+        if (timestamp < TimeSpan.Zero)
+        {
+            timestamp = TimeSpan.Zero;
+        }
+
+        return true;
     }
 
     private static string CleanText(string text)
