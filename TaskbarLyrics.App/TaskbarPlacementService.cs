@@ -9,6 +9,7 @@ namespace TaskbarLyrics.App;
 internal sealed class TaskbarPlacementService
 {
     private const int WmShowWindow = 0x0018;
+    private const double AutoFollowGap = 8;
     private static int _hasReportedNativeBoundsCommitFailure;
 
     public uint TaskbarCreatedMessage { get; } = TaskbarNativeMethods.RegisterWindowMessage("TaskbarCreated");
@@ -27,12 +28,7 @@ internal sealed class TaskbarPlacementService
         var metrics = LyricsLayoutMetrics.Create(settings, pixelsPerDip);
         window.Height = Math.Min(metrics.DesiredWindowHeight, display.Height);
 
-        window.Left = settings.HorizontalAnchor switch
-        {
-            LyricsHorizontalAnchor.Left => Math.Max(display.Left, display.Left + settings.XOffset),
-            LyricsHorizontalAnchor.Center => display.Left + ((display.Width - window.Width) / 2.0) + settings.XOffset,
-            _ => Math.Max(display.Left, display.Right - window.Width - 230 + settings.XOffset)
-        };
+        window.Left = CalculateHorizontalLeft(settings, display, window.Width, pixelsPerDip);
 
         var taskbarCenterY = display.Bottom - (taskbarHeight / 2);
         window.Top = display.Top + CalculateVerticalPosition(
@@ -42,6 +38,66 @@ internal sealed class TaskbarPlacementService
             settings.YOffset);
 
         CommitNativeBounds(window, pixelsPerDip);
+    }
+
+    internal static double CalculateHorizontalLeft(Window window, AppSettings settings)
+    {
+        var pixelsPerDip = GetPixelsPerDip(window);
+        return CalculateHorizontalLeft(settings, GetPrimaryDisplayMetrics(pixelsPerDip), window.Width, pixelsPerDip);
+    }
+
+    internal static double CalculateHorizontalLeft(
+        AppSettings settings,
+        TaskbarDisplayMetrics display,
+        double windowWidth,
+        double pixelsPerDip)
+    {
+        return settings.HorizontalAnchor switch
+        {
+            LyricsHorizontalAnchor.Left => Math.Max(display.Left, display.Left + settings.XOffset),
+            LyricsHorizontalAnchor.Center => display.Left + ((display.Width - windowWidth) / 2.0) + settings.XOffset,
+            LyricsHorizontalAnchor.AutoFollowIcons => CalculateAutoFollowLeft(settings, display, windowWidth, pixelsPerDip),
+            _ => CalculateRightAnchoredLeft(settings, display, windowWidth, pixelsPerDip)
+        };
+    }
+
+    private static double CalculateAutoFollowLeft(
+        AppSettings settings,
+        TaskbarDisplayMetrics display,
+        double windowWidth,
+        double pixelsPerDip)
+    {
+        var baseLeft = TaskbarIconRegionService.TryGetLeftIconsRightEdge(pixelsPerDip, out var iconsRight)
+            ? iconsRight + AutoFollowGap
+            : display.Left;
+        var left = Math.Max(display.Left, baseLeft + settings.XOffset);
+        return ClampLeftToTray(left, windowWidth, display, pixelsPerDip);
+    }
+
+    private static double CalculateRightAnchoredLeft(
+        AppSettings settings,
+        TaskbarDisplayMetrics display,
+        double windowWidth,
+        double pixelsPerDip)
+    {
+        var reservedWidth = TaskbarIconRegionService.TryGetTrayLeftEdge(pixelsPerDip, out var trayLeft)
+            ? Math.Max(0, display.Right - trayLeft)
+            : 230;
+        return Math.Max(display.Left, display.Right - windowWidth - reservedWidth + settings.XOffset);
+    }
+
+    private static double ClampLeftToTray(
+        double left,
+        double windowWidth,
+        TaskbarDisplayMetrics display,
+        double pixelsPerDip)
+    {
+        if (!TaskbarIconRegionService.TryGetTrayLeftEdge(pixelsPerDip, out var trayLeft))
+        {
+            return left;
+        }
+
+        return Math.Min(left, Math.Max(display.Left, trayLeft - windowWidth - AutoFollowGap));
     }
 
     internal static double GetPixelsPerDip(Window window)
@@ -84,7 +140,7 @@ internal sealed class TaskbarPlacementService
             workArea.Height);
     }
 
-    private static void CommitNativeBounds(Window window, double pixelsPerDip)
+    internal static void CommitNativeBounds(Window window, double pixelsPerDip)
     {
         var hwnd = new WindowInteropHelper(window).Handle;
         if (hwnd == IntPtr.Zero)
