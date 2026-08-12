@@ -42,12 +42,11 @@ public partial class MainWindow : Window, IDisposable
     private bool _hasTrackTranslation;
     private double _lastLineProgress;
     private double? _lastWordScanProgress;
-    private string? _lastCoverTrackId;
-    private string? _currentCoverVisualTrackId;
+    private readonly CoverVisualTransitionState _coverVisualTransition = new();
     private string? _currentCoverDataUri;
     private string _currentCoverFallbackText = "N";
     private string _currentCoverFallbackColorCss = "rgba(67, 160, 71, 1)";
-    private string? _lastLocalCoverLookupTrackId;
+    private string? _lastLocalCoverLookupIdentity;
     private DateTimeOffset _nextLocalCoverLookupUtc;
     private SpectrumDisplayMode _spectrumDisplayMode = SpectrumDisplayMode.Disabled;
     private float[] _spectrumSilence = new float[SpectrumTuningSettings.DefaultBarCount];
@@ -200,7 +199,7 @@ public partial class MainWindow : Window, IDisposable
         var previousProvider = _localMediaCoverProvider;
         _localMediaCoverProvider = _compositionRoot.CreateLocalMediaCoverProvider(settings);
         previousProvider?.Dispose();
-        _lastLocalCoverLookupTrackId = null;
+        _lastLocalCoverLookupIdentity = null;
         _nextLocalCoverLookupUtc = default;
     }
 
@@ -699,9 +698,9 @@ public partial class MainWindow : Window, IDisposable
 
     private void UpdateCover(PlaybackSnapshot snapshot)
     {
-        var trackId = snapshot.Track?.Id;
-        var isSameRequestedTrack = string.Equals(trackId, _lastCoverTrackId, StringComparison.Ordinal);
-        var isCurrentTrackVisual = string.Equals(trackId, _currentCoverVisualTrackId, StringComparison.Ordinal);
+        var coverIdentity = CoverIdentity.FromTrack(snapshot.Track);
+        var isSameRequestedTrack = !_coverVisualTransition.Begin(coverIdentity);
+        var isCurrentTrackVisual = _coverVisualTransition.IsVisualFor(coverIdentity);
         if (isSameRequestedTrack && isCurrentTrackVisual)
         {
             // Proceed only if we previously had no cover for this track but now we have bytes.
@@ -712,8 +711,6 @@ public partial class MainWindow : Window, IDisposable
             }
         }
 
-        _lastCoverTrackId = trackId;
-
         var sourceApp = snapshot.Track?.SourceApp ?? string.Empty;
         (_currentCoverFallbackText, var fallbackColor) = GetCoverFallback(sourceApp);
         _currentCoverFallbackColorCss = ToCssColor(fallbackColor);
@@ -721,30 +718,32 @@ public partial class MainWindow : Window, IDisposable
         if (snapshot.CoverImageBytes is { Length: > 0 } bytes)
         {
             _currentCoverDataUri = BuildCoverDataUri(bytes);
-            _currentCoverVisualTrackId = trackId;
-            LogCoverVisualState(trackId, "SMTC", bytes.Length, DetectImageMimeType(bytes));
+            _coverVisualTransition.MarkVisual(coverIdentity);
+            LogCoverVisualState(coverIdentity, "SMTC", bytes.Length, DetectImageMimeType(bytes));
             PushCoverToWebView();
             return;
         }
 
-        if (snapshot.IsCoverLoading)
+        if (snapshot.IsCoverLoading &&
+            _currentCoverDataUri != null &&
+            _coverVisualTransition.ShouldRetainPreviousVisual())
         {
             return;
         }
 
-        var localCoverBytes = TryGetThrottledLocalCover(snapshot.Track, trackId);
+        var localCoverBytes = TryGetThrottledLocalCover(snapshot.Track, coverIdentity);
         if (localCoverBytes is { Length: > 0 })
         {
             _currentCoverDataUri = BuildCoverDataUri(localCoverBytes);
-            _currentCoverVisualTrackId = trackId;
-            LogCoverVisualState(trackId, "Local", localCoverBytes.Length, DetectImageMimeType(localCoverBytes));
+            _coverVisualTransition.MarkVisual(coverIdentity);
+            LogCoverVisualState(coverIdentity, "Local", localCoverBytes.Length, DetectImageMimeType(localCoverBytes));
             PushCoverToWebView();
             return;
         }
 
         _currentCoverDataUri = null;
-        _currentCoverVisualTrackId = trackId;
-        LogCoverVisualState(trackId, "Fallback", 0, string.Empty);
+        _coverVisualTransition.MarkVisual(coverIdentity);
+        LogCoverVisualState(coverIdentity, "Fallback", 0, string.Empty);
         PushCoverToWebView();
     }
 
@@ -774,7 +773,7 @@ public partial class MainWindow : Window, IDisposable
         return normalized.Length <= 240 ? normalized : normalized[..240];
     }
 
-    private byte[]? TryGetThrottledLocalCover(TrackInfo? track, string? trackId)
+    private byte[]? TryGetThrottledLocalCover(TrackInfo? track, string coverIdentity)
     {
         if (_localMediaCoverProvider is null || track is null)
         {
@@ -782,13 +781,13 @@ public partial class MainWindow : Window, IDisposable
         }
 
         var now = DateTimeOffset.UtcNow;
-        if (string.Equals(trackId, _lastLocalCoverLookupTrackId, StringComparison.Ordinal) &&
+        if (string.Equals(coverIdentity, _lastLocalCoverLookupIdentity, StringComparison.Ordinal) &&
             now < _nextLocalCoverLookupUtc)
         {
             return null;
         }
 
-        _lastLocalCoverLookupTrackId = trackId;
+        _lastLocalCoverLookupIdentity = coverIdentity;
         _nextLocalCoverLookupUtc = now.AddSeconds(5);
         var cover = _localMediaCoverProvider.TryGetCover(track);
         if (cover is { Length: > 0 })
@@ -909,7 +908,7 @@ public partial class MainWindow : Window, IDisposable
             _currentCoverDataUri,
             _currentCoverFallbackText,
             _currentCoverFallbackColorCss,
-            _currentCoverVisualTrackId);
+            _coverVisualTransition.VisualIdentity);
         TaskObserver.Observe(ExecuteWebScriptAsync(script), "lyrics cover update");
     }
 

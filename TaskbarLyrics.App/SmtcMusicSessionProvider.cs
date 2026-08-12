@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Linq;
+using System.Text;
 using System.Text.RegularExpressions;
 using TaskbarLyrics.Core.Abstractions;
 using TaskbarLyrics.Core.Models;
@@ -9,10 +10,117 @@ using Windows.Storage.Streams;
 
 namespace TaskbarLyrics.App;
 
+internal static class CoverIdentity
+{
+    public static string FromTrack(TrackInfo? track)
+    {
+        return track is null
+            ? string.Empty
+            : FromMetadata(track.SourceApp, track.SongId, track.Title, track.Artist, track.Album);
+    }
+
+    public static string FromMetadata(
+        string? sourceApp,
+        string? songId,
+        string? title,
+        string? artist,
+        string? album)
+    {
+        var normalizedSource = Normalize(sourceApp);
+        var normalizedSongId = Normalize(songId);
+        return !string.IsNullOrEmpty(normalizedSongId)
+            ? Compose("song", normalizedSource, normalizedSongId)
+            : Compose(
+                "metadata",
+                normalizedSource,
+                Normalize(title),
+                Normalize(artist),
+                Normalize(album));
+    }
+
+    private static string Compose(string scope, params string[] parts)
+    {
+        var builder = new StringBuilder(scope);
+        foreach (var part in parts)
+        {
+            builder.Append('|').Append(part.Length).Append(':').Append(part);
+        }
+
+        return builder.ToString();
+    }
+
+    private static string Normalize(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value)
+            ? string.Empty
+            : string.Join(" ", value.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+    }
+}
+
+internal sealed class CoverVisualTransitionState
+{
+    internal static readonly TimeSpan DefaultRetention = TimeSpan.FromMilliseconds(1500);
+
+    private readonly TimeSpan _retention;
+    private readonly Func<DateTimeOffset> _utcNow;
+    private DateTimeOffset _transitionDeadlineUtc;
+
+    internal CoverVisualTransitionState()
+        : this(DefaultRetention, () => DateTimeOffset.UtcNow)
+    {
+    }
+
+    internal CoverVisualTransitionState(TimeSpan retention, Func<DateTimeOffset> utcNow)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(retention, TimeSpan.Zero);
+
+        _retention = retention;
+        _utcNow = utcNow ?? throw new ArgumentNullException(nameof(utcNow));
+    }
+
+    internal string RequestedIdentity { get; private set; } = string.Empty;
+
+    internal string VisualIdentity { get; private set; } = string.Empty;
+
+    internal bool Begin(string? identity)
+    {
+        var normalizedIdentity = (identity ?? string.Empty).Trim();
+        if (string.Equals(RequestedIdentity, normalizedIdentity, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        RequestedIdentity = normalizedIdentity;
+        var now = _utcNow();
+        _transitionDeadlineUtc = string.IsNullOrEmpty(normalizedIdentity)
+            ? now
+            : now + _retention;
+        return true;
+    }
+
+    internal bool IsVisualFor(string? identity)
+    {
+        return string.Equals(VisualIdentity, identity ?? string.Empty, StringComparison.Ordinal);
+    }
+
+    internal bool ShouldRetainPreviousVisual()
+    {
+        return !string.IsNullOrEmpty(RequestedIdentity) &&
+               !IsVisualFor(RequestedIdentity) &&
+               _utcNow() < _transitionDeadlineUtc;
+    }
+
+    internal void MarkVisual(string? identity)
+    {
+        VisualIdentity = (identity ?? string.Empty).Trim();
+    }
+}
+
 public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlaybackController, IPlayerRecognitionController, IDisposable
 {
     private static readonly string[] DefaultRecognitionOrder = { "QQMusic", "Netease", "Kugou", "Spotify" };
     private static readonly TimeSpan MissingCoverRetryInterval = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan CoverReadTimeout = TimeSpan.FromSeconds(5);
     private static readonly Regex TitleArtistRegex = new(
         @"^(?<title>.+?)\s*[-|—]\s*(?<artist>.+)$",
         RegexOptions.Compiled);
@@ -216,14 +324,6 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
             artist = media?.Artist?.Trim() ?? string.Empty;
             album = media?.AlbumTitle?.Trim() ?? string.Empty;
 
-            (coverImageBytes, isCoverLoading) = GetCoverBytes(
-                sourceApp,
-                title,
-                artist,
-                media?.Thumbnail,
-                nowUtc);
-
-            // 从 Genres 流派元数据列表中解析播放器写入的 SongId (例如网易云 NCM-, QQ音乐 QQ-)
             if (media?.Genres != null)
             {
                 if (sourceApp.Equals("Netease", StringComparison.OrdinalIgnoreCase))
@@ -238,16 +338,26 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
                         .FirstOrDefault(x => x.StartsWith("QQ-", StringComparison.OrdinalIgnoreCase))?
                         .Replace("QQ-", "");
                 }
+            }
 
-                if (sourceApp.Equals("QQMusic", StringComparison.OrdinalIgnoreCase))
+            (coverImageBytes, isCoverLoading) = GetCoverBytes(
+                sourceApp,
+                title,
+                artist,
+                album,
+                songId,
+                media?.Thumbnail,
+                nowUtc);
+
+            // 从 Genres 流派元数据列表中解析播放器写入的 SongId (例如网易云 NCM-, QQ音乐 QQ-)
+            if (media?.Genres != null && sourceApp.Equals("QQMusic", StringComparison.OrdinalIgnoreCase))
+            {
+                var genresText = string.Join(" | ", media.Genres);
+                var diagnosticsKey = $"{title}|{artist}|{album}|{songId}|{genresText}";
+                if (!string.Equals(_lastQqMetadataDiagnosticsKey, diagnosticsKey, StringComparison.Ordinal))
                 {
-                    var genresText = string.Join(" | ", media.Genres);
-                    var diagnosticsKey = $"{title}|{artist}|{album}|{songId}|{genresText}";
-                    if (!string.Equals(_lastQqMetadataDiagnosticsKey, diagnosticsKey, StringComparison.Ordinal))
-                    {
-                        _lastQqMetadataDiagnosticsKey = diagnosticsKey;
-                        Log.Debug($"SMTC QQMusic metadata: Album='{album}', SongId='{songId ?? string.Empty}', Genres='{genresText}'");
-                    }
+                    _lastQqMetadataDiagnosticsKey = diagnosticsKey;
+                    Log.Debug($"SMTC QQMusic metadata: Album='{album}', SongId='{songId ?? string.Empty}', Genres='{genresText}'");
                 }
             }
         }
@@ -969,10 +1079,12 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
         string sourceApp,
         string title,
         string artist,
+        string album,
+        string? songId,
         IRandomAccessStreamReference? thumbnail,
         DateTimeOffset nowUtc)
     {
-        var metadataKey = $"{sourceApp}|{title}|{artist}";
+        var metadataKey = CoverIdentity.FromMetadata(sourceApp, songId, title, artist, album);
         byte[]? cachedCover;
         var isLoading = false;
         var thumbnailStateChanged = false;
@@ -1034,7 +1146,8 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
             "COVER-SMTC",
             $"ReadStarted Sequence={readSequence} Track='{ToLogValue(metadataKey)}'");
 
-        var result = await ReadCoverBytesAsync(thumbnail, CancellationToken.None);
+        using var timeoutSource = new CancellationTokenSource(CoverReadTimeout);
+        var result = await ReadCoverBytesAsync(thumbnail, timeoutSource.Token);
         var nowUtc = DateTimeOffset.UtcNow;
         var isStale = false;
 
