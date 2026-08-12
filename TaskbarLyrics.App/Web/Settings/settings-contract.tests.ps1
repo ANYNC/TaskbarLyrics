@@ -15,7 +15,7 @@ $mediaHotkeyCatalog = [IO.File]::ReadAllText((Join-Path $appRoot 'MediaHotkeyCat
 
 $errors = [Collections.Generic.List[string]]::new()
 
-$pages = @('sources', 'shortcuts', 'lyrics', 'trackOffsets', 'displayArea', 'general', 'advanced', 'lyricDiagnostics', 'about')
+$pages = @('sources', 'shortcuts', 'lyrics', 'trackOffsets', 'displayArea', 'general', 'advanced', 'lyricDiagnostics', 'taskbarEmbedding', 'about')
 foreach ($page in $pages) {
     if (-not $html.Contains("data-nav=`"$page`"")) { $errors.Add("missing nav: $page") }
     if (-not $html.Contains("data-page=`"$page`"")) { $errors.Add("missing page: $page") }
@@ -27,7 +27,9 @@ $settings = @(
     'coverSize', 'coverGap', 'coverCornerRadius', 'fontFamily',
     'fontWeight', 'foregroundColorMode', 'showTextShadow', 'toolWindowTheme', 'showBackground',
     'backgroundOpacity', 'showBorder', 'windowWidth', 'horizontalAnchor', 'xOffset',
-    'yOffset', 'forceAlwaysOnTop', 'startWithWindows', 'autoCheckUpdates'
+    'yOffset', 'forceAlwaysOnTop', 'taskbarEmbeddingEnabled', 'embeddedTaskbarWidth',
+    'embeddedTaskbarHorizontalAnchor', 'embeddedTaskbarHorizontalOffset', 'embeddedTaskbarVerticalOffset',
+    'startWithWindows', 'autoCheckUpdates'
 )
 foreach ($key in $settings) {
     if (-not $html.Contains("data-setting=`"$key`"")) { $errors.Add("missing setting control: $key") }
@@ -71,7 +73,7 @@ $requiredHtml = @(
 foreach ($marker in $requiredHtml) {
     if (-not $html.Contains($marker)) { $errors.Add("missing html marker: $marker") }
 }
-foreach ($key in @('lyricsLayoutScalePercent', 'coverGap', 'coverCornerRadius', 'backgroundOpacity', 'xOffset', 'yOffset', 'windowWidth')) {
+foreach ($key in @('lyricsLayoutScalePercent', 'coverGap', 'coverCornerRadius', 'backgroundOpacity', 'xOffset', 'yOffset', 'windowWidth', 'embeddedTaskbarWidth', 'embeddedTaskbarHorizontalOffset', 'embeddedTaskbarVerticalOffset')) {
     if ([regex]::Matches($html, "type=`"range`"[^>]+data-setting=`"$key`"").Count -ne 1) { $errors.Add("missing unique slider: $key") }
     if ([regex]::Matches($html, "type=`"number`"[^>]+data-setting=`"$key`"").Count -ne 1) { $errors.Add("missing unique numeric pair: $key") }
 }
@@ -132,6 +134,8 @@ if (-not $appSettings.Contains('public GlobalMediaHotkeySettings GlobalMediaHotk
 if (-not $appSettings.Contains('public double LyricsLayoutScalePercent')) { $errors.Add('lyrics layout scale setting missing') }
 if (-not $appSettings.Contains('public bool ShowCover')) { $errors.Add('show cover setting missing') }
 if (-not $appSettings.Contains('public bool SpectrumAudioAccessGranted')) { $errors.Add('spectrum audio access setting missing') }
+if (-not $appSettings.Contains('public bool TaskbarEmbeddingEnabled')) { $errors.Add('taskbar embedding switch setting missing') }
+if (-not $appSettings.Contains('public EmbeddedTaskbarHorizontalAnchor EmbeddedTaskbarHorizontalAnchor')) { $errors.Add('embedded taskbar anchor setting missing') }
 if (-not $appSettings.Contains('public const string DefaultFontFamily = BundledFontFamily;')) { $errors.Add('bundled font is not the default') }
 if (-not $app.Contains('Settings.FontFamily = AppSettings.NormalizeFontFamily(Settings.FontFamily);')) { $errors.Add('startup font normalization missing') }
 if (-not $lyricsWindow.Contains('fontFamily = AppSettings.NormalizeFontFamily(settings.FontFamily)')) { $errors.Add('lyrics font normalization missing') }

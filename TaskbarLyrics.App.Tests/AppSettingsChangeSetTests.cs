@@ -182,6 +182,47 @@ public sealed class AppSettingsChangeSetTests
         Assert.True(changes.VisualStyleChanged);
         Assert.True(changes.LyricsLayoutChanged);
         Assert.True(changes.WindowLayoutChanged);
+        Assert.True(changes.TaskbarEmbeddingChanged);
         Assert.True(changes.GlobalMediaHotkeysChanged);
+    }
+
+    [Fact]
+    public void CreateWhenEmbeddingSwitchChangesReappliesLyricsWindowWithoutRebuildingOtherServices()
+    {
+        var current = new AppSettings();
+        var next = current.Clone();
+        next.TaskbarEmbeddingEnabled = true;
+
+        var changes = AppSettingsChangeSet.Create(current, next);
+
+        Assert.True(changes.TaskbarEmbeddingChanged);
+        Assert.True(changes.RequiresLyricsWindowApply);
+        Assert.False(changes.WindowLayoutChanged);
+        Assert.False(changes.LyricSyncServiceChanged);
+    }
+
+    [Fact]
+    public void CreateWhenEmbeddingWidthChangesReappliesLyricsWindow()
+    {
+        var current = new AppSettings();
+        var next = current.Clone();
+        next.EmbeddedTaskbarWidth = 500;
+
+        var changes = AppSettingsChangeSet.Create(current, next);
+
+        Assert.True(changes.TaskbarEmbeddingChanged);
+        Assert.True(changes.RequiresLyricsWindowApply);
+    }
+
+    [Fact]
+    public void CreateWhenOnlyVisualStyleChangesDoesNotFlagEmbedding()
+    {
+        var current = new AppSettings();
+        var next = current.Clone();
+        next.FontSize += 1;
+
+        var changes = AppSettingsChangeSet.Create(current, next);
+
+        Assert.False(changes.TaskbarEmbeddingChanged);
     }
 }
