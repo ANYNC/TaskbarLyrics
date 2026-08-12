@@ -29,6 +29,11 @@ public partial class MainWindow : Window, IDisposable
     private readonly SystemAudioSpectrumService _audioSpectrumService = new();
     private readonly DispatcherTimer _timer;
     private readonly DispatcherTimer _spectrumTimer;
+    private readonly DispatcherTimer _placementTimer;
+    private readonly DispatcherTimer _horizontalAnimationTimer;
+    private double _horizontalAnimationFrom;
+    private double _horizontalAnimationTo;
+    private long _horizontalAnimationStartTick;
     private readonly TaskbarPlacementService _taskbarPlacementService = new();
     private LocalMediaCoverProvider? _localMediaCoverProvider;
     private Media.Color _primaryTextColor = Media.Colors.White;
@@ -85,6 +90,7 @@ public partial class MainWindow : Window, IDisposable
     private bool _hasReportedWebViewControllerMonitoringFailure;
     private int _displayLayoutRefreshPending;
     private int _isDisposed;
+    private const double HorizontalAnimationDurationMilliseconds = 280;
 
     internal MainWindow(TrackLyricOffsetStore trackLyricOffsetStore, IAppCompositionRoot compositionRoot)
     {
@@ -109,6 +115,18 @@ public partial class MainWindow : Window, IDisposable
             Interval = TimeSpan.FromMilliseconds(33)
         };
         _spectrumTimer.Tick += OnSpectrumTimerTick;
+
+        _placementTimer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = TimeSpan.FromMilliseconds(1000)
+        };
+        _placementTimer.Tick += OnPlacementTimerTick;
+
+        _horizontalAnimationTimer = new DispatcherTimer(DispatcherPriority.Render)
+        {
+            Interval = TimeSpan.FromMilliseconds(16)
+        };
+        _horizontalAnimationTimer.Tick += OnHorizontalAnimationTick;
 
         Loaded += OnLoaded;
         SourceInitialized += OnSourceInitialized;
@@ -183,7 +201,7 @@ public partial class MainWindow : Window, IDisposable
 
         if (changes.WindowLayoutChanged || changes.LyricsLayoutChanged)
         {
-            AnchorToTaskbar();
+            AnchorToTaskbar(animateHorizontal: IsVisible);
             AttachToTaskbarHost();
         }
 
@@ -272,6 +290,7 @@ public partial class MainWindow : Window, IDisposable
         PushCurrentLyricsToWebView();
         _timer.Start();
         UpdateSpectrumCaptureState();
+        _placementTimer.Start();
     }
 
     private void OnSourceInitialized(object? sender, EventArgs e)
@@ -292,6 +311,11 @@ public partial class MainWindow : Window, IDisposable
             {
                 _timer.Start();
             }
+            if (!_placementTimer.IsEnabled)
+            {
+                _placementTimer.Start();
+            }
+
             AnchorToTaskbar();
             AttachToTaskbarHost();
         }
@@ -300,6 +324,10 @@ public partial class MainWindow : Window, IDisposable
             if (_timer.IsEnabled)
             {
                 _timer.Stop();
+            }
+            if (_placementTimer.IsEnabled)
+            {
+                _placementTimer.Stop();
             }
         }
 
@@ -331,8 +359,12 @@ public partial class MainWindow : Window, IDisposable
         CloseSmtcTimelineMonitorWindow();
         _timer.Stop();
         _spectrumTimer.Stop();
+        _placementTimer.Stop();
+        _horizontalAnimationTimer.Stop();
         _timer.Tick -= OnTimerTick;
         _spectrumTimer.Tick -= OnSpectrumTimerTick;
+        _placementTimer.Tick -= OnPlacementTimerTick;
+        _horizontalAnimationTimer.Tick -= OnHorizontalAnimationTick;
         SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
         Loaded -= OnLoaded;
         SourceInitialized -= OnSourceInitialized;
@@ -1466,9 +1498,86 @@ public partial class MainWindow : Window, IDisposable
 """;
     }
 
-    private void AnchorToTaskbar()
+    private void AnchorToTaskbar(bool animateHorizontal = false)
     {
+        StopHorizontalAnimation("anchor");
+        if (!animateHorizontal)
+        {
+            TaskbarPlacementService.Anchor(this, _currentSettings);
+            return;
+        }
+
+        var previousLeft = Left;
         TaskbarPlacementService.Anchor(this, _currentSettings);
+        if (Math.Abs(Left - previousLeft) > 0.5)
+        {
+            BeginHorizontalAnimation(previousLeft, Left);
+        }
+    }
+
+    private void BeginHorizontalAnimation(double fromLeft, double toLeft)
+    {
+        _horizontalAnimationFrom = fromLeft;
+        _horizontalAnimationTo = toLeft;
+        _horizontalAnimationStartTick = Environment.TickCount64;
+        Left = fromLeft;
+        CommitHorizontalPosition();
+        Log.Diagnostic("H-ANIM", $"Begin From={fromLeft:0.#} To={toLeft:0.#}");
+        if (!_horizontalAnimationTimer.IsEnabled)
+        {
+            _horizontalAnimationTimer.Start();
+        }
+    }
+
+    private void StopHorizontalAnimation(string reason)
+    {
+        if (!_horizontalAnimationTimer.IsEnabled)
+        {
+            return;
+        }
+
+        _horizontalAnimationTimer.Stop();
+        Log.Diagnostic("H-ANIM", $"Interrupted Left={Left:0.#} Reason={reason}");
+    }
+
+    private void OnHorizontalAnimationTick(object? sender, EventArgs e)
+    {
+        var progress = (Environment.TickCount64 - _horizontalAnimationStartTick) / HorizontalAnimationDurationMilliseconds;
+        if (progress >= 1)
+        {
+            _horizontalAnimationTimer.Stop();
+            Left = _horizontalAnimationTo;
+            CommitHorizontalPosition();
+            Log.Diagnostic("H-ANIM", $"Complete To={_horizontalAnimationTo:0.#}");
+            return;
+        }
+
+        // Cubic ease-out：起步快、收尾缓，避免位置切换的生硬感。
+        var eased = 1 - Math.Pow(1 - progress, 3);
+        Left = _horizontalAnimationFrom + ((_horizontalAnimationTo - _horizontalAnimationFrom) * eased);
+        CommitHorizontalPosition();
+    }
+
+    // WPF 并不保证每帧都把 Left 的变更应用到原生窗口（被 SetWindowPos 移动过后
+    // 内部位置缓存会失配），动画期间改用 SetWindowPos 直接驱动窗口位置，确保滑动可见。
+    private void CommitHorizontalPosition()
+    {
+        TaskbarPlacementService.CommitNativeBounds(this, TaskbarPlacementService.GetPixelsPerDip(this));
+    }
+
+    private void OnPlacementTimerTick(object? sender, EventArgs e)
+    {
+        if (!IsVisible ||
+            _currentSettings.HorizontalAnchor is not (LyricsHorizontalAnchor.AutoFollowIcons or LyricsHorizontalAnchor.Right))
+        {
+            return;
+        }
+
+        var targetLeft = TaskbarPlacementService.CalculateHorizontalLeft(this, _currentSettings);
+        if (Math.Abs(targetLeft - Left) > 0.5)
+        {
+            AnchorToTaskbar(animateHorizontal: true);
+        }
     }
 
     protected override void OnDpiChanged(DpiScale oldDpi, DpiScale newDpi)
@@ -1563,9 +1672,11 @@ public partial class MainWindow : Window, IDisposable
         if (!IsVisible)
         {
             Show();
+            AnchorToTaskbar();
         }
 
-        AnchorToTaskbar();
+        // explorer 调整任务栏 Z 序（如点击托盘）时会盖住歌词窗口，
+        // 周期性恢复置顶/显示态；只重附着、不重锚定，避免打断滑动动画。
         AttachToTaskbarHost();
     }
 

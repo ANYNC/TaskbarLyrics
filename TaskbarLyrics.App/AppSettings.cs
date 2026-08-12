@@ -4,7 +4,8 @@ public enum LyricsHorizontalAnchor
 {
     Left,
     Center,
-    Right
+    Right,
+    AutoFollowIcons
 }
 
 public enum ForegroundColorMode
