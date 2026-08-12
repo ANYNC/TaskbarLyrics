@@ -59,6 +59,19 @@ public static partial class LyricSearchPlanner
                 ["removed-feature-or-bracket-suffix"]);
         }
 
+        var versionRelaxedTitle = RelaxDelimitedVersionSuffix(track.Title);
+        if (versionRelaxedTitle.Length > 0 &&
+            !string.Equals(versionRelaxedTitle, track.Title, StringComparison.Ordinal))
+        {
+            AddVariant(
+                variants,
+                "version-relaxed-title",
+                versionRelaxedTitle,
+                artists,
+                track,
+                ["removed-delimited-version-suffix"]);
+        }
+
         return new LyricSearchPlan(track, variants);
     }
 
@@ -112,9 +125,27 @@ public static partial class LyricSearchPlanner
         }
     }
 
+    private static string RelaxDelimitedVersionSuffix(string title)
+    {
+        var delimiters = DelimitedSuffixSeparatorRegex().Matches(title);
+        if (delimiters.Count == 0)
+        {
+            return title;
+        }
+
+        var delimiter = delimiters[delimiters.Count - 1];
+        var suffix = title[(delimiter.Index + delimiter.Length)..];
+        return LyricMatcher.ContainsContentVersionMarker(suffix)
+            ? title[..delimiter.Index].Trim()
+            : title;
+    }
+
     [GeneratedRegex(@"\s*(?:,|&|/|、|，|;|；|\bfeat\.?\b|\bft\.?\b|\bwith\b)\s*", RegexOptions.IgnoreCase)]
     private static partial Regex ArtistSeparatorRegex();
 
     [GeneratedRegex(@"\s*(?:[\(\[\{（【].*?[\)\]\}）】]|\b(?:feat\.?|ft\.?|with)\b.*)$", RegexOptions.IgnoreCase)]
     private static partial Regex BracketOrFeatureSuffixRegex();
+
+    [GeneratedRegex(@"\s+[-–—]\s+")]
+    private static partial Regex DelimitedSuffixSeparatorRegex();
 }

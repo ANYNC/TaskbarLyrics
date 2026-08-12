@@ -27,10 +27,16 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot 'verify-output.ps1')
 $appTests = Join-Path $repositoryRoot 'TaskbarLyrics.App.Tests\TaskbarLyrics.App.Tests.csproj'
 $coreTests = Join-Path $repositoryRoot 'TaskbarLyrics.Core.Tests\TaskbarLyrics.Core.Tests.csproj'
 $settingsContract = Join-Path $repositoryRoot 'TaskbarLyrics.App\Web\Settings\settings-contract.tests.ps1'
+$restartAppTests = Join-Path $repositoryRoot 'scripts\restart-app.tests.ps1'
+$verificationOutputTests = Join-Path $repositoryRoot 'scripts\verify-output.tests.ps1'
 $webDependencies = Join-Path $repositoryRoot 'node_modules'
+$verificationLogRoot = Join-Path $repositoryRoot 'tmp\verify-logs'
+$verificationContext = New-VerificationLogContext -RepositoryRoot $repositoryRoot -LogRoot $verificationLogRoot
+$script:verificationFailureReported = $false
 $allowedAreas = @('Core', 'App', 'Web', 'Settings')
 $requestedAreas = @(
     $Area -split ',' |
@@ -83,10 +89,15 @@ function Invoke-VerificationStep {
         [scriptblock]$Action
     )
 
-    Write-Host "==> $Name"
-    & $Action
-    if ($LASTEXITCODE -ne 0) {
-        throw "$Name failed with exit code $LASTEXITCODE."
+    try {
+        Invoke-LoggedVerificationStep -Context $verificationContext -Name $Name -Action $Action
+    }
+    catch {
+        # Invoke-LoggedVerificationStep has already emitted the bounded failure
+        # report. The outer handler must not print a second report for the same
+        # step, but it still rethrows so the script retains non-zero semantics.
+        $script:verificationFailureReported = $true
+        throw
     }
 }
 
@@ -180,6 +191,14 @@ function Invoke-FullVerification {
     Invoke-VerificationStep 'Code format verification' {
         dotnet format TaskbarLyrics.sln --verify-no-changes --no-restore
     }
+
+    Invoke-VerificationStep 'Verification output regression tests' {
+        powershell -ExecutionPolicy Bypass -File $verificationOutputTests
+    }
+
+    Invoke-VerificationStep 'Restart script regression tests' {
+        powershell -NoProfile -ExecutionPolicy Bypass -File $restartAppTests
+    }
 }
 
 Push-Location $repositoryRoot
@@ -191,7 +210,15 @@ try {
         'Full' { Invoke-FullVerification }
     }
 
-    Write-Host "$Tier verification passed."
+}
+catch {
+    if (-not $script:verificationFailureReported) {
+        Write-VerificationUnhandledFailure -Context $verificationContext -ErrorRecord $_
+    }
+
+    # Keep the terminal report bounded while preserving the process failure
+    # contract expected by callers of verify.ps1.
+    exit 1
 }
 finally {
     Pop-Location

@@ -56,9 +56,10 @@
     .caption-button svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 
     .status { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; padding: 12px 14px; }
-    .stat { border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); padding: 10px 12px; box-shadow: var(--shadow-sm); }
+    .stat { min-width: 0; border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); padding: 10px 12px; box-shadow: var(--shadow-sm); }
     .stat .k { color: var(--subtle); font-size: 10px; letter-spacing: .3px; text-transform: uppercase; margin-bottom: 4px; }
-    .stat .v { font-size: 15px; font-weight: 700; color: var(--foreground); display: flex; align-items: center; gap: 6px; }
+    .stat .v { min-width: 0; font-size: 15px; font-weight: 700; color: var(--foreground); display: flex; align-items: center; gap: 6px; }
+    #sourceName { min-width: 0; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .stat .v.big { font-size: 22px; font-variant-numeric: tabular-nums; }
     .stat .sub { color: var(--muted-foreground); font-size: 11px; margin-top: 2px; }
     .stat .sub.source-detail { min-width: 0; display: flex; align-items: center; gap: 6px; }
@@ -78,9 +79,17 @@
 
     .details { min-height: 0; overflow: auto; padding: 0 14px 10px; }
     .panel { border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); overflow: hidden; box-shadow: var(--shadow-sm); }
-    .mono { margin: 0; padding: 12px 14px; font-family: Consolas, "Cascadia Mono", monospace; font-size: 11.5px; line-height: 1.75; color: var(--muted-foreground); white-space: pre; }
+    .mono { margin: 0; padding: 12px 14px; font-family: Consolas, "Cascadia Mono", monospace; font-size: 11.5px; line-height: 1.75; color: var(--muted-foreground); white-space: normal; }
     .mono .k { color: var(--subtle); } .mono .v { color: var(--foreground); }
     .mono .ok { color: var(--success); } .mono .warn { color: var(--warning); } .mono .bad { color: var(--danger); }
+    .diagnostic-row { min-width: 0; display: grid; grid-template-columns: 126px minmax(0, 1fr); }
+    .diagnostic-row > span { min-width: 0; }
+    .diagnostic-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .diagnostic-spacer { display: block; height: 1.75em; }
+    .truncated-value:focus-visible { border-radius: 2px; outline: 2px solid var(--ring); outline-offset: 2px; }
+    .hover-tooltip { position: fixed; z-index: 400; width: max-content; max-width: min(360px, calc(100vw - 24px)); padding: 9px 11px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--popover); color: var(--popover-foreground); font-family: "Microsoft YaHei UI", "Microsoft YaHei", sans-serif; font-size: 11px; font-weight: 400; line-height: 1.7; overflow-wrap: anywhere; white-space: normal; box-shadow: var(--shadow); pointer-events: none; opacity: 0; transform: translateY(-4px); visibility: hidden; transition: opacity var(--duration-fast) ease, transform var(--duration-fast) ease, visibility 0s linear var(--duration-fast); }
+    .hover-tooltip[data-state="open"] { opacity: 1; transform: translateY(0); visibility: visible; transition: opacity var(--duration-fast) ease, transform var(--duration-fast) ease, visibility 0s; }
+    @media (prefers-reduced-motion: reduce) { .hover-tooltip { transition: none; } }
 
     .footer { display: flex; align-items: center; justify-content: flex-end; padding: 10px 14px; border-top: 1px solid var(--border); }
     .footer .actions { display: flex; gap: 8px; flex: 0 0 auto; }
@@ -167,6 +176,7 @@
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <div class="hover-tooltip" id="hoverTooltip" role="tooltip"></div>
 
   <script>
     const $ = s => document.querySelector(s);
@@ -201,7 +211,10 @@
       $("#playSub").textContent = `策略：${p.strategy || '—'}${p.isFallback ? ' · 回退快照' : ''}`;
 
       const src = p.resolvedSource || p.normalizedSource || p.sourceAppUserModelId || '—';
-      $("#sourceName").textContent = src;
+      const sourceName = $("#sourceName");
+      sourceName.textContent = src;
+      sourceName.dataset.fullValue = src;
+      sourceName.classList.add("truncated-value");
       $("#sourceSub").textContent = `歌词源：${p.lyricSource || '—'}`;
       const acquisition = acquisitionMeta(p.lyricAcquisition);
       const cacheBadge = $("#cacheBadge");
@@ -230,8 +243,62 @@
         ["SelectedPosition:", fmtMs(p.selectedMs ?? 0), "v"],
         ["Strategy:", p.strategy || "—", "k"],
       ];
-      $("#log").innerHTML = rows.map(([key, value, cls]) => key ? `<span class="k">${escapeHtml(key.padEnd(20))}</span><span class="${cls}">${escapeHtml(value)}</span>` : "").join("\n");
+      $("#log").innerHTML = rows.map(([key, value, cls]) => key
+        ? `<span class="diagnostic-row"><span class="k">${escapeHtml(key.padEnd(20))}</span><span class="diagnostic-value truncated-value ${cls}" data-full-value="${escapeHtml(value)}">${escapeHtml(value)}</span></span>`
+        : '<span class="diagnostic-spacer" aria-hidden="true"></span>').join("\n");
+      (window.requestAnimationFrame || (callback => callback()))(() => {
+        document.querySelectorAll("[data-full-value]").forEach(element => {
+          element.tabIndex = element.scrollWidth > element.clientWidth ? 0 : -1;
+        });
+      });
     }
+
+    const hoverTooltip = $("#hoverTooltip");
+    let tooltipTarget = null;
+    function hideHoverTooltip() {
+      tooltipTarget?.removeAttribute("aria-describedby");
+      tooltipTarget = null;
+      hoverTooltip.dataset.state = "closed";
+    }
+    function showHoverTooltip(target) {
+      if (!target?.dataset.fullValue || target.scrollWidth <= target.clientWidth) {
+        hideHoverTooltip();
+        return;
+      }
+
+      tooltipTarget = target;
+      hoverTooltip.textContent = target.dataset.fullValue;
+      hoverTooltip.dataset.state = "open";
+      target.setAttribute("aria-describedby", "hoverTooltip");
+
+      const margin = 12;
+      const gap = 8;
+      const targetRect = target.getBoundingClientRect();
+      const tooltipRect = hoverTooltip.getBoundingClientRect();
+      const left = Math.min(
+        window.innerWidth - tooltipRect.width - margin,
+        Math.max(margin, targetRect.left));
+      const below = targetRect.bottom + gap;
+      const top = below + tooltipRect.height <= window.innerHeight - margin
+        ? below
+        : Math.max(margin, targetRect.top - tooltipRect.height - gap);
+      hoverTooltip.style.left = `${left}px`;
+      hoverTooltip.style.top = `${top}px`;
+    }
+
+    document.addEventListener("pointerover", event => {
+      const target = event.target.closest?.("[data-full-value]");
+      if (target) showHoverTooltip(target);
+    });
+    document.addEventListener("pointerout", event => {
+      if (tooltipTarget && !event.relatedTarget?.closest?.("[data-full-value]")) hideHoverTooltip();
+    });
+    document.addEventListener("focusin", event => showHoverTooltip(event.target.closest?.("[data-full-value]")));
+    document.addEventListener("focusout", hideHoverTooltip);
+    document.addEventListener("keydown", event => { if (event.key === "Escape") hideHoverTooltip(); });
+    window.addEventListener("resize", hideHoverTooltip);
+    document.addEventListener("scroll", hideHoverTooltip, true);
+    window.addEventListener("blur", hideHoverTooltip);
 
     function setPaused(v) {
       paused = v;

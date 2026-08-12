@@ -59,6 +59,49 @@ public sealed class LyricSearchPlannerTests
     }
 
     [Theory]
+    [InlineData("Anti-Hero - ILLENIUM Remix", "Anti-Hero")]
+    [InlineData("Versioned song – Live", "Versioned song")]
+    [InlineData("Versioned song — Acoustic Version", "Versioned song")]
+    public void CreatePlanProducesDelimitedVersionRelaxedVariant(string title, string expectedTitle)
+    {
+        var identity = CreateIdentity(title);
+
+        var plan = LyricSearchPlanner.CreatePlan(identity);
+
+        var exact = Assert.Single(plan.Variants, variant => variant.Id == "exact");
+        var relaxed = Assert.Single(plan.Variants, variant => variant.Id == "version-relaxed-title");
+        Assert.Equal(expectedTitle, relaxed.Title);
+        Assert.Equal(exact.Artists, relaxed.Artists);
+        Assert.Contains("removed-delimited-version-suffix", relaxed.RelaxationReasons);
+        Assert.Equal(title, plan.OriginalTrack.Title);
+    }
+
+    [Theory]
+    [InlineData("Anti-Hero")]
+    [InlineData("Versioned song - Chapter Two")]
+    public void CreatePlanDoesNotRelaxOrdinaryHyphenatedTitle(string title)
+    {
+        var plan = LyricSearchPlanner.CreatePlan(CreateIdentity(title));
+
+        Assert.DoesNotContain(plan.Variants, variant => variant.Id == "version-relaxed-title");
+    }
+
+    [Fact]
+    public void DelimitedVersionRelaxedQueryStillUsesOriginalVersionIdentityForAdmission()
+    {
+        var identity = CreateIdentity("Anti-Hero - ILLENIUM Remix");
+        var plan = LyricSearchPlanner.CreatePlan(identity);
+        var relaxed = Assert.Single(plan.Variants, variant => variant.Id == "version-relaxed-title");
+        var candidate = CreateIdentityCandidate(identity, relaxed.Title);
+
+        var evaluation = LyricIdentityEvaluator.Evaluate(identity, candidate);
+
+        Assert.False(evaluation.IsAdmitted);
+        Assert.Equal(0, evaluation.Score);
+        Assert.Contains("identity-conflict", evaluation.RejectionReasons);
+    }
+
+    [Theory]
     [InlineData("Live")]
     [InlineData("Remix")]
     [InlineData("Acoustic")]

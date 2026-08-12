@@ -175,6 +175,14 @@ dotnet run --project TaskbarLyrics.App
 powershell -ExecutionPolicy Bypass -File scripts/restart-app.ps1
 ```
 
+该命令保持前台运行，适合交互式调试。自动化交付可先停止本地实例以释放构建文件锁，再在验证完成后后台启动：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/restart-app.ps1 -StopOnly
+dotnet build TaskbarLyrics.sln
+powershell -ExecutionPolicy Bypass -File scripts/restart-app.ps1 -NoWait
+```
+
 构建项目：
 
 ```powershell

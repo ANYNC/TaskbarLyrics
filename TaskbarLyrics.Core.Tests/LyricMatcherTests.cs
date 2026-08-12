@@ -28,6 +28,76 @@ public sealed class LyricMatcherTests
     }
 
     [Fact]
+    public void ScoreTreatsBracketedVersionMarkerAsEquivalentToDelimitedVersionMarker()
+    {
+        var track = CreateTrack("Anti-Hero - ILLENIUM Remix", "Taylor Swift", 267) with
+        {
+            Album = "Anti-Hero (Remixes) [Explicit]"
+        };
+
+        var score = LyricMatcher.Score(
+            track,
+            "Anti-Hero (Illenium Remix)",
+            "Taylor Swift / ILLENIUM",
+            267,
+            "Anti-Hero (Remixes) [Explicit]");
+
+        Assert.Equal(98, score);
+    }
+
+    [Fact]
+    public void ScoreRejectsDifferentVersionMarkersInsideBrackets()
+    {
+        var track = CreateTrack("Anti-Hero - ILLENIUM Remix", "Taylor Swift", 267);
+
+        var score = LyricMatcher.Score(
+            track,
+            "Anti-Hero (Live)",
+            "Taylor Swift",
+            267);
+
+        Assert.Equal(0, score);
+    }
+
+    [Fact]
+    public void ScoreStillIgnoresNonVersionBracketedTitleContent()
+    {
+        var track = CreateTrack("Midnight City", "M83", 244);
+
+        var score = LyricMatcher.Score(track, "Midnight City (Radio Edit)", "M83", 244);
+
+        Assert.Equal(100, score);
+    }
+
+    [Fact]
+    public void ScoreTreatsBracketedFromQualifierAsEquivalentToDelimitedQualifier()
+    {
+        var track = CreateTrack("Nobody - from Kaiju No. 8", "OneRepublic", 153) with
+        {
+            Album = "Nobody (from Kaiju No. 8)"
+        };
+
+        var score = LyricMatcher.Score(
+            track,
+            "Nobody (from Kaiju No. 8)",
+            "OneRepublic",
+            153,
+            "Nobody (from Kaiju No. 8)");
+
+        Assert.Equal(100, score);
+    }
+
+    [Fact]
+    public void ScoreRejectsFromQualifierWhenOnlyOneTitleContainsIt()
+    {
+        var track = CreateTrack("Nobody - from Kaiju No. 8", "OneRepublic", 153);
+
+        var score = LyricMatcher.Score(track, "Nobody", "OneRepublic", 153);
+
+        Assert.Equal(0, score);
+    }
+
+    [Fact]
     public void ScoreWhenNonQqMusicDurationDiffersByTwentySecondsReducesScoreButDoesNotReject()
     {
         var track = CreateTrack("Midnight City", "M83", 244);

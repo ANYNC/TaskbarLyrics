@@ -13,7 +13,7 @@ public static class LyricMatcher
     private static readonly Regex FeatureSuffixRegex = new(@"\s+(feat\.?|ft\.?|with)\s+.*$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private static readonly string[] ConflictKeywords =
     {
-        "live", "remix", "acoustic", "demo", "instrumental", "karaoke", "simlish",
+        "live", "remix", "acoustic", "demo", "instrumental", "karaoke", "simlish", "from",
         "vma", "award", "现场", "演唱会", "颁奖", "典礼"
     };
 
@@ -35,8 +35,8 @@ public static class LyricMatcher
             if (HasVersionConflict(target.Title, resultTitle, keyword)) return 0;
         }
 
-        var normalizedTargetTitle = NormalizeForSearch(target.Title);
-        var normalizedResultTitle = NormalizeForSearch(resultTitle);
+        var normalizedTargetTitle = NormalizeTitleForComparison(target.Title);
+        var normalizedResultTitle = NormalizeTitleForComparison(resultTitle);
         var normalizedTargetArtist = NormalizeForSearch(target.Artist);
         var normalizedResultArtist = NormalizeForSearch(resultArtist);
         var normalizedTargetAlbum = NormalizeForSearch(target.Album);
@@ -155,6 +155,13 @@ public static class LyricMatcher
     }
 
     public static string NormalizeForSearch(string? value)
+        => Normalize(value, RemoveBracketedContent);
+
+    // Preserve semantic version markers when providers use brackets instead of a title suffix.
+    private static string NormalizeTitleForComparison(string? value)
+        => Normalize(value, PreserveVersionMarkerInsideBrackets);
+
+    private static string Normalize(string? value, MatchEvaluator normalizeBracketedContent)
     {
         if (string.IsNullOrWhiteSpace(value)) return string.Empty;
 
@@ -164,8 +171,7 @@ public static class LyricMatcher
         // 移除常见平台噪声标签
         var noNoise = Regex.Replace(normalized, @"\s*[\(\[（【](explicit|deluxe|digital|premium|album|edit|version|special|anniversary|studio|remastered)[\)\]）】]\s*", " ", RegexOptions.IgnoreCase);
 
-        // 移除所有括号内容进行纯基准对比（相似度算法对噪声敏感）
-        var pureTitle = BracketSuffixRegex.Replace(noNoise, " ");
+        var pureTitle = BracketSuffixRegex.Replace(noNoise, normalizeBracketedContent);
 
         // 移除歌手后缀
         var noFeatures = FeatureSuffixRegex.Replace(pureTitle, string.Empty);
@@ -178,6 +184,27 @@ public static class LyricMatcher
         }
 
         return Regex.Replace(sb.ToString(), @"\s+", " ").Trim();
+    }
+
+    private static string RemoveBracketedContent(Match _) => " ";
+
+    private static string PreserveVersionMarkerInsideBrackets(Match match)
+    {
+        if (!ContainsContentVersionMarker(match.Value))
+        {
+            return " ";
+        }
+
+        var content = match.Value
+            .Trim()
+            .Trim('(', '[', '{', '（', '【', ')', ']', '}', '）', '】');
+        return $" {content} ";
+    }
+
+    internal static bool ContainsContentVersionMarker(string? value)
+    {
+        return !string.IsNullOrWhiteSpace(value) &&
+               ConflictKeywords.Any(keyword => value.Contains(keyword, StringComparison.OrdinalIgnoreCase));
     }
 
     private static string RemoveDiacritics(string text)

@@ -32,29 +32,23 @@ public sealed class QqMusicLyricSource : ILyricSource
             ];
         }
 
-        var results = new Dictionary<string, SourceTrackCandidate>(StringComparer.Ordinal);
-        foreach (var variant in plan.Variants)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            var response = await LyricifyTask.WaitAsync(
-                ProviderHelper.QQMusicApi.Search(
-                    BuildQuery(variant),
-                    Lyricify.Lyrics.Providers.Web.QQMusic.Api.SearchTypeEnum.SONG_ID),
-                cancellationToken);
-            var songs = response?.Req_1?.Data?.Body?.Song?.List ?? [];
-            foreach (var song in songs)
+        return await LyricSearchStageExecutor.ExecuteAsync(
+            plan,
+            async (variant, token) =>
             {
-                var candidate = MapSong(song, variant);
-                if (candidate is null)
-                {
-                    continue;
-                }
-
-                results.TryAdd(candidate.CandidateId, candidate);
-            }
-        }
-
-        return results.Values.ToArray();
+                var response = await LyricifyTask.WaitAsync(
+                    ProviderHelper.QQMusicApi.Search(
+                        BuildQuery(variant),
+                        Lyricify.Lyrics.Providers.Web.QQMusic.Api.SearchTypeEnum.SONG_ID),
+                    token);
+                var songs = response?.Req_1?.Data?.Body?.Song?.List ?? [];
+                return songs
+                    .Select(song => MapSong(song, variant))
+                    .Where(candidate => candidate is not null)
+                    .Cast<SourceTrackCandidate>()
+                    .ToArray();
+            },
+            cancellationToken);
     }
 
     public async Task<RawLyricPayload?> FetchAsync(
@@ -173,35 +167,35 @@ public sealed class KugouLyricSource : ILyricSource
                 .ToArray();
         }
 
-        var results = new Dictionary<string, SourceTrackCandidate>(StringComparer.Ordinal);
-        foreach (var variant in plan.Variants)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            var response = await LyricifyTask.WaitAsync(
-                ProviderHelper.KugouApi.GetSearchSong(BuildQuery(variant)),
-                cancellationToken);
-            foreach (var song in response?.Data?.Info ?? [])
+        return await LyricSearchStageExecutor.ExecuteAsync(
+            plan,
+            async (variant, token) =>
             {
-                if (string.IsNullOrWhiteSpace(song.Hash))
+                var response = await LyricifyTask.WaitAsync(
+                    ProviderHelper.KugouApi.GetSearchSong(BuildQuery(variant)),
+                    token);
+                var candidates = new List<SourceTrackCandidate>();
+                foreach (var song in response?.Data?.Info ?? [])
                 {
-                    continue;
-                }
-
-                var lyricCandidates = await SearchLyricCandidatesAsync(song.Hash, cancellationToken);
-                foreach (var lyric in lyricCandidates)
-                {
-                    var candidate = MapCandidate(song, lyric, variant);
-                    if (candidate is null)
+                    if (string.IsNullOrWhiteSpace(song.Hash))
                     {
                         continue;
                     }
 
-                    results.TryAdd(candidate.CandidateId, candidate);
+                    var lyricCandidates = await SearchLyricCandidatesAsync(song.Hash, token);
+                    foreach (var lyric in lyricCandidates)
+                    {
+                        var candidate = MapCandidate(song, lyric, variant);
+                        if (candidate is not null)
+                        {
+                            candidates.Add(candidate);
+                        }
+                    }
                 }
-            }
-        }
 
-        return results.Values.ToArray();
+                return candidates;
+            },
+            cancellationToken);
     }
 
     public async Task<RawLyricPayload?> FetchAsync(
@@ -316,26 +310,20 @@ public sealed class NeteaseLyricSource : ILyricSource
             ];
         }
 
-        var results = new Dictionary<string, SourceTrackCandidate>(StringComparer.Ordinal);
-        foreach (var variant in plan.Variants)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            var response = await LyricifyTask.WaitAsync(
-                ProviderHelper.NeteaseApi.SearchNew(BuildQuery(variant)),
-                cancellationToken);
-            foreach (var song in response?.Result?.Songs ?? [])
+        return await LyricSearchStageExecutor.ExecuteAsync(
+            plan,
+            async (variant, token) =>
             {
-                var candidate = MapSong(song, variant);
-                if (candidate is null)
-                {
-                    continue;
-                }
-
-                results.TryAdd(candidate.CandidateId, candidate);
-            }
-        }
-
-        return results.Values.ToArray();
+                var response = await LyricifyTask.WaitAsync(
+                    ProviderHelper.NeteaseApi.SearchNew(BuildQuery(variant)),
+                    token);
+                return (response?.Result?.Songs ?? [])
+                    .Select(song => MapSong(song, variant))
+                    .Where(candidate => candidate is not null)
+                    .Cast<SourceTrackCandidate>()
+                    .ToArray();
+            },
+            cancellationToken);
     }
 
     public async Task<RawLyricPayload?> FetchAsync(
@@ -418,30 +406,24 @@ public sealed class LrcLibLyricSource : ILyricSource
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(plan);
-        var results = new Dictionary<string, SourceTrackCandidate>(StringComparer.Ordinal);
-        foreach (var variant in plan.Variants)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            var response = await LyricifyTask.WaitAsync(
-                ProviderHelper.LRCLIBApi.Search(
-                    variant.Title,
-                    string.Join(", ", variant.Artists),
-                    variant.Album,
-                    variant.Duration > TimeSpan.Zero ? variant.Duration.TotalSeconds : null),
-                cancellationToken);
-            foreach (var item in response ?? [])
+        return await LyricSearchStageExecutor.ExecuteAsync(
+            plan,
+            async (variant, token) =>
             {
-                var candidate = MapSearchResult(item, variant);
-                if (candidate is null)
-                {
-                    continue;
-                }
-
-                results.TryAdd(candidate.CandidateId, candidate);
-            }
-        }
-
-        return results.Values.ToArray();
+                var response = await LyricifyTask.WaitAsync(
+                    ProviderHelper.LRCLIBApi.Search(
+                        variant.Title,
+                        string.Join(", ", variant.Artists),
+                        variant.Album,
+                        variant.Duration > TimeSpan.Zero ? variant.Duration.TotalSeconds : null),
+                    token);
+                return (response ?? [])
+                    .Select(item => MapSearchResult(item, variant))
+                    .Where(candidate => candidate is not null)
+                    .Cast<SourceTrackCandidate>()
+                    .ToArray();
+            },
+            cancellationToken);
     }
 
     public async Task<RawLyricPayload?> FetchAsync(
