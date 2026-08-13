@@ -905,6 +905,11 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             XOffset = _settings.XOffset,
             YOffset = _settings.YOffset,
             ForceAlwaysOnTop = _settings.ForceAlwaysOnTop,
+            TaskbarEmbeddingEnabled = _settings.TaskbarEmbeddingEnabled,
+            EmbeddedTaskbarWidth = _settings.EmbeddedTaskbarWidth,
+            EmbeddedTaskbarHorizontalAnchor = _settings.EmbeddedTaskbarHorizontalAnchor,
+            EmbeddedTaskbarHorizontalOffset = _settings.EmbeddedTaskbarHorizontalOffset,
+            EmbeddedTaskbarVerticalOffset = _settings.EmbeddedTaskbarVerticalOffset,
             AppVersion = UpdateChecker.GetCurrentVersion(),
             RepositoryUrl = UpdateChecker.RepositoryUrl
         };
@@ -1126,6 +1131,29 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 break;
             case "yOffset":
                 _settings.YOffset = Math.Clamp(ReadDouble(element, _settings.YOffset), -2000, 2000);
+                break;
+            case "taskbarEmbeddingEnabled":
+                _settings.TaskbarEmbeddingEnabled = ReadBool(element, _settings.TaskbarEmbeddingEnabled);
+                break;
+            case "embeddedTaskbarWidth":
+                _settings.EmbeddedTaskbarWidth = AppSettings.ClampEmbeddedTaskbarWidth(
+                    ReadDouble(element, _settings.EmbeddedTaskbarWidth));
+                break;
+            case "embeddedTaskbarHorizontalAnchor":
+                if (Enum.TryParse<EmbeddedTaskbarHorizontalAnchor>(
+                    ReadString(element, _settings.EmbeddedTaskbarHorizontalAnchor.ToString()),
+                    out var embeddedAnchor))
+                {
+                    _settings.EmbeddedTaskbarHorizontalAnchor = embeddedAnchor;
+                }
+                break;
+            case "embeddedTaskbarHorizontalOffset":
+                _settings.EmbeddedTaskbarHorizontalOffset = AppSettings.ClampEmbeddedTaskbarOffset(
+                    ReadDouble(element, _settings.EmbeddedTaskbarHorizontalOffset));
+                break;
+            case "embeddedTaskbarVerticalOffset":
+                _settings.EmbeddedTaskbarVerticalOffset = AppSettings.ClampEmbeddedTaskbarOffset(
+                    ReadDouble(element, _settings.EmbeddedTaskbarVerticalOffset));
                 break;
         }
     }
@@ -1663,6 +1691,11 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         public double XOffset { get; set; }
         public double YOffset { get; set; }
         public bool ForceAlwaysOnTop { get; set; }
+        public bool TaskbarEmbeddingEnabled { get; set; }
+        public double EmbeddedTaskbarWidth { get; set; }
+        public EmbeddedTaskbarHorizontalAnchor EmbeddedTaskbarHorizontalAnchor { get; set; }
+        public double EmbeddedTaskbarHorizontalOffset { get; set; }
+        public double EmbeddedTaskbarVerticalOffset { get; set; }
         public string AppVersion { get; set; } = "";
         public string RepositoryUrl { get; set; } = "";
     }

@@ -35,6 +35,7 @@
         <button class="nav-item" data-nav="trackOffsets" data-tooltip="单曲偏移" type="button"><svg viewBox="0 0 24 24"><path d="M4 7h10M4 12h16M4 17h9"/><path d="M18 15v6M15 18h6"/></svg><span>单曲偏移</span></button>
         <button class="nav-item" data-nav="advanced" data-tooltip="高级" type="button"><svg viewBox="0 0 24 24"><path d="m14 4-4 16M5 8l-3 4 3 4M19 8l3 4-3 4"/></svg><span>高级</span></button>
         <button class="nav-item" data-nav="lyricDiagnostics" data-tooltip="歌词诊断" type="button"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4z"/><path d="M8 9h8M8 13h5"/><circle cx="17" cy="16" r="3"/><path d="m19.2 18.2 1.8 1.8"/></svg><span>歌词诊断</span></button>
+        <button class="nav-item" data-nav="taskbarEmbedding" data-tooltip="任务栏嵌入" type="button"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M9 10v9"/></svg><span>任务栏嵌入</span></button>
         <button class="nav-item" data-nav="about" data-tooltip="关于" type="button"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg><span>关于</span></button>
       </nav>
 
@@ -237,6 +238,21 @@
             <section id="lyricDiagnosticsSelectionPanel" class="panel" hidden>
               <div class="panel-head"><div><h2>最终结果</h2><p>以下是本次诊断最终采用的歌词内容；空结果表示没有通过完整校验的候选。</p></div></div>
               <div id="lyricDiagnosticsSelection" class="diagnostics-selection"></div>
+            </section>
+          </div>
+        </section>
+
+        <section class="page" data-page="taskbarEmbedding" aria-labelledby="taskbarEmbeddingHeading">
+          <div class="page-inner">
+            <section class="panel">
+              <div class="panel-head"><div><h2 id="taskbarEmbeddingHeading" tabindex="-1">任务栏嵌入（测试版）</h2><p>将歌词窗口直接嵌入任务栏；这是独立于现有定位方式的新实现，默认关闭。</p></div></div>
+              <div class="settings">
+                <div class="setting-row compact"><div class="setting-label"><strong>启用任务栏嵌入</strong><small>启用后歌词窗口将以新机制嵌入任务栏，现有窗口定位设置不再生效。</small></div><label class="switch"><input type="checkbox" data-setting="taskbarEmbeddingEnabled" aria-label="启用任务栏嵌入"><span class="switch-track"></span></label></div>
+                <div class="setting-row" data-depends="taskbarEmbeddingEnabled"><div class="setting-label"><strong>嵌入水平锚点</strong><small>决定歌词窗口依附在任务栏的水平区域。</small></div><button class="control select-trigger" type="button" data-setting="embeddedTaskbarHorizontalAnchor" aria-label="嵌入水平锚点" aria-haspopup="listbox" aria-expanded="false"><span class="select-trigger-value"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+                <div class="setting-row" data-depends="taskbarEmbeddingEnabled"><div class="setting-label"><strong>嵌入窗口宽度</strong><small>嵌入模式下歌词窗口的宽度，范围 320～1400 px。</small></div><div class="slider-number-control"><input type="range" min="320" max="1400" step="1" data-setting="embeddedTaskbarWidth" aria-label="嵌入窗口宽度滑块"><label class="unit-input compact-number-input pixel-input"><input type="number" min="320" max="1400" step="1" data-setting="embeddedTaskbarWidth" aria-label="嵌入窗口宽度数值"><span>px</span></label></div></div>
+                <div class="setting-row" data-depends="taskbarEmbeddingEnabled"><div class="setting-label"><strong>水平偏移</strong><small>相对嵌入水平锚点微调，范围 -2000～2000 px。</small></div><div class="slider-number-control"><input type="range" min="-2000" max="2000" step="1" data-setting="embeddedTaskbarHorizontalOffset" aria-label="嵌入水平偏移滑块"><label class="unit-input compact-number-input pixel-input"><input type="number" min="-2000" max="2000" step="1" inputmode="numeric" data-setting="embeddedTaskbarHorizontalOffset" aria-label="嵌入水平偏移数值"><span>px</span></label></div></div>
+                <div class="setting-row" data-depends="taskbarEmbeddingEnabled"><div class="setting-label"><strong>垂直偏移</strong><small>相对任务栏垂直居中微调，范围 -2000～2000 px。</small></div><div class="slider-number-control"><input type="range" min="-2000" max="2000" step="1" data-setting="embeddedTaskbarVerticalOffset" aria-label="嵌入垂直偏移滑块"><label class="unit-input compact-number-input pixel-input"><input type="number" min="-2000" max="2000" step="1" inputmode="numeric" data-setting="embeddedTaskbarVerticalOffset" aria-label="嵌入垂直偏移数值"><span>px</span></label></div></div>
+              </div>
             </section>
           </div>
         </section>
