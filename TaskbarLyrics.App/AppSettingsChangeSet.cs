@@ -87,7 +87,9 @@ internal readonly record struct AppSettingsChangeSet(
             current.HorizontalAnchor != next.HorizontalAnchor ||
             current.XOffset != next.XOffset ||
             current.YOffset != next.YOffset ||
-            current.ForceAlwaysOnTop != next.ForceAlwaysOnTop;
+            current.ForceAlwaysOnTop != next.ForceAlwaysOnTop ||
+            current.LyricsDisplayMode != next.LyricsDisplayMode ||
+            !AreSameStrings(current.SelectedDisplayIds, next.SelectedDisplayIds);
 
         var globalMediaHotkeysChanged = isInitialApplication ||
             !AreSameGlobalMediaHotkeys(current.GlobalMediaHotkeys, next.GlobalMediaHotkeys);

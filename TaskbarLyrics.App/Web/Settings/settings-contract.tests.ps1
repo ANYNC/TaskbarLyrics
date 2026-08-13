@@ -11,6 +11,8 @@ $settingsWindow = [IO.File]::ReadAllText((Join-Path $appRoot 'SettingsWindow.xam
 $app = [IO.File]::ReadAllText((Join-Path $appRoot 'App.xaml.cs'), [Text.UTF8Encoding]::new($false, $true))
 $appSettings = [IO.File]::ReadAllText((Join-Path $appRoot 'AppSettings.cs'), [Text.UTF8Encoding]::new($false, $true))
 $lyricsWindow = [IO.File]::ReadAllText((Join-Path $appRoot 'MainWindow.xaml.cs'), [Text.UTF8Encoding]::new($false, $true))
+$lyricsWindowHost = [IO.File]::ReadAllText((Join-Path $appRoot 'LyricsWindowHost.cs'), [Text.UTF8Encoding]::new($false, $true))
+$lyricsStyleFactory = [IO.File]::ReadAllText((Join-Path $appRoot 'LyricsStyleScriptFactory.cs'), [Text.UTF8Encoding]::new($false, $true))
 $mediaHotkeyCatalog = [IO.File]::ReadAllText((Join-Path $appRoot 'MediaHotkeyCatalog.cs'), [Text.UTF8Encoding]::new($false, $true))
 
 $errors = [Collections.Generic.List[string]]::new()
@@ -61,6 +63,7 @@ $requiredHtml = @(
     'id="spectrumAudioConsentDialog"', 'id="confirmSpectrumAudioAccess"',
     'id="spectrumCaptureFailureDialog"', 'id="retrySpectrumCaptureButton"', 'id="disableSpectrumButton"',
     'id="browseButton"', 'id="showLyricsWindowButton"', 'data-reset-layout-scale',
+    'name="lyricsDisplayMode"', 'id="displayMonitorList"', 'data-display-mode',
     'data-reset-layout-base', 'id="layoutScalePreview"', 'data-window-resize="top"',
     'class="slider-number-control"', 'compact-number-input', 'id="hueNumberInput"',
     'type="range" min="-2000" max="2000" step="1" data-setting="xOffset"',
@@ -92,6 +95,7 @@ $requiredScript = @(
     'function openPlayerSettings', 'function commitPlayerOffset', 'playerLyricOffset:',
     'function renderMediaHotkeys', 'function beginHotkeyRecording', 'function getRecordedHotkey', 'type: "resetMediaHotkey"',
     'function renderTrackOffsets', 'function commitCurrentTrackOffset', 'function setCurrentTrackOffsetData',
+    'function renderDisplayMonitors', 'commitSetting("lyricsDisplayMode"', 'commitSetting("selectedDisplayIds"',
     'function setTrackOffsetEntries', 'function requestTrackOffsetPage', 'function changeTrackOffsetPage',
     'function setLyricDiagnosticsState', 'function renderLyricDiagnosticsProviders',
     'function renderLyricDiagnosticsVariants', 'function renderLyricDiagnosticsSelection',
@@ -132,11 +136,15 @@ if (-not $appSettings.Contains('public GlobalMediaHotkeySettings GlobalMediaHotk
 if (-not $appSettings.Contains('public double LyricsLayoutScalePercent')) { $errors.Add('lyrics layout scale setting missing') }
 if (-not $appSettings.Contains('public bool ShowCover')) { $errors.Add('show cover setting missing') }
 if (-not $appSettings.Contains('public bool SpectrumAudioAccessGranted')) { $errors.Add('spectrum audio access setting missing') }
+if (-not $appSettings.Contains('public LyricsDisplayMode LyricsDisplayMode')) { $errors.Add('lyrics display mode setting missing') }
+if (-not $appSettings.Contains('public List<string> SelectedDisplayIds')) { $errors.Add('selected display ids setting missing') }
 if (-not $appSettings.Contains('public const string DefaultFontFamily = BundledFontFamily;')) { $errors.Add('bundled font is not the default') }
 if (-not $app.Contains('Settings.FontFamily = AppSettings.NormalizeFontFamily(Settings.FontFamily);')) { $errors.Add('startup font normalization missing') }
-if (-not $lyricsWindow.Contains('fontFamily = AppSettings.NormalizeFontFamily(settings.FontFamily)')) { $errors.Add('lyrics font normalization missing') }
-if (-not $lyricsWindow.Contains('showCover = settings.ShowCover')) { $errors.Add('lyrics cover visibility payload missing') }
-if (-not $lyricsWindow.Contains('WebViewMessageScriptFactory.Dispatch("taskbarLyrics", "style"')) { $errors.Add('lyrics V1 style dispatch missing') }
+if (-not $lyricsStyleFactory.Contains('fontFamily = AppSettings.NormalizeFontFamily(settings.FontFamily)')) { $errors.Add('lyrics font normalization missing') }
+if (-not $lyricsStyleFactory.Contains('showCover = settings.ShowCover')) { $errors.Add('lyrics cover visibility payload missing') }
+if (-not $lyricsStyleFactory.Contains('WebViewMessageScriptFactory.Dispatch("taskbarLyrics", "style"')) { $errors.Add('lyrics V1 style dispatch missing') }
+if (-not $lyricsWindowHost.Contains('LyricsDisplayTargetSelector.Select(')) { $errors.Add('lyrics display target reconciliation missing') }
+if (-not $lyricsWindowHost.Contains('SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;')) { $errors.Add('lyrics display hotplug handling missing') }
 
 $lyricsScript = [IO.File]::ReadAllText((Join-Path $appRoot 'Web\Lyrics\app.js'), [Text.UTF8Encoding]::new($false, $true))
 $lyricsCss = [IO.File]::ReadAllText((Join-Path $appRoot 'Web\Lyrics\style.css'), [Text.UTF8Encoding]::new($false, $true))

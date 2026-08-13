@@ -84,6 +84,11 @@ public partial class MainWindow : Window, IDisposable
     private bool _hasReportedWebViewControllerMonitoringFailure;
     private int _displayLayoutRefreshPending;
     private int _isDisposed;
+    private DisplayMonitor? _displayMonitor;
+
+    internal event Action<LyricsPresentationCommand>? PresentationCommandCreated;
+
+    internal DisplayMonitor? DisplayMonitor => _displayMonitor;
 
     internal MainWindow(TrackLyricOffsetStore trackLyricOffsetStore, IAppCompositionRoot compositionRoot)
     {
@@ -141,7 +146,7 @@ public partial class MainWindow : Window, IDisposable
             Width = AppSettings.ClampEffectiveWindowWidth(
                 snapshot.WindowWidth,
                 snapshot.LyricsLayoutScalePercent,
-                SystemParameters.WorkArea.Width);
+                GetTargetWorkAreaWidth());
         }
 
         if (changes.WindowLayoutChanged)
@@ -193,6 +198,37 @@ public partial class MainWindow : Window, IDisposable
 
         PushCurrentLyricsToWebView();
     }
+
+    internal void SetDisplayMonitor(DisplayMonitor displayMonitor)
+    {
+        _displayMonitor = displayMonitor;
+        if (!_hasAppliedSettings)
+        {
+            return;
+        }
+
+        Width = AppSettings.ClampEffectiveWindowWidth(
+            _currentSettings.WindowWidth,
+            _currentSettings.LyricsLayoutScalePercent,
+            GetTargetWorkAreaWidth());
+        ApplyHostLayout(CreateLayoutMetrics(_currentSettings));
+        AnchorToTaskbar();
+        AttachToTaskbarHost();
+        PushStyleToWebView(_currentSettings);
+    }
+
+    internal void ReplayPresentationState()
+    {
+        PushStyleToWebView(_currentSettings);
+        PushCurrentLyricsToWebView();
+        PushCoverToWebView();
+        PushSpectrumTuningToWebView(_spectrumTuningSettings);
+    }
+
+    private double GetTargetWorkAreaWidth() =>
+        _displayMonitor is null
+            ? SystemParameters.WorkArea.Width
+            : _displayMonitor.WorkAreaWidth / _displayMonitor.PixelsPerDip;
 
     private void ReconfigureLocalMedia(AppSettings settings)
     {
@@ -894,7 +930,7 @@ public partial class MainWindow : Window, IDisposable
             _currentTranslation,
             _nextTranslation,
             _currentSettings.ShowLyricTranslation && _hasTrackTranslation);
-        TaskObserver.Observe(ExecuteWebScriptAsync(script), "lyrics web view update");
+        PublishPresentationCommand("lyrics", script, "lyrics web view update");
     }
 
     private void PushCoverToWebView()
@@ -909,7 +945,7 @@ public partial class MainWindow : Window, IDisposable
             _currentCoverFallbackText,
             _currentCoverFallbackColorCss,
             _coverVisualTransition.VisualIdentity);
-        TaskObserver.Observe(ExecuteWebScriptAsync(script), "lyrics cover update");
+        PublishPresentationCommand("cover", script, "lyrics cover update");
     }
 
     private void PushSpectrumToWebView(IReadOnlyList<float> bars)
@@ -937,7 +973,7 @@ public partial class MainWindow : Window, IDisposable
         }
 
         var script = LyricsWebViewScriptFactory.SetSpectrumTuning(settings);
-        TaskObserver.Observe(ExecuteWebScriptAsync(script), "lyrics spectrum tuning update");
+        PublishPresentationCommand("spectrumTuning", script, "lyrics spectrum tuning update");
     }
 
     private void SendSpectrumToWebView(string script)
@@ -949,7 +985,14 @@ public partial class MainWindow : Window, IDisposable
         }
 
         _isSpectrumScriptPending = true;
+        PresentationCommandCreated?.Invoke(new LyricsPresentationCommand("spectrum", script));
         TaskObserver.Observe(CompleteSpectrumScriptAsync(task), "lyrics spectrum update");
+    }
+
+    private void PublishPresentationCommand(string slot, string script, string operation)
+    {
+        PresentationCommandCreated?.Invoke(new LyricsPresentationCommand(slot, script));
+        TaskObserver.Observe(ExecuteWebScriptAsync(script), operation);
     }
 
     private async Task CompleteSpectrumScriptAsync(Task scriptTask)
@@ -1205,52 +1248,10 @@ public partial class MainWindow : Window, IDisposable
             return;
         }
 
-        var metrics = CreateLayoutMetrics(settings);
-        var stylePayload = new
-        {
-            fontFamily = AppSettings.NormalizeFontFamily(settings.FontFamily),
-            layoutScalePercent = metrics.ScalePercent,
-            fontSize = metrics.FontSize,
-            showCover = settings.ShowCover,
-            coverSize = metrics.CoverSize,
-            coverGap = metrics.CoverGap,
-            coverCornerRadius = metrics.CoverCornerRadius,
-            viewportDescenderBuffer = metrics.ViewportDescenderBuffer,
-            layoutHorizontalPadding = metrics.LayoutHorizontalPadding,
-            lyricsPaneTopPadding = metrics.LyricsPaneTopPadding,
-            lyricsPaneRightPadding = metrics.LyricsPaneRightPadding,
-            lyricsPaneLeftPadding = metrics.LyricsPaneLeftPadding,
-            primaryOffsetY = metrics.PrimaryOffsetY,
-            secondaryOffsetY = metrics.SecondaryOffsetY,
-            lineTextBottomPadding = metrics.LineTextBottomPadding,
-            surfaceRadius = metrics.SurfaceRadius,
-            layerTransitionOffset = metrics.LayerTransitionOffset,
-            coverFallbackFontSize = metrics.CoverFallbackFontSize,
-            spectrumWidth = metrics.SpectrumWidth,
-            spectrumHeight = metrics.SpectrumHeight,
-            spectrumGap = metrics.SpectrumGap,
-            spectrumBarWidth = metrics.SpectrumBarWidth,
-            spectrumBarHeight = metrics.SpectrumBarHeight,
-            spectrumLowHeight = metrics.SpectrumLowHeight,
-            spectrumHighHeight = metrics.SpectrumHighHeight,
-            spectrumMiddleHeight = metrics.SpectrumMiddleHeight,
-            fontWeight = settings.FontWeight,
-            primaryColor = ToCssColor(_primaryTextColor),
-            secondaryColor = ToCssColor(_secondaryTextColor),
-            translationColor = ToCssColor(_translationTextColor),
-            surfaceColor = settings.ShowBackground
-                ? $"rgba(18, 18, 24, {Math.Clamp(settings.BackgroundOpacity, 0, 1).ToString("0.####", CultureInfo.InvariantCulture)})"
-                : "transparent",
-            surfaceShadow = settings.ShowBorder
-                ? "inset 0 0 0 1px rgba(255, 255, 255, 0.16)"
-                : "none",
-            textShadow = settings.ShowTextShadow
-                ? "0 1px 2px rgba(0, 0, 0, 0.36)"
-                : "none"
-        };
-
-        var script = WebViewMessageScriptFactory.Dispatch("taskbarLyrics", "style", stylePayload);
-        TaskObserver.Observe(ExecuteWebScriptAsync(script), "lyrics style update");
+        var script = LyricsStyleScriptFactory.Create(
+            settings,
+            GetTargetPixelsPerDip());
+        PublishPresentationCommand("style", script, "lyrics style update");
     }
 
     private object EnsureWebViewControlCreated()
@@ -1400,7 +1401,7 @@ public partial class MainWindow : Window, IDisposable
         return $"rgba({color.R}, {color.G}, {color.B}, {alpha.ToString(CultureInfo.InvariantCulture)})";
     }
 
-    private static string GetLyricsWebUiHtml()
+    internal static string GetLyricsWebUiHtml()
     {
         try
         {
@@ -1467,7 +1468,7 @@ public partial class MainWindow : Window, IDisposable
 
     private void AnchorToTaskbar()
     {
-        TaskbarPlacementService.Anchor(this, _currentSettings);
+        TaskbarPlacementService.Anchor(this, _currentSettings, _displayMonitor);
     }
 
     protected override void OnDpiChanged(DpiScale oldDpi, DpiScale newDpi)
@@ -1520,8 +1521,11 @@ public partial class MainWindow : Window, IDisposable
 
     private LyricsLayoutMetrics CreateLayoutMetrics(AppSettings settings)
     {
-        return LyricsLayoutMetrics.Create(settings, TaskbarPlacementService.GetPixelsPerDip(this));
+        return LyricsLayoutMetrics.Create(settings, GetTargetPixelsPerDip());
     }
+
+    private double GetTargetPixelsPerDip() =>
+        _displayMonitor?.PixelsPerDip ?? TaskbarPlacementService.GetPixelsPerDip(this);
 
     private void AttachToTaskbarHost()
     {
