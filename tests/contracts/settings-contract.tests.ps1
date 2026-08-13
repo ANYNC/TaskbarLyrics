@@ -1,12 +1,14 @@
 $ErrorActionPreference = 'Stop'
 
-$settingsRoot = $PSScriptRoot
-$appRoot = Resolve-Path (Join-Path $settingsRoot '..\..')
+$repositoryRoot = Resolve-Path (Join-Path $PSScriptRoot '..\..')
+$appRoot = Join-Path $repositoryRoot 'TaskbarLyrics.App'
+$settingsRoot = Join-Path $appRoot 'Web\Settings'
 $html = [IO.File]::ReadAllText((Join-Path $settingsRoot 'settings.html'), [Text.UTF8Encoding]::new($false, $true))
 $css = [IO.File]::ReadAllText((Join-Path $settingsRoot 'settings.css'), [Text.UTF8Encoding]::new($false, $true))
 $script = [IO.File]::ReadAllText((Join-Path $settingsRoot 'settings.js'), [Text.UTF8Encoding]::new($false, $true))
 $bridge = [IO.File]::ReadAllText((Join-Path $settingsRoot 'bridge.js'), [Text.UTF8Encoding]::new($false, $true))
 $hotkeyScript = [IO.File]::ReadAllText((Join-Path $settingsRoot 'hotkeys.js'), [Text.UTF8Encoding]::new($false, $true))
+$settingsWindowXaml = [IO.File]::ReadAllText((Join-Path $appRoot 'SettingsWindow.xaml'), [Text.UTF8Encoding]::new($false, $true))
 $settingsWindow = [IO.File]::ReadAllText((Join-Path $appRoot 'SettingsWindow.xaml.cs'), [Text.UTF8Encoding]::new($false, $true))
 $app = [IO.File]::ReadAllText((Join-Path $appRoot 'App.xaml.cs'), [Text.UTF8Encoding]::new($false, $true))
 $appSettings = [IO.File]::ReadAllText((Join-Path $appRoot 'AppSettings.cs'), [Text.UTF8Encoding]::new($false, $true))
@@ -14,6 +16,15 @@ $lyricsWindow = [IO.File]::ReadAllText((Join-Path $appRoot 'MainWindow.xaml.cs')
 $mediaHotkeyCatalog = [IO.File]::ReadAllText((Join-Path $appRoot 'MediaHotkeyCatalog.cs'), [Text.UTF8Encoding]::new($false, $true))
 
 $errors = [Collections.Generic.List[string]]::new()
+
+$productionWebRoot = Join-Path $appRoot 'Web'
+$developmentArtifacts = Get-ChildItem -LiteralPath $productionWebRoot -Recurse -File | Where-Object {
+    $_.Name -match '\.(tests?|spec)\.' -or $_.Extension -eq '.ps1'
+}
+foreach ($artifact in $developmentArtifacts) {
+    $relativePath = [IO.Path]::GetRelativePath($repositoryRoot, $artifact.FullName)
+    $errors.Add("development artifact is inside production Web assets: $relativePath")
+}
 
 $pages = @('sources', 'shortcuts', 'lyrics', 'trackOffsets', 'displayArea', 'general', 'advanced', 'lyricDiagnostics', 'about')
 foreach ($page in $pages) {
@@ -52,7 +63,8 @@ if ($mediaHotkeyCatalog.Contains('string Description')) { $errors.Add('media hot
 
 $requiredHtml = @(
     'id="sourceGrid"', 'id="priorityList"', 'id="mediaHotkeyList"', 'id="selectPopover"', 'role="listbox"',
-    'id="colorPopover"', 'id="colorArea"', 'id="restoreDialog"', 'id="clearDialog"',
+    'id="colorPopover"', 'id="colorArea"', 'id="colorSaturationSlider"', 'id="colorBrightnessSlider"',
+    'id="restoreDialog"', 'id="clearDialog"',
     'id="playerSettingsDialog"', 'id="playerRecognitionToggle"', 'id="playerOffsetInput"',
     'id="currentTrackOffset"', 'id="trackOffsetList"', 'id="trackOffsetPagination"', 'id="clearTrackOffsetsDialog"',
     'id="runLyricDiagnosticsButton"', 'id="lyricDiagnosticsStatus"', 'id="lyricDiagnosticsReportSummary"', 'id="lyricDiagnosticsProviders"',
@@ -70,6 +82,19 @@ $requiredHtml = @(
 )
 foreach ($marker in $requiredHtml) {
     if (-not $html.Contains($marker)) { $errors.Add("missing html marker: $marker") }
+}
+foreach ($dialog in @(
+    @{ Id = 'restoreDialog'; Title = 'restoreDialogTitle'; Description = 'restoreDialogDescription' },
+    @{ Id = 'clearDialog'; Title = 'clearDialogTitle'; Description = 'clearDialogDescription' },
+    @{ Id = 'deleteTrackOffsetDialog'; Title = 'deleteTrackOffsetDialogTitle'; Description = 'deleteTrackOffsetDialogDescription' },
+    @{ Id = 'clearTrackOffsetsDialog'; Title = 'clearTrackOffsetsDialogTitle'; Description = 'clearTrackOffsetsDialogDescription' }
+)) {
+    if (-not $html.Contains("id=`"$($dialog.Id)`" aria-labelledby=`"$($dialog.Title)`" aria-describedby=`"$($dialog.Description)`"")) { $errors.Add("dialog semantics missing: $($dialog.Id)") }
+    if (-not $html.Contains("id=`"$($dialog.Title)`"")) { $errors.Add("dialog title missing: $($dialog.Id)") }
+    if (-not $html.Contains("id=`"$($dialog.Description)`"")) { $errors.Add("dialog description missing: $($dialog.Id)") }
+}
+foreach ($colorSlider in @('colorSaturationSlider', 'colorBrightnessSlider')) {
+    if (-not [regex]::IsMatch($html, "input[^>]+id=`"$colorSlider`"[^>]+type=`"range`"[^>]+aria-label", 'IgnoreCase')) { $errors.Add("color range semantics missing: $colorSlider") }
 }
 foreach ($key in @('lyricsLayoutScalePercent', 'coverGap', 'coverCornerRadius', 'backgroundOpacity', 'xOffset', 'yOffset', 'windowWidth')) {
     if ([regex]::Matches($html, "type=`"range`"[^>]+data-setting=`"$key`"").Count -ne 1) { $errors.Add("missing unique slider: $key") }
@@ -97,7 +122,7 @@ $requiredScript = @(
     'function renderLyricDiagnosticsVariants', 'function renderLyricDiagnosticsSelection',
     'type: "queryTrackOffsets"',
     'type: "setCurrentTrackOffset"', 'type: "setStoredTrackOffset"', 'type: "deleteTrackOffset"',
-    'function positionPopover', 'function postSourceOrder', 'function updateLayoutPreview', 'function readSettingControlValue',
+    'function positionPopover', 'function postSourceOrder', 'function updateLayoutPreview', 'function readSettingControlValue', 'function updateColorFromRange', 'function setPageInteractionState',
     'function setSettingsSaveResult', 'case "settingsSaveResult"',
     'type: "resetLyricsLayoutBase"', 'type: "previewUpdate"', '"ArrowDown"', '"Home"', '"Escape"'
 )
@@ -127,6 +152,8 @@ if (-not $settingsWindow.Contains('"settingsSaveResult"')) { $errors.Add('missin
 if (-not $settingsWindow.Contains('"lyricDiagnosticsState"')) { $errors.Add('missing lyric diagnostics state dispatch') }
 if (-not $settingsWindow.Contains('"requestSpectrumDisplayMode"')) { $errors.Add('missing spectrum mode request dispatch') }
 if (-not $settingsWindow.Contains('"spectrumCaptureState"')) { $errors.Add('missing spectrum capture state dispatch') }
+if (-not $settingsWindow.Contains('SystemParameters.WorkArea')) { $errors.Add('settings window work-area bounds missing') }
+if (-not $settingsWindowXaml.Contains('MinWidth="720"')) { $errors.Add('settings window minimum width remains too large') }
 if (-not $app.Contains('public void ShowLyricsWindow()')) { $errors.Add('missing App.ShowLyricsWindow') }
 if (-not $appSettings.Contains('public GlobalMediaHotkeySettings GlobalMediaHotkeys')) { $errors.Add('global media hotkeys settings missing') }
 if (-not $appSettings.Contains('public double LyricsLayoutScalePercent')) { $errors.Add('lyrics layout scale setting missing') }

@@ -30,7 +30,7 @@ $repositoryRoot = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot 'verify-output.ps1')
 $appTests = Join-Path $repositoryRoot 'TaskbarLyrics.App.Tests\TaskbarLyrics.App.Tests.csproj'
 $coreTests = Join-Path $repositoryRoot 'TaskbarLyrics.Core.Tests\TaskbarLyrics.Core.Tests.csproj'
-$settingsContract = Join-Path $repositoryRoot 'TaskbarLyrics.App\Web\Settings\settings-contract.tests.ps1'
+$settingsContract = Join-Path $repositoryRoot 'tests\contracts\settings-contract.tests.ps1'
 $restartAppTests = Join-Path $repositoryRoot 'scripts\restart-app.tests.ps1'
 $verificationOutputTests = Join-Path $repositoryRoot 'scripts\verify-output.tests.ps1'
 $webDependencies = Join-Path $repositoryRoot 'node_modules'

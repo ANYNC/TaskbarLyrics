@@ -1,22 +1,16 @@
 using System.IO;
 using System.Globalization;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using System.Windows;
 using System.Windows.Threading;
 using Microsoft.Web.WebView2.Core;
 using TaskbarLyrics.Core.Services;
+using TaskbarLyrics.Core.Utilities;
 
 namespace TaskbarLyrics.App;
 
 public partial class SmtcTimelineMonitorWindow : Wpf.Ui.Controls.FluentWindow
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        Converters = { new JsonStringEnumConverter() }
-    };
-
     private readonly SmtcMusicSessionProvider _provider;
     private readonly LyricSyncService _lyricSyncService;
     private readonly DispatcherTimer _timer;
@@ -118,9 +112,7 @@ public partial class SmtcTimelineMonitorWindow : Wpf.Ui.Controls.FluentWindow
         var diagnostics = _provider.GetLastTimelineDiagnostics();
         if (diagnostics is null)
         {
-            TaskObserver.Observe(
-                MonitorWebView.ExecuteScriptAsync("window.smtcMonitor?.setData(null);"),
-                "SMTC timeline monitor update");
+            DispatchToWeb("setData", null, "SMTC timeline monitor update");
             return;
         }
 
@@ -148,10 +140,7 @@ public partial class SmtcTimelineMonitorWindow : Wpf.Ui.Controls.FluentWindow
             artist = diagnostics.Artist
         };
 
-        var json = JsonSerializer.Serialize(payload, JsonOptions);
-        TaskObserver.Observe(
-            MonitorWebView.ExecuteScriptAsync($"window.smtcMonitor?.setData({json});"),
-            "SMTC timeline monitor update");
+        DispatchToWeb("setData", payload, "SMTC timeline monitor update");
     }
 
     private void WebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
@@ -162,9 +151,22 @@ public partial class SmtcTimelineMonitorWindow : Wpf.Ui.Controls.FluentWindow
             messageJson = e.WebMessageAsJson;
         }
 
-        var message = JsonSerializer.Deserialize<MonitorMessage>(messageJson, JsonOptions);
-        if (message?.Type is null)
+        var message = WebViewMessageRouter.Parse(messageJson);
+        if (message is null)
         {
+            Log.Diagnostic("SMTC-WEB", "MessageRejected Reason='InvalidV1Envelope'");
+            return;
+        }
+
+        if (!IsKnownMessageType(message.Type))
+        {
+            Log.Diagnostic("SMTC-WEB", "MessageRejected Reason='UnknownType'");
+            return;
+        }
+
+        if (message.Payload is not { ValueKind: JsonValueKind.Object } payload)
+        {
+            Log.Diagnostic("SMTC-WEB", "MessageRejected Reason='PayloadNotObject'");
             return;
         }
 
@@ -172,39 +174,35 @@ public partial class SmtcTimelineMonitorWindow : Wpf.Ui.Controls.FluentWindow
         {
             case "ready":
                 PushDiagnostics();
-                TaskObserver.Observe(
-                    MonitorWebView.ExecuteScriptAsync($"window.smtcMonitor?.setTopmost({(Topmost ? "true" : "false")});"),
-                    "SMTC timeline monitor topmost update");
+                DispatchToWeb("setTopmost", Topmost, "SMTC timeline monitor topmost update");
                 break;
             case "copy":
-                if (!string.IsNullOrWhiteSpace(message.Text))
-                {
-                    try { System.Windows.Clipboard.SetText(message.Text); } catch { }
-                }
+                HandleCopyRequest(payload);
                 break;
             case "toggleTopmost":
                 Topmost = !Topmost;
-                TaskObserver.Observe(
-                    MonitorWebView.ExecuteScriptAsync($"window.smtcMonitor?.setTopmost({(Topmost ? "true" : "false")});"),
-                    "SMTC timeline monitor topmost update");
+                DispatchToWeb("setTopmost", Topmost, "SMTC timeline monitor topmost update");
                 break;
             case "pause":
                 _timer.Stop();
-                TaskObserver.Observe(
-                    MonitorWebView.ExecuteScriptAsync("window.smtcMonitor?.setPaused(true);"),
-                    "SMTC timeline monitor pause update");
+                DispatchToWeb("setPaused", true, "SMTC timeline monitor pause update");
                 break;
             case "resume":
                 _timer.Start();
-                TaskObserver.Observe(
-                    MonitorWebView.ExecuteScriptAsync("window.smtcMonitor?.setPaused(false);"),
-                    "SMTC timeline monitor resume update");
+                DispatchToWeb("setPaused", false, "SMTC timeline monitor resume update");
                 break;
             case "windowDrag":
                 NativeWindowInteraction.BeginDrag(this);
                 break;
             case "windowResizeStart":
-                NativeWindowInteraction.BeginResize(this, message.Edge);
+                if (TryReadResizeEdge(payload, out var edge))
+                {
+                    NativeWindowInteraction.BeginResize(this, edge);
+                }
+                else
+                {
+                    Log.Diagnostic("SMTC-WEB", "MessageRejected Reason='InvalidResizeEdge'");
+                }
                 break;
             case "windowMinimize":
                 WindowState = WindowState.Minimized;
@@ -213,6 +211,77 @@ public partial class SmtcTimelineMonitorWindow : Wpf.Ui.Controls.FluentWindow
                 Close();
                 break;
         }
+    }
+
+    private void HandleCopyRequest(JsonElement payload)
+    {
+        if (!payload.TryGetProperty("text", out var textElement) ||
+            textElement.ValueKind != JsonValueKind.String ||
+            string.IsNullOrWhiteSpace(textElement.GetString()))
+        {
+            Log.Diagnostic("SMTC-WEB", "CopyFailed Reason='InvalidTextPayload'");
+            DispatchToWeb("copyResult", new { success = false, message = "没有可复制的诊断数据。" }, "SMTC copy result");
+            return;
+        }
+
+        try
+        {
+            System.Windows.Clipboard.SetText(textElement.GetString()!);
+            DispatchToWeb("copyResult", new { success = true }, "SMTC copy result");
+        }
+        catch (Exception exception)
+        {
+            Log.Diagnostic(
+                "SMTC-WEB",
+                $"CopyFailed Reason='ClipboardException' Exception='{exception.GetType().Name}' HResult=0x{exception.HResult:X8}");
+            DispatchToWeb("copyResult", new { success = false, message = "复制失败，请重试。" }, "SMTC copy result");
+        }
+    }
+
+    private void DispatchToWeb(string type, object? payload, string operation)
+    {
+        if (!_isWebReady || MonitorWebView.CoreWebView2 is null)
+        {
+            return;
+        }
+
+        TaskObserver.Observe(
+            MonitorWebView.ExecuteScriptAsync(
+                WebViewMessageScriptFactory.Dispatch("smtcMonitor", type, payload)),
+            operation);
+    }
+
+    private static bool IsKnownMessageType(string? type)
+    {
+        return type is "ready" or
+            "copy" or
+            "toggleTopmost" or
+            "pause" or
+            "resume" or
+            "windowDrag" or
+            "windowResizeStart" or
+            "windowMinimize" or
+            "windowClose";
+    }
+
+    private static bool TryReadResizeEdge(JsonElement payload, out string edge)
+    {
+        edge = string.Empty;
+        if (!payload.TryGetProperty("edge", out var edgeElement) ||
+            edgeElement.ValueKind != JsonValueKind.String)
+        {
+            return false;
+        }
+
+        edge = edgeElement.GetString() ?? string.Empty;
+        return edge is "left" or
+            "right" or
+            "top" or
+            "topLeft" or
+            "topRight" or
+            "bottom" or
+            "bottomLeft" or
+            "bottomRight";
     }
 
     private void OnWindowThemeChanged(object? sender, EventArgs e)
@@ -230,10 +299,4 @@ public partial class SmtcTimelineMonitorWindow : Wpf.Ui.Controls.FluentWindow
         NativeWindowTheme.Apply(this, MonitorWebView);
     }
 
-    private sealed class MonitorMessage
-    {
-        public string? Type { get; set; }
-        public string? Text { get; set; }
-        public string? Edge { get; set; }
-    }
 }

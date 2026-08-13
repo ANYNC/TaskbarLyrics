@@ -192,7 +192,7 @@ dotnet build TaskbarLyrics.sln
 修改设置页后运行设置契约测试：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File TaskbarLyrics.App/Web/Settings/settings-contract.tests.ps1
+powershell -ExecutionPolicy Bypass -File tests/contracts/settings-contract.tests.ps1
 ```
 
 ### 自行发布

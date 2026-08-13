@@ -46,3 +46,44 @@ describe("SMTC monitor long metadata", () => {
     expect(sourceName.getAttribute("aria-describedby")).toBe("hoverTooltip");
   });
 });
+
+describe("SMTC monitor V1 bridge", () => {
+  async function createDom(posted = []) {
+    const html = await readFile(
+      new URL("TaskbarLyrics.App/Web/SmtcMonitor/index.html", root),
+      "utf8");
+    return new JSDOM(html, { runScripts: "dangerously", beforeParse(window) {
+      window.chrome = { webview: { postMessage(message) { posted.push(JSON.parse(message)); } } };
+    } });
+  }
+
+  it("sends V1 envelopes and renders copyResult feedback", async () => {
+    const posted = [];
+    const dom = await createDom(posted);
+
+    expect(posted[0]).toEqual({ version: 1, type: "ready", payload: {} });
+    dom.window.document.querySelector("#copyBtn").click();
+    expect(posted.at(-1)).toEqual({
+      version: 1,
+      type: "copy",
+      payload: { text: "等待 SMTC 诊断数据…" }
+    });
+
+    dom.window.smtcMonitor.receive({ version: 1, type: "copyResult", payload: { success: true } });
+    expect(dom.window.document.querySelector("#toast").textContent).toBe("已复制到剪贴板");
+    dom.window.smtcMonitor.receive({ version: 1, type: "copyResult", payload: { success: false, message: "复制失败" } });
+    expect(dom.window.document.querySelector("#toast").textContent).toBe("复制失败");
+  });
+
+  it("ignores malformed, unknown, and invalid inbound messages", async () => {
+    const dom = await createDom();
+    const original = dom.window.document.querySelector("#live").textContent;
+
+    dom.window.smtcMonitor.receive(null);
+    dom.window.smtcMonitor.receive({ version: 2, type: "setPaused", payload: true });
+    dom.window.smtcMonitor.receive({ version: 1, type: "unknown", payload: {} });
+    dom.window.smtcMonitor.receive({ version: 1, type: "setPaused", payload: "true" });
+
+    expect(dom.window.document.querySelector("#live").textContent).toBe(original);
+  });
+});

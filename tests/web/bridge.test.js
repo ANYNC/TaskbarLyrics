@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 const root = new URL("../..", import.meta.url);
 const read = relativePath => readFile(new URL(relativePath, root), "utf8");
 
-async function createSettingsDom({ deferAnimationFrames = false } = {}) {
+async function createSettingsDom({ deferAnimationFrames = false, reducedMotion = false } = {}) {
   const [html, bridge, hotkeys, state, script] = await Promise.all([
     read("TaskbarLyrics.App/Web/Settings/settings.html"),
     read("TaskbarLyrics.App/Web/Settings/bridge.js"),
@@ -17,7 +17,7 @@ async function createSettingsDom({ deferAnimationFrames = false } = {}) {
   const sent = [];
   const animationFrames = [];
   dom.window.chrome = { webview: { postMessage: value => sent.push(JSON.parse(value)) } };
-  dom.window.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
+  dom.window.matchMedia = () => ({ matches: reducedMotion, addEventListener() {}, removeEventListener() {} });
   dom.window.requestAnimationFrame = callback => {
     if (!deferAnimationFrames) {
       callback(0);
@@ -449,6 +449,103 @@ describe("settings WebView bridge", () => {
     document.querySelector('[data-nav="shortcuts"]').click();
 
     expect(document.querySelector('[data-page="shortcuts"]').style.transform).toBe("translateX(28px)");
+  });
+
+  it("keeps non-target pages inert during rapid transitions", async () => {
+    const { dom, script } = await createSettingsDom();
+    const document = dom.window.document;
+    const pendingAnimation = new Promise(() => {});
+
+    document.querySelectorAll("[data-page]").forEach(page => {
+      page.animate = () => ({ cancel() {}, finished: pendingAnimation });
+    });
+    dom.window.eval(script);
+
+    document.querySelector('[data-nav="lyrics"]').click();
+    expect(document.querySelector('[data-page="sources"]').inert).toBe(true);
+    expect(document.querySelector('[data-page="lyrics"]').inert).toBe(false);
+
+    document.querySelector('[data-nav="shortcuts"]').click();
+    expect(document.querySelector('[data-page="lyrics"]').inert).toBe(true);
+    expect(document.querySelector('[data-page="shortcuts"]').inert).toBe(false);
+    expect(document.querySelector('[data-page="shortcuts"]').hasAttribute("inert")).toBe(false);
+  });
+
+  it("finishes reduced-motion navigation with only the target page focusable", async () => {
+    const { dom, script } = await createSettingsDom({ reducedMotion: true });
+    const document = dom.window.document;
+    dom.window.eval(script);
+
+    document.querySelector('[data-nav="about"]').click();
+
+    expect(document.querySelector('[data-page="about"]').classList.contains("active")).toBe(true);
+    expect(document.querySelector('[data-page="about"]').inert).toBe(false);
+    expect([...document.querySelectorAll("[data-page]")].filter(page => !page.inert)).toEqual([
+      document.querySelector('[data-page="about"]')
+    ]);
+    expect(document.activeElement).toBe(document.querySelector("#aboutHeading"));
+  });
+
+  it("exposes color saturation and brightness as native ranges while retaining pointer picking", async () => {
+    const { dom, script } = await createSettingsDom();
+    const document = dom.window.document;
+    dom.window.eval(script);
+    dom.window.settingsApp.receive({
+      version: 1,
+      type: "settingsState",
+      payload: {
+        settings: {
+          foregroundColorMode: "Custom",
+          foregroundColor: "#FF336699"
+        },
+        fonts: []
+      }
+    });
+
+    const colorArea = document.querySelector("#colorArea");
+    const saturation = document.querySelector("#colorSaturationSlider");
+    const brightness = document.querySelector("#colorBrightnessSlider");
+    expect(colorArea.hasAttribute("tabindex")).toBe(false);
+    expect(colorArea.getAttribute("aria-hidden")).toBe("true");
+    expect(saturation.type).toBe("range");
+    expect(brightness.type).toBe("range");
+
+    document.querySelector("#colorPickerButton").click();
+    expect(document.activeElement).toBe(saturation);
+    expect(saturation.value).toBe("67");
+    expect(brightness.value).toBe("60");
+
+    saturation.value = "25";
+    saturation.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+    expect(document.querySelector("#colorCursor").style.left).toBe("25%");
+
+    colorArea.getBoundingClientRect = () => ({ left: 0, top: 0, width: 100, height: 100 });
+    colorArea.setPointerCapture = () => {};
+    colorArea.releasePointerCapture = () => {};
+    const pointerDown = new dom.window.Event("pointerdown", { bubbles: true });
+    Object.defineProperties(pointerDown, {
+      clientX: { value: 75 },
+      clientY: { value: 25 },
+      pointerId: { value: 1 }
+    });
+    colorArea.dispatchEvent(pointerDown);
+
+    expect(saturation.value).toBe("75");
+    expect(brightness.value).toBe("75");
+  });
+
+  it("gives destructive and reset dialogs accessible names and descriptions", async () => {
+    const { dom } = await createSettingsDom();
+    const document = dom.window.document;
+    const dialogs = ["restoreDialog", "clearDialog", "deleteTrackOffsetDialog", "clearTrackOffsetsDialog"];
+
+    dialogs.forEach(id => {
+      const dialog = document.querySelector(`#${id}`);
+      const title = document.getElementById(dialog.getAttribute("aria-labelledby"));
+      const description = document.getElementById(dialog.getAttribute("aria-describedby"));
+      expect(title?.textContent).toBeTruthy();
+      expect(description?.textContent).toBeTruthy();
+    });
   });
 
   it("posts layout scale updates and renders host-calculated effective metrics", async () => {

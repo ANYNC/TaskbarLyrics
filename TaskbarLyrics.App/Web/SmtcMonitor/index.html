@@ -89,7 +89,9 @@
     .truncated-value:focus-visible { border-radius: 2px; outline: 2px solid var(--ring); outline-offset: 2px; }
     .hover-tooltip { position: fixed; z-index: 400; width: max-content; max-width: min(360px, calc(100vw - 24px)); padding: 9px 11px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--popover); color: var(--popover-foreground); font-family: "Microsoft YaHei UI", "Microsoft YaHei", sans-serif; font-size: 11px; font-weight: 400; line-height: 1.7; overflow-wrap: anywhere; white-space: normal; box-shadow: var(--shadow); pointer-events: none; opacity: 0; transform: translateY(-4px); visibility: hidden; transition: opacity var(--duration-fast) ease, transform var(--duration-fast) ease, visibility 0s linear var(--duration-fast); }
     .hover-tooltip[data-state="open"] { opacity: 1; transform: translateY(0); visibility: visible; transition: opacity var(--duration-fast) ease, transform var(--duration-fast) ease, visibility 0s; }
-    @media (prefers-reduced-motion: reduce) { .hover-tooltip { transition: none; } }
+    @media (prefers-reduced-motion: reduce) {
+      .titlebar .live::before, .hover-tooltip, .toast { animation: none; transition: none; }
+    }
 
     .footer { display: flex; align-items: center; justify-content: flex-end; padding: 10px 14px; border-top: 1px solid var(--border); }
     .footer .actions { display: flex; gap: 8px; flex: 0 0 auto; }
@@ -180,7 +182,11 @@
 
   <script>
     const $ = s => document.querySelector(s);
-    const bridge = { post(m) { window.chrome?.webview?.postMessage(JSON.stringify(m)); } };
+    const bridge = {
+      post(type, payload = {}) {
+        window.chrome?.webview?.postMessage(JSON.stringify({ version: 1, type, payload }));
+      }
+    };
     const TH_WARN = 200, TH_BAD = 500, STALE_MS = 2000;
     let paused = false;
 
@@ -317,8 +323,8 @@
     let toastTimer;
     function showToast(msg) { clearTimeout(toastTimer); const el = $("#toast"); el.textContent = msg; el.classList.add("show"); toastTimer = setTimeout(() => el.classList.remove("show"), 1600); }
 
-    $("#pauseBtn").addEventListener("click", () => { const next = !paused; setPaused(next); bridge.post({ type: next ? "pause" : "resume" }); });
-    $("#copyBtn").addEventListener("click", () => { bridge.post({ type: "copy", text: $("#log").textContent }); showToast("已复制到剪贴板"); });
+    $("#pauseBtn").addEventListener("click", () => { const next = !paused; setPaused(next); bridge.post(next ? "pause" : "resume"); });
+    $("#copyBtn").addEventListener("click", () => { bridge.post("copy", { text: $("#log").textContent }); });
 
     document.addEventListener("pointerdown", e => {
       if (e.button !== 0) return;
@@ -326,20 +332,45 @@
       if (!handle) return;
       e.preventDefault();
       e.stopImmediatePropagation();
-      bridge.post({ type: "windowResizeStart", edge: handle.dataset.windowResize });
+      bridge.post("windowResizeStart", { edge: handle.dataset.windowResize });
     }, true);
-    document.addEventListener("pointerdown", e => { if (e.button !== 0) return; const d = e.target.closest("[data-caption-drag]"); if (!d || e.target.closest("button, input, select, textarea")) return; bridge.post({ type: "windowDrag" }); });
+    document.addEventListener("pointerdown", e => { if (e.button !== 0) return; const d = e.target.closest("[data-caption-drag]"); if (!d || e.target.closest("button, input, select, textarea")) return; bridge.post("windowDrag"); });
     document.addEventListener("click", e => {
       const a = e.target.closest("[data-window-action]");
       if (!a) return;
       const t = a.dataset.windowAction;
-      if (t === "pin") bridge.post({ type: "toggleTopmost" });
-      else if (t === "minimize") bridge.post({ type: "windowMinimize" });
-      else if (t === "close") bridge.post({ type: "windowClose" });
+      if (t === "pin") bridge.post("toggleTopmost");
+      else if (t === "minimize") bridge.post("windowMinimize");
+      else if (t === "close") bridge.post("windowClose");
     });
 
-    window.smtcMonitor = { setData, setPaused, setTopmost };
-    bridge.post({ type: "ready" });
+    function receive(message) {
+      if (message?.version !== 1 || typeof message.type !== "string") return;
+      switch (message.type) {
+        case "setData":
+          if (message.payload === null || (message.payload && typeof message.payload === "object" && !Array.isArray(message.payload))) {
+            setData(message.payload);
+          }
+          break;
+        case "setPaused":
+          if (typeof message.payload === "boolean") setPaused(message.payload);
+          break;
+        case "setTopmost":
+          if (typeof message.payload === "boolean") setTopmost(message.payload);
+          break;
+        case "copyResult":
+          if (message.payload && typeof message.payload === "object" && typeof message.payload.success === "boolean") {
+            const failureMessage = typeof message.payload.message === "string" && message.payload.message
+              ? message.payload.message
+              : "复制失败，请重试。";
+            showToast(message.payload.success ? "已复制到剪贴板" : failureMessage);
+          }
+          break;
+      }
+    }
+
+    window.smtcMonitor = { setData, setPaused, setTopmost, receive };
+    bridge.post("ready");
   </script>
 </body>
 </html>

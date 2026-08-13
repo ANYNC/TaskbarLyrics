@@ -5,7 +5,7 @@ namespace TaskbarLyrics.App;
 
 internal sealed class SettingsWebMessage
 {
-    public const int CurrentVersion = 1;
+    public const int CurrentVersion = WebViewMessageRouter.CurrentVersion;
 
     public int Version { get; set; }
 
@@ -22,61 +22,49 @@ internal sealed class SettingsWebMessage
 
 internal static class SettingsWebJson
 {
-    public static JsonSerializerOptions Options { get; } = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        Converters = { new JsonStringEnumConverter() }
-    };
+    public static JsonSerializerOptions Options => WebViewMessageRouter.JsonOptions;
 }
 
 internal static class SettingsWebMessageRouter
 {
     public static SettingsWebMessage? Parse(string? messageJson)
     {
-        if (string.IsNullOrWhiteSpace(messageJson))
+        var message = WebViewMessageRouter.Parse(messageJson);
+        if (message is null)
         {
             return null;
         }
 
-        try
+        if (!IsSettingValueMessage(message.Type) ||
+            message.Payload is not { ValueKind: JsonValueKind.Object } payload ||
+            !payload.TryGetProperty("key", out var keyElement) ||
+            !payload.TryGetProperty("value", out var valueElement))
         {
-            var message = JsonSerializer.Deserialize<SettingsWebMessage>(messageJson, SettingsWebJson.Options);
-            if (message is null || message.Version != SettingsWebMessage.CurrentVersion ||
-                string.IsNullOrWhiteSpace(message.Type))
-            {
-                return null;
-            }
-
-            if (!IsSettingValueMessage(message.Type) ||
-                message.Payload is not { ValueKind: JsonValueKind.Object } payload ||
-                !payload.TryGetProperty("key", out var keyElement) ||
-                !payload.TryGetProperty("value", out var valueElement))
-            {
-                return new SettingsWebMessage
-                {
-                    Version = message.Version,
-                    Type = message.Type,
-                    Payload = message.Payload,
-                    Value = message.Payload is JsonElement value ? value.Clone() : null
-                };
-            }
-
-            return new SettingsWebMessage
-            {
-                Version = message.Version,
-                Type = message.Type,
-                Payload = message.Payload,
-                Key = keyElement.GetString(),
-                Value = valueElement.Clone()
-            };
+            return ToSettingsMessage(message, value: message.Payload?.Clone());
         }
-        catch (JsonException)
-        {
-            return null;
-        }
+
+        return ToSettingsMessage(
+            message,
+            key: keyElement.ValueKind == JsonValueKind.String ? keyElement.GetString() : null,
+            value: valueElement.Clone());
     }
 
-    private static bool IsSettingValueMessage(string type)
+    private static SettingsWebMessage ToSettingsMessage(
+        WebViewMessage message,
+        string? key = null,
+        JsonElement? value = null)
+    {
+        return new SettingsWebMessage
+        {
+            Version = message.Version,
+            Type = message.Type,
+            Payload = message.Payload,
+            Key = key,
+            Value = value
+        };
+    }
+
+    private static bool IsSettingValueMessage(string? type)
     {
         return type is "update" or "previewUpdate";
     }

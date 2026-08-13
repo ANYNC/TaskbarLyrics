@@ -62,7 +62,17 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
 
     private void SettingsWindow_SourceInitialized(object? sender, EventArgs e)
     {
+        ApplyInitialWindowBounds();
         ApplyWindowTheme();
+    }
+
+    private void ApplyInitialWindowBounds()
+    {
+        var workArea = SystemParameters.WorkArea;
+        MinWidth = Math.Min(MinWidth, workArea.Width);
+        MinHeight = Math.Min(MinHeight, workArea.Height);
+        Width = Math.Clamp(Width, MinWidth, workArea.Width);
+        Height = Math.Clamp(Height, MinHeight, workArea.Height);
     }
 
     private void SettingsWindow_Loaded(object? sender, RoutedEventArgs e)

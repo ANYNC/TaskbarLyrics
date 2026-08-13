@@ -55,7 +55,7 @@ Run verification proportional to impact:
 
 1. Add or update a regression test for changed logic and relevant failure paths.
 2. Run targeted tests while iterating.
-3. For settings UI changes, run `TaskbarLyrics.App/Web/Settings/settings-contract.tests.ps1`.
+3. For settings UI changes, run `tests/contracts/settings-contract.tests.ps1`.
 4. Before handing off non-trivial code changes, run `scripts/verify.ps1`, `dotnet build TaskbarLyrics.sln`, and `git diff --check`.
 5. Require zero build warnings. Fix the cause unless an unavoidable platform boundary is documented.
 6. Record manual checks for SMTC, tray, hotkeys, taskbar attachment, audio capture, WebView2, DPI, or multi-monitor behavior when automated coverage is insufficient.

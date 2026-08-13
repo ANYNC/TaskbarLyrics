@@ -527,6 +527,15 @@
       renderTrackOffsets();
     }
 
+    function setPageInteractionState(pages, interactivePage) {
+      pages.forEach(page => {
+        const isInteractive = page === interactivePage;
+        page.inert = !isInteractive;
+        page.toggleAttribute("inert", !isInteractive);
+        page.setAttribute("aria-hidden", String(!isInteractive));
+      });
+    }
+
     function renderPlayerSettings() {
       const source = sourceCatalog.find(item => item.id === activePlayerSourceId);
       if (!source) return;
@@ -627,6 +636,7 @@
 
       if (!currentPage || currentPage === nextPage || reducedMotionQuery.matches || typeof nextPage.animate !== "function") {
         pages.forEach(page => page.classList.toggle("active", page === nextPage));
+        setPageInteractionState(pages, nextPage);
         titleBlock.style.transitionDuration = "0ms";
         titleBlock.style.opacity = "1";
         updateTitleText();
@@ -637,6 +647,7 @@
       const direction = nextIndex > currentIndex ? 1 : -1;
       nextPage.style.transform = `translateX(${direction * 28}px)`;
       nextPage.classList.add("transitioning");
+      setPageInteractionState(pages, nextPage);
 
       // 标题：先快速淡出，中点换文字再淡入，与正文同步
       titleBlock.style.transitionDuration = "100ms";
@@ -671,6 +682,7 @@
         nextPage.classList.add("active");
         currentPage.style.transform = "";
         nextPage.style.transform = "";
+        setPageInteractionState(pages, nextPage);
         pageAnimations.forEach(animation => animation.cancel());
         pageAnimations = [];
         if (moveFocus) heading?.focus({ preventScroll: true });
@@ -1066,6 +1078,10 @@
       colorDraft.hex = rgbToHex(hsvToRgb(colorDraft));
       $("#colorArea").style.setProperty("--picker-hue", colorDraft.h);
       $("#hueSlider").style.setProperty("--picker-hue", colorDraft.h);
+      $("#colorSaturationSlider").style.setProperty("--picker-hue", colorDraft.h);
+      $("#colorBrightnessSlider").style.setProperty("--picker-hue", colorDraft.h);
+      $("#colorSaturationSlider").value = Math.round(colorDraft.s * 100);
+      $("#colorBrightnessSlider").value = Math.round(colorDraft.v * 100);
       $("#hueSlider").value = Math.round(colorDraft.h);
       $("#hueNumberInput").value = Math.round(colorDraft.h);
       $("#colorCursor").style.left = `${colorDraft.s * 100}%`;
@@ -1098,7 +1114,7 @@
       $("#colorPopover").setAttribute("data-state", "open");
       $("#colorPickerButton").setAttribute("aria-expanded", "true");
       positionPopover($("#colorPopover"), $("#colorPickerButton"), 264);
-      $("#colorArea").focus({ preventScroll: true });
+      $("#colorSaturationSlider").focus({ preventScroll: true });
     }
 
     function closeColorPopover(returnFocus = true) {
@@ -1113,6 +1129,13 @@
       const rect = $("#colorArea").getBoundingClientRect();
       colorDraft.s = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
       colorDraft.v = 1 - Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height));
+      updateColorDraft();
+    }
+
+    function updateColorFromRange(event) {
+      const value = Math.max(0, Math.min(100, Number(event.target.value) || 0)) / 100;
+      if (event.target === $("#colorSaturationSlider")) colorDraft.s = value;
+      else colorDraft.v = value;
       updateColorDraft();
     }
 
@@ -1474,16 +1497,8 @@
     });
     $("#colorArea").addEventListener("pointermove", event => { if (colorPointerActive) updateColorFromPointer(event); });
     $("#colorArea").addEventListener("pointerup", event => { colorPointerActive = false; $("#colorArea").releasePointerCapture(event.pointerId); });
-    $("#colorArea").addEventListener("keydown", event => {
-      const step = event.shiftKey ? .1 : .02;
-      if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return;
-      event.preventDefault();
-      if (event.key === "ArrowLeft") colorDraft.s = Math.max(0, colorDraft.s - step);
-      if (event.key === "ArrowRight") colorDraft.s = Math.min(1, colorDraft.s + step);
-      if (event.key === "ArrowUp") colorDraft.v = Math.min(1, colorDraft.v + step);
-      if (event.key === "ArrowDown") colorDraft.v = Math.max(0, colorDraft.v - step);
-      updateColorDraft();
-    });
+    $("#colorSaturationSlider").addEventListener("input", updateColorFromRange);
+    $("#colorBrightnessSlider").addEventListener("input", updateColorFromRange);
     $("#hueSlider").addEventListener("input", event => { colorDraft.h = Number(event.target.value); updateColorDraft(); });
     $("#hueNumberInput").addEventListener("input", event => {
       if (event.target.value === "" || !event.target.validity.valid) return;
@@ -1720,4 +1735,5 @@
     }
 
     window.settingsApp = { receive };
+    setPageInteractionState($$("[data-page]"), document.querySelector("[data-page].active"));
     bridge.post({ type: "ready" });
