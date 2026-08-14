@@ -230,6 +230,8 @@ powershell -ExecutionPolicy Bypass -File scripts/publish-release.ps1 -Version 1.
 
 歌词检索与匹配思路参考了 [BetterLyrics](https://github.com/jayfunc/BetterLyrics)，并结合任务栏实时显示场景进行了调整。
 
+在线歌词搜索、解密与解析能力基于 [Lyricify Lyrics Helper](https://github.com/WXRIW/Lyricify-Lyrics-Helper)（QQ 音乐、网易云音乐、酷狗音乐、LRCLIB）。
+
 ## 项目支持
 
 如果这个项目对你有所帮助，欢迎：
