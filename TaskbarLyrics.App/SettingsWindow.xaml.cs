@@ -6,6 +6,7 @@ using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
 using Microsoft.Web.WebView2.Core;
+using Microsoft.Win32;
 using TaskbarLyrics.Core.Services;
 using TaskbarLyrics.Core.Utilities;
 using Drawing = System.Drawing;
@@ -58,6 +59,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         StateChanged += SettingsWindow_StateChanged;
         Closed += SettingsWindow_Closed;
         NativeWindowTheme.ThemeChanged += OnWindowThemeChanged;
+        SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
     }
 
     private void SettingsWindow_SourceInitialized(object? sender, EventArgs e)
@@ -98,6 +100,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
 
     private void SettingsWindow_Closed(object? sender, EventArgs e)
     {
+        _isWebReady = false;
         if (_hasPendingPreviewChanges)
         {
             SaveSettings();
@@ -105,6 +108,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         }
 
         NativeWindowTheme.ThemeChanged -= OnWindowThemeChanged;
+        SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
         var diagnosticsCancellation = Interlocked.Exchange(ref _lyricDiagnosticsCancellation, null);
         diagnosticsCancellation?.Cancel();
         diagnosticsCancellation?.Dispose();
@@ -118,6 +122,18 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         }
 
         SettingsWebView.Dispose();
+    }
+
+    private void OnDisplaySettingsChanged(object? sender, EventArgs e)
+    {
+        if (Dispatcher.HasShutdownStarted || Dispatcher.HasShutdownFinished)
+        {
+            return;
+        }
+
+        Dispatcher.BeginInvoke(
+            () => TaskObserver.Observe(PushSettingsToWebAsync(), "settings display list update"),
+            DispatcherPriority.Background);
     }
 
     private async Task InitializeSettingsWebViewAsync()
@@ -915,6 +931,18 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             XOffset = _settings.XOffset,
             YOffset = _settings.YOffset,
             ForceAlwaysOnTop = _settings.ForceAlwaysOnTop,
+            LyricsDisplayMode = _settings.LyricsDisplayMode,
+            SelectedDisplayIds = _settings.SelectedDisplayIds.ToList(),
+            AvailableDisplays = DisplayMonitorService.GetDisplays()
+                .Select(display => new WebDisplayMonitor
+                {
+                    Id = display.Id,
+                    Name = display.Name,
+                    IsPrimary = display.IsPrimary,
+                    Width = display.Width,
+                    Height = display.Height
+                })
+                .ToList(),
             AppVersion = UpdateChecker.GetCurrentVersion(),
             RepositoryUrl = UpdateChecker.RepositoryUrl
         };
@@ -1081,6 +1109,13 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 break;
             case "forceAlwaysOnTop":
                 _settings.ForceAlwaysOnTop = ReadBool(element, _settings.ForceAlwaysOnTop);
+                break;
+            case "lyricsDisplayMode":
+                _settings.LyricsDisplayMode = ReadEnum(element, _settings.LyricsDisplayMode);
+                break;
+            case "selectedDisplayIds":
+                _settings.SelectedDisplayIds = ReadStringList(element);
+                _settings.NormalizeDisplaySelection();
                 break;
             case "fontSize":
                 _settings.FontSize = AppSettings.ClampFontSize(ReadDouble(element, _settings.FontSize));
@@ -1542,6 +1577,8 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         target.XOffset = source.XOffset;
         target.YOffset = source.YOffset;
         target.ForceAlwaysOnTop = source.ForceAlwaysOnTop;
+        target.LyricsDisplayMode = source.LyricsDisplayMode;
+        target.SelectedDisplayIds = source.SelectedDisplayIds.ToList();
     }
 
     private void ToggleMaximizeRestore()
@@ -1673,8 +1710,27 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         public double XOffset { get; set; }
         public double YOffset { get; set; }
         public bool ForceAlwaysOnTop { get; set; }
+
+        public LyricsDisplayMode LyricsDisplayMode { get; set; }
+
+        public List<string> SelectedDisplayIds { get; set; } = [];
+
+        public List<WebDisplayMonitor> AvailableDisplays { get; set; } = [];
         public string AppVersion { get; set; } = "";
         public string RepositoryUrl { get; set; } = "";
+    }
+
+    private sealed class WebDisplayMonitor
+    {
+        public string Id { get; set; } = string.Empty;
+
+        public string Name { get; set; } = string.Empty;
+
+        public bool IsPrimary { get; set; }
+
+        public int Width { get; set; }
+
+        public int Height { get; set; }
     }
 
     private sealed class WebMediaHotkeyDefinition

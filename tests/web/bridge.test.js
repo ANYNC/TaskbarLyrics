@@ -113,6 +113,53 @@ describe("settings WebView bridge", () => {
     expect(toggle.checked).toBe(true);
   });
 
+  it("renders connected displays and posts mode and multi-selection updates", async () => {
+    const { dom, sent, script } = await createSettingsDom();
+    const document = dom.window.document;
+    dom.window.eval(script);
+    dom.window.settingsApp.receive({
+      version: 1,
+      type: "settingsState",
+      payload: {
+        settings: {
+          lyricsDisplayMode: "Selected",
+          selectedDisplayIds: ["display-b"],
+          availableDisplays: [
+            { id: "display-a", name: "显示器 1 · Internal", isPrimary: true, width: 1920, height: 1080 },
+            { id: "display-b", name: "显示器 2 · External", isPrimary: false, width: 2560, height: 1440 }
+          ]
+        },
+        fonts: []
+      }
+    });
+
+    const mode = document.querySelector('[data-display-mode][value="Selected"]');
+    const displayA = document.querySelector('[data-display-id="display-a"]');
+    const displayB = document.querySelector('[data-display-id="display-b"]');
+    expect(mode.checked).toBe(true);
+    expect(displayA.checked).toBe(false);
+    expect(displayB.checked).toBe(true);
+    expect(document.querySelector("#displayMonitorHint").textContent).toContain("1 台");
+
+    displayA.checked = true;
+    displayA.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+    expect(sent.at(-1)).toEqual({
+      version: 1,
+      type: "update",
+      payload: { key: "selectedDisplayIds", value: ["display-b", "display-a"] }
+    });
+
+    const allMode = document.querySelector('[data-display-mode][value="All"]');
+    allMode.checked = true;
+    allMode.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+    expect(sent.at(-1)).toEqual({
+      version: 1,
+      type: "update",
+      payload: { key: "lyricsDisplayMode", value: "All" }
+    });
+    expect(document.querySelector('[data-display-id="display-a"]').disabled).toBe(true);
+  });
+
   it("requires consent before changing an unauthorized spectrum mode", async () => {
     const { dom, sent, script } = await createSettingsDom();
     enableDialogDomSupport(dom);

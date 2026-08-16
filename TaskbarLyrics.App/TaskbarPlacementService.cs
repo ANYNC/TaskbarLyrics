@@ -18,12 +18,13 @@ internal sealed class TaskbarPlacementService
 
     public static bool IsShowWindowMessage(int message) => message == WmShowWindow;
 
-    public static void Anchor(Window window, AppSettings settings)
+    public static void Anchor(Window window, AppSettings settings, DisplayMonitor? targetDisplay = null)
     {
-        var pixelsPerDip = GetPixelsPerDip(window);
-        var display = GetPrimaryDisplayMetrics(pixelsPerDip);
-        const double normalTaskbarHeight = 48;
-        var taskbarHeight = Math.Max(normalTaskbarHeight, display.Height - display.WorkAreaHeight);
+        var pixelsPerDip = targetDisplay?.PixelsPerDip ?? GetPixelsPerDip(window);
+        var display = targetDisplay is null
+            ? GetPrimaryDisplayMetrics(pixelsPerDip)
+            : ConvertPhysicalDisplayMetrics(targetDisplay.Bounds, targetDisplay.WorkArea, pixelsPerDip);
+        var taskbar = ResolveTaskbarBounds(display);
         var metrics = LyricsLayoutMetrics.Create(settings, pixelsPerDip);
         window.Height = Math.Min(metrics.DesiredWindowHeight, display.Height);
 
@@ -34,9 +35,8 @@ internal sealed class TaskbarPlacementService
             _ => Math.Max(display.Left, display.Right - window.Width - 230 + settings.XOffset)
         };
 
-        var taskbarCenterY = display.Bottom - (taskbarHeight / 2);
         window.Top = display.Top + CalculateVerticalPosition(
-            taskbarCenterY - display.Top,
+            taskbar.CenterY - display.Top,
             window.Height,
             display.Height,
             settings.YOffset);
@@ -81,6 +81,9 @@ internal sealed class TaskbarPlacementService
             0,
             SystemParameters.PrimaryScreenWidth,
             SystemParameters.PrimaryScreenHeight,
+            workArea.Left,
+            workArea.Top,
+            workArea.Width,
             workArea.Height);
     }
 
@@ -158,7 +161,66 @@ internal sealed class TaskbarPlacementService
             monitor.Top / pixelsPerDip,
             (monitor.Right - monitor.Left) / pixelsPerDip,
             (monitor.Bottom - monitor.Top) / pixelsPerDip,
+            workArea.Left / pixelsPerDip,
+            workArea.Top / pixelsPerDip,
+            (workArea.Right - workArea.Left) / pixelsPerDip,
             (workArea.Bottom - workArea.Top) / pixelsPerDip);
+    }
+
+    internal static TaskbarDisplayMetrics ConvertPhysicalDisplayMetrics(
+        NativeRect monitor,
+        NativeRect workArea,
+        double pixelsPerDip) =>
+        ConvertPhysicalDisplayMetrics(
+            new TaskbarNativeMethods.NativeRect(monitor.Left, monitor.Top, monitor.Right, monitor.Bottom),
+            new TaskbarNativeMethods.NativeRect(workArea.Left, workArea.Top, workArea.Right, workArea.Bottom),
+            pixelsPerDip);
+
+    internal static TaskbarBounds ResolveTaskbarBounds(TaskbarDisplayMetrics display)
+    {
+        const double defaultThickness = 48;
+        const double edgeTolerance = 0.5;
+        if (display.WorkAreaBottom < display.Bottom - edgeTolerance)
+        {
+            return new TaskbarBounds(
+                display.Left,
+                display.WorkAreaBottom,
+                display.Width,
+                Math.Max(defaultThickness, display.Bottom - display.WorkAreaBottom));
+        }
+
+        if (display.WorkAreaTop > display.Top + edgeTolerance)
+        {
+            return new TaskbarBounds(
+                display.Left,
+                display.Top,
+                display.Width,
+                Math.Max(defaultThickness, display.WorkAreaTop - display.Top));
+        }
+
+        if (display.WorkAreaLeft > display.Left + edgeTolerance)
+        {
+            return new TaskbarBounds(
+                display.Left,
+                display.Top,
+                Math.Max(defaultThickness, display.WorkAreaLeft - display.Left),
+                display.Height);
+        }
+
+        if (display.WorkAreaRight < display.Right - edgeTolerance)
+        {
+            return new TaskbarBounds(
+                display.WorkAreaRight,
+                display.Top,
+                Math.Max(defaultThickness, display.Right - display.WorkAreaRight),
+                display.Height);
+        }
+
+        return new TaskbarBounds(
+            display.Left,
+            display.Bottom - defaultThickness,
+            display.Width,
+            defaultThickness);
     }
 
     public static void Attach(Window window, bool forceAlwaysOnTop)
@@ -223,11 +285,23 @@ internal readonly record struct TaskbarDisplayMetrics(
     double Top,
     double Width,
     double Height,
+    double WorkAreaLeft,
+    double WorkAreaTop,
+    double WorkAreaWidth,
     double WorkAreaHeight)
 {
     public double Right => Left + Width;
 
     public double Bottom => Top + Height;
+
+    public double WorkAreaRight => WorkAreaLeft + WorkAreaWidth;
+
+    public double WorkAreaBottom => WorkAreaTop + WorkAreaHeight;
+}
+
+internal readonly record struct TaskbarBounds(double Left, double Top, double Width, double Height)
+{
+    public double CenterY => Top + (Height / 2);
 }
 
 internal readonly record struct TaskbarNativeBounds(int Left, int Top, int Width, int Height);
@@ -246,6 +320,7 @@ internal static class TaskbarNativeMethods
     internal const int GWL_EXSTYLE = -20;
     internal const int WS_EX_TOOLWINDOW = 0x00000080;
     internal const uint MONITOR_DEFAULTTOPRIMARY = 0x00000001;
+    internal const uint MONITOR_DEFAULTTONEAREST = 0x00000002;
 
     [StructLayout(LayoutKind.Sequential)]
     internal struct NativePoint

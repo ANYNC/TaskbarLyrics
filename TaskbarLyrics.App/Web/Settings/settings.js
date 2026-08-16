@@ -837,6 +837,26 @@
       });
     }
 
+    function renderDisplayMonitors() {
+      if (!state) return;
+      const mode = state.lyricsDisplayMode === "Selected" ? "Selected" : "All";
+      const selected = new Set(Array.isArray(state.selectedDisplayIds) ? state.selectedDisplayIds : []);
+      const displays = Array.isArray(state.availableDisplays) ? state.availableDisplays : [];
+      $$('[data-display-mode]').forEach(control => { control.checked = control.value === mode; });
+      const list = $("#displayMonitorList");
+      list.setAttribute("aria-disabled", String(mode !== "Selected"));
+      list.innerHTML = displays.length
+        ? displays.map(display => `<label class="monitor-option"><span class="monitor-option-copy"><strong title="${escapeHtml(display.name)}">${escapeHtml(display.name)}</strong><small>${Number(display.width) || 0} × ${Number(display.height) || 0}${display.isPrimary ? " · 主显示器" : ""}</small></span><input type="checkbox" data-display-id="${escapeHtml(display.id)}" ${selected.has(display.id) ? "checked" : ""} ${mode !== "Selected" ? "disabled" : ""} aria-label="在 ${escapeHtml(display.name)} 显示歌词"></label>`).join("")
+        : '<div class="monitor-hint">暂时没有检测到可用显示器。</div>';
+      const connectedIds = new Set(displays.map(display => display.id));
+      const connectedSelectedCount = [...selected].filter(id => connectedIds.has(id)).length;
+      $("#displayMonitorHint").textContent = mode === "All"
+        ? `已检测到 ${displays.length} 台显示器，将在全部任务栏显示。`
+        : connectedSelectedCount > 0
+          ? `已选择 ${connectedSelectedCount} 台已连接显示器。`
+          : "未选择已连接的显示器时，将临时在主显示器显示。";
+    }
+
     function cancelHotkeyRecording() {
       if (!activeHotkeyRecorder) return;
       activeHotkeyRecorder.classList.remove("recording");
@@ -1254,6 +1274,7 @@
       syncColorMode();
       syncControls();
       renderMediaHotkeys();
+      renderDisplayMonitors();
       applyDependencies();
       renderSpectrumAudioAccess();
       updateOutputs();
@@ -1532,6 +1553,23 @@
     });
 
     document.addEventListener("change", event => {
+      const displayMode = event.target.closest("[data-display-mode]");
+      if (displayMode) {
+        commitSetting("lyricsDisplayMode", displayMode.value);
+        renderDisplayMonitors();
+        return;
+      }
+
+      const displayOption = event.target.closest("[data-display-id]");
+      if (displayOption) {
+        const selected = new Set(Array.isArray(state.selectedDisplayIds) ? state.selectedDisplayIds : []);
+        if (displayOption.checked) selected.add(displayOption.dataset.displayId);
+        else selected.delete(displayOption.dataset.displayId);
+        commitSetting("selectedDisplayIds", [...selected]);
+        renderDisplayMonitors();
+        return;
+      }
+
       if (event.target === $("#currentTrackOffsetInput")) {
         commitCurrentTrackOffset(event.target.value);
         return;

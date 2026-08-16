@@ -156,6 +156,21 @@ public sealed class AppSettingsChangeSetTests
     }
 
     [Fact]
+    public void CreateWhenDisplayModeChangesReconcilesLyricsWindows()
+    {
+        var current = new AppSettings();
+        var next = current.Clone();
+        next.LyricsDisplayMode = LyricsDisplayMode.Selected;
+        next.SelectedDisplayIds = ["display-a"];
+
+        var changes = AppSettingsChangeSet.Create(current, next);
+
+        Assert.True(changes.WindowLayoutChanged);
+        Assert.True(changes.RequiresLyricsWindowApply);
+        Assert.False(changes.LyricSyncServiceChanged);
+    }
+
+    [Fact]
     public void CreateWhenOnlyUpdatePreferenceChangesDoesNotApplyRuntimeServices()
     {
         var current = new AppSettings();

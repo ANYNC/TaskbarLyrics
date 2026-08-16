@@ -316,4 +316,62 @@ public sealed class SettingsStoreTests
             }
         }
     }
+
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("{\"SelectedDisplayIds\":null}")]
+    public void LoadOldSettingsDefaultsToAllDisplays(string json)
+    {
+        var directory = Path.Combine(AppContext.BaseDirectory, $"settings-store-{Guid.NewGuid():N}");
+        var filePath = Path.Combine(directory, "settings.json");
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            File.WriteAllText(filePath, json);
+
+            var loaded = new SettingsStore(filePath).Load();
+
+            Assert.Equal(LyricsDisplayMode.All, loaded.LyricsDisplayMode);
+            Assert.Empty(loaded.SelectedDisplayIds);
+        }
+        finally
+        {
+            if (Directory.Exists(directory))
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void SaveAndLoadRoundTripsSelectedDisplayIds()
+    {
+        var directory = Path.Combine(AppContext.BaseDirectory, $"settings-store-{Guid.NewGuid():N}");
+        var filePath = Path.Combine(directory, "settings.json");
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            var store = new SettingsStore(filePath);
+            var settings = new AppSettings
+            {
+                LyricsDisplayMode = LyricsDisplayMode.Selected,
+                SelectedDisplayIds = [" display-a ", "DISPLAY-A", "display-b"]
+            };
+
+            Assert.True(store.Save(settings));
+            var loaded = store.Load();
+
+            Assert.Equal(LyricsDisplayMode.Selected, loaded.LyricsDisplayMode);
+            Assert.Equal(["display-a", "display-b"], loaded.SelectedDisplayIds);
+        }
+        finally
+        {
+            if (Directory.Exists(directory))
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+    }
 }

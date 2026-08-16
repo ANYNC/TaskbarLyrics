@@ -1,5 +1,6 @@
 using System.Threading;
 using System.Windows.Threading;
+using Microsoft.Win32;
 using TaskbarLyrics.Core.Services;
 using TaskbarLyrics.Core.Utilities;
 
@@ -12,6 +13,8 @@ internal sealed class LyricsWindowHost : IDisposable
     private readonly Thread _thread;
     private Dispatcher? _dispatcher;
     private MainWindow? _window;
+    private readonly Dictionary<string, LyricsMirrorWindow> _mirrorWindows = new(StringComparer.OrdinalIgnoreCase);
+    private AppSettings _currentSettings = new();
     private bool _disposed;
     private volatile bool _isVisible;
     private int _startupAbandoned;
@@ -48,6 +51,11 @@ internal sealed class LyricsWindowHost : IDisposable
         }
 
         _window.Show();
+        foreach (var mirrorWindow in _mirrorWindows.Values)
+        {
+            mirrorWindow.Show();
+        }
+        _window.ReplayPresentationState();
         _isVisible = true;
     });
 
@@ -59,13 +67,17 @@ internal sealed class LyricsWindowHost : IDisposable
         }
 
         _window.Hide();
+        foreach (var mirrorWindow in _mirrorWindows.Values)
+        {
+            mirrorWindow.Hide();
+        }
         _isVisible = false;
     });
 
     public void ApplySettings(AppSettings settings)
     {
         var snapshot = settings.Clone();
-        InvokeAsync(() => _window?.ApplySettings(snapshot));
+        InvokeAsync(() => ApplySettingsOnWindowThread(snapshot));
     }
 
     public void ApplySpectrumTuning(SpectrumTuningSettings settings)
@@ -117,6 +129,8 @@ internal sealed class LyricsWindowHost : IDisposable
 
         InvokeAsync(() =>
         {
+            SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
+            CloseMirrorWindows();
             _window?.Close();
             Dispatcher.CurrentDispatcher.BeginInvokeShutdown(DispatcherPriority.Normal);
         });
@@ -142,10 +156,14 @@ internal sealed class LyricsWindowHost : IDisposable
         {
             _dispatcher = Dispatcher.CurrentDispatcher;
             _window = new MainWindow(trackLyricOffsetStore, compositionRoot);
-            _window.ApplySettings(initialSettings);
+            _window.PresentationCommandCreated += OnPresentationCommandCreated;
+            SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
+            ApplySettingsOnWindowThread(initialSettings);
             _window.IsVisibleChanged += (_, _) => _isVisible = _window.IsVisible;
             _window.Closed += (_, _) =>
             {
+                SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
+                CloseMirrorWindows();
                 _isVisible = false;
                 Dispatcher.CurrentDispatcher.BeginInvokeShutdown(DispatcherPriority.Normal);
             };
@@ -164,6 +182,98 @@ internal sealed class LyricsWindowHost : IDisposable
             Log.Error($"Lyrics window initialization failed: {exception}");
             _ready.TrySetException(exception);
         }
+    }
+
+    private void ApplySettingsOnWindowThread(AppSettings settings)
+    {
+        if (_window is null)
+        {
+            return;
+        }
+
+        _currentSettings = settings.Clone();
+        _currentSettings.NormalizeDisplaySelection();
+        var targets = LyricsDisplayTargetSelector.Select(
+            DisplayMonitorService.GetDisplays(),
+            _currentSettings.LyricsDisplayMode,
+            _currentSettings.SelectedDisplayIds);
+        if (targets.Count == 0)
+        {
+            return;
+        }
+
+        var sourceDisplay = targets.FirstOrDefault(display => display.IsPrimary) ?? targets[0];
+        var sourceDisplayChanged = !string.Equals(
+            _window.DisplayMonitor?.Id,
+            sourceDisplay.Id,
+            StringComparison.OrdinalIgnoreCase);
+        _window.SetDisplayMonitor(sourceDisplay);
+        _window.ApplySettings(_currentSettings);
+        ReconcileMirrorWindows(targets, sourceDisplay.Id);
+        if (sourceDisplayChanged || _isVisible)
+        {
+            _window.ReplayPresentationState();
+        }
+    }
+
+    private void ReconcileMirrorWindows(IReadOnlyList<DisplayMonitor> targets, string sourceDisplayId)
+    {
+        var mirrorDisplays = targets
+            .Where(display => !string.Equals(display.Id, sourceDisplayId, StringComparison.OrdinalIgnoreCase))
+            .ToDictionary(display => display.Id, StringComparer.OrdinalIgnoreCase);
+        foreach (var staleId in _mirrorWindows.Keys.Where(id => !mirrorDisplays.ContainsKey(id)).ToList())
+        {
+            var staleWindow = _mirrorWindows[staleId];
+            _mirrorWindows.Remove(staleId);
+            staleWindow.Close();
+        }
+
+        foreach (var display in mirrorDisplays.Values)
+        {
+            if (!_mirrorWindows.TryGetValue(display.Id, out var mirrorWindow))
+            {
+                mirrorWindow = new LyricsMirrorWindow(display);
+                _mirrorWindows.Add(display.Id, mirrorWindow);
+            }
+            else
+            {
+                mirrorWindow.SetDisplayMonitor(display);
+            }
+
+            mirrorWindow.ApplySettings(_currentSettings);
+            if (_isVisible)
+            {
+                mirrorWindow.Show();
+            }
+        }
+    }
+
+    private void OnPresentationCommandCreated(LyricsPresentationCommand command)
+    {
+        foreach (var mirrorWindow in _mirrorWindows.Values)
+        {
+            mirrorWindow.ApplyPresentationCommand(command);
+        }
+    }
+
+    private void OnDisplaySettingsChanged(object? sender, EventArgs e)
+    {
+        InvokeAsync(() => ApplySettingsOnWindowThread(_currentSettings));
+    }
+
+    private void CloseMirrorWindows()
+    {
+        if (_window is not null)
+        {
+            _window.PresentationCommandCreated -= OnPresentationCommandCreated;
+        }
+
+        foreach (var mirrorWindow in _mirrorWindows.Values)
+        {
+            mirrorWindow.Close();
+        }
+
+        _mirrorWindows.Clear();
     }
 
     private void InvokeAsync(Action action)

@@ -298,6 +298,19 @@
     .setting-row.compact { grid-template-columns: minmax(0, 1fr) auto; }
     .setting-row.child { min-height: 54px; margin: 2px 0 6px 24px; padding: 9px 18px 9px 0; border: 0; border-radius: 0; background: transparent; }
     .setting-row.is-disabled { opacity: .46; }
+    .monitor-selection { width: min(100%, 420px); display: grid; gap: 10px; }
+    .monitor-mode { display: flex; flex-wrap: wrap; gap: 8px; }
+    .monitor-mode label, .monitor-option { min-width: 0; display: flex; align-items: center; gap: 8px; cursor: pointer; }
+    .monitor-mode label { min-height: 32px; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--secondary); }
+    .monitor-mode label:has(input:checked) { border-color: var(--primary); background: var(--accent); }
+    .monitor-mode label:has(input:focus-visible), .monitor-option:has(input:focus-visible) { outline: 2px solid var(--ring); outline-offset: 2px; }
+    .monitor-mode input, .monitor-option input { accent-color: var(--primary); }
+    .monitor-list { display: grid; gap: 6px; }
+    .monitor-option { justify-content: space-between; min-height: 38px; padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--card); }
+    .monitor-option-copy { min-width: 0; display: grid; gap: 2px; }
+    .monitor-option-copy strong, .monitor-option-copy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .monitor-option-copy small, .monitor-hint { color: var(--muted-foreground); font-size: 11px; }
+    .monitor-list[aria-disabled="true"] { opacity: .55; }
     .setting-label { min-width: 0; display: grid; gap: 3px; }
     .setting-label strong { font-size: 13px; font-weight: 600; }
     .setting-label small { color: var(--muted-foreground); font-size: 11px; line-height: 1.45; }

@@ -30,6 +30,12 @@ public enum ToolWindowTheme
     Dark
 }
 
+public enum LyricsDisplayMode
+{
+    All,
+    Selected
+}
+
 public sealed class AppSettings
 {
     public const int MinimumPlayerLyricOffsetMilliseconds = -5000;
@@ -152,6 +158,10 @@ public sealed class AppSettings
 
     public bool ForceAlwaysOnTop { get; set; } = true;
 
+    public LyricsDisplayMode LyricsDisplayMode { get; set; } = LyricsDisplayMode.All;
+
+    public List<string> SelectedDisplayIds { get; set; } = new();
+
     public GlobalMediaHotkeySettings GlobalMediaHotkeys { get; set; } = new();
 
     public static string NormalizeFontFamily(string? fontFamily)
@@ -185,6 +195,7 @@ public sealed class AppSettings
             pair => pair.Value.Clone(),
             StringComparer.OrdinalIgnoreCase);
         cloned.LocalMusicFolders = LocalMusicFolders.ToList();
+        cloned.SelectedDisplayIds = (SelectedDisplayIds ?? []).ToList();
         cloned.SpectrumTuning = SpectrumTuning.Clone();
         cloned.GlobalMediaHotkeys = (GlobalMediaHotkeys ?? new GlobalMediaHotkeySettings()).Clone();
         return cloned;
@@ -215,6 +226,20 @@ public sealed class AppSettings
         CoverGap = ClampCoverGap(CoverGap);
         CoverCornerRadius = ClampCoverCornerRadius(CoverCornerRadius, CoverSize);
         LyricsLayoutScalePercent = ClampLyricsLayoutScalePercent(LyricsLayoutScalePercent);
+    }
+
+    public void NormalizeDisplaySelection()
+    {
+        if (!Enum.IsDefined(LyricsDisplayMode))
+        {
+            LyricsDisplayMode = LyricsDisplayMode.All;
+        }
+
+        SelectedDisplayIds = (SelectedDisplayIds ?? [])
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Select(id => id.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
     }
 
     public int GetPlayerLyricOffsetMilliseconds(string? sourceApp)

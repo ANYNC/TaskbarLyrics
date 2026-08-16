@@ -35,6 +35,7 @@ public sealed class SettingsStore
             MigrateSpectrumAudioAccess(document.RootElement, settings);
             settings.NormalizePlayerSources();
             settings.NormalizeLyricsLayout();
+            settings.NormalizeDisplaySelection();
             return settings;
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException)
@@ -51,6 +52,7 @@ public sealed class SettingsStore
         {
             settings.NormalizePlayerSources();
             settings.NormalizeLyricsLayout();
+            settings.NormalizeDisplaySelection();
             var directory = Path.GetDirectoryName(_filePath);
             if (!string.IsNullOrWhiteSpace(directory))
             {

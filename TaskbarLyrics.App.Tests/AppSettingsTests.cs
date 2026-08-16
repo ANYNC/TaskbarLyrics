@@ -29,6 +29,57 @@ public sealed class AppSettingsTests
     }
 
     [Fact]
+    public void NewSettingsShowLyricsOnAllDisplaysByDefault()
+    {
+        var settings = new AppSettings();
+
+        Assert.Equal(LyricsDisplayMode.All, settings.LyricsDisplayMode);
+        Assert.Empty(settings.SelectedDisplayIds);
+    }
+
+    [Fact]
+    public void NormalizeDisplaySelectionRemovesBlankAndDuplicateIds()
+    {
+        var settings = new AppSettings
+        {
+            SelectedDisplayIds = [" display-a ", "DISPLAY-A", "", "display-b"]
+        };
+
+        settings.NormalizeDisplaySelection();
+
+        Assert.Equal(["display-a", "display-b"], settings.SelectedDisplayIds);
+    }
+
+    [Fact]
+    public void NormalizeDisplaySelectionRestoresUnknownModeToAllDisplays()
+    {
+        var settings = new AppSettings
+        {
+            LyricsDisplayMode = (LyricsDisplayMode)999
+        };
+
+        settings.NormalizeDisplaySelection();
+
+        Assert.Equal(LyricsDisplayMode.All, settings.LyricsDisplayMode);
+    }
+
+    [Fact]
+    public void CloneKeepsDisplaySelectionIndependentFromSource()
+    {
+        var source = new AppSettings
+        {
+            LyricsDisplayMode = LyricsDisplayMode.Selected,
+            SelectedDisplayIds = ["display-a"]
+        };
+
+        var clone = source.Clone();
+        clone.SelectedDisplayIds.Add("display-b");
+
+        Assert.Equal(LyricsDisplayMode.Selected, clone.LyricsDisplayMode);
+        Assert.Equal(["display-a"], source.SelectedDisplayIds);
+    }
+
+    [Fact]
     public void ClampEffectiveWindowWidthReturnsBaseWidthAtFullScale()
     {
         Assert.Equal(420, AppSettings.ClampEffectiveWindowWidth(420, 100, 1920));
