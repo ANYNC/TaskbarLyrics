@@ -15,6 +15,7 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
     private bool _isWebInitializationStarted;
     private bool _isSpectrumScriptPending;
     private bool _isDisposed;
+    private bool _isContentVisible = true;
 
     public LyricsMirrorWindow(DisplayMonitor displayMonitor)
     {
@@ -51,6 +52,17 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
         TaskbarPlacementService.Anchor(this, _settings, _displayMonitor);
         TaskbarPlacementService.Attach(this, _settings.ForceAlwaysOnTop);
         ExecutePendingScript("style");
+    }
+
+    public void SetContentVisibility(bool isVisible)
+    {
+        if (_isContentVisible == isVisible)
+        {
+            return;
+        }
+
+        _isContentVisible = isVisible;
+        RootBorder.Visibility = isVisible ? Visibility.Visible : Visibility.Collapsed;
     }
 
     public void ApplyPresentationCommand(LyricsPresentationCommand command)

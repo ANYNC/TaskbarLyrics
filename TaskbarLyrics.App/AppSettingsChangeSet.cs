@@ -7,6 +7,7 @@ internal readonly record struct AppSettingsChangeSet(
     bool LyricSyncServiceChanged,
     bool WordScanningChanged,
     bool TranslationDisplayChanged,
+    bool AutoHideWhenNoPlaybackChanged,
     bool SpectrumDisplayChanged,
     bool VisualStyleChanged,
     bool LyricsLayoutChanged,
@@ -20,6 +21,7 @@ internal readonly record struct AppSettingsChangeSet(
         LyricSyncServiceChanged ||
         WordScanningChanged ||
         TranslationDisplayChanged ||
+        AutoHideWhenNoPlaybackChanged ||
         SpectrumDisplayChanged ||
         VisualStyleChanged ||
         LyricsLayoutChanged ||
@@ -53,6 +55,9 @@ internal readonly record struct AppSettingsChangeSet(
 
         var translationDisplayChanged = isInitialApplication ||
             current.ShowLyricTranslation != next.ShowLyricTranslation;
+
+        var autoHideWhenNoPlaybackChanged = isInitialApplication ||
+            current.AutoHideWhenNoPlayback != next.AutoHideWhenNoPlayback;
 
         var spectrumDisplayChanged = isInitialApplication ||
             current.SpectrumDisplayMode != next.SpectrumDisplayMode ||
@@ -101,6 +106,7 @@ internal readonly record struct AppSettingsChangeSet(
             lyricSyncServiceChanged,
             wordScanningChanged,
             translationDisplayChanged,
+            autoHideWhenNoPlaybackChanged,
             spectrumDisplayChanged,
             visualStyleChanged,
             lyricsLayoutChanged,

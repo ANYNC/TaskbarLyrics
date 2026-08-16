@@ -121,6 +121,21 @@ public sealed class AppSettingsChangeSetTests
     }
 
     [Fact]
+    public void CreateWhenAutoHidePreferenceChangesReappliesLyricsWindowWithoutRebuildingService()
+    {
+        var current = new AppSettings();
+        var next = current.Clone();
+        next.AutoHideWhenNoPlayback = false;
+
+        var changes = AppSettingsChangeSet.Create(current, next);
+
+        Assert.True(changes.AutoHideWhenNoPlaybackChanged);
+        Assert.True(changes.RequiresLyricsWindowApply);
+        Assert.False(changes.LyricSyncServiceChanged);
+        Assert.False(changes.WindowLayoutChanged);
+    }
+
+    [Fact]
     public void CreateWhenSpectrumAudioAccessChangesReappliesSpectrumWithoutRebuildingOtherServices()
     {
         var current = new AppSettings();
@@ -194,6 +209,7 @@ public sealed class AppSettingsChangeSetTests
         Assert.True(changes.LocalMediaLibraryChanged);
         Assert.True(changes.LyricSyncServiceChanged);
         Assert.True(changes.SpectrumDisplayChanged);
+        Assert.True(changes.AutoHideWhenNoPlaybackChanged);
         Assert.True(changes.VisualStyleChanged);
         Assert.True(changes.LyricsLayoutChanged);
         Assert.True(changes.WindowLayoutChanged);

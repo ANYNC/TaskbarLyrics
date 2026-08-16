@@ -80,7 +80,9 @@ public partial class MainWindow : Window, IDisposable
     private string _lastSpectrumDiagnosticsKey = string.Empty;
     private AppSettings _currentSettings = new();
     private TrackInfo? _currentTrack;
+    private readonly LyricsContentVisibilityStateMachine _lyricsContentVisibilityState = new();
     private bool _hasAppliedSettings;
+    private bool _isLyricsContentVisible = true;
     private bool _hasReportedWebViewControllerMonitoringFailure;
     private int _displayLayoutRefreshPending;
     private int _isDisposed;
@@ -88,7 +90,11 @@ public partial class MainWindow : Window, IDisposable
 
     internal event Action<LyricsPresentationCommand>? PresentationCommandCreated;
 
+    internal event EventHandler<LyricsContentVisibilityChangedEventArgs>? LyricsContentVisibilityChanged;
+
     internal DisplayMonitor? DisplayMonitor => _displayMonitor;
+
+    internal bool IsLyricsContentVisible => _isLyricsContentVisible;
 
     internal MainWindow(TrackLyricOffsetStore trackLyricOffsetStore, IAppCompositionRoot compositionRoot)
     {
@@ -133,6 +139,7 @@ public partial class MainWindow : Window, IDisposable
         var changes = AppSettingsChangeSet.Create(_currentSettings, snapshot, !_hasAppliedSettings);
         _currentSettings = snapshot;
         _hasAppliedSettings = true;
+        var animateLyricsTransition = true;
 
         if (changes.PlayerRecognitionChanged)
         {
@@ -185,6 +192,19 @@ public partial class MainWindow : Window, IDisposable
             UpdateSpectrumCaptureState();
         }
 
+        if (changes.AutoHideWhenNoPlaybackChanged || changes.IsInitialApplication)
+        {
+            var visibilityTransition = _lyricsContentVisibilityState.ApplySettings(
+                snapshot.AutoHideWhenNoPlayback,
+                DateTimeOffset.UtcNow);
+            ApplyLyricsContentVisibility(visibilityTransition);
+            if (_lyricsContentVisibilityState.IsConfirmedNoPlayback)
+            {
+                ApplyNoPlaybackPresentation(visibilityTransition);
+                animateLyricsTransition = !visibilityTransition.PresentationChanged;
+            }
+        }
+
         if (changes.WindowLayoutChanged || changes.LyricsLayoutChanged)
         {
             AnchorToTaskbar();
@@ -196,7 +216,7 @@ public partial class MainWindow : Window, IDisposable
             PushStyleToWebView(snapshot);
         }
 
-        PushCurrentLyricsToWebView();
+        PushCurrentLyricsToWebView(animateLyricsTransition);
     }
 
     internal void SetDisplayMonitor(DisplayMonitor displayMonitor)
@@ -458,7 +478,36 @@ public partial class MainWindow : Window, IDisposable
             EnsureVisibleIfExpected();
 
             var snapshot = await _musicSessionProvider.GetCurrentAsync();
-            _currentTrack = snapshot.Track;
+            var inputKind = PlaybackInputPolicy.Classify(snapshot);
+            _currentTrack = inputKind == PlaybackInputKind.ValidTrack
+                ? snapshot.Track
+                : null;
+            var visibilityTransition = _lyricsContentVisibilityState.ObservePlaybackInput(
+                inputKind,
+                DateTimeOffset.UtcNow);
+            ApplyLyricsContentVisibility(visibilityTransition);
+
+            if (inputKind == PlaybackInputKind.NoPlayback)
+            {
+                var noPlaybackSnapshot = snapshot with
+                {
+                    Track = null,
+                    CoverImageBytes = null,
+                    IsCoverLoading = false
+                };
+                // Passing a null-track snapshot only clears LyricSyncService state;
+                // its null-input guard cancels searches without starting retrieval.
+                await _lyricSyncService.GetDisplayFrameAsync(noPlaybackSnapshot);
+                UpdateCover(noPlaybackSnapshot);
+                if (visibilityTransition.PresentationChanged)
+                {
+                    ApplyNoPlaybackPresentation(visibilityTransition);
+                    PushCurrentLyricsToWebView(animateTransition: false);
+                }
+
+                return;
+            }
+
             UpdateCover(snapshot);
 
             var frame = await _lyricSyncService.GetDisplayFrameAsync(snapshot);
@@ -741,6 +790,7 @@ public partial class MainWindow : Window, IDisposable
         {
             // Proceed only if we previously had no cover for this track but now we have bytes.
             if (_currentCoverDataUri != null ||
+                snapshot.Track is null ||
                 (snapshot.CoverImageBytes == null && _localMediaCoverProvider is null))
             {
                 return;
@@ -911,7 +961,7 @@ public partial class MainWindow : Window, IDisposable
         }
     }
 
-    private void PushCurrentLyricsToWebView()
+    private void PushCurrentLyricsToWebView(bool animateTransition = true)
     {
         if (!_isWebViewReady || !_isWebDocumentReady || _isShowingWebErrorPage)
         {
@@ -929,7 +979,8 @@ public partial class MainWindow : Window, IDisposable
             _lastWordScanProgress,
             _currentTranslation,
             _nextTranslation,
-            _currentSettings.ShowLyricTranslation && _hasTrackTranslation);
+            _currentSettings.ShowLyricTranslation && _hasTrackTranslation,
+            animateTransition);
         PublishPresentationCommand("lyrics", script, "lyrics web view update");
     }
 
@@ -1572,4 +1623,47 @@ public partial class MainWindow : Window, IDisposable
         AttachToTaskbarHost();
     }
 
+    private void ApplyLyricsContentVisibility(LyricsContentVisibilityTransition transition)
+    {
+        if (_isLyricsContentVisible == transition.IsVisible)
+        {
+            return;
+        }
+
+        _isLyricsContentVisible = transition.IsVisible;
+        RootBorder.Visibility = transition.IsVisible ? Visibility.Visible : Visibility.Collapsed;
+        LyricsContentVisibilityChanged?.Invoke(
+            this,
+            new LyricsContentVisibilityChangedEventArgs(transition.IsVisible));
+    }
+
+    private void ApplyNoPlaybackPresentation(LyricsContentVisibilityTransition transition)
+    {
+        _currentLine = transition.CountdownSecondsRemaining is int seconds
+            ? $"暂无播放内容，{seconds} 秒后自动隐藏"
+            : "等待播放...";
+        _nextLine = string.Empty;
+        _currentTranslation = string.Empty;
+        _nextTranslation = string.Empty;
+        _hasTrackTranslation = false;
+        _lastLineProgress = 0;
+        _lastWordScanProgress = null;
+        _lastWebCurrentLineIndex = -1;
+        _lastWebTrackId = string.Empty;
+        _isCurrentFramePureMusic = false;
+        _isCurrentPlaybackPlaying = false;
+        UpdateSpectrumCaptureState();
+
+        if (_musicSessionProvider is SmtcMusicSessionProvider smtcProvider)
+        {
+            smtcProvider.SetCurrentLyricSource(null);
+            smtcProvider.SetCurrentLyricOffsets(0, 0);
+        }
+    }
+
+}
+
+internal sealed class LyricsContentVisibilityChangedEventArgs(bool isVisible) : EventArgs
+{
+    public bool IsVisible { get; } = isVisible;
 }

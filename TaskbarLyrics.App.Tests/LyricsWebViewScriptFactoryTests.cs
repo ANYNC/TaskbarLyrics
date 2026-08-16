@@ -21,6 +21,23 @@ public sealed class LyricsWebViewScriptFactoryTests
         Assert.Contains("\"type\":\"lyrics\"", script);
         Assert.Contains("A \\u0022quoted\\u0022 line", script);
         Assert.Contains("\"progress\":1", script);
+        Assert.Contains("\"animateTransition\":true", script);
+    }
+
+    [Fact]
+    public void SetLyricsCanDisableTransitionAnimation()
+    {
+        var script = LyricsWebViewScriptFactory.SetLyrics(
+            "current",
+            "next",
+            0.5,
+            2,
+            "track",
+            isPureMusic: false,
+            isPlaying: false,
+            animateTransition: false);
+
+        Assert.Contains("\"animateTransition\":false", script);
     }
 
     [Fact]

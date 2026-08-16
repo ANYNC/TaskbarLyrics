@@ -635,6 +635,83 @@ describe("lyrics responsive layout", () => {
     expect(track.classList.contains("animating")).toBe(false);
   });
 
+  it("updates no-playback countdown prompts in place and preserves animation defaults", async () => {
+    const [html, state, script] = await Promise.all([
+      read("TaskbarLyrics.App/Web/Lyrics/index.html"),
+      read("TaskbarLyrics.App/Web/Lyrics/state.js"),
+      read("TaskbarLyrics.App/Web/Lyrics/app.js")
+    ]);
+    const dom = new JSDOM(html.replace("{{STYLE_CSS}}", "").replace("{{APP_JS}}", ""), {
+      runScripts: "outside-only"
+    });
+    dom.window.CSS = { supports: () => true };
+    const pendingAnimationFrames = [];
+    dom.window.requestAnimationFrame = callback => {
+      pendingAnimationFrames.push(callback);
+      return pendingAnimationFrames.length;
+    };
+    dom.window.cancelAnimationFrame = () => {};
+    dom.window.eval(state);
+    dom.window.eval(script);
+
+    const track = dom.window.document.querySelector("#track");
+    const currentLineText = dom.window.document.querySelector("#currentLineText");
+    const receiveCountdown = seconds => dom.window.taskbarLyrics.receive({
+      version: 1,
+      type: "lyrics",
+      payload: {
+        current: `暂无播放内容，${seconds} 秒后自动隐藏`,
+        next: "",
+        progress: 0,
+        currentLineIndex: -1,
+        trackId: "",
+        isPureMusic: false,
+        isPlaying: false,
+        animateTransition: false
+      }
+    });
+
+    receiveCountdown(3);
+    expect(currentLineText.textContent).toBe("暂无播放内容，3 秒后自动隐藏");
+    expect(track.classList.contains("animating")).toBe(false);
+    expect(track.classList.contains("translation-pair-animating")).toBe(false);
+    expect(track.classList.contains("no-anim")).toBe(false);
+    expect(track.style.transform).toBe("");
+    expect(pendingAnimationFrames).toHaveLength(0);
+
+    receiveCountdown(2);
+    expect(currentLineText.textContent).toBe("暂无播放内容，2 秒后自动隐藏");
+    expect(track.classList.contains("animating")).toBe(false);
+    expect(track.classList.contains("translation-pair-animating")).toBe(false);
+    expect(track.style.transform).toBe("");
+    expect(pendingAnimationFrames).toHaveLength(0);
+
+    const receiveDefault = (current, currentLineIndex) => dom.window.taskbarLyrics.receive({
+      version: 1,
+      type: "lyrics",
+      payload: {
+        current,
+        next: "Next line",
+        progress: 0.25,
+        currentLineIndex,
+        trackId: "",
+        isPureMusic: false,
+        isPlaying: true
+      }
+    });
+
+    receiveDefault("First line", 0);
+    receiveDefault("Second line", 1);
+    expect(pendingAnimationFrames).toHaveLength(1);
+    pendingAnimationFrames.shift()(0);
+    expect(track.classList.contains("animating")).toBe(true);
+
+    receiveCountdown(1);
+    expect(currentLineText.textContent).toBe("暂无播放内容，1 秒后自动隐藏");
+    expect(track.classList.contains("animating")).toBe(false);
+    expect(dom.window.document.querySelector("#incomingLineText").textContent.trim()).toBe("");
+  });
+
   it("keeps every spectrum bar visible when scaled geometry exceeds the viewport", async () => {
     const [html, state, script] = await Promise.all([
       read("TaskbarLyrics.App/Web/Lyrics/index.html"),

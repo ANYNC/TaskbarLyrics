@@ -113,6 +113,37 @@ describe("settings WebView bridge", () => {
     expect(toggle.checked).toBe(true);
   });
 
+  it("hydrates the auto-hide setting and posts V1 updates", async () => {
+    const { dom, sent, script } = await createSettingsDom();
+    const document = dom.window.document;
+    dom.window.eval(script);
+
+    dom.window.settingsApp.receive({
+      version: 1,
+      type: "settingsState",
+      payload: { settings: { autoHideWhenNoPlayback: true }, fonts: [] }
+    });
+
+    const toggle = document.querySelector('input[data-setting="autoHideWhenNoPlayback"]');
+    expect(toggle).not.toBeNull();
+    expect(toggle.checked).toBe(true);
+
+    toggle.checked = false;
+    toggle.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+    expect(sent.at(-1)).toEqual({
+      version: 1,
+      type: "update",
+      payload: { key: "autoHideWhenNoPlayback", value: false }
+    });
+
+    dom.window.settingsApp.receive({
+      version: 1,
+      type: "settingsState",
+      payload: { settings: { autoHideWhenNoPlayback: true }, fonts: [] }
+    });
+    expect(toggle.checked).toBe(true);
+  });
+
   it("renders connected displays and posts mode and multi-selection updates", async () => {
     const { dom, sent, script } = await createSettingsDom();
     const document = dom.window.document;
@@ -139,8 +170,12 @@ describe("settings WebView bridge", () => {
     expect(mode.checked).toBe(true);
     expect(displayA.checked).toBe(false);
     expect(displayB.checked).toBe(true);
-    expect(document.querySelector("#displayMonitorHint").textContent).toContain("1 台");
+    expect(document.querySelector("#displayMonitorHint").textContent).toBe("已选择 1/2 台显示器。");
+    const displayGroup = document.querySelector("#displayMonitorList");
+    expect(displayGroup.getAttribute("role")).toBe("group");
+    expect(document.getElementById(displayGroup.getAttribute("aria-labelledby")).textContent).toBe("选择显示歌词的显示器");
 
+    displayA.focus();
     displayA.checked = true;
     displayA.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
     expect(sent.at(-1)).toEqual({
@@ -148,6 +183,7 @@ describe("settings WebView bridge", () => {
       type: "update",
       payload: { key: "selectedDisplayIds", value: ["display-b", "display-a"] }
     });
+    expect(document.activeElement.dataset.displayId).toBe("display-a");
 
     const allMode = document.querySelector('[data-display-mode][value="All"]');
     allMode.checked = true;
@@ -157,7 +193,9 @@ describe("settings WebView bridge", () => {
       type: "update",
       payload: { key: "lyricsDisplayMode", value: "All" }
     });
-    expect(document.querySelector('[data-display-id="display-a"]').disabled).toBe(true);
+    expect(document.querySelector('input[data-display-id="display-a"]')).toBeNull();
+    expect(document.querySelector('[data-display-id="display-a"] .is-enabled').textContent).toBe("已启用");
+    expect(document.querySelector("#displayMonitorHint").textContent).toBe("已连接 2 台显示器，歌词将在全部任务栏显示。");
   });
 
   it("requires consent before changing an unauthorized spectrum mode", async () => {

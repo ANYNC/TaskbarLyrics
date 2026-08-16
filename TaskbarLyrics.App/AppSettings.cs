@@ -94,6 +94,8 @@ public sealed class AppSettings
 
     public bool ShowLyricsOnStartup { get; set; } = true;
 
+    public bool AutoHideWhenNoPlayback { get; set; } = true;
+
     public bool StartWithWindows { get; set; }
 
     public bool AutoCheckUpdates { get; set; } = true;

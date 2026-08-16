@@ -897,6 +897,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             })
             .ToList(),
             ShowLyricsOnStartup = _settings.ShowLyricsOnStartup,
+            AutoHideWhenNoPlayback = _settings.AutoHideWhenNoPlayback,
             StartWithWindows = _settings.StartWithWindows,
             AutoCheckUpdates = _settings.AutoCheckUpdates,
             ShowLyricTranslation = _settings.ShowLyricTranslation,
@@ -1068,6 +1069,9 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 break;
             case "showLyricsOnStartup":
                 _settings.ShowLyricsOnStartup = ReadBool(element, _settings.ShowLyricsOnStartup);
+                break;
+            case "autoHideWhenNoPlayback":
+                _settings.AutoHideWhenNoPlayback = ReadBool(element, _settings.AutoHideWhenNoPlayback);
                 break;
             case "startWithWindows":
                 _settings.StartWithWindows = ReadBool(element, _settings.StartWithWindows);
@@ -1547,6 +1551,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         target.LocalMusicFolders = NormalizeLocalMusicFolders(source.LocalMusicFolders);
         target.GlobalMediaHotkeys = (source.GlobalMediaHotkeys ?? new GlobalMediaHotkeySettings()).Clone();
         target.ShowLyricsOnStartup = source.ShowLyricsOnStartup;
+        target.AutoHideWhenNoPlayback = source.AutoHideWhenNoPlayback;
         target.StartWithWindows = source.StartWithWindows;
         target.AutoCheckUpdates = source.AutoCheckUpdates;
         target.LastUpdateCheckUtc = source.LastUpdateCheckUtc;
@@ -1679,6 +1684,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         public Dictionary<string, string> MediaHotkeyStatuses { get; set; } = new(StringComparer.Ordinal);
         public List<WebMediaHotkeyDefinition> MediaHotkeys { get; set; } = [];
         public bool ShowLyricsOnStartup { get; set; }
+        public bool AutoHideWhenNoPlayback { get; set; }
         public bool StartWithWindows { get; set; }
         public bool AutoCheckUpdates { get; set; }
         public bool ShowLyricTranslation { get; set; }

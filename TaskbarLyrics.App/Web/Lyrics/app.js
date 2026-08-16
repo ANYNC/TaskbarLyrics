@@ -726,6 +726,33 @@ function applyFrameAfterSearchDwell(frame) {
   }, delay);
 }
 
+function applyFrameWithoutTransition(
+  safeCurrent,
+  safeNext,
+  progress,
+  currentLineIndex,
+  wordScanProgress,
+  currentTranslation = "",
+  nextTranslation = "",
+  translationMode = false) {
+  const useTranslationPair = Boolean(translationMode);
+  const visibleSecondary = useTranslationPair
+    ? toDisplayLine(currentTranslation, " ")
+    : safeNext;
+  const p = clamp01(progress);
+
+  cancelActiveTransition();
+  trackSwitchSearchStartedAt = 0;
+  setTranslationMode(useTranslationPair);
+  setIncomingLine("");
+  setCurrentLine(safeCurrent);
+  setWordScanProgress(wordScanProgress, false);
+  setSecondaryLine(visibleSecondary);
+  updateSecondaryOpacity(p);
+  lastCurrentLineIndex = Number.isInteger(currentLineIndex) ? currentLineIndex : -1;
+  lastLineProgress = p;
+}
+
 function cancelActiveTransition() {
   transitionGeneration++;
   if (transitionFallbackTimer) {
@@ -1334,7 +1361,8 @@ const lyricsApi = {
     wordScanProgress,
     currentTranslation,
     nextTranslation,
-    translationMode) {
+    translationMode,
+    animateTransition = true) {
     isPlaybackPlaying = Boolean(isPlaying);
     const safeCurrent = toDisplayLine(current, SEARCHING_TEXT);
     const safeNext = toDisplayLine(next, " ");
@@ -1370,6 +1398,19 @@ const lyricsApi = {
 
     setDisplayMode(false);
     clearSpectrumBars();
+
+    if (animateTransition === false) {
+      applyFrameWithoutTransition(
+        safeCurrent,
+        safeNext,
+        p,
+        lineIndex,
+        wordScanProgress,
+        safeCurrentTranslation,
+        safeNextTranslation,
+        useTranslationPair);
+      return;
+    }
 
     if (normalizedTrackId.length > 0 && normalizedTrackId !== lastTrackId) {
       resetForTrackSwitch(
@@ -1615,7 +1656,8 @@ window.taskbarLyrics = {
           payload?.wordScanProgress,
           payload?.currentTranslation,
           payload?.nextTranslation,
-          payload?.translationMode);
+          payload?.translationMode,
+          payload?.animateTransition);
         break;
       case "cover":
         lyricsApi.setCover(payload?.dataUri, payload?.fallbackText, payload?.fallbackColor, payload?.trackId);

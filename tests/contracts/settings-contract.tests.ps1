@@ -35,7 +35,7 @@ foreach ($page in $pages) {
 }
 
 $settings = @(
-    'enableLocalLyrics', 'localMusicFolders', 'enableGlobalMediaHotkeys', 'showLyricsOnStartup', 'showLyricTranslation', 'enableWordScanning',
+    'enableLocalLyrics', 'localMusicFolders', 'enableGlobalMediaHotkeys', 'showLyricsOnStartup', 'autoHideWhenNoPlayback', 'showLyricTranslation', 'enableWordScanning',
     'spectrumDisplayMode', 'lyricsLayoutScalePercent', 'fontSize', 'showCover',
     'coverSize', 'coverGap', 'coverCornerRadius', 'fontFamily',
     'fontWeight', 'foregroundColorMode', 'showTextShadow', 'toolWindowTheme', 'showBackground',
@@ -162,6 +162,7 @@ if (-not $app.Contains('public void ShowLyricsWindow()')) { $errors.Add('missing
 if (-not $appSettings.Contains('public GlobalMediaHotkeySettings GlobalMediaHotkeys')) { $errors.Add('global media hotkeys settings missing') }
 if (-not $appSettings.Contains('public double LyricsLayoutScalePercent')) { $errors.Add('lyrics layout scale setting missing') }
 if (-not $appSettings.Contains('public bool ShowCover')) { $errors.Add('show cover setting missing') }
+if (-not $appSettings.Contains('public bool AutoHideWhenNoPlayback')) { $errors.Add('auto-hide when no playback setting missing') }
 if (-not $appSettings.Contains('public bool SpectrumAudioAccessGranted')) { $errors.Add('spectrum audio access setting missing') }
 if (-not $appSettings.Contains('public LyricsDisplayMode LyricsDisplayMode')) { $errors.Add('lyrics display mode setting missing') }
 if (-not $appSettings.Contains('public List<string> SelectedDisplayIds')) { $errors.Add('selected display ids setting missing') }

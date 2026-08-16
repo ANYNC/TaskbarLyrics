@@ -13,7 +13,8 @@ internal static class LyricsWebViewScriptFactory
         double? wordScanProgress = null,
         string? currentTranslation = null,
         string? nextTranslation = null,
-        bool translationMode = false)
+        bool translationMode = false,
+        bool animateTransition = true)
     {
         return WebViewMessageScriptFactory.Dispatch("taskbarLyrics", "lyrics", new
         {
@@ -27,6 +28,7 @@ internal static class LyricsWebViewScriptFactory
             currentTranslation = currentTranslation ?? string.Empty,
             nextTranslation = nextTranslation ?? string.Empty,
             translationMode,
+            animateTransition,
             wordScanProgress = wordScanProgress.HasValue
                 ? Math.Clamp(wordScanProgress.Value, 0, 1)
                 : (double?)null

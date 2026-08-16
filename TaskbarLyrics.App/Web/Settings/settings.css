@@ -298,19 +298,29 @@
     .setting-row.compact { grid-template-columns: minmax(0, 1fr) auto; }
     .setting-row.child { min-height: 54px; margin: 2px 0 6px 24px; padding: 9px 18px 9px 0; border: 0; border-radius: 0; background: transparent; }
     .setting-row.is-disabled { opacity: .46; }
-    .monitor-selection { width: min(100%, 420px); display: grid; gap: 10px; }
-    .monitor-mode { display: flex; flex-wrap: wrap; gap: 8px; }
-    .monitor-mode label, .monitor-option { min-width: 0; display: flex; align-items: center; gap: 8px; cursor: pointer; }
-    .monitor-mode label { min-height: 32px; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--secondary); }
-    .monitor-mode label:has(input:checked) { border-color: var(--primary); background: var(--accent); }
+    .setting-row.monitor-setting-row { grid-template-columns: minmax(0, 1fr) minmax(360px, 560px); align-items: start; gap: 32px; padding-block: 14px; }
+    .monitor-selection { width: 100%; max-width: 560px; justify-self: end; display: grid; gap: 10px; }
+    .monitor-mode { width: max-content; max-width: 100%; justify-self: end; display: inline-flex; gap: 3px; padding: 3px; border: 1px solid var(--input); border-radius: var(--radius-sm); background: var(--muted); }
+    .monitor-mode label, .monitor-option { min-width: 0; display: flex; align-items: center; gap: 8px; }
+    .monitor-mode label { min-height: 30px; padding: 0 12px; border-radius: calc(var(--radius-sm) - 2px); color: var(--muted-foreground); font-size: 12px; font-weight: 600; cursor: pointer; }
+    .monitor-mode label:has(input:checked) { background: var(--card); color: var(--foreground); box-shadow: var(--shadow-sm); }
+    .monitor-mode label:hover, .monitor-option:not(.is-readonly):hover { background: var(--surface-hover); color: var(--foreground); }
+    .monitor-mode label:active, .monitor-option:not(.is-readonly):active { background: var(--accent); }
     .monitor-mode label:has(input:focus-visible), .monitor-option:has(input:focus-visible) { outline: 2px solid var(--ring); outline-offset: 2px; }
-    .monitor-mode input, .monitor-option input { accent-color: var(--primary); }
-    .monitor-list { display: grid; gap: 6px; }
-    .monitor-option { justify-content: space-between; min-height: 38px; padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--card); }
+    .monitor-mode input { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+    .monitor-option input { accent-color: var(--primary); }
+    .monitor-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
+    .monitor-option { justify-content: space-between; min-height: 52px; padding: 9px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--card); }
+    .monitor-option:not(.is-readonly) { cursor: pointer; }
+    .monitor-option:has(input:checked) { border-color: var(--primary); background: var(--accent); }
     .monitor-option-copy { min-width: 0; display: grid; gap: 2px; }
-    .monitor-option-copy strong, .monitor-option-copy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .monitor-option-title { min-width: 0; display: flex; align-items: center; gap: 6px; }
+    .monitor-option-title strong { min-width: 0; overflow: hidden; font-size: 13px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+    .monitor-option-copy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .monitor-option-copy small, .monitor-hint { color: var(--muted-foreground); font-size: 11px; }
-    .monitor-list[aria-disabled="true"] { opacity: .55; }
+    .monitor-hint { text-align: right; }
+    .monitor-badge { flex: 0 0 auto; padding: 2px 6px; border-radius: 999px; background: var(--muted); color: var(--muted-foreground); font-size: 10px; font-weight: 600; line-height: 1.4; }
+    .monitor-badge.is-enabled { background: color-mix(in oklch, var(--success) 18%, transparent); color: var(--success); box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--success) 32%, transparent); }
     .setting-label { min-width: 0; display: grid; gap: 3px; }
     .setting-label strong { font-size: 13px; font-weight: 600; }
     .setting-label small { color: var(--muted-foreground); font-size: 11px; line-height: 1.45; }
@@ -667,6 +677,10 @@
       .save-state { display: none; }
       .save-state[data-state="error"] { display: inline-flex; }
       .setting-row { grid-template-columns: 1fr; gap: 8px; }
+      .setting-row.monitor-setting-row { grid-template-columns: 1fr; gap: 12px; }
+      .monitor-selection { justify-self: stretch; }
+      .monitor-mode { justify-self: start; }
+      .monitor-hint { text-align: left; }
       .setting-row.layout-scale-row { grid-template-columns: 1fr; }
       .setting-row.compact { grid-template-columns: 1fr auto; }
       .media-hotkey-row { grid-template-columns: 1fr; gap: 8px; }

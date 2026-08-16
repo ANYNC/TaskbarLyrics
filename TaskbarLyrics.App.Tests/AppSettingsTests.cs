@@ -38,6 +38,12 @@ public sealed class AppSettingsTests
     }
 
     [Fact]
+    public void NewSettingsAutoHideWhenNoPlaybackByDefault()
+    {
+        Assert.True(new AppSettings().AutoHideWhenNoPlayback);
+    }
+
+    [Fact]
     public void NormalizeDisplaySelectionRemovesBlankAndDuplicateIds()
     {
         var settings = new AppSettings

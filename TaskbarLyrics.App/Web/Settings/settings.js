@@ -837,6 +837,18 @@
       });
     }
 
+    function renderDisplayMonitorOption(display, mode, selected) {
+      const displayId = escapeHtml(display.id);
+      const displayName = escapeHtml(display.name);
+      const primaryBadge = display.isPrimary ? '<span class="monitor-badge">主显示器</span>' : "";
+      const copy = `<span class="monitor-option-copy"><span class="monitor-option-title"><strong title="${displayName}">${displayName}</strong>${primaryBadge}</span><small>${Number(display.width) || 0} × ${Number(display.height) || 0}</small></span>`;
+      if (mode === "All") {
+        return `<div class="monitor-option is-readonly" data-display-id="${displayId}">${copy}<span class="monitor-badge is-enabled">已启用</span></div>`;
+      }
+
+      return `<label class="monitor-option">${copy}<input type="checkbox" data-display-id="${displayId}" ${selected.has(display.id) ? "checked" : ""} aria-label="在 ${displayName} 显示歌词"></label>`;
+    }
+
     function renderDisplayMonitors() {
       if (!state) return;
       const mode = state.lyricsDisplayMode === "Selected" ? "Selected" : "All";
@@ -844,17 +856,23 @@
       const displays = Array.isArray(state.availableDisplays) ? state.availableDisplays : [];
       $$('[data-display-mode]').forEach(control => { control.checked = control.value === mode; });
       const list = $("#displayMonitorList");
-      list.setAttribute("aria-disabled", String(mode !== "Selected"));
+      const focusedDisplayId = document.activeElement?.dataset?.displayId;
+      list.dataset.mode = mode;
       list.innerHTML = displays.length
-        ? displays.map(display => `<label class="monitor-option"><span class="monitor-option-copy"><strong title="${escapeHtml(display.name)}">${escapeHtml(display.name)}</strong><small>${Number(display.width) || 0} × ${Number(display.height) || 0}${display.isPrimary ? " · 主显示器" : ""}</small></span><input type="checkbox" data-display-id="${escapeHtml(display.id)}" ${selected.has(display.id) ? "checked" : ""} ${mode !== "Selected" ? "disabled" : ""} aria-label="在 ${escapeHtml(display.name)} 显示歌词"></label>`).join("")
-        : '<div class="monitor-hint">暂时没有检测到可用显示器。</div>';
+        ? displays.map(display => renderDisplayMonitorOption(display, mode, selected)).join("")
+        : '<div class="monitor-hint">暂未检测到显示器。</div>';
+      const focusedDisplay = [...list.querySelectorAll("input[data-display-id]")]
+        .find(control => control.dataset.displayId === focusedDisplayId);
+      focusedDisplay?.focus({ preventScroll: true });
       const connectedIds = new Set(displays.map(display => display.id));
       const connectedSelectedCount = [...selected].filter(id => connectedIds.has(id)).length;
-      $("#displayMonitorHint").textContent = mode === "All"
-        ? `已检测到 ${displays.length} 台显示器，将在全部任务栏显示。`
-        : connectedSelectedCount > 0
-          ? `已选择 ${connectedSelectedCount} 台已连接显示器。`
-          : "未选择已连接的显示器时，将临时在主显示器显示。";
+      $("#displayMonitorHint").textContent = displays.length === 0
+        ? "连接显示器后，此列表将自动更新。"
+        : mode === "All"
+          ? `已连接 ${displays.length} 台显示器，歌词将在全部任务栏显示。`
+          : connectedSelectedCount > 0
+            ? `已选择 ${connectedSelectedCount}/${displays.length} 台显示器。`
+            : "未选择显示器时，将临时显示在主显示器。";
     }
 
     function cancelHotkeyRecording() {

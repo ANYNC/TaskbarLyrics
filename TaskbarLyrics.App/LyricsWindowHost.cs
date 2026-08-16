@@ -17,6 +17,7 @@ internal sealed class LyricsWindowHost : IDisposable
     private AppSettings _currentSettings = new();
     private bool _disposed;
     private volatile bool _isVisible;
+    private bool _isLyricsContentVisible = true;
     private int _startupAbandoned;
 
     public LyricsWindowHost(
@@ -157,6 +158,8 @@ internal sealed class LyricsWindowHost : IDisposable
             _dispatcher = Dispatcher.CurrentDispatcher;
             _window = new MainWindow(trackLyricOffsetStore, compositionRoot);
             _window.PresentationCommandCreated += OnPresentationCommandCreated;
+            _window.LyricsContentVisibilityChanged += OnLyricsContentVisibilityChanged;
+            _isLyricsContentVisible = _window.IsLyricsContentVisible;
             SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
             ApplySettingsOnWindowThread(initialSettings);
             _window.IsVisibleChanged += (_, _) => _isVisible = _window.IsVisible;
@@ -241,6 +244,7 @@ internal sealed class LyricsWindowHost : IDisposable
             }
 
             mirrorWindow.ApplySettings(_currentSettings);
+            mirrorWindow.SetContentVisibility(_isLyricsContentVisible);
             if (_isVisible)
             {
                 mirrorWindow.Show();
@@ -256,6 +260,17 @@ internal sealed class LyricsWindowHost : IDisposable
         }
     }
 
+    private void OnLyricsContentVisibilityChanged(
+        object? sender,
+        LyricsContentVisibilityChangedEventArgs e)
+    {
+        _isLyricsContentVisible = e.IsVisible;
+        foreach (var mirrorWindow in _mirrorWindows.Values)
+        {
+            mirrorWindow.SetContentVisibility(e.IsVisible);
+        }
+    }
+
     private void OnDisplaySettingsChanged(object? sender, EventArgs e)
     {
         InvokeAsync(() => ApplySettingsOnWindowThread(_currentSettings));
@@ -266,6 +281,7 @@ internal sealed class LyricsWindowHost : IDisposable
         if (_window is not null)
         {
             _window.PresentationCommandCreated -= OnPresentationCommandCreated;
+            _window.LyricsContentVisibilityChanged -= OnLyricsContentVisibilityChanged;
         }
 
         foreach (var mirrorWindow in _mirrorWindows.Values)
