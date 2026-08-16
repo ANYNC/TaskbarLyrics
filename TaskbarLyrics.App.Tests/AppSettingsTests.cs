@@ -38,6 +38,25 @@ public sealed class AppSettingsTests
     }
 
     [Fact]
+    public void NewSettingsUseLeftLyricsTextAlignmentByDefault()
+    {
+        Assert.Equal(LyricsTextAlignment.Left, new AppSettings().LyricsTextAlignment);
+    }
+
+    [Fact]
+    public void NormalizeLyricsTextAlignmentFallsBackToLeftForUndefinedValues()
+    {
+        var settings = new AppSettings
+        {
+            LyricsTextAlignment = (LyricsTextAlignment)999
+        };
+
+        settings.NormalizeLyricsTextAlignment();
+
+        Assert.Equal(LyricsTextAlignment.Left, settings.LyricsTextAlignment);
+    }
+
+    [Fact]
     public void NewSettingsAutoHideWhenNoPlaybackByDefault()
     {
         Assert.True(new AppSettings().AutoHideWhenNoPlayback);

@@ -21,6 +21,22 @@ public sealed class AppSettingsChangeSetTests
     }
 
     [Fact]
+    public void CreateWhenLyricsTextAlignmentChangesOnlyReappliesVisualStyle()
+    {
+        var current = new AppSettings();
+        var next = current.Clone();
+        next.LyricsTextAlignment = LyricsTextAlignment.Right;
+
+        var changes = AppSettingsChangeSet.Create(current, next);
+
+        Assert.True(changes.VisualStyleChanged);
+        Assert.True(changes.RequiresLyricsWindowApply);
+        Assert.False(changes.LyricsLayoutChanged);
+        Assert.False(changes.WindowLayoutChanged);
+        Assert.False(changes.LyricSyncServiceChanged);
+    }
+
+    [Fact]
     public void CreateWhenLayoutScaleChangesReappliesStyleAndWindowLayout()
     {
         var current = new AppSettings();

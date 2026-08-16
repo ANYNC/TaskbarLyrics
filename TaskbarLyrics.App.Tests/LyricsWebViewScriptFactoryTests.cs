@@ -41,6 +41,22 @@ public sealed class LyricsWebViewScriptFactoryTests
     }
 
     [Fact]
+    public void SetLyricsEmitsStablePresentationScene()
+    {
+        var script = LyricsWebViewScriptFactory.SetLyrics(
+            "正在检索歌词...",
+            string.Empty,
+            0,
+            -1,
+            "track",
+            isPureMusic: false,
+            isPlaying: true,
+            presentationScene: LyricsPresentationScene.Searching);
+
+        Assert.Contains("\"scene\":\"searching\"", script);
+    }
+
+    [Fact]
     public void SetLyricsClampsWordScanProgressAndEmitsNullWhenUnavailable()
     {
         var clampedHigh = LyricsWebViewScriptFactory.SetLyrics(

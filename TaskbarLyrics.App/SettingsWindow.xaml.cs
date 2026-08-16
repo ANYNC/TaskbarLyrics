@@ -857,6 +857,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
     private WebSettingsPayload CreateSettingsPayload()
     {
         _settings.NormalizePlayerSources();
+        _settings.NormalizeLyricsTextAlignment();
         var mediaHotkeys = _settings.GlobalMediaHotkeys ??= new GlobalMediaHotkeySettings();
         var layoutMetrics = CreateLyricsLayoutMetrics();
         return new WebSettingsPayload
@@ -929,6 +930,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             ShowTextShadow = _settings.ShowTextShadow,
             WindowWidth = _settings.WindowWidth,
             HorizontalAnchor = _settings.HorizontalAnchor,
+            LyricsTextAlignment = _settings.LyricsTextAlignment,
             XOffset = _settings.XOffset,
             YOffset = _settings.YOffset,
             ForceAlwaysOnTop = _settings.ForceAlwaysOnTop,
@@ -1168,6 +1170,15 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 if (Enum.TryParse<LyricsHorizontalAnchor>(ReadString(element, _settings.HorizontalAnchor.ToString()), out var anchor))
                 {
                     _settings.HorizontalAnchor = anchor;
+                }
+                break;
+            case "lyricsTextAlignment":
+                _settings.NormalizeLyricsTextAlignment();
+                var textAlignment = ReadString(element, string.Empty);
+                if (Enum.TryParse<LyricsTextAlignment>(textAlignment, ignoreCase: true, out var parsedTextAlignment) &&
+                    Enum.IsDefined(parsedTextAlignment))
+                {
+                    _settings.LyricsTextAlignment = parsedTextAlignment;
                 }
                 break;
             case "xOffset":
@@ -1579,6 +1590,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         target.ShowTextShadow = source.ShowTextShadow;
         target.WindowWidth = source.WindowWidth;
         target.HorizontalAnchor = source.HorizontalAnchor;
+        target.LyricsTextAlignment = source.LyricsTextAlignment;
         target.XOffset = source.XOffset;
         target.YOffset = source.YOffset;
         target.ForceAlwaysOnTop = source.ForceAlwaysOnTop;
@@ -1713,6 +1725,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         public bool ShowTextShadow { get; set; }
         public double WindowWidth { get; set; }
         public LyricsHorizontalAnchor HorizontalAnchor { get; set; }
+        public LyricsTextAlignment LyricsTextAlignment { get; set; }
         public double XOffset { get; set; }
         public double YOffset { get; set; }
         public bool ForceAlwaysOnTop { get; set; }

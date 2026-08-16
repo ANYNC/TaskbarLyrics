@@ -231,6 +231,59 @@ public sealed class SettingsStoreTests
     }
 
     [Fact]
+    public void LoadUndefinedLyricsTextAlignmentFallsBackToLeft()
+    {
+        var directory = Path.Combine(AppContext.BaseDirectory, $"settings-store-{Guid.NewGuid():N}");
+        var filePath = Path.Combine(directory, "settings.json");
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            File.WriteAllText(filePath, "{\"LyricsTextAlignment\":999}");
+
+            var store = new SettingsStore(filePath);
+            var loaded = store.Load();
+
+            Assert.Equal(LyricsTextAlignment.Left, loaded.LyricsTextAlignment);
+            Assert.True(store.Save(loaded));
+            Assert.Contains("\"LyricsTextAlignment\": 0", File.ReadAllText(filePath), StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(directory))
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData(LyricsTextAlignment.Left)]
+    [InlineData(LyricsTextAlignment.Center)]
+    [InlineData(LyricsTextAlignment.Right)]
+    public void SaveAndLoadRoundTripsLyricsTextAlignment(LyricsTextAlignment alignment)
+    {
+        var directory = Path.Combine(AppContext.BaseDirectory, $"settings-store-{Guid.NewGuid():N}");
+        var filePath = Path.Combine(directory, "settings.json");
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            var store = new SettingsStore(filePath);
+            Assert.True(store.Save(new AppSettings { LyricsTextAlignment = alignment }));
+
+            Assert.Equal(alignment, store.Load().LyricsTextAlignment);
+        }
+        finally
+        {
+            if (Directory.Exists(directory))
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public void LoadClampsLayoutSettingsToExtendedHardBoundaries()
     {
         var directory = Path.Combine(AppContext.BaseDirectory, $"settings-store-{Guid.NewGuid():N}");

@@ -61,6 +61,7 @@ public partial class MainWindow : Window, IDisposable
     private bool _isSpectrumScriptPending;
     private bool _isCurrentFramePureMusic;
     private bool _isCurrentPlaybackPlaying;
+    private LyricsPresentationScene _lyricsPresentationScene = LyricsPresentationScene.Message;
     private bool _forceAlwaysOnTop = true;
     private string? _pendingSpectrumValuesJson;
     private SpectrumTuningSettings _spectrumTuningSettings = SpectrumTuningSettings.CreateDefault();
@@ -187,6 +188,7 @@ public partial class MainWindow : Window, IDisposable
             if (_spectrumDisplayMode == SpectrumDisplayMode.Disabled)
             {
                 _isCurrentFramePureMusic = false;
+                _lyricsPresentationScene = ResolveCurrentLyricsPresentationScene();
             }
 
             UpdateSpectrumCaptureState();
@@ -535,6 +537,13 @@ public partial class MainWindow : Window, IDisposable
 
             _isCurrentFramePureMusic = ShouldShowSpectrum(frame);
             _isCurrentPlaybackPlaying = snapshot.IsPlaying;
+            _lyricsPresentationScene = ResolveLyricsPresentationScene(frame);
+            if (_lyricsPresentationScene == LyricsPresentationScene.Searching)
+            {
+                var searchingPresentation = LyricsSearchingPresentationPolicy.Create(_currentTrack);
+                current = searchingPresentation.Current;
+                next = searchingPresentation.Next;
+            }
             UpdateSpectrumCaptureState();
             var wordScanProgress = _currentSettings.EnableWordScanning
                 ? frame.WordScanProgress
@@ -561,6 +570,7 @@ public partial class MainWindow : Window, IDisposable
             _lastWordScanProgress = null;
             _isCurrentFramePureMusic = false;
             _isCurrentPlaybackPlaying = false;
+            _lyricsPresentationScene = LyricsPresentationScene.Message;
             UpdateSpectrumCaptureState();
             PushCurrentLyricsToWebView();
             Debug.WriteLine(ex);
@@ -621,6 +631,40 @@ public partial class MainWindow : Window, IDisposable
     {
         return frame.CurrentLineIndex < 0 &&
             string.Equals(frame.CurrentLine, LyricSyncService.NoLyricsText, StringComparison.Ordinal);
+    }
+
+    private LyricsPresentationScene ResolveLyricsPresentationScene(LyricDisplayFrame frame)
+    {
+        if (ShouldShowSpectrum(frame))
+        {
+            return LyricsPresentationScene.Spectrum;
+        }
+
+        if (_lyricSyncService.CurrentLyricAcquisition == LyricAcquisitionKind.Searching)
+        {
+            return LyricsPresentationScene.Searching;
+        }
+
+        return frame.CurrentLineIndex >= 0
+            ? LyricsPresentationScene.Lyrics
+            : LyricsPresentationScene.Message;
+    }
+
+    private LyricsPresentationScene ResolveCurrentLyricsPresentationScene()
+    {
+        if (_isCurrentFramePureMusic)
+        {
+            return LyricsPresentationScene.Spectrum;
+        }
+
+        if (_lyricSyncService.CurrentLyricAcquisition == LyricAcquisitionKind.Searching)
+        {
+            return LyricsPresentationScene.Searching;
+        }
+
+        return _lastWebCurrentLineIndex >= 0
+            ? LyricsPresentationScene.Lyrics
+            : LyricsPresentationScene.Message;
     }
 
     private void UpdateSpectrumCaptureState()
@@ -980,7 +1024,8 @@ public partial class MainWindow : Window, IDisposable
             _currentTranslation,
             _nextTranslation,
             _currentSettings.ShowLyricTranslation && _hasTrackTranslation,
-            animateTransition);
+            animateTransition,
+            _lyricsPresentationScene);
         PublishPresentationCommand("lyrics", script, "lyrics web view update");
     }
 
@@ -1462,6 +1507,7 @@ public partial class MainWindow : Window, IDisposable
             var script = string.Join(Environment.NewLine, [
                 File.ReadAllText(Path.Combine(lyricsWebDir, "bridge.js")),
                 File.ReadAllText(Path.Combine(lyricsWebDir, "state.js")),
+                File.ReadAllText(Path.Combine(lyricsWebDir, "presentation.js")),
                 File.ReadAllText(Path.Combine(lyricsWebDir, "app.js"))
             ]);
 
@@ -1652,6 +1698,7 @@ public partial class MainWindow : Window, IDisposable
         _lastWebTrackId = string.Empty;
         _isCurrentFramePureMusic = false;
         _isCurrentPlaybackPlaying = false;
+        _lyricsPresentationScene = LyricsPresentationScene.Message;
         UpdateSpectrumCaptureState();
 
         if (_musicSessionProvider is SmtcMusicSessionProvider smtcProvider)

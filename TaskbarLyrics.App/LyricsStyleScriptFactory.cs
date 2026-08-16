@@ -8,6 +8,7 @@ internal static class LyricsStyleScriptFactory
     public static string Create(AppSettings settings, double pixelsPerDip)
     {
         ArgumentNullException.ThrowIfNull(settings);
+        settings.NormalizeLyricsTextAlignment();
         var primaryColor = ParseColor(settings.ForegroundColor);
         var secondaryColor = ForegroundColorPolicy.CreateSecondaryColor(primaryColor);
         var translationColor = ForegroundColorPolicy.CreateTranslationColor(primaryColor);
@@ -52,7 +53,8 @@ internal static class LyricsStyleScriptFactory
                 : "none",
             textShadow = settings.ShowTextShadow
                 ? "0 1px 2px rgba(0, 0, 0, 0.36)"
-                : "none"
+                : "none",
+            textAlignment = settings.LyricsTextAlignment
         };
 
         return WebViewMessageScriptFactory.Dispatch("taskbarLyrics", "style", stylePayload);

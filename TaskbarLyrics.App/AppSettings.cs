@@ -7,6 +7,13 @@ public enum LyricsHorizontalAnchor
     Right
 }
 
+public enum LyricsTextAlignment
+{
+    Left = 0,
+    Center = 1,
+    Right = 2
+}
+
 public enum ForegroundColorMode
 {
     Dark = 0,
@@ -154,6 +161,8 @@ public sealed class AppSettings
 
     public LyricsHorizontalAnchor HorizontalAnchor { get; set; } = LyricsHorizontalAnchor.Left;
 
+    public LyricsTextAlignment LyricsTextAlignment { get; set; } = LyricsTextAlignment.Left;
+
     public double XOffset { get; set; }
 
     public double YOffset { get; set; }
@@ -190,6 +199,7 @@ public sealed class AppSettings
     public AppSettings Clone()
     {
         NormalizePlayerSources();
+        NormalizeLyricsTextAlignment();
         var cloned = (AppSettings)MemberwiseClone();
         cloned.SourceRecognitionOrder = SourceRecognitionOrder.ToList();
         cloned.PlayerSources = PlayerSources.ToDictionary(
@@ -228,6 +238,15 @@ public sealed class AppSettings
         CoverGap = ClampCoverGap(CoverGap);
         CoverCornerRadius = ClampCoverCornerRadius(CoverCornerRadius, CoverSize);
         LyricsLayoutScalePercent = ClampLyricsLayoutScalePercent(LyricsLayoutScalePercent);
+        NormalizeLyricsTextAlignment();
+    }
+
+    public void NormalizeLyricsTextAlignment()
+    {
+        if (!Enum.IsDefined(LyricsTextAlignment))
+        {
+            LyricsTextAlignment = LyricsTextAlignment.Left;
+        }
     }
 
     public void NormalizeDisplaySelection()

@@ -7,9 +7,11 @@ const read = relativePath => readFile(new URL(relativePath, root), "utf8");
 
 describe("lyrics responsive layout", () => {
   it("renders and clears word-scan progress without changing the secondary line", async () => {
-    const [html, state, script, style] = await Promise.all([
+    const [html, bridge, state, presentation, script, style] = await Promise.all([
       read("TaskbarLyrics.App/Web/Lyrics/index.html"),
+      read("TaskbarLyrics.App/Web/Lyrics/bridge.js"),
       read("TaskbarLyrics.App/Web/Lyrics/state.js"),
+      read("TaskbarLyrics.App/Web/Lyrics/presentation.js"),
       read("TaskbarLyrics.App/Web/Lyrics/app.js"),
       read("TaskbarLyrics.App/Web/Lyrics/style.css")
     ]);
@@ -19,7 +21,9 @@ describe("lyrics responsive layout", () => {
     dom.window.CSS = { supports: () => true };
     dom.window.requestAnimationFrame = () => 1;
     dom.window.cancelAnimationFrame = () => {};
+    dom.window.eval(bridge);
     dom.window.eval(state);
+    dom.window.eval(presentation);
     dom.window.eval(script);
 
     expect(style).toContain(".current-line.word-scanning");
@@ -164,9 +168,11 @@ describe("lyrics responsive layout", () => {
   });
 
   it("disables word-scan interpolation when reduced motion is requested", async () => {
-    const [html, state, script] = await Promise.all([
+    const [html, bridge, state, presentation, script] = await Promise.all([
       read("TaskbarLyrics.App/Web/Lyrics/index.html"),
+      read("TaskbarLyrics.App/Web/Lyrics/bridge.js"),
       read("TaskbarLyrics.App/Web/Lyrics/state.js"),
+      read("TaskbarLyrics.App/Web/Lyrics/presentation.js"),
       read("TaskbarLyrics.App/Web/Lyrics/app.js")
     ]);
     const dom = new JSDOM(html.replace("{{STYLE_CSS}}", "").replace("{{APP_JS}}", ""), {
@@ -180,7 +186,9 @@ describe("lyrics responsive layout", () => {
     });
     dom.window.requestAnimationFrame = () => 1;
     dom.window.cancelAnimationFrame = () => {};
+    dom.window.eval(bridge);
     dom.window.eval(state);
+    dom.window.eval(presentation);
     dom.window.eval(script);
 
     const receiveLyrics = wordScanProgress => dom.window.taskbarLyrics.receive({
@@ -207,9 +215,11 @@ describe("lyrics responsive layout", () => {
   });
 
   it("carries word-scan progress through queued line transitions", async () => {
-    const [html, state, script] = await Promise.all([
+    const [html, bridge, state, presentation, script] = await Promise.all([
       read("TaskbarLyrics.App/Web/Lyrics/index.html"),
+      read("TaskbarLyrics.App/Web/Lyrics/bridge.js"),
       read("TaskbarLyrics.App/Web/Lyrics/state.js"),
+      read("TaskbarLyrics.App/Web/Lyrics/presentation.js"),
       read("TaskbarLyrics.App/Web/Lyrics/app.js")
     ]);
     const dom = new JSDOM(html.replace("{{STYLE_CSS}}", "").replace("{{APP_JS}}", ""), {
@@ -222,7 +232,9 @@ describe("lyrics responsive layout", () => {
       return pendingAnimationFrames.length;
     };
     dom.window.cancelAnimationFrame = () => {};
+    dom.window.eval(bridge);
     dom.window.eval(state);
+    dom.window.eval(presentation);
     dom.window.eval(script);
 
     const document = dom.window.document;
@@ -317,9 +329,11 @@ describe("lyrics responsive layout", () => {
   });
 
   it("renders structured translation pairs and cleans reduced-motion transitions", async () => {
-    const [html, state, script, style] = await Promise.all([
+    const [html, bridge, state, presentation, script, style] = await Promise.all([
       read("TaskbarLyrics.App/Web/Lyrics/index.html"),
+      read("TaskbarLyrics.App/Web/Lyrics/bridge.js"),
       read("TaskbarLyrics.App/Web/Lyrics/state.js"),
+      read("TaskbarLyrics.App/Web/Lyrics/presentation.js"),
       read("TaskbarLyrics.App/Web/Lyrics/app.js"),
       read("TaskbarLyrics.App/Web/Lyrics/style.css")
     ]);
@@ -340,7 +354,9 @@ describe("lyrics responsive layout", () => {
       addEventListener: () => {},
       removeEventListener: () => {}
     });
+    dom.window.eval(bridge);
     dom.window.eval(state);
+    dom.window.eval(presentation);
     dom.window.eval(script);
 
     const document = dom.window.document;
@@ -531,9 +547,11 @@ describe("lyrics responsive layout", () => {
   });
 
   it("animates a translation result out of the search state", async () => {
-    const [html, state, script, style] = await Promise.all([
+    const [html, bridge, state, presentation, script, style] = await Promise.all([
       read("TaskbarLyrics.App/Web/Lyrics/index.html"),
+      read("TaskbarLyrics.App/Web/Lyrics/bridge.js"),
       read("TaskbarLyrics.App/Web/Lyrics/state.js"),
+      read("TaskbarLyrics.App/Web/Lyrics/presentation.js"),
       read("TaskbarLyrics.App/Web/Lyrics/app.js"),
       read("TaskbarLyrics.App/Web/Lyrics/style.css")
     ]);
@@ -551,7 +569,9 @@ describe("lyrics responsive layout", () => {
       return pendingAnimationFrames.length;
     };
     dom.window.cancelAnimationFrame = () => {};
+    dom.window.eval(bridge);
     dom.window.eval(state);
+    dom.window.eval(presentation);
     dom.window.eval(script);
 
     const document = dom.window.document;
@@ -636,9 +656,11 @@ describe("lyrics responsive layout", () => {
   });
 
   it("updates no-playback countdown prompts in place and preserves animation defaults", async () => {
-    const [html, state, script] = await Promise.all([
+    const [html, bridge, state, presentation, script] = await Promise.all([
       read("TaskbarLyrics.App/Web/Lyrics/index.html"),
+      read("TaskbarLyrics.App/Web/Lyrics/bridge.js"),
       read("TaskbarLyrics.App/Web/Lyrics/state.js"),
+      read("TaskbarLyrics.App/Web/Lyrics/presentation.js"),
       read("TaskbarLyrics.App/Web/Lyrics/app.js")
     ]);
     const dom = new JSDOM(html.replace("{{STYLE_CSS}}", "").replace("{{APP_JS}}", ""), {
@@ -651,7 +673,9 @@ describe("lyrics responsive layout", () => {
       return pendingAnimationFrames.length;
     };
     dom.window.cancelAnimationFrame = () => {};
+    dom.window.eval(bridge);
     dom.window.eval(state);
+    dom.window.eval(presentation);
     dom.window.eval(script);
 
     const track = dom.window.document.querySelector("#track");
@@ -713,9 +737,11 @@ describe("lyrics responsive layout", () => {
   });
 
   it("keeps every spectrum bar visible when scaled geometry exceeds the viewport", async () => {
-    const [html, state, script] = await Promise.all([
+    const [html, bridge, state, presentation, script] = await Promise.all([
       read("TaskbarLyrics.App/Web/Lyrics/index.html"),
+      read("TaskbarLyrics.App/Web/Lyrics/bridge.js"),
       read("TaskbarLyrics.App/Web/Lyrics/state.js"),
+      read("TaskbarLyrics.App/Web/Lyrics/presentation.js"),
       read("TaskbarLyrics.App/Web/Lyrics/app.js")
     ]);
     const dom = new JSDOM(html.replace("{{STYLE_CSS}}", "").replace("{{APP_JS}}", ""), {
@@ -726,7 +752,9 @@ describe("lyrics responsive layout", () => {
     dom.window.CSS = { supports: () => true };
     dom.window.requestAnimationFrame = () => 1;
     dom.window.cancelAnimationFrame = () => {};
+    dom.window.eval(bridge);
     dom.window.eval(state);
+    dom.window.eval(presentation);
     dom.window.eval(script);
 
     dom.window.taskbarLyrics.receive({
@@ -753,5 +781,1033 @@ describe("lyrics responsive layout", () => {
     expect(fittedBarWidth).toBeGreaterThanOrEqual(1);
     expect(fittedGap).toBeGreaterThanOrEqual(0);
     expect(fittedTotalWidth).toBeLessThanOrEqual(120);
+  });
+
+  it("selects presentation transitions from scene and layout without DOM dependencies", async () => {
+    const presentation = await read("TaskbarLyrics.App/Web/Lyrics/presentation.js");
+    const dom = new JSDOM("<!doctype html><html><body></body></html>", {
+      runScripts: "outside-only"
+    });
+    dom.window.eval(presentation);
+    const { PresentationPlanner, TRANSITIONS, SCENES, LAYOUTS } = dom.window.taskbarLyricsPresentation;
+    const planner = new PresentationPlanner();
+    const searching = { scene: SCENES.SEARCHING, current: "正在检索歌词..." };
+    const spectrum = { scene: SCENES.SPECTRUM, isPureMusic: true };
+    const single = { scene: SCENES.LYRICS, layout: LAYOUTS.SINGLE, currentLineIndex: 0, trackId: "track" };
+    const translationPair = {
+      scene: SCENES.LYRICS,
+      layout: LAYOUTS.TRANSLATION_PAIR,
+      currentLineIndex: 1,
+      trackId: "track"
+    };
+
+    expect(planner.plan(searching, spectrum).kind).toBe(TRANSITIONS.SEARCHING_TO_SPECTRUM_ROLL);
+    expect(planner.plan(single, translationPair).kind).toBe(TRANSITIONS.TRANSLATION_PAIR_ROLL);
+    expect(planner.plan(single, { ...single, progress: 0.75 }).kind).toBe(TRANSITIONS.PROGRESS_PATCH);
+    expect(planner.plan(single, { ...single, current: "updated" }).kind).toBe(TRANSITIONS.REPLACE_IN_PLACE);
+    expect(planner.plan(single, searching).kind).toBe(TRANSITIONS.SINGLE_ROLL);
+    expect(planner.plan(searching, { ...searching, progress: 0.5 }).kind).toBe(TRANSITIONS.PROGRESS_PATCH);
+    expect(planner.plan(searching, { ...searching, current: "new search" }).kind).toBe(TRANSITIONS.REPLACE_IN_PLACE);
+    const message = { scene: SCENES.MESSAGE, current: "No lyrics", currentLineIndex: -1 };
+    expect(planner.plan(searching, message).kind).toBe(TRANSITIONS.SINGLE_ROLL);
+    expect(planner.plan(message, { ...message, current: "Still no lyrics" }).kind).toBe(TRANSITIONS.SINGLE_ROLL);
+    expect(planner.plan(searching, spectrum, { reducedMotion: true }).kind).toBe(TRANSITIONS.IMMEDIATE);
+    expect(dom.window.taskbarLyricsPresentation.normalizeFrame({
+      scene: SCENES.LYRICS,
+      current: searching.current,
+      currentLineIndex: -1
+    }).scene).toBe(SCENES.LYRICS);
+  });
+
+  it("consumes planner decisions for ordinary lyric patches, replacements, and rolls", async () => {
+    const [html, bridge, state, presentation, script] = await Promise.all([
+      read("TaskbarLyrics.App/Web/Lyrics/index.html"),
+      read("TaskbarLyrics.App/Web/Lyrics/bridge.js"),
+      read("TaskbarLyrics.App/Web/Lyrics/state.js"),
+      read("TaskbarLyrics.App/Web/Lyrics/presentation.js"),
+      read("TaskbarLyrics.App/Web/Lyrics/app.js")
+    ]);
+    const dom = new JSDOM(html.replace("{{STYLE_CSS}}", "").replace("{{APP_JS}}", ""), {
+      runScripts: "outside-only"
+    });
+    const pendingAnimationFrames = [];
+    dom.window.CSS = { supports: () => true };
+    dom.window.requestAnimationFrame = callback => {
+      pendingAnimationFrames.push(callback);
+      return pendingAnimationFrames.length;
+    };
+    dom.window.cancelAnimationFrame = () => {};
+    dom.window.eval(bridge);
+    dom.window.eval(state);
+    dom.window.eval(presentation);
+    dom.window.eval(script);
+
+    const receive = payload => dom.window.taskbarLyrics.receive({
+      version: 1,
+      type: "lyrics",
+      payload: {
+        next: "next",
+        progress: 0.25,
+        currentLineIndex: 0,
+        trackId: "",
+        isPureMusic: false,
+        isPlaying: true,
+        ...payload
+      }
+    });
+    const track = dom.window.document.querySelector("#track");
+    const currentLineText = dom.window.document.querySelector("#currentLineText");
+    const nextLine = dom.window.document.querySelector("#nextLine");
+    const nextLineText = dom.window.document.querySelector("#nextLineText");
+
+    receive({ current: "line", wordScanProgress: 0.2 });
+    receive({ current: "line", progress: 0.4, wordScanProgress: 0.4 });
+    expect(nextLine.classList.contains("promoting")).toBe(false);
+    expect(currentLineText.textContent).toBe("line");
+
+    receive({ current: "corrected line", progress: 0.4 });
+    expect(nextLine.classList.contains("promoting")).toBe(false);
+    expect(currentLineText.textContent).toBe("corrected line");
+
+    receive({ current: "next line", next: "following", currentLineIndex: 1, progress: 0.1 });
+    expect(currentLineText.textContent).toBe("corrected line");
+    expect(nextLineText.textContent).toBe("next line");
+    const transitionEnd = new dom.window.Event("transitionend", { bubbles: true });
+    Object.defineProperty(transitionEnd, "propertyName", { value: "transform" });
+    track.dispatchEvent(transitionEnd);
+    expect(currentLineText.textContent).toBe("next line");
+    receive({
+      current: "No lyrics available",
+      next: "",
+      currentLineIndex: -1,
+      scene: "message",
+      progress: 0
+    });
+    expect(currentLineText.textContent).toBe("next line");
+    expect(nextLineText.textContent).toBe("No lyrics available");
+    track.dispatchEvent(transitionEnd);
+    expect(currentLineText.textContent).toBe("No lyrics available");
+    pendingAnimationFrames.splice(0);
+  });
+
+  it("keeps searching scene and track identity while a track-switch result rolls in", async () => {
+    const [html, bridge, state, presentation, script] = await Promise.all([
+      read("TaskbarLyrics.App/Web/Lyrics/index.html"),
+      read("TaskbarLyrics.App/Web/Lyrics/bridge.js"),
+      read("TaskbarLyrics.App/Web/Lyrics/state.js"),
+      read("TaskbarLyrics.App/Web/Lyrics/presentation.js"),
+      read("TaskbarLyrics.App/Web/Lyrics/app.js")
+    ]);
+    const searchingLine = "正在检索歌词...";
+    const dom = new JSDOM(html
+      .replace("TaskbarLyrics started", searchingLine)
+      .replace("Waiting for lyrics...", " ")
+      .replace("{{STYLE_CSS}}", "")
+      .replace("{{APP_JS}}", ""), {
+      runScripts: "outside-only"
+    });
+    const pendingAnimationFrames = [];
+    dom.window.CSS = { supports: () => true };
+    dom.window.requestAnimationFrame = callback => {
+      pendingAnimationFrames.push(callback);
+      return pendingAnimationFrames.length;
+    };
+    dom.window.cancelAnimationFrame = () => {};
+    dom.window.eval(bridge);
+    dom.window.eval(state);
+    dom.window.eval(presentation);
+    dom.window.eval(script);
+
+    const receive = payload => dom.window.taskbarLyrics.receive({ version: 1, type: "lyrics", payload });
+    Object.defineProperty(dom.window.performance, "now", {
+      configurable: true,
+      value: () => 1
+    });
+    receive({
+      current: searchingLine,
+      next: "",
+      progress: 0,
+      currentLineIndex: -1,
+      trackId: "track-a",
+      isPureMusic: false,
+      isPlaying: true,
+      scene: "searching"
+    });
+    const track = dom.window.document.querySelector("#track");
+    const currentLineText = dom.window.document.querySelector("#currentLineText");
+    const nextLine = dom.window.document.querySelector("#nextLine");
+    const nextLineText = dom.window.document.querySelector("#nextLineText");
+    expect(currentLineText.textContent).toBe(searchingLine);
+
+    Object.defineProperty(dom.window.performance, "now", {
+      configurable: true,
+      value: () => 1000
+    });
+    receive({
+      current: "found line",
+      next: "next line",
+      progress: 0.2,
+      currentLineIndex: 0,
+      trackId: "track-a",
+      isPureMusic: false,
+      isPlaying: true,
+      scene: "lyrics"
+    });
+    await new Promise(resolve => dom.window.setTimeout(resolve, 0));
+    expect(currentLineText.textContent).toBe(searchingLine);
+    expect(nextLineText.textContent).toBe("found line");
+    const transitionEnd = new dom.window.Event("transitionend", { bubbles: true });
+    Object.defineProperty(transitionEnd, "propertyName", { value: "transform" });
+    track.dispatchEvent(transitionEnd);
+    expect(currentLineText.textContent).toBe("found line");
+    receive({
+      current: "found line",
+      next: "next line",
+      progress: 0.4,
+      currentLineIndex: 0,
+      trackId: "track-a",
+      isPureMusic: false,
+      isPlaying: true,
+      scene: "lyrics"
+    });
+    expect(nextLine.classList.contains("promoting")).toBe(false);
+    expect(currentLineText.textContent).toBe("found line");
+    while (pendingAnimationFrames.length > 0) {
+      pendingAnimationFrames.shift()(0);
+    }
+  });
+
+  it("keeps the 900ms search dwell when duplicate lyric frames arrive", async () => {
+      const [html, bridge, state, presentation, script] = await Promise.all([
+        read("TaskbarLyrics.App/Web/Lyrics/index.html"),
+        read("TaskbarLyrics.App/Web/Lyrics/bridge.js"),
+        read("TaskbarLyrics.App/Web/Lyrics/state.js"),
+        read("TaskbarLyrics.App/Web/Lyrics/presentation.js"),
+        read("TaskbarLyrics.App/Web/Lyrics/app.js")
+      ]);
+      const searchingLine = "正在检索歌词...";
+      const dom = new JSDOM(html
+        .replace("TaskbarLyrics started", searchingLine)
+        .replace("Waiting for lyrics...", " ")
+        .replace("{{STYLE_CSS}}", "")
+        .replace("{{APP_JS}}", ""), {
+        runScripts: "outside-only"
+      });
+      const pendingAnimationFrames = [];
+      let now = 100;
+      dom.window.CSS = { supports: () => true };
+      dom.window.requestAnimationFrame = callback => {
+        pendingAnimationFrames.push(callback);
+        return pendingAnimationFrames.length;
+      };
+      dom.window.cancelAnimationFrame = () => {};
+      let nextTimerId = 1;
+      const scheduledTimers = new Map();
+      dom.window.setTimeout = (callback, delay) => {
+        const id = nextTimerId++;
+        scheduledTimers.set(id, { callback, delay });
+        return id;
+      };
+      dom.window.clearTimeout = id => scheduledTimers.delete(id);
+      Object.defineProperty(dom.window.performance, "now", {
+        configurable: true,
+        value: () => now
+      });
+      dom.window.eval(bridge);
+      dom.window.eval(state);
+      dom.window.eval(presentation);
+      dom.window.eval(script);
+
+      const receive = current => dom.window.taskbarLyrics.receive({
+        version: 1,
+        type: "lyrics",
+        payload: {
+          current,
+          next: "next",
+          progress: 0.2,
+          currentLineIndex: current === searchingLine ? -1 : 0,
+          trackId: "track-dwell",
+          isPureMusic: false,
+          isPlaying: true,
+          scene: current === searchingLine ? "searching" : "lyrics"
+        }
+      });
+
+      receive(searchingLine);
+      now = 200;
+      receive("found line");
+      const currentLineText = dom.window.document.querySelector("#currentLineText");
+      const nextLine = dom.window.document.querySelector("#nextLine");
+      const nextLineText = dom.window.document.querySelector("#nextLineText");
+      expect(nextLine.classList.contains("promoting")).toBe(false);
+      expect(currentLineText.textContent).toBe(searchingLine);
+      expect(scheduledTimers.size).toBe(1);
+      const firstTimerId = [...scheduledTimers.keys()][0];
+      expect(scheduledTimers.get(firstTimerId)?.delay).toBe(800);
+
+      now = 300;
+      receive("found line");
+      expect(nextLine.classList.contains("promoting")).toBe(false);
+      expect(currentLineText.textContent).toBe(searchingLine);
+      expect(scheduledTimers.has(firstTimerId)).toBe(false);
+      expect(scheduledTimers.size).toBe(1);
+      const secondTimerId = [...scheduledTimers.keys()][0];
+      expect(scheduledTimers.get(secondTimerId)?.delay).toBe(700);
+
+      now = 1000;
+      scheduledTimers.get(secondTimerId)?.callback();
+      expect(currentLineText.textContent).toBe(searchingLine);
+      expect(nextLineText.textContent).toBe("found line");
+  });
+
+  it("plans and executes a searching-to-spectrum line-pitch roll without rendering pure-music text", async () => {
+    const [html, bridge, state, presentation, script] = await Promise.all([
+      read("TaskbarLyrics.App/Web/Lyrics/index.html"),
+      read("TaskbarLyrics.App/Web/Lyrics/bridge.js"),
+      read("TaskbarLyrics.App/Web/Lyrics/state.js"),
+      read("TaskbarLyrics.App/Web/Lyrics/presentation.js"),
+      read("TaskbarLyrics.App/Web/Lyrics/app.js")
+    ]);
+    const searchingLine = "正在检索歌词...";
+    const dom = new JSDOM(html
+      .replace("TaskbarLyrics started", searchingLine)
+      .replace("Waiting for lyrics...", " ")
+      .replace("{{STYLE_CSS}}", "")
+      .replace("{{APP_JS}}", ""), {
+      runScripts: "outside-only"
+    });
+    const pendingAnimationFrames = [];
+    dom.window.CSS = { supports: () => true };
+    dom.window.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
+    dom.window.requestAnimationFrame = callback => {
+      pendingAnimationFrames.push(callback);
+      return pendingAnimationFrames.length;
+    };
+    dom.window.cancelAnimationFrame = () => {};
+    dom.window.eval(bridge);
+    dom.window.eval(state);
+    dom.window.eval(presentation);
+    dom.window.eval(script);
+
+    dom.window.taskbarLyrics.receive({
+      version: 1,
+      type: "lyrics",
+      payload: {
+        current: searchingLine,
+        next: "",
+        progress: 0,
+        currentLineIndex: -1,
+        trackId: "",
+        isPureMusic: false,
+        isPlaying: true
+      }
+    });
+    const pureMusicText = "纯音乐";
+    dom.window.taskbarLyrics.receive({
+      version: 1,
+      type: "lyrics",
+      payload: {
+        current: pureMusicText,
+        next: "",
+        progress: 0,
+        currentLineIndex: -1,
+        trackId: "",
+        isPureMusic: true,
+        isPlaying: true
+      }
+    });
+
+    const layout = dom.window.document.querySelector("#layout");
+    const lyricsLayer = dom.window.document.querySelector("#lyricsLayer");
+    const spectrumLayer = dom.window.document.querySelector("#spectrumLayer");
+    const currentLineText = dom.window.document.querySelector("#currentLineText");
+    expect(layout.classList.contains("spectrum-mode")).toBe(true);
+    expect(layout.classList.contains("spectrum-transitioning")).toBe(true);
+    expect(currentLineText.textContent).toBe(searchingLine);
+    expect(currentLineText.textContent).not.toBe(pureMusicText);
+    expect(lyricsLayer.style.transform).toBe("translateY(0)");
+    expect(spectrumLayer.style.transform).toMatch(/translateY\(\d+(?:\.\d+)?px\)/);
+
+    const startupFrames = pendingAnimationFrames.splice(0);
+    expect(startupFrames.length).toBeGreaterThan(0);
+    startupFrames.forEach(callback => callback(0));
+    expect(lyricsLayer.style.opacity).toBe("");
+    expect(lyricsLayer.style.transform).toBe("");
+    expect(spectrumLayer.style.opacity).toBe("");
+    expect(spectrumLayer.style.transform).toBe("");
+    expect(layout.classList.contains("spectrum-transitioning")).toBe(true);
+    const transitionEnd = new dom.window.Event("transitionend", { bubbles: true });
+    Object.defineProperty(transitionEnd, "propertyName", { value: "transform" });
+    spectrumLayer.dispatchEvent(transitionEnd);
+    expect(layout.classList.contains("spectrum-transitioning")).toBe(false);
+    expect(layout.classList.contains("spectrum-mode")).toBe(true);
+    expect(currentLineText.textContent).toBe(searchingLine);
+  });
+
+  it("switches searching to spectrum immediately when reduced motion is requested", async () => {
+    const [html, bridge, state, presentation, script] = await Promise.all([
+      read("TaskbarLyrics.App/Web/Lyrics/index.html"),
+      read("TaskbarLyrics.App/Web/Lyrics/bridge.js"),
+      read("TaskbarLyrics.App/Web/Lyrics/state.js"),
+      read("TaskbarLyrics.App/Web/Lyrics/presentation.js"),
+      read("TaskbarLyrics.App/Web/Lyrics/app.js")
+    ]);
+    const searchingLine = "正在检索歌词...";
+    const dom = new JSDOM(html
+      .replace("TaskbarLyrics started", searchingLine)
+      .replace("Waiting for lyrics...", " ")
+      .replace("{{STYLE_CSS}}", "")
+      .replace("{{APP_JS}}", ""), {
+      runScripts: "outside-only"
+    });
+    dom.window.CSS = { supports: () => true };
+    dom.window.matchMedia = () => ({ matches: true, addEventListener() {}, removeEventListener() {} });
+    dom.window.requestAnimationFrame = () => 1;
+    dom.window.cancelAnimationFrame = () => {};
+    dom.window.eval(bridge);
+    dom.window.eval(state);
+    dom.window.eval(presentation);
+    dom.window.eval(script);
+
+    dom.window.taskbarLyrics.receive({
+      version: 1,
+      type: "lyrics",
+      payload: {
+        current: searchingLine,
+        next: "",
+        progress: 0,
+        currentLineIndex: -1,
+        trackId: "",
+        isPureMusic: false,
+        isPlaying: true
+      }
+    });
+    dom.window.taskbarLyrics.receive({
+      version: 1,
+      type: "lyrics",
+      payload: {
+        current: "纯音乐",
+        next: "",
+        progress: 0,
+        currentLineIndex: -1,
+        trackId: "",
+        isPureMusic: true,
+        isPlaying: true
+      }
+    });
+
+    const layout = dom.window.document.querySelector("#layout");
+    expect(layout.classList.contains("spectrum-mode")).toBe(true);
+    expect(layout.classList.contains("spectrum-transitioning")).toBe(false);
+  });
+
+  it("cancels a searching-to-spectrum roll when a lyric frame arrives", async () => {
+    const [html, bridge, state, presentation, script] = await Promise.all([
+      read("TaskbarLyrics.App/Web/Lyrics/index.html"),
+      read("TaskbarLyrics.App/Web/Lyrics/bridge.js"),
+      read("TaskbarLyrics.App/Web/Lyrics/state.js"),
+      read("TaskbarLyrics.App/Web/Lyrics/presentation.js"),
+      read("TaskbarLyrics.App/Web/Lyrics/app.js")
+    ]);
+    const searchingLine = "正在检索歌词...";
+    const dom = new JSDOM(html
+      .replace("TaskbarLyrics started", searchingLine)
+      .replace("Waiting for lyrics...", " ")
+      .replace("{{STYLE_CSS}}", "")
+      .replace("{{APP_JS}}", ""), {
+      runScripts: "outside-only"
+    });
+    const pendingAnimationFrames = [];
+    dom.window.CSS = { supports: () => true };
+    dom.window.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
+    dom.window.requestAnimationFrame = callback => {
+      pendingAnimationFrames.push(callback);
+      return pendingAnimationFrames.length;
+    };
+    dom.window.cancelAnimationFrame = () => {};
+    dom.window.eval(bridge);
+    dom.window.eval(state);
+    dom.window.eval(presentation);
+    dom.window.eval(script);
+
+    const receive = payload => dom.window.taskbarLyrics.receive({ version: 1, type: "lyrics", payload });
+    receive({
+      current: searchingLine,
+      next: "",
+      progress: 0,
+      currentLineIndex: -1,
+      trackId: "",
+      isPureMusic: false,
+      isPlaying: true
+    });
+    receive({
+      current: "纯音乐",
+      next: "",
+      progress: 0,
+      currentLineIndex: -1,
+      trackId: "",
+      isPureMusic: true,
+      isPlaying: true
+    });
+    const layout = dom.window.document.querySelector("#layout");
+    const spectrumLayer = dom.window.document.querySelector("#spectrumLayer");
+    expect(layout.classList.contains("spectrum-transitioning")).toBe(true);
+    const staleStartupFrame = pendingAnimationFrames[0];
+
+    receive({
+      current: "Recovered lyric",
+      next: "Next lyric",
+      progress: 0,
+      currentLineIndex: 0,
+      trackId: "",
+      isPureMusic: false,
+      isPlaying: true
+    });
+    spectrumLayer.style.opacity = "0.31";
+    staleStartupFrame?.(0);
+    expect(spectrumLayer.style.opacity).toBe("0.31");
+    expect(layout.classList.contains("spectrum-transitioning")).toBe(false);
+    expect(layout.classList.contains("spectrum-mode")).toBe(false);
+    // Stale spectrum frames are cancelled; only the new lyric transition may remain queued.
+    expect(pendingAnimationFrames.length).toBeGreaterThan(0);
+  });
+
+  it("renders search metadata above the prompt and enters lyrics after the 900ms dwell", async () => {
+    const [html, bridge, state, presentation, script] = await Promise.all([
+      read("TaskbarLyrics.App/Web/Lyrics/index.html"),
+      read("TaskbarLyrics.App/Web/Lyrics/bridge.js"),
+      read("TaskbarLyrics.App/Web/Lyrics/state.js"),
+      read("TaskbarLyrics.App/Web/Lyrics/presentation.js"),
+      read("TaskbarLyrics.App/Web/Lyrics/app.js")
+    ]);
+    const searchingPrompt = "\u6b63\u5728\u68c0\u7d22\u6b4c\u8bcd...";
+    const dom = new JSDOM(html
+      .replace("TaskbarLyrics started", searchingPrompt)
+      .replace("Waiting for lyrics...", " ")
+      .replace("{{STYLE_CSS}}", "")
+      .replace("{{APP_JS}}", ""), {
+      runScripts: "outside-only"
+    });
+    let now = 100;
+    const timers = new Map();
+    let timerId = 0;
+    dom.window.CSS = { supports: () => true };
+    dom.window.requestAnimationFrame = () => 1;
+    dom.window.cancelAnimationFrame = () => {};
+    dom.window.setTimeout = (callback, delay) => {
+      const id = ++timerId;
+      timers.set(id, { callback, delay });
+      return id;
+    };
+    dom.window.clearTimeout = id => timers.delete(id);
+    Object.defineProperty(dom.window.performance, "now", {
+      configurable: true,
+      value: () => now
+    });
+    dom.window.eval(bridge);
+    dom.window.eval(state);
+    dom.window.eval(presentation);
+    dom.window.eval(script);
+
+    const receive = payload => dom.window.taskbarLyrics.receive({
+      version: 1,
+      type: "lyrics",
+      payload
+    });
+    const currentLineText = dom.window.document.querySelector("#currentLineText");
+    const nextLineText = dom.window.document.querySelector("#nextLineText");
+    receive({
+      current: "Song - Artist",
+      next: searchingPrompt,
+      progress: 0,
+      currentLineIndex: -1,
+      trackId: "track-search",
+      isPureMusic: false,
+      isPlaying: true,
+      scene: "searching"
+    });
+    expect(currentLineText.textContent).toBe("Song - Artist");
+    expect(nextLineText.textContent).toBe(searchingPrompt);
+
+    now = 200;
+    receive({
+      current: "Found lyric",
+      next: "Next lyric",
+      progress: 0.2,
+      currentLineIndex: 0,
+      trackId: "track-search",
+      isPureMusic: false,
+      isPlaying: true,
+      scene: "lyrics"
+    });
+    expect(currentLineText.textContent).toBe("Song - Artist");
+    expect(nextLineText.textContent).toBe(searchingPrompt);
+    expect([...timers.values()].map(timer => timer.delay)).toContain(800);
+
+    now = 1000;
+    const dwellTimer = [...timers.values()].find(timer => timer.delay === 800);
+    dwellTimer?.callback();
+    expect(currentLineText.textContent).toBe("Song - Artist");
+    expect(nextLineText.textContent).toBe("Found lyric");
+    const transitionEnd = new dom.window.Event("transitionend", { bubbles: true });
+    Object.defineProperty(transitionEnd, "propertyName", { value: "transform" });
+    dom.window.document.querySelector("#track").dispatchEvent(transitionEnd);
+    expect(currentLineText.textContent).toBe("Found lyric");
+  });
+
+  it("uses the searching scene for the search-to-spectrum roll even when metadata is shown", async () => {
+    const [html, bridge, state, presentation, script] = await Promise.all([
+      read("TaskbarLyrics.App/Web/Lyrics/index.html"),
+      read("TaskbarLyrics.App/Web/Lyrics/bridge.js"),
+      read("TaskbarLyrics.App/Web/Lyrics/state.js"),
+      read("TaskbarLyrics.App/Web/Lyrics/presentation.js"),
+      read("TaskbarLyrics.App/Web/Lyrics/app.js")
+    ]);
+    const searchingPrompt = "\u6b63\u5728\u68c0\u7d22\u6b4c\u8bcd...";
+    const dom = new JSDOM(html
+      .replace("TaskbarLyrics started", searchingPrompt)
+      .replace("Waiting for lyrics...", " ")
+      .replace("{{STYLE_CSS}}", "")
+      .replace("{{APP_JS}}", ""), {
+      runScripts: "outside-only"
+    });
+    const pendingAnimationFrames = [];
+    dom.window.CSS = { supports: () => true };
+    dom.window.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
+    dom.window.requestAnimationFrame = callback => {
+      pendingAnimationFrames.push(callback);
+      return pendingAnimationFrames.length;
+    };
+    dom.window.cancelAnimationFrame = () => {};
+    dom.window.eval(bridge);
+    dom.window.eval(state);
+    dom.window.eval(presentation);
+    dom.window.eval(script);
+
+    const receive = payload => dom.window.taskbarLyrics.receive({
+      version: 1,
+      type: "lyrics",
+      payload
+    });
+    receive({
+      current: "Song - Artist",
+      next: searchingPrompt,
+      progress: 0,
+      currentLineIndex: -1,
+      trackId: "",
+      isPureMusic: false,
+      isPlaying: true,
+      scene: "searching"
+    });
+    receive({
+      current: "Pure music marker",
+      next: "",
+      progress: 0,
+      currentLineIndex: -1,
+      trackId: "",
+      isPureMusic: true,
+      isPlaying: true,
+      scene: "spectrum"
+    });
+
+    const layout = dom.window.document.querySelector("#layout");
+    expect(layout.classList.contains("spectrum-transitioning")).toBe(true);
+    expect(dom.window.document.querySelector("#currentLineText").textContent).toBe("Song - Artist");
+    pendingAnimationFrames.splice(0).forEach(callback => callback(0));
+  });
+
+  it("updates metadata when switching directly between searching tracks", async () => {
+    const [html, bridge, state, presentation, script] = await Promise.all([
+      read("TaskbarLyrics.App/Web/Lyrics/index.html"),
+      read("TaskbarLyrics.App/Web/Lyrics/bridge.js"),
+      read("TaskbarLyrics.App/Web/Lyrics/state.js"),
+      read("TaskbarLyrics.App/Web/Lyrics/presentation.js"),
+      read("TaskbarLyrics.App/Web/Lyrics/app.js")
+    ]);
+    const searchingPrompt = "\u6b63\u5728\u68c0\u7d22\u6b4c\u8bcd...";
+    const dom = new JSDOM(html
+      .replace("TaskbarLyrics started", searchingPrompt)
+      .replace("Waiting for lyrics...", " ")
+      .replace("{{STYLE_CSS}}", "")
+      .replace("{{APP_JS}}", ""), {
+      runScripts: "outside-only"
+    });
+    dom.window.CSS = { supports: () => true };
+    dom.window.requestAnimationFrame = () => 1;
+    dom.window.cancelAnimationFrame = () => {};
+    dom.window.eval(bridge);
+    dom.window.eval(state);
+    dom.window.eval(presentation);
+    dom.window.eval(script);
+
+    const receive = payload => dom.window.taskbarLyrics.receive({
+      version: 1,
+      type: "lyrics",
+      payload
+    });
+    const searchPayload = (trackId, current) => ({
+      current,
+      next: searchingPrompt,
+      progress: 0,
+      currentLineIndex: -1,
+      trackId,
+      isPureMusic: false,
+      isPlaying: true,
+      scene: "searching"
+    });
+    receive(searchPayload("track-a", "Song A - Artist A"));
+    receive(searchPayload("track-b", "Song B - Artist B"));
+
+    expect(dom.window.document.querySelector("#currentLineText").textContent)
+      .toBe("Song B - Artist B");
+    expect(dom.window.document.querySelector("#nextLineText").textContent)
+      .toBe(searchingPrompt);
+  });
+
+  it("exits a stable spectrum toward searching from below and clears exit styles on completion", async () => {
+    const [html, bridge, state, presentation, script, style] = await Promise.all([
+      read("TaskbarLyrics.App/Web/Lyrics/index.html"),
+      read("TaskbarLyrics.App/Web/Lyrics/bridge.js"),
+      read("TaskbarLyrics.App/Web/Lyrics/state.js"),
+      read("TaskbarLyrics.App/Web/Lyrics/presentation.js"),
+      read("TaskbarLyrics.App/Web/Lyrics/app.js"),
+      read("TaskbarLyrics.App/Web/Lyrics/style.css")
+    ]);
+    const dom = new JSDOM(html.replace("{{STYLE_CSS}}", "").replace("{{APP_JS}}", ""), {
+      runScripts: "outside-only"
+    });
+    const pendingAnimationFrames = [];
+    dom.window.CSS = { supports: () => true };
+    dom.window.requestAnimationFrame = callback => {
+      pendingAnimationFrames.push(callback);
+      return pendingAnimationFrames.length;
+    };
+    dom.window.cancelAnimationFrame = () => {};
+    dom.window.eval(bridge);
+    dom.window.eval(state);
+    dom.window.eval(presentation);
+    dom.window.eval(script);
+
+    const receive = payload => dom.window.taskbarLyrics.receive({
+      version: 1,
+      type: "lyrics",
+      payload
+    });
+    const searchingPrompt = "\u6b63\u5728\u68c0\u7d22\u6b4c\u8bcd...";
+    receive({
+      current: "Pure music",
+      next: "",
+      progress: 0,
+      currentLineIndex: -1,
+      trackId: "track-a",
+      isPureMusic: true,
+      isPlaying: true,
+      scene: "spectrum",
+      animateTransition: false
+    });
+    const layout = dom.window.document.querySelector("#layout");
+    const lyricsLayer = dom.window.document.querySelector("#lyricsLayer");
+    const spectrumLayer = dom.window.document.querySelector("#spectrumLayer");
+    const track = dom.window.document.querySelector("#track");
+    const currentLineText = dom.window.document.querySelector("#currentLineText");
+    const nextLineText = dom.window.document.querySelector("#nextLineText");
+    expect(style).toMatch(/\.layout\.spectrum-mode\.spectrum-exiting\.spectrum-exit-active \.lyrics-layer/);
+    expect(style).toMatch(/\.layout\.spectrum-mode\.spectrum-exiting\.spectrum-exit-active \.spectrum-layer/);
+    expect(layout.classList.contains("spectrum-mode")).toBe(true);
+
+    receive({
+      current: "Song B - Artist B",
+      next: searchingPrompt,
+      progress: 0,
+      currentLineIndex: -1,
+      trackId: "track-b",
+      isPureMusic: false,
+      isPlaying: true,
+      scene: "searching"
+    });
+    expect(layout.classList.contains("spectrum-mode")).toBe(true);
+    expect(layout.classList.contains("spectrum-exiting")).toBe(true);
+    expect(lyricsLayer.style.transform).toMatch(/^translateY\(\d+(?:\.\d+)?px\)$/);
+    expect(spectrumLayer.style.transform).toBe("translateY(0)");
+    expect(currentLineText.textContent).toBe("Song B - Artist B");
+    expect(nextLineText.textContent).toBe(searchingPrompt);
+
+    const startExit = pendingAnimationFrames.shift();
+    expect(startExit).toBeTypeOf("function");
+    startExit(0);
+    expect(lyricsLayer.style.transform).toBe("translateY(0)");
+    expect(spectrumLayer.style.transform).toMatch(/^translateY\(-\d+(?:\.\d+)?px\)$/);
+
+    const transitionEnd = new dom.window.Event("transitionend", { bubbles: true });
+    Object.defineProperty(transitionEnd, "propertyName", { value: "transform" });
+    spectrumLayer.dispatchEvent(transitionEnd);
+    expect(layout.classList.contains("spectrum-mode")).toBe(false);
+    expect(layout.classList.contains("spectrum-exiting")).toBe(false);
+    expect(lyricsLayer.style.transform).toBe("");
+    expect(spectrumLayer.style.transform).toBe("");
+    expect(currentLineText.textContent).toBe("Song B - Artist B");
+    expect(nextLineText.textContent).toBe(searchingPrompt);
+    expect(track.classList.contains("animating")).toBe(false);
+  });
+
+  it("keeps search metadata through spectrum exit before applying queued lyrics after dwell", async () => {
+    const [html, bridge, state, presentation, script] = await Promise.all([
+      read("TaskbarLyrics.App/Web/Lyrics/index.html"),
+      read("TaskbarLyrics.App/Web/Lyrics/bridge.js"),
+      read("TaskbarLyrics.App/Web/Lyrics/state.js"),
+      read("TaskbarLyrics.App/Web/Lyrics/presentation.js"),
+      read("TaskbarLyrics.App/Web/Lyrics/app.js")
+    ]);
+    const searchingPrompt = "\u6b63\u5728\u68c0\u7d22\u6b4c\u8bcd...";
+    const pendingAnimationFrames = [];
+    const timers = new Map();
+    let timerId = 0;
+    let now = 100;
+    const dom = new JSDOM(html
+      .replace("TaskbarLyrics started", searchingPrompt)
+      .replace("Waiting for lyrics...", " ")
+      .replace("{{STYLE_CSS}}", "")
+      .replace("{{APP_JS}}", ""), {
+        runScripts: "outside-only"
+      });
+    dom.window.CSS = { supports: () => true };
+    dom.window.requestAnimationFrame = callback => {
+      pendingAnimationFrames.push(callback);
+      return pendingAnimationFrames.length;
+    };
+    dom.window.cancelAnimationFrame = () => {};
+    dom.window.setTimeout = (callback, delay) => {
+      const id = ++timerId;
+      timers.set(id, { callback, delay });
+      return id;
+    };
+    dom.window.clearTimeout = id => timers.delete(id);
+    Object.defineProperty(dom.window.performance, "now", {
+      configurable: true,
+      value: () => now
+    });
+    dom.window.eval(bridge);
+    dom.window.eval(state);
+    dom.window.eval(presentation);
+    dom.window.eval(script);
+
+    const receive = payload => dom.window.taskbarLyrics.receive({
+      version: 1,
+      type: "lyrics",
+      payload
+    });
+    const spectrumLayer = dom.window.document.querySelector("#spectrumLayer");
+    const lyricsLayer = dom.window.document.querySelector("#lyricsLayer");
+    const layout = dom.window.document.querySelector("#layout");
+    const track = dom.window.document.querySelector("#track");
+    const currentLineText = dom.window.document.querySelector("#currentLineText");
+    const nextLineText = dom.window.document.querySelector("#nextLineText");
+    receive({
+      current: "Pure music",
+      next: "",
+      progress: 0,
+      currentLineIndex: -1,
+      trackId: "track-a",
+      isPureMusic: true,
+      isPlaying: true,
+      scene: "spectrum",
+      animateTransition: false
+    });
+    receive({
+      current: "Song B - Artist B",
+      next: searchingPrompt,
+      progress: 0,
+      currentLineIndex: -1,
+      trackId: "track-b",
+      isPureMusic: false,
+      isPlaying: true,
+      scene: "searching"
+    });
+    expect(layout.classList.contains("spectrum-exiting")).toBe(true);
+    expect(currentLineText.textContent).toBe("Song B - Artist B");
+    expect(nextLineText.textContent).toBe(searchingPrompt);
+
+    now = 200;
+    receive({
+      current: "Found lyric",
+      next: "Next lyric",
+      progress: 0.2,
+      currentLineIndex: 0,
+      trackId: "track-b",
+      isPureMusic: false,
+      isPlaying: true,
+      scene: "lyrics"
+    });
+    expect(currentLineText.textContent).toBe("Song B - Artist B");
+    expect(nextLineText.textContent).toBe(searchingPrompt);
+
+    const startExit = pendingAnimationFrames.shift();
+    expect(startExit).toBeTypeOf("function");
+    startExit(0);
+    now = 300;
+    const spectrumTransitionEnd = new dom.window.Event("transitionend", { bubbles: true });
+    Object.defineProperty(spectrumTransitionEnd, "propertyName", { value: "transform" });
+    spectrumLayer.dispatchEvent(spectrumTransitionEnd);
+    expect(layout.classList.contains("spectrum-mode")).toBe(false);
+    expect(currentLineText.textContent).toBe("Song B - Artist B");
+    expect(nextLineText.textContent).toBe(searchingPrompt);
+    const dwellTimer = [...timers.values()].find(timer => timer.delay === 900);
+    expect(dwellTimer).toBeDefined();
+
+    now = 1200;
+    dwellTimer.callback();
+    expect(currentLineText.textContent).toBe("Song B - Artist B");
+    expect(nextLineText.textContent).toBe("Found lyric");
+    const lyricTransitionEnd = new dom.window.Event("transitionend", { bubbles: true });
+    Object.defineProperty(lyricTransitionEnd, "propertyName", { value: "transform" });
+    track.dispatchEvent(lyricTransitionEnd);
+    expect(currentLineText.textContent).toBe("Found lyric");
+  });
+
+  it("switches out of stable spectrum immediately for animate=false and reduced motion", async () => {
+    const [html, bridge, state, presentation, script] = await Promise.all([
+      read("TaskbarLyrics.App/Web/Lyrics/index.html"),
+      read("TaskbarLyrics.App/Web/Lyrics/bridge.js"),
+      read("TaskbarLyrics.App/Web/Lyrics/state.js"),
+      read("TaskbarLyrics.App/Web/Lyrics/presentation.js"),
+      read("TaskbarLyrics.App/Web/Lyrics/app.js")
+    ]);
+    let reducedMotion = false;
+    const dom = new JSDOM(html.replace("{{STYLE_CSS}}", "").replace("{{APP_JS}}", ""), {
+      runScripts: "outside-only"
+    });
+    dom.window.CSS = { supports: () => true };
+    dom.window.matchMedia = () => ({
+      matches: reducedMotion,
+      addEventListener() {},
+      removeEventListener() {}
+    });
+    dom.window.requestAnimationFrame = () => 1;
+    dom.window.cancelAnimationFrame = () => {};
+    dom.window.eval(bridge);
+    dom.window.eval(state);
+    dom.window.eval(presentation);
+    dom.window.eval(script);
+
+    const receive = payload => dom.window.taskbarLyrics.receive({
+      version: 1,
+      type: "lyrics",
+      payload
+    });
+    const spectrumPayload = {
+      current: "Pure music",
+      next: "",
+      progress: 0,
+      currentLineIndex: -1,
+      trackId: "track-a",
+      isPureMusic: true,
+      isPlaying: true,
+      scene: "spectrum"
+    };
+    receive({ ...spectrumPayload, animateTransition: false });
+    receive({
+      current: "Immediate lyric",
+      next: "Next lyric",
+      progress: 0,
+      currentLineIndex: 0,
+      trackId: "track-b",
+      isPureMusic: false,
+      isPlaying: true,
+      scene: "lyrics",
+      animateTransition: false
+    });
+    const layout = dom.window.document.querySelector("#layout");
+    expect(layout.classList.contains("spectrum-mode")).toBe(false);
+    expect(layout.classList.contains("spectrum-exiting")).toBe(false);
+    expect(dom.window.document.querySelector("#currentLineText").textContent).toBe("Immediate lyric");
+
+    receive({ ...spectrumPayload, animateTransition: false });
+    reducedMotion = true;
+    receive({
+      current: "Reduced motion message",
+      next: "",
+      progress: 0,
+      currentLineIndex: -1,
+      trackId: "track-c",
+      isPureMusic: false,
+      isPlaying: true,
+      scene: "message"
+    });
+    expect(layout.classList.contains("spectrum-mode")).toBe(false);
+    expect(layout.classList.contains("spectrum-exiting")).toBe(false);
+    expect(dom.window.document.querySelector("#currentLineText").textContent)
+      .toBe("Reduced motion message");
+  });
+
+  it("does not let a cancelled spectrum exit rAF restore stale styles", async () => {
+    const [html, bridge, state, presentation, script] = await Promise.all([
+      read("TaskbarLyrics.App/Web/Lyrics/index.html"),
+      read("TaskbarLyrics.App/Web/Lyrics/bridge.js"),
+      read("TaskbarLyrics.App/Web/Lyrics/state.js"),
+      read("TaskbarLyrics.App/Web/Lyrics/presentation.js"),
+      read("TaskbarLyrics.App/Web/Lyrics/app.js")
+    ]);
+    const pendingAnimationFrames = [];
+    const dom = new JSDOM(html.replace("{{STYLE_CSS}}", "").replace("{{APP_JS}}", ""), {
+      runScripts: "outside-only"
+    });
+    dom.window.CSS = { supports: () => true };
+    dom.window.requestAnimationFrame = callback => {
+      pendingAnimationFrames.push(callback);
+      return pendingAnimationFrames.length;
+    };
+    dom.window.cancelAnimationFrame = () => {};
+    dom.window.eval(bridge);
+    dom.window.eval(state);
+    dom.window.eval(presentation);
+    dom.window.eval(script);
+
+    const receive = payload => dom.window.taskbarLyrics.receive({
+      version: 1,
+      type: "lyrics",
+      payload
+    });
+    receive({
+      current: "Pure music",
+      next: "",
+      progress: 0,
+      currentLineIndex: -1,
+      trackId: "track-a",
+      isPureMusic: true,
+      isPlaying: true,
+      scene: "spectrum",
+      animateTransition: false
+    });
+    receive({
+      current: "First target",
+      next: "",
+      progress: 0,
+      currentLineIndex: -1,
+      trackId: "track-b",
+      isPureMusic: false,
+      isPlaying: true,
+      scene: "message"
+    });
+    const staleStart = pendingAnimationFrames.shift();
+    expect(staleStart).toBeTypeOf("function");
+
+    receive({
+      current: "Pure music again",
+      next: "",
+      progress: 0,
+      currentLineIndex: -1,
+      trackId: "track-c",
+      isPureMusic: true,
+      isPlaying: true,
+      scene: "spectrum"
+    });
+    staleStart(0);
+    const layout = dom.window.document.querySelector("#layout");
+    const lyricsLayer = dom.window.document.querySelector("#lyricsLayer");
+    const spectrumLayer = dom.window.document.querySelector("#spectrumLayer");
+    expect(layout.classList.contains("spectrum-mode")).toBe(true);
+    expect(layout.classList.contains("spectrum-exiting")).toBe(false);
+    expect(lyricsLayer.style.transform).toBe("");
+    expect(spectrumLayer.style.transform).toBe("");
   });
 });

@@ -1,4 +1,6 @@
 const layoutEl = document.getElementById("layout");
+const lyricsLayerEl = document.getElementById("lyricsLayer");
+const spectrumLayerEl = document.getElementById("spectrumLayer");
 const viewportEl = document.getElementById("viewport");
 const trackEl = document.getElementById("track");
 const currentLineEl = document.getElementById("currentLine");
@@ -33,11 +35,6 @@ let requestedSpectrumGapPx = 3;
 let rowHeightPx = 14;
 let rowGapPx = 1;
 let linePitchPx = 15;
-let isTransitioning = false;
-let queuedFrame = null;
-let transitionFallbackTimer = 0;
-let transitionOpacityAnimation = 0;
-let transitionGeneration = 0;
 let transitionStartTime = 0;
 let transitionBaseNextOpacity = 0.72;
 let transitionPromotedLine = "";
@@ -58,6 +55,7 @@ const translationPairTransitionDurationMs = 760;
 const currentLineRestOpacity = 0.98;
 const leavingLineOpacity = 0.16;
 const trackSwitchSearchMinVisibleMs = 900;
+const searchingToSpectrumTransitionDurationMs = 520;
 const coverSwapDelayMs = 180;
 const coverSwitchMinVisibleMs = 420;
 const horizontalScrollAnchorRatio = 0.65;
@@ -65,6 +63,8 @@ const SEARCHING_TEXT = "\u6b63\u5728\u68c0\u7d22\u6b4c\u8bcd...";
 const LEGACY_SEARCHING_TEXT = "\u6b63\u5728\u5339\u914d\u6b4c\u8bcd...";
 let trackSwitchSearchStartedAt = 0;
 let delayedFrameTimer = 0;
+let spectrumEntryTimer = 0;
+let spectrumExitState = null;
 let coverUpdateTimer = 0;
 let coverStateTimer = 0;
 let coverSwitchStartedAt = 0;
@@ -86,6 +86,12 @@ const spectrumTuning = {
   heightRange: 17,
   opacity: 0.78
 };
+
+const lyricsTextAlignments = new Set(["Left", "Center", "Right"]);
+
+const presentationApi = window.taskbarLyricsPresentation;
+const presentationPlanner = new presentationApi.PresentationPlanner();
+const presentationCoordinator = new presentationApi.PresentationCoordinator(presentationPlanner);
 
 function clamp01(value) {
   const parsed = Number(value);
@@ -387,10 +393,17 @@ function getFadeInEase(t) {
 }
 
 function stopTransitionOpacityAnimation() {
-  if (transitionOpacityAnimation) {
-    window.cancelAnimationFrame(transitionOpacityAnimation);
-    transitionOpacityAnimation = 0;
-  }
+  presentationCoordinator.clearAnimationFrames();
+}
+
+function normalizeLyricsTextAlignment(value) {
+  return lyricsTextAlignments.has(value) ? value : "Left";
+}
+
+function applyLyricsTextAlignment(value) {
+  const alignment = normalizeLyricsTextAlignment(value);
+  layoutEl.dataset.textAlignment = alignment;
+  root.style.setProperty("--line-transform-origin", `${alignment.toLowerCase()} center`);
 }
 
 function isSearchingLine(line) {
@@ -405,6 +418,301 @@ function setDisplayMode(showSpectrum) {
 
   isSpectrumMode = shouldShowSpectrum;
   layoutEl.classList.toggle("spectrum-mode", shouldShowSpectrum);
+}
+
+function createPresentationFrame({
+  scene: requestedScene,
+  current,
+  next,
+  progress,
+  currentLineIndex,
+  trackId,
+  isPureMusic,
+  isPlaying,
+  wordScanProgress,
+  currentTranslation,
+  nextTranslation,
+  translationMode
+}) {
+  const normalizedCurrent = String(current ?? "");
+  const lineIndex = Number(currentLineIndex);
+  const derivedScene = isPureMusic === true
+    ? presentationApi.SCENES.SPECTRUM
+    : isSearchingLine(normalizedCurrent)
+      ? presentationApi.SCENES.SEARCHING
+      : Number.isInteger(lineIndex) && lineIndex >= 0
+        ? presentationApi.SCENES.LYRICS
+        : presentationApi.SCENES.MESSAGE;
+  return presentationApi.normalizeFrame({
+    scene: requestedScene || derivedScene,
+    layout: translationMode ? presentationApi.LAYOUTS.TRANSLATION_PAIR : presentationApi.LAYOUTS.SINGLE,
+    current: normalizedCurrent,
+    next,
+    progress,
+    currentLineIndex: lineIndex,
+    trackId,
+    isPureMusic,
+    isPlaying,
+    wordScanProgress,
+    currentTranslation,
+    nextTranslation,
+    translationMode
+  });
+}
+
+function clearSpectrumTransitionStyles() {
+  layoutEl.classList.remove("spectrum-transitioning");
+  lyricsLayerEl?.style.removeProperty("opacity");
+  lyricsLayerEl?.style.removeProperty("transform");
+  spectrumLayerEl?.style.removeProperty("opacity");
+  spectrumLayerEl?.style.removeProperty("transform");
+}
+
+function clearSpectrumExitStyles() {
+  layoutEl.classList.remove("spectrum-exiting", "spectrum-exit-active");
+  lyricsLayerEl?.style.removeProperty("opacity");
+  lyricsLayerEl?.style.removeProperty("transform");
+  spectrumLayerEl?.style.removeProperty("opacity");
+  spectrumLayerEl?.style.removeProperty("transform");
+}
+
+function isSpectrumExitTransitionActive() {
+  return spectrumExitState !== null &&
+    presentationCoordinator.activeTransition?.plan?.kind === presentationApi.TRANSITIONS.LAYER_SWITCH;
+}
+
+function renderSpectrumExitTarget(frame) {
+  const normalized = presentationApi.normalizeFrame(frame);
+  renderLyricsFrameContent(normalized, false);
+  return normalized;
+}
+
+function queueSpectrumExitTarget(frame) {
+  if (!spectrumExitState) {
+    return null;
+  }
+
+  const normalized = presentationApi.normalizeFrame(frame);
+  spectrumExitState.latestFrame = normalized;
+  if (normalized.scene === presentationApi.SCENES.SEARCHING) {
+    // Searching metadata is the only queued content that may replace the
+    // hidden entry while the spectrum is still visible. Keep a queued lyric
+    // or message frame out of the layer until the exit has completed; this
+    // prevents a search result from flashing through the exit before dwell.
+    renderSpectrumExitTarget(normalized);
+    spectrumExitState.sawSearching = true;
+    spectrumExitState.searchingFrame = normalized;
+  }
+  presentationCoordinator.queueLatest(normalized);
+  return normalized;
+}
+
+function applySpectrumExitImmediately(targetFrame) {
+  cancelActiveTransition();
+  spectrumExitState = null;
+  clearSpectrumExitStyles();
+  clearSpectrumTransitionStyles();
+  clearSpectrumEntryTimer();
+  clearSpectrumBars();
+  const normalized = presentationApi.normalizeFrame(targetFrame);
+  renderLyricsFrameContent(normalized, false);
+  setDisplayMode(false);
+  trackSwitchSearchStartedAt = 0;
+  presentationCoordinator.setCurrentFrame(normalized);
+}
+
+function completeSpectrumExitTransition(initialTargetFrame) {
+  const state = spectrumExitState;
+  spectrumExitState = null;
+  const pending = presentationCoordinator.takeLatest();
+  const finalFrame = pending?.frame || state?.latestFrame || initialTargetFrame;
+  const normalizedFinal = presentationApi.normalizeFrame(finalFrame);
+  const searchingFrame = state?.searchingFrame;
+  const shouldResumeSearchDwell = state?.sawSearching === true &&
+    normalizedFinal.scene === presentationApi.SCENES.LYRICS &&
+    searchingFrame;
+
+  if (shouldResumeSearchDwell) {
+    renderLyricsFrameContent(searchingFrame, false);
+    clearSpectrumExitStyles();
+    clearSpectrumTransitionStyles();
+    setDisplayMode(false);
+    presentationCoordinator.setCurrentFrame(searchingFrame);
+    trackSwitchSearchStartedAt = window.performance.now();
+    applyFrameAfterSearchDwell({ targetFrame: normalizedFinal });
+    return;
+  }
+
+  renderLyricsFrameContent(normalizedFinal, false);
+  clearSpectrumExitStyles();
+  clearSpectrumTransitionStyles();
+  setDisplayMode(false);
+  trackSwitchSearchStartedAt = normalizedFinal.scene === presentationApi.SCENES.SEARCHING
+    ? window.performance.now()
+    : 0;
+  presentationCoordinator.setCurrentFrame(normalizedFinal);
+}
+
+function startSpectrumExitTransition(targetFrame) {
+  const normalizedTarget = presentationApi.normalizeFrame(targetFrame);
+  if (isSpectrumExitTransitionActive()) {
+    queueSpectrumExitTarget(normalizedTarget);
+    return;
+  }
+
+  const plan = presentationPlanner.plan(
+    presentationCoordinator.currentFrame,
+    normalizedTarget,
+    { animateTransition: true });
+  if (prefersReducedMotion() || plan.kind !== presentationApi.TRANSITIONS.LAYER_SWITCH) {
+    applySpectrumExitImmediately(normalizedTarget);
+    return;
+  }
+
+  clearSpectrumTransitionStyles();
+  clearSpectrumExitStyles();
+  setDisplayMode(true);
+  const preparedTarget = renderSpectrumExitTarget(normalizedTarget);
+  spectrumExitState = {
+    latestFrame: preparedTarget,
+    searchingFrame: preparedTarget.scene === presentationApi.SCENES.SEARCHING
+      ? preparedTarget
+      : null,
+    sawSearching: preparedTarget.scene === presentationApi.SCENES.SEARCHING
+  };
+  presentationCoordinator.queueLatest(preparedTarget);
+
+  let hasFinished = false;
+  const finish = () => {
+    if (hasFinished) {
+      return;
+    }
+
+    hasFinished = true;
+    context.finish();
+  };
+  const context = presentationCoordinator.beginTransition(
+    plan,
+    {
+      complete: () => completeSpectrumExitTransition(normalizedTarget)
+    });
+
+  context.listenTransitionEnd(spectrumLayerEl, event => {
+    if (event?.propertyName === "transform" || event?.propertyName === "opacity") {
+      finish();
+    }
+  });
+  context.listenTransitionEnd(lyricsLayerEl, event => {
+    if (event?.propertyName === "transform" || event?.propertyName === "opacity") {
+      finish();
+    }
+  });
+
+  layoutEl.classList.add("spectrum-exiting");
+  if (lyricsLayerEl) {
+    lyricsLayerEl.style.opacity = "0";
+    lyricsLayerEl.style.transform = `translateY(${linePitchPx}px)`;
+  }
+  if (spectrumLayerEl) {
+    spectrumLayerEl.style.opacity = "1";
+    spectrumLayerEl.style.transform = "translateY(0)";
+  }
+  void layoutEl.offsetHeight;
+  context.requestFrame(() => {
+    if (!context.isCurrent()) {
+      return;
+    }
+
+    layoutEl.classList.add("spectrum-exit-active");
+    if (lyricsLayerEl) {
+      lyricsLayerEl.style.opacity = "1";
+      lyricsLayerEl.style.transform = "translateY(0)";
+    }
+    if (spectrumLayerEl) {
+      spectrumLayerEl.style.opacity = "0";
+      spectrumLayerEl.style.transform = `translateY(${-linePitchPx}px)`;
+    }
+  });
+  context.scheduleFallback(context.finish, plan.durationMs + 120);
+}
+
+function applySpectrumImmediately(targetFrame = null) {
+  cancelActiveTransition();
+  trackSwitchSearchStartedAt = 0;
+  spectrumExitState = null;
+  clearSpectrumExitStyles();
+  clearSpectrumTransitionStyles();
+  setDisplayMode(true);
+  presentationCoordinator.setCurrentFrame(targetFrame || {
+    scene: presentationApi.SCENES.SPECTRUM,
+    isPureMusic: true,
+    current: displayedCurrent,
+    currentLineIndex: -1
+  });
+}
+
+function startSearchingToSpectrumTransition(targetFrame) {
+  if (presentationCoordinator.currentFrame.scene !== presentationApi.SCENES.SEARCHING ||
+      prefersReducedMotion()) {
+    applySpectrumImmediately(targetFrame);
+    return;
+  }
+
+  cancelActiveTransition();
+  const plan = presentationPlanner.plan(
+    presentationCoordinator.currentFrame,
+    targetFrame,
+    { animateTransition: true });
+  let hasFinished = false;
+  const finish = () => {
+    if (hasFinished) {
+      return;
+    }
+
+    hasFinished = true;
+    context.finish();
+  };
+  const context = presentationCoordinator.beginTransition(plan, {
+    complete: () => {
+      trackSwitchSearchStartedAt = 0;
+      clearSpectrumTransitionStyles();
+      setDisplayMode(true);
+      presentationCoordinator.setCurrentFrame(targetFrame);
+    }
+  });
+
+  context.listenTransitionEnd(spectrumLayerEl, event => {
+    if (event?.propertyName === "transform" || event?.propertyName === "opacity") {
+      finish();
+    }
+  });
+
+  clearSpectrumTransitionStyles();
+  setDisplayMode(false);
+  if (lyricsLayerEl) {
+    lyricsLayerEl.style.opacity = "1";
+    lyricsLayerEl.style.transform = "translateY(0)";
+  }
+  if (spectrumLayerEl) {
+    spectrumLayerEl.style.opacity = "0";
+    spectrumLayerEl.style.transform = `translateY(${linePitchPx}px)`;
+  }
+  void layoutEl.offsetHeight;
+  layoutEl.classList.add("spectrum-transitioning");
+  setDisplayMode(true);
+  context.requestFrame(() => {
+    if (!context.isCurrent()) {
+      return;
+    }
+
+    lyricsLayerEl?.style.removeProperty("opacity");
+    lyricsLayerEl?.style.removeProperty("transform");
+    spectrumLayerEl?.style.removeProperty("opacity");
+    spectrumLayerEl?.style.removeProperty("transform");
+  });
+  // The class transition provides the line-pitch roll; the fallback keeps
+  // the layer switch deterministic when WebView2 omits transitionend.
+  context.scheduleFallback(finish, searchingToSpectrumTransitionDurationMs + 120);
 }
 
 function ensureSpectrumBarCount(value) {
@@ -686,26 +994,40 @@ function clearDelayedFrameTimer() {
   }
 }
 
+function clearSpectrumEntryTimer() {
+  if (spectrumEntryTimer) {
+    window.clearTimeout(spectrumEntryTimer);
+    spectrumEntryTimer = 0;
+  }
+}
+
+function resolveQueuedPresentationFrame(frame) {
+  return presentationApi.normalizeFrame(frame?.targetFrame || frame);
+}
+
 function shouldHoldAfterSearch(frame) {
+  const target = resolveQueuedPresentationFrame(frame);
   return trackSwitchSearchStartedAt > 0 &&
-    isSearchingLine(displayedCurrent) &&
-    Number.isInteger(frame.currentLineIndex) &&
-    frame.currentLineIndex >= 0 &&
-    !isSearchingLine(frame.current);
+    presentationCoordinator.currentFrame.scene === presentationApi.SCENES.SEARCHING &&
+    target.scene === presentationApi.SCENES.LYRICS &&
+    Number.isInteger(target.currentLineIndex) &&
+    target.currentLineIndex >= 0;
 }
 
 function applyFrameAfterSearchDwell(frame) {
+  const target = resolveQueuedPresentationFrame(frame);
   clearDelayedFrameTimer();
   if (!shouldHoldAfterSearch(frame)) {
     applyFrame(
-      frame.current,
-      frame.next,
-      frame.progress,
-      frame.currentLineIndex,
-      frame.wordScanProgress,
-      frame.currentTranslation,
-      frame.nextTranslation,
-      frame.translationMode);
+      target.current,
+      target.next,
+      target.progress,
+      target.currentLineIndex,
+      target.wordScanProgress,
+      target.currentTranslation,
+      target.nextTranslation,
+      target.translationMode,
+      target);
     return;
   }
 
@@ -715,14 +1037,15 @@ function applyFrameAfterSearchDwell(frame) {
     delayedFrameTimer = 0;
     trackSwitchSearchStartedAt = 0;
     applyFrame(
-      frame.current,
-      frame.next,
-      frame.progress,
-      frame.currentLineIndex,
-      frame.wordScanProgress,
-      frame.currentTranslation,
-      frame.nextTranslation,
-      frame.translationMode);
+      target.current,
+      target.next,
+      target.progress,
+      target.currentLineIndex,
+      target.wordScanProgress,
+      target.currentTranslation,
+      target.nextTranslation,
+      target.translationMode,
+      target);
   }, delay);
 }
 
@@ -734,35 +1057,85 @@ function applyFrameWithoutTransition(
   wordScanProgress,
   currentTranslation = "",
   nextTranslation = "",
-  translationMode = false) {
-  const useTranslationPair = Boolean(translationMode);
-  const visibleSecondary = useTranslationPair
-    ? toDisplayLine(currentTranslation, " ")
-    : safeNext;
-  const p = clamp01(progress);
-
+  translationMode = false,
+  targetFrame = null) {
+  const resolvedTargetFrame = targetFrame || createPresentationFrame({
+    current: safeCurrent,
+    next: safeNext,
+    progress,
+    currentLineIndex,
+    currentTranslation,
+    nextTranslation,
+    translationMode
+  });
   cancelActiveTransition();
-  trackSwitchSearchStartedAt = 0;
+  if (resolvedTargetFrame.scene !== presentationApi.SCENES.SEARCHING) {
+    trackSwitchSearchStartedAt = 0;
+  }
+  renderLyricsFrame(resolvedTargetFrame, false);
+}
+
+function renderLyricsFrameContent(frame, allowWordScanSmoothing = true) {
+  const normalized = presentationApi.normalizeFrame(frame);
+  const useTranslationPair = normalized.layout === presentationApi.LAYOUTS.TRANSLATION_PAIR;
+  const safeCurrent = toDisplayLine(normalized.current, SEARCHING_TEXT);
+  const visibleSecondary = useTranslationPair
+    ? toDisplayLine(normalized.currentTranslation, " ")
+    : toDisplayLine(normalized.next, " ");
+
   setTranslationMode(useTranslationPair);
   setIncomingLine("");
   setCurrentLine(safeCurrent);
-  setWordScanProgress(wordScanProgress, false);
+  setWordScanProgress(normalized.wordScanProgress, allowWordScanSmoothing);
   setSecondaryLine(visibleSecondary);
-  updateSecondaryOpacity(p);
-  lastCurrentLineIndex = Number.isInteger(currentLineIndex) ? currentLineIndex : -1;
-  lastLineProgress = p;
+  updateSecondaryOpacity(normalized.progress);
+  lastCurrentLineIndex = normalized.currentLineIndex >= 0
+    ? normalized.currentLineIndex
+    : -1;
+  lastLineProgress = normalized.progress;
+  if (normalized.trackId.length > 0) {
+    lastTrackId = normalized.trackId;
+  }
+  return normalized;
+}
+
+function renderLyricsFrame(frame, allowWordScanSmoothing = true) {
+  const normalized = renderLyricsFrameContent(frame, allowWordScanSmoothing);
+  presentationCoordinator.setCurrentFrame(normalized);
+  return normalized;
+}
+
+function applyProgressPatch(frame) {
+  const normalized = presentationApi.normalizeFrame(frame);
+  const useTranslationPair = normalized.layout === presentationApi.LAYOUTS.TRANSLATION_PAIR;
+  const visibleSecondary = useTranslationPair
+    ? toDisplayLine(normalized.currentTranslation, " ")
+    : toDisplayLine(normalized.next, " ");
+
+  setTranslationMode(useTranslationPair);
+  setWordScanProgress(normalized.wordScanProgress);
+  setSecondaryLine(visibleSecondary);
+  updateSecondaryOpacity(normalized.progress);
+  lastCurrentLineIndex = normalized.currentLineIndex >= 0
+    ? normalized.currentLineIndex
+    : -1;
+  lastLineProgress = normalized.progress;
+  if (normalized.trackId.length > 0) {
+    lastTrackId = normalized.trackId;
+  }
+  presentationCoordinator.setCurrentFrame(normalized);
 }
 
 function cancelActiveTransition() {
-  transitionGeneration++;
-  if (transitionFallbackTimer) {
-    window.clearTimeout(transitionFallbackTimer);
-    transitionFallbackTimer = 0;
+  const wasSpectrumExit = isSpectrumExitTransitionActive();
+  presentationCoordinator.cancelTransition();
+  if (wasSpectrumExit) {
+    spectrumExitState = null;
   }
   clearDelayedFrameTimer();
   stopTransitionOpacityAnimation();
-  isTransitioning = false;
-  queuedFrame = null;
+  presentationCoordinator.takeLatest();
+  clearSpectrumExitStyles();
   trackEl.classList.add("no-anim");
   trackEl.classList.remove("animating");
   trackEl.classList.remove("translation-pair-animating");
@@ -795,7 +1168,8 @@ function resetForTrackSwitch(
   wordScanProgress,
   currentTranslation,
   nextTranslation,
-  translationMode) {
+  translationMode,
+  targetFrame) {
   cancelActiveTransition();
   setTranslationMode(false);
   lastTrackId = trackId;
@@ -804,12 +1178,45 @@ function resetForTrackSwitch(
   trackSwitchSearchStartedAt = window.performance.now();
   setCoverLoadingState(true);
 
-  const hasLyricFrame = Number.isInteger(currentLineIndex) && currentLineIndex >= 0 && !isSearchingLine(safeCurrent);
+  const target = presentationApi.normalizeFrame(targetFrame || {
+    current: safeCurrent,
+    next: safeNext,
+    progress,
+    currentLineIndex,
+    trackId,
+    currentTranslation,
+    nextTranslation,
+    translationMode
+  });
+  const hasLyricFrame = target.scene === presentationApi.SCENES.LYRICS &&
+    Number.isInteger(target.currentLineIndex) &&
+    target.currentLineIndex >= 0;
+  const searchFrame = target.scene === presentationApi.SCENES.SEARCHING
+    ? target
+    : presentationApi.normalizeFrame({
+      scene: presentationApi.SCENES.SEARCHING,
+      current: SEARCHING_TEXT,
+      next: " ",
+      progress: 0,
+      currentLineIndex: -1,
+      trackId
+    });
+  const currentIsSearching = presentationCoordinator.currentFrame.scene ===
+    presentationApi.SCENES.SEARCHING;
 
-  if (!isSearchingLine(displayedCurrent)) {
-    startTransition(SEARCHING_TEXT, " ", 0, -1, null);
+  if (!currentIsSearching) {
+    applyFrame(
+      searchFrame.current,
+      searchFrame.next,
+      0,
+      -1,
+      null,
+      "",
+      "",
+      false,
+      searchFrame);
     if (hasLyricFrame) {
-      queuedFrame = {
+      applyFrameAfterSearchDwell({
         current: safeCurrent,
         next: safeNext,
         progress,
@@ -817,10 +1224,25 @@ function resetForTrackSwitch(
         wordScanProgress,
         currentTranslation,
         nextTranslation,
-        translationMode
-      };
+        translationMode,
+        targetFrame: target
+      });
     }
+  } else if (target.scene === presentationApi.SCENES.SEARCHING) {
+    // A fast switch between tracks can keep the searching scene active. Apply
+    // the new metadata frame so the previous track's title cannot linger.
+    applyFrame(
+      searchFrame.current,
+      searchFrame.next,
+      searchFrame.progress,
+      searchFrame.currentLineIndex,
+      searchFrame.wordScanProgress,
+      searchFrame.currentTranslation,
+      searchFrame.nextTranslation,
+      searchFrame.translationMode,
+      searchFrame);
   } else {
+    presentationCoordinator.setCurrentFrame(searchFrame);
     setSecondaryLine(" ");
     updateSecondaryOpacity(0);
     if (hasLyricFrame) {
@@ -832,7 +1254,8 @@ function resetForTrackSwitch(
         wordScanProgress,
         currentTranslation,
         nextTranslation,
-        translationMode
+        translationMode,
+        targetFrame: target
       });
     }
   }
@@ -840,7 +1263,7 @@ function resetForTrackSwitch(
 
 
 function runTransitionOpacityAnimation(now) {
-  if (!isTransitioning) {
+  if (!presentationCoordinator.isTransitioning) {
     return;
   }
 
@@ -854,9 +1277,8 @@ function runTransitionOpacityAnimation(now) {
   incomingLineEl.style.opacity = secondaryOpacity.toFixed(3);
 
   if (t < 1) {
-    transitionOpacityAnimation = window.requestAnimationFrame(runTransitionOpacityAnimation);
-  } else {
-    transitionOpacityAnimation = 0;
+    const generation = presentationCoordinator.activeGeneration;
+    presentationCoordinator.requestFrame(generation, runTransitionOpacityAnimation);
   }
 }
 
@@ -868,53 +1290,19 @@ function applyFrame(
   wordScanProgress,
   currentTranslation = "",
   nextTranslation = "",
-  translationMode = false) {
-  const useTranslationPair = Boolean(translationMode);
-  const visibleSecondary = useTranslationPair
-    ? toDisplayLine(currentTranslation, " ")
-    : safeNext;
-  const p = clamp01(progress);
-
-  if (useTranslationPair !== isTranslationMode) {
-    const shouldAnimateSearchResult =
-      useTranslationPair &&
-      isSearchingLine(displayedCurrent) &&
-      !isSearchingLine(safeCurrent);
-    cancelActiveTransition();
-    setTranslationMode(useTranslationPair);
-    if (shouldAnimateSearchResult) {
-      startTransition(
-        safeCurrent,
-        safeNext,
-        p,
-        currentLineIndex,
-        wordScanProgress,
-        currentTranslation,
-        nextTranslation,
-        useTranslationPair);
-      return;
-    }
-
-    setCurrentLine(safeCurrent);
-    setWordScanProgress(wordScanProgress, false);
-    setSecondaryLine(visibleSecondary);
-    updateSecondaryOpacity(p);
-    lastCurrentLineIndex = Number.isInteger(currentLineIndex) ? currentLineIndex : -1;
-    lastLineProgress = p;
-    return;
-  }
-
-  if (isTransitioning) {
-    queuedFrame = {
-      current: safeCurrent,
-      next: safeNext,
-      progress,
-      currentLineIndex,
-      wordScanProgress,
-      currentTranslation,
-      nextTranslation,
-      translationMode: useTranslationPair
-    };
+  translationMode = false,
+  targetFrame = null) {
+  const resolvedTargetFrame = targetFrame || createPresentationFrame({
+    current: safeCurrent,
+    next: safeNext,
+    progress,
+    currentLineIndex,
+    currentTranslation,
+    nextTranslation,
+    translationMode
+  });
+  if (presentationCoordinator.isTransitioning) {
+    presentationCoordinator.queueLatest(resolvedTargetFrame);
     const updatesPromotedLine = transitionPromotedLineIndex >= 0
       ? currentLineIndex === transitionPromotedLineIndex
       : safeCurrent === transitionPromotedLine;
@@ -924,89 +1312,61 @@ function applyFrame(
     return;
   }
 
-  const hasLineIndex = Number.isInteger(currentLineIndex) && currentLineIndex >= 0;
+  const plan = presentationPlanner.plan(
+    presentationCoordinator.currentFrame,
+    resolvedTargetFrame,
+    { animateTransition: true });
+  const normalized = presentationApi.normalizeFrame(resolvedTargetFrame);
+  const useTranslationPair = normalized.layout === presentationApi.LAYOUTS.TRANSLATION_PAIR;
 
-  if (hasLineIndex) {
-    if (!Number.isInteger(lastCurrentLineIndex) || lastCurrentLineIndex < 0) {
-      // If we were in a non-lyric state, slide into the first line smoothly.
-      if (isSearchingLine(displayedCurrent)) {
-        startTransition(
-          safeCurrent,
-          safeNext,
-          p,
-          currentLineIndex,
-          wordScanProgress,
-          currentTranslation,
-          nextTranslation,
-          useTranslationPair);
-      } else {
-        setCurrentLine(safeCurrent);
-        setWordScanProgress(wordScanProgress, false);
-        setSecondaryLine(visibleSecondary);
-        updateSecondaryOpacity(p);
-      }
-      lastCurrentLineIndex = currentLineIndex;
-      lastLineProgress = p;
+  switch (plan.kind) {
+    case presentationApi.TRANSITIONS.PROGRESS_PATCH:
+      applyProgressPatch(normalized);
       return;
-    }
-
-    if (currentLineIndex !== lastCurrentLineIndex) {
+    case presentationApi.TRANSITIONS.SINGLE_ROLL:
       startTransition(
-        safeCurrent,
-        safeNext,
-        p,
-        currentLineIndex,
-        wordScanProgress,
-        currentTranslation,
-        nextTranslation,
-        useTranslationPair);
-    } else {
-      if (safeCurrent !== displayedCurrent) {
-        setCurrentLine(safeCurrent);
-      }
-      setWordScanProgress(wordScanProgress);
-      setSecondaryLine(visibleSecondary);
-      updateSecondaryOpacity(p);
-    }
-
-    lastLineProgress = p;
-    return;
+        normalized.current,
+        normalized.next,
+        normalized.progress,
+        normalized.currentLineIndex,
+        normalized.wordScanProgress,
+        normalized.currentTranslation,
+        normalized.nextTranslation,
+        false,
+        normalized);
+      return;
+    case presentationApi.TRANSITIONS.TRANSLATION_PAIR_ROLL:
+      startTransition(
+        normalized.current,
+        normalized.next,
+        normalized.progress,
+        normalized.currentLineIndex,
+        normalized.wordScanProgress,
+        normalized.currentTranslation,
+        normalized.nextTranslation,
+        true,
+        normalized);
+      return;
+    case presentationApi.TRANSITIONS.REPLACE_IN_PLACE:
+    case presentationApi.TRANSITIONS.LAYER_SWITCH:
+    case presentationApi.TRANSITIONS.IMMEDIATE:
+    default:
+      applyFrameWithoutTransition(
+        normalized.current,
+        normalized.next,
+        normalized.progress,
+        normalized.currentLineIndex,
+        normalized.wordScanProgress,
+        normalized.currentTranslation,
+        normalized.nextTranslation,
+        useTranslationPair,
+        normalized);
+      return;
   }
-
-  const isRepeatedPromotionCandidate =
-    safeCurrent === displayedCurrent &&
-    displayedNext === displayedCurrent &&
-    visibleSecondary !== displayedNext;
-  const isUnchangedTextFrame =
-    safeCurrent === displayedCurrent &&
-    visibleSecondary === displayedNext;
-  const wrappedProgressForSameText =
-    isUnchangedTextFrame &&
-    Number.isFinite(lastLineProgress) &&
-    (lastLineProgress - p) > 0.16 &&
-    lastLineProgress > 0.62;
-
-  if (safeCurrent !== displayedCurrent || isRepeatedPromotionCandidate || wrappedProgressForSameText) {
-    startTransition(
-      safeCurrent,
-      safeNext,
-      p,
-      -1,
-      wordScanProgress,
-      currentTranslation,
-      nextTranslation,
-      useTranslationPair);
-  } else {
-    setWordScanProgress(wordScanProgress);
-    setSecondaryLine(visibleSecondary);
-    updateSecondaryOpacity(p);
-  }
-
-  lastLineProgress = p;
 }
 
 function updateMetrics() {
-  if (isTransitioning) {
+  if (presentationCoordinator.isTransitioning) {
     metricsUpdatePending = true;
     return;
   }
@@ -1031,7 +1391,13 @@ function updateMetrics() {
   refreshLineHorizontalScroll(currentLineEl);
 }
 
-function finalizeTransition(promotedCurrent, upcomingNext, progress, promotedLineIndex = -1, wordScanProgress = null) {
+function finalizeTransition(
+  promotedCurrent,
+  upcomingNext,
+  progress,
+  promotedLineIndex = -1,
+  wordScanProgress = null,
+  targetFrame = null) {
   const incomingEndOpacity = Number.parseFloat(window.getComputedStyle(incomingLineEl).opacity || "0.72");
 
   // Freeze transitions while swapping layers to avoid visible "grow then shrink" rebound.
@@ -1065,7 +1431,13 @@ function finalizeTransition(promotedCurrent, upcomingNext, progress, promotedLin
   updateSecondaryOpacity(progress);
   void trackEl.offsetHeight;
   trackEl.classList.remove("no-anim");
-  isTransitioning = false;
+  presentationCoordinator.setCurrentFrame(targetFrame || createPresentationFrame({
+    current: promotedCurrent,
+    next: upcomingNext,
+    progress,
+    currentLineIndex: promotedLineIndex,
+    wordScanProgress
+  }));
   lastLineProgress = clamp01(progress);
   if (Number.isInteger(promotedLineIndex) && promotedLineIndex >= 0) {
     lastCurrentLineIndex = promotedLineIndex;
@@ -1074,9 +1446,9 @@ function finalizeTransition(promotedCurrent, upcomingNext, progress, promotedLin
     updateMetrics();
   }
 
-  if (queuedFrame) {
-    const frame = queuedFrame;
-    queuedFrame = null;
+  const pending = presentationCoordinator.takeLatest();
+  if (pending) {
+    const frame = pending.frame;
     applyFrameAfterSearchDwell(frame);
   }
 }
@@ -1089,32 +1461,35 @@ function startTransition(
   wordScanProgress = null,
   currentTranslation = "",
   nextTranslation = "",
-  translationMode = false) {
-  if (isTransitioning) {
-    queuedFrame = {
-      current: newCurrent,
-      next: newNext,
-      progress,
-      currentLineIndex,
-      wordScanProgress,
-      currentTranslation,
-      nextTranslation,
-      translationMode
-    };
+  translationMode = false,
+  targetFrame = null) {
+  const resolvedTargetFrame = targetFrame || createPresentationFrame({
+    current: newCurrent,
+    next: newNext,
+    progress,
+    currentLineIndex,
+    currentTranslation,
+    nextTranslation,
+    translationMode
+  });
+  if (presentationCoordinator.isTransitioning) {
+    presentationCoordinator.queueLatest(resolvedTargetFrame);
     return;
   }
 
+  setTranslationMode(Boolean(translationMode));
   if (translationMode) {
     startTranslationPairTransition(
       newCurrent,
       currentTranslation,
       progress,
       currentLineIndex,
-      wordScanProgress);
+      wordScanProgress,
+      resolvedTargetFrame);
     return;
   }
 
-  startStandardTransition(newCurrent, newNext, progress, currentLineIndex, wordScanProgress);
+  startStandardTransition(newCurrent, newNext, progress, currentLineIndex, wordScanProgress, resolvedTargetFrame);
 }
 
 function finalizeTranslationPairTransition(
@@ -1122,7 +1497,8 @@ function finalizeTranslationPairTransition(
   promotedTranslation,
   progress,
   promotedLineIndex,
-  wordScanProgress) {
+  wordScanProgress,
+  targetFrame = null) {
   trackEl.classList.add("no-anim");
   incomingTranslationPairEl.classList.add("no-anim");
   stopTransitionOpacityAnimation();
@@ -1143,7 +1519,16 @@ function finalizeTranslationPairTransition(
   clearIncomingTranslationPair();
   void trackEl.offsetHeight;
   trackEl.classList.remove("no-anim");
-  isTransitioning = false;
+  presentationCoordinator.setCurrentFrame(targetFrame || createPresentationFrame({
+    scene: presentationApi.SCENES.LYRICS,
+    layout: presentationApi.LAYOUTS.TRANSLATION_PAIR,
+    current: promotedCurrent,
+    currentTranslation: promotedTranslation,
+    progress,
+    currentLineIndex: promotedLineIndex,
+    wordScanProgress,
+    translationMode: true
+  }));
   lastLineProgress = clamp01(progress);
   if (Number.isInteger(promotedLineIndex) && promotedLineIndex >= 0) {
     lastCurrentLineIndex = promotedLineIndex;
@@ -1152,9 +1537,9 @@ function finalizeTranslationPairTransition(
     updateMetrics();
   }
 
-  if (queuedFrame) {
-    const frame = queuedFrame;
-    queuedFrame = null;
+  const pending = presentationCoordinator.takeLatest();
+  if (pending) {
+    const frame = pending.frame;
     applyFrameAfterSearchDwell(frame);
   }
 }
@@ -1164,10 +1549,9 @@ function startTranslationPairTransition(
   currentTranslation,
   progress,
   currentLineIndex,
-  wordScanProgress) {
-  isTransitioning = true;
+  wordScanProgress,
+  targetFrame = null) {
   transitionUsesTranslationPair = true;
-  const generation = ++transitionGeneration;
   const promoted = toDisplayLine(newCurrent, SEARCHING_TEXT);
   const promotedTranslation = toDisplayLine(currentTranslation, " ");
   transitionPromotedLine = promoted;
@@ -1175,6 +1559,20 @@ function startTranslationPairTransition(
   transitionWordScanProgress = wordScanProgress;
   stopTransitionOpacityAnimation();
 
+  const context = presentationCoordinator.beginTransition(
+    {
+      kind: presentationApi.TRANSITIONS.TRANSLATION_PAIR_ROLL,
+      durationMs: translationPairTransitionDurationMs
+    },
+    {
+      complete: () => finalizeTranslationPairTransition(
+        promoted,
+        promotedTranslation,
+        progress,
+        currentLineIndex,
+        transitionWordScanProgress,
+        targetFrame)
+    });
   trackEl.classList.add("no-anim");
   trackEl.classList.remove("animating", "translation-pair-animating");
   currentLineEl.classList.remove("leaving");
@@ -1196,21 +1594,7 @@ function startTranslationPairTransition(
     }
 
     hasFinished = true;
-    trackEl.removeEventListener("transitionend", onTransitionEnd);
-    if (generation !== transitionGeneration) {
-      return;
-    }
-
-    if (transitionFallbackTimer) {
-      window.clearTimeout(transitionFallbackTimer);
-      transitionFallbackTimer = 0;
-    }
-    finalizeTranslationPairTransition(
-      promoted,
-      promotedTranslation,
-      progress,
-      currentLineIndex,
-      transitionWordScanProgress);
+    context.finish();
   };
   const onTransitionEnd = (event) => {
     if (!event || event.target !== trackEl || event.propertyName !== "transform") {
@@ -1220,34 +1604,37 @@ function startTranslationPairTransition(
     finish();
   };
 
-  trackEl.addEventListener("transitionend", onTransitionEnd);
-  window.requestAnimationFrame(() => {
-    if (generation !== transitionGeneration) {
+  context.listenTransitionEnd(trackEl, onTransitionEnd);
+  context.requestFrame(() => {
+    if (!context.isCurrent()) {
       return;
     }
 
     incomingTranslationPairEl.classList.remove("preparing");
     incomingTranslationPairEl.classList.add("entering");
     trackEl.classList.add("translation-pair-animating", "animating");
-    window.requestAnimationFrame(() => {
-      if (generation !== transitionGeneration) {
+    context.requestFrame(() => {
+      if (!context.isCurrent()) {
         return;
       }
 
       setTrackOffset(2);
       if (prefersReducedMotion()) {
-        window.requestAnimationFrame(finish);
+        context.requestFrame(finish);
       }
     });
   });
-  transitionFallbackTimer = window.setTimeout(finish, translationPairTransitionDurationMs + 120);
+  context.scheduleFallback(finish, translationPairTransitionDurationMs + 120);
 }
 
-function startStandardTransition(newCurrent, newNext, progress, currentLineIndex = -1, wordScanProgress = null) {
+function startStandardTransition(
+  newCurrent,
+  newNext,
+  progress,
+  currentLineIndex = -1,
+  wordScanProgress = null,
+  targetFrame = null) {
   transitionUsesTranslationPair = false;
-
-  isTransitioning = true;
-  const generation = ++transitionGeneration;
   const promoted = toDisplayLine(newCurrent, SEARCHING_TEXT);
   const upcoming = toDisplayLine(newNext, " ");
   transitionPromotedLine = promoted;
@@ -1261,6 +1648,21 @@ function startStandardTransition(newCurrent, newNext, progress, currentLineIndex
     : 1;
   transitionStartTime = 0;
   stopTransitionOpacityAnimation();
+
+  const context = presentationCoordinator.beginTransition(
+    {
+      kind: presentationApi.TRANSITIONS.SINGLE_ROLL,
+      durationMs: transitionDurationMs
+    },
+    {
+      complete: () => finalizeTransition(
+        promoted,
+        upcoming,
+        progress,
+        currentLineIndex,
+        transitionWordScanProgress,
+        targetFrame)
+    });
 
   // Render with final font metrics from the start, then animate only the visual scale.
   trackEl.classList.add("no-anim");
@@ -1285,45 +1687,105 @@ function startStandardTransition(newCurrent, newNext, progress, currentLineIndex
       return;
     }
 
-    trackEl.removeEventListener("transitionend", onTransitionEnd);
-    if (generation !== transitionGeneration) {
-      return;
-    }
-
-    if (transitionFallbackTimer) {
-      window.clearTimeout(transitionFallbackTimer);
-      transitionFallbackTimer = 0;
-    }
-    finalizeTransition(promoted, upcoming, progress, currentLineIndex, transitionWordScanProgress);
+    context.finish();
   };
 
-  trackEl.addEventListener("transitionend", onTransitionEnd);
-  window.requestAnimationFrame(() => {
-    if (generation !== transitionGeneration) {
+  context.listenTransitionEnd(trackEl, onTransitionEnd);
+  context.requestFrame(() => {
+    if (!context.isCurrent()) {
       return;
     }
 
     transitionStartTime = window.performance.now();
-    transitionOpacityAnimation = window.requestAnimationFrame(runTransitionOpacityAnimation);
+    context.requestFrame(runTransitionOpacityAnimation);
     currentLineEl.classList.add("leaving");
     nextLineEl.classList.add("promoting");
     nextLineEl.style.setProperty("--promotion-scale", "1");
     nextLineEl.style.removeProperty("transform");
     trackEl.classList.add("animating");
-    window.requestAnimationFrame(() => {
-      if (generation === transitionGeneration) {
+    context.requestFrame(() => {
+      if (context.isCurrent()) {
         setTrackOffset(1);
       }
     });
   });
-  transitionFallbackTimer = window.setTimeout(() => {
-    trackEl.removeEventListener("transitionend", onTransitionEnd);
-    if (generation !== transitionGeneration) {
+  context.scheduleFallback(context.finish, transitionDurationMs + 120);
+}
+
+function applySpectrumFrame(targetFrame, isPlaying) {
+  cancelActiveTransition();
+  spectrumExitState = null;
+  clearSpectrumExitStyles();
+  setTranslationMode(false);
+  trackSwitchSearchStartedAt = 0;
+  clearSpectrumTransitionStyles();
+  setWordScanProgress(null, false);
+  setSecondaryLine(" ");
+  setIncomingLine("");
+  lastCurrentLineIndex = -1;
+  lastLineProgress = 0;
+  setDisplayMode(true);
+  if (isPlaying === false) {
+    setAudioDrivenSpectrum(spectrumSilence);
+  }
+  presentationCoordinator.setCurrentFrame(targetFrame);
+}
+
+function cancelSpectrumPresentationIfActive() {
+  if (presentationCoordinator.activeTransition?.plan?.kind !==
+      presentationApi.TRANSITIONS.SEARCHING_TO_SPECTRUM_ROLL) {
+    return;
+  }
+
+  cancelActiveTransition();
+  clearSpectrumTransitionStyles();
+  setDisplayMode(false);
+}
+
+function presentSpectrumFrame(targetFrame, isPlaying, animateTransition) {
+  if (!isSpectrumMode) {
+    clearSpectrumBars();
+  }
+  const plan = presentationPlanner.plan(
+    presentationCoordinator.currentFrame,
+    targetFrame,
+    {
+      animateTransition,
+      reducedMotion: prefersReducedMotion()
+    });
+  if (plan.kind !== presentationApi.TRANSITIONS.SEARCHING_TO_SPECTRUM_ROLL) {
+    applySpectrumFrame(targetFrame, isPlaying);
+    return;
+  }
+
+  // A confirmed spectrum target supersedes any lyric result waiting on the
+  // track-search dwell; keep the two pending-entry timers independent.
+  clearDelayedFrameTimer();
+
+  const showSpectrum = () => {
+    spectrumEntryTimer = 0;
+    if (presentationCoordinator.currentFrame.scene !== presentationApi.SCENES.SEARCHING) {
+      applySpectrumFrame(targetFrame, isPlaying);
       return;
     }
 
-    finalizeTransition(promoted, upcoming, progress, currentLineIndex, transitionWordScanProgress);
-  }, transitionDurationMs + 120);
+    startSearchingToSpectrumTransition(targetFrame);
+    if (isPlaying === false) {
+      setAudioDrivenSpectrum(spectrumSilence);
+    }
+  };
+
+  if (trackSwitchSearchStartedAt > 0) {
+    const elapsed = Math.max(0, window.performance.now() - trackSwitchSearchStartedAt);
+    const delay = Math.max(0, trackSwitchSearchMinVisibleMs - elapsed);
+    if (delay > 0) {
+      clearSpectrumEntryTimer();
+      spectrumEntryTimer = window.setTimeout(showSpectrum, delay);
+      return;
+    }
+  }
+
+  showSpectrum();
 }
 
 function updateResponsiveLayout() {
@@ -1338,6 +1800,16 @@ setWordScanProgress(null);
 setSecondaryLine(displayedNext);
 setIncomingLine("");
 updateSecondaryOpacity(0);
+presentationCoordinator.setCurrentFrame(createPresentationFrame({
+  current: displayedCurrent,
+  next: displayedNext,
+  progress: 0,
+  currentLineIndex: -1,
+  trackId: "",
+  isPureMusic: false,
+  isPlaying: false,
+  translationMode: false
+}));
 
 if (typeof ResizeObserver !== "undefined") {
   new ResizeObserver(updateResponsiveLayout).observe(layoutEl);
@@ -1362,7 +1834,8 @@ const lyricsApi = {
     currentTranslation,
     nextTranslation,
     translationMode,
-    animateTransition = true) {
+    animateTransition = true,
+    scene = null) {
     isPlaybackPlaying = Boolean(isPlaying);
     const safeCurrent = toDisplayLine(current, SEARCHING_TEXT);
     const safeNext = toDisplayLine(next, " ");
@@ -1372,31 +1845,43 @@ const lyricsApi = {
     const p = clamp01(progress);
     const lineIndex = Number(currentLineIndex);
     const normalizedTrackId = normalizeTrackId(trackId);
-    const shouldShowSpectrum = Boolean(isPureMusic);
-    const shouldAnimateSpectrum = isPlaying !== false;
+    const targetFrame = createPresentationFrame({
+      scene,
+      current: safeCurrent,
+      next: safeNext,
+      progress: p,
+      currentLineIndex: lineIndex,
+      trackId: normalizedTrackId,
+      isPureMusic: Boolean(isPureMusic),
+      isPlaying,
+      wordScanProgress,
+      currentTranslation: safeCurrentTranslation,
+      nextTranslation: safeNextTranslation,
+      translationMode: useTranslationPair
+    });
+    const shouldShowSpectrum = targetFrame.scene === presentationApi.SCENES.SPECTRUM;
 
     if (shouldShowSpectrum) {
       if (normalizedTrackId.length > 0) {
         lastTrackId = normalizedTrackId;
       }
+      presentSpectrumFrame(targetFrame, isPlaying, animateTransition);
+      return;
+    }
 
-      cancelActiveTransition();
-      setTranslationMode(false);
-      trackSwitchSearchStartedAt = 0;
-      setCurrentLine(safeCurrent);
-      setWordScanProgress(null);
-      setSecondaryLine(" ");
-      setIncomingLine("");
-      lastCurrentLineIndex = Number.isInteger(lineIndex) ? lineIndex : -1;
-      lastLineProgress = p;
-      setDisplayMode(true);
-      if (!shouldAnimateSpectrum) {
-        setAudioDrivenSpectrum(spectrumSilence);
+    if (presentationCoordinator.currentFrame.scene === presentationApi.SCENES.SPECTRUM ||
+        isSpectrumExitTransitionActive()) {
+      if (animateTransition === false || prefersReducedMotion()) {
+        applySpectrumExitImmediately(targetFrame);
+      } else {
+        startSpectrumExitTransition(targetFrame);
       }
       return;
     }
 
+    cancelSpectrumPresentationIfActive();
     setDisplayMode(false);
+    clearSpectrumEntryTimer();
     clearSpectrumBars();
 
     if (animateTransition === false) {
@@ -1408,7 +1893,8 @@ const lyricsApi = {
         wordScanProgress,
         safeCurrentTranslation,
         safeNextTranslation,
-        useTranslationPair);
+        useTranslationPair,
+        targetFrame);
       return;
     }
 
@@ -1422,12 +1908,28 @@ const lyricsApi = {
         wordScanProgress,
         safeCurrentTranslation,
         safeNextTranslation,
-        useTranslationPair);
+        useTranslationPair,
+        targetFrame);
       return;
     }
 
     if (normalizedTrackId.length > 0) {
       lastTrackId = normalizedTrackId;
+    }
+
+    if (shouldHoldAfterSearch(targetFrame)) {
+      applyFrameAfterSearchDwell({
+        current: safeCurrent,
+        next: safeNext,
+        progress: p,
+        currentLineIndex: lineIndex,
+        wordScanProgress,
+        currentTranslation: safeCurrentTranslation,
+        nextTranslation: safeNextTranslation,
+        translationMode: useTranslationPair,
+        targetFrame
+      });
+      return;
     }
 
     applyFrame(
@@ -1438,7 +1940,8 @@ const lyricsApi = {
       wordScanProgress,
       safeCurrentTranslation,
       safeNextTranslation,
-      useTranslationPair);
+      useTranslationPair,
+      targetFrame);
   },
 
   setSpectrum(values) {
@@ -1550,6 +2053,7 @@ const lyricsApi = {
     }
 
     root.style.setProperty("--font-family", payload.fontFamily || "\"SF Pro Display\", \"Segoe UI Variable Display\", \"Segoe UI Variable Text\", \"Microsoft YaHei UI\", sans-serif");
+    applyLyricsTextAlignment(payload.textAlignment);
     const layoutScalePercent = Number(payload.layoutScalePercent);
     if (Number.isFinite(layoutScalePercent) && layoutScalePercent > 0) {
       layoutScaleFactor = layoutScalePercent / 100;
@@ -1657,7 +2161,8 @@ window.taskbarLyrics = {
           payload?.currentTranslation,
           payload?.nextTranslation,
           payload?.translationMode,
-          payload?.animateTransition);
+          payload?.animateTransition,
+          payload?.scene);
         break;
       case "cover":
         lyricsApi.setCover(payload?.dataUri, payload?.fallbackText, payload?.fallbackColor, payload?.trackId);

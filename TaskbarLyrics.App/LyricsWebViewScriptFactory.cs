@@ -14,7 +14,8 @@ internal static class LyricsWebViewScriptFactory
         string? currentTranslation = null,
         string? nextTranslation = null,
         bool translationMode = false,
-        bool animateTransition = true)
+        bool animateTransition = true,
+        LyricsPresentationScene presentationScene = LyricsPresentationScene.Message)
     {
         return WebViewMessageScriptFactory.Dispatch("taskbarLyrics", "lyrics", new
         {
@@ -31,7 +32,8 @@ internal static class LyricsWebViewScriptFactory
             animateTransition,
             wordScanProgress = wordScanProgress.HasValue
                 ? Math.Clamp(wordScanProgress.Value, 0, 1)
-                : (double?)null
+                : (double?)null,
+            scene = presentationScene.ToWireValue()
         });
     }
 

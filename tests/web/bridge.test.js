@@ -1014,4 +1014,30 @@ describe("settings WebView bridge", () => {
     expect(color.getAttribute("aria-invalid")).toBe("false");
     expect(document.querySelector("#foregroundColorError").hidden).toBe(true);
   });
+
+  it("normalizes invalid lyrics text alignment to left and posts only supported values", async () => {
+    const { dom, sent, script } = await createSettingsDom();
+    const document = dom.window.document;
+    dom.window.eval(script);
+    const initialSentCount = sent.length;
+
+    dom.window.settingsApp.receive({
+      version: 1,
+      type: "settingsState",
+      payload: { settings: { lyricsTextAlignment: "Unsupported" }, fonts: [] }
+    });
+
+    const trigger = document.querySelector('[data-setting="lyricsTextAlignment"]');
+    expect(trigger.querySelector(".select-trigger-value").textContent).toBe("左对齐");
+    expect(sent).toHaveLength(initialSentCount);
+
+    trigger.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+    document.querySelector('[data-option-index="2"]').dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+
+    expect(sent.at(-1)).toEqual({
+      version: 1,
+      type: "update",
+      payload: { key: "lyricsTextAlignment", value: "Right" }
+    });
+  });
 });

@@ -38,7 +38,7 @@ $settings = @(
     'enableLocalLyrics', 'localMusicFolders', 'enableGlobalMediaHotkeys', 'showLyricsOnStartup', 'autoHideWhenNoPlayback', 'showLyricTranslation', 'enableWordScanning',
     'spectrumDisplayMode', 'lyricsLayoutScalePercent', 'fontSize', 'showCover',
     'coverSize', 'coverGap', 'coverCornerRadius', 'fontFamily',
-    'fontWeight', 'foregroundColorMode', 'showTextShadow', 'toolWindowTheme', 'showBackground',
+    'fontWeight', 'lyricsTextAlignment', 'foregroundColorMode', 'showTextShadow', 'toolWindowTheme', 'showBackground',
     'backgroundOpacity', 'showBorder', 'windowWidth', 'horizontalAnchor', 'xOffset',
     'yOffset', 'forceAlwaysOnTop', 'startWithWindows', 'autoCheckUpdates'
 )
@@ -164,12 +164,14 @@ if (-not $appSettings.Contains('public double LyricsLayoutScalePercent')) { $err
 if (-not $appSettings.Contains('public bool ShowCover')) { $errors.Add('show cover setting missing') }
 if (-not $appSettings.Contains('public bool AutoHideWhenNoPlayback')) { $errors.Add('auto-hide when no playback setting missing') }
 if (-not $appSettings.Contains('public bool SpectrumAudioAccessGranted')) { $errors.Add('spectrum audio access setting missing') }
+if (-not $appSettings.Contains('public LyricsTextAlignment LyricsTextAlignment')) { $errors.Add('lyrics text alignment setting missing') }
 if (-not $appSettings.Contains('public LyricsDisplayMode LyricsDisplayMode')) { $errors.Add('lyrics display mode setting missing') }
 if (-not $appSettings.Contains('public List<string> SelectedDisplayIds')) { $errors.Add('selected display ids setting missing') }
 if (-not $appSettings.Contains('public const string DefaultFontFamily = BundledFontFamily;')) { $errors.Add('bundled font is not the default') }
 if (-not $app.Contains('Settings.FontFamily = AppSettings.NormalizeFontFamily(Settings.FontFamily);')) { $errors.Add('startup font normalization missing') }
 if (-not $lyricsStyleFactory.Contains('fontFamily = AppSettings.NormalizeFontFamily(settings.FontFamily)')) { $errors.Add('lyrics font normalization missing') }
 if (-not $lyricsStyleFactory.Contains('showCover = settings.ShowCover')) { $errors.Add('lyrics cover visibility payload missing') }
+if (-not $lyricsStyleFactory.Contains('textAlignment = settings.LyricsTextAlignment')) { $errors.Add('lyrics text alignment payload missing') }
 if (-not $lyricsStyleFactory.Contains('WebViewMessageScriptFactory.Dispatch("taskbarLyrics", "style"')) { $errors.Add('lyrics V1 style dispatch missing') }
 if (-not $lyricsWindowHost.Contains('LyricsDisplayTargetSelector.Select(')) { $errors.Add('lyrics display target reconciliation missing') }
 if (-not $lyricsWindowHost.Contains('SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;')) { $errors.Add('lyrics display hotplug handling missing') }
@@ -178,6 +180,7 @@ $lyricsScript = [IO.File]::ReadAllText((Join-Path $appRoot 'Web\Lyrics\app.js'),
 $lyricsCss = [IO.File]::ReadAllText((Join-Path $appRoot 'Web\Lyrics\style.css'), [Text.UTF8Encoding]::new($false, $true))
 if (-not $lyricsScript.Contains('root.classList.toggle("cover-hidden", payload.showCover === false)')) { $errors.Add('lyrics cover visibility behavior missing') }
 if (-not $lyricsCss.Contains('.cover-hidden :is(.cover, .cover-gap)')) { $errors.Add('lyrics hidden cover style missing') }
+if (-not $lyricsCss.Contains('.layout[data-text-alignment="Center"] .line-text-stack')) { $errors.Add('lyrics center text alignment style missing') }
 
 $lyricsHtml = [IO.File]::ReadAllText((Join-Path $appRoot 'Web\Lyrics\index.html'), [Text.UTF8Encoding]::new($false, $true))
 if (-not $lyricsHtml.Contains('class="cover-gap" aria-hidden="true"')) { $errors.Add('lyrics cover gap marker missing') }

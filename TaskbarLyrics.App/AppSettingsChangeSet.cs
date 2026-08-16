@@ -77,7 +77,8 @@ internal readonly record struct AppSettingsChangeSet(
             current.ShowBackground != next.ShowBackground ||
             current.BackgroundOpacity != next.BackgroundOpacity ||
             current.ShowBorder != next.ShowBorder ||
-            current.ShowTextShadow != next.ShowTextShadow;
+            current.ShowTextShadow != next.ShowTextShadow ||
+            current.LyricsTextAlignment != next.LyricsTextAlignment;
 
         var lyricsLayoutChanged = isInitialApplication ||
             current.FontSize != next.FontSize ||

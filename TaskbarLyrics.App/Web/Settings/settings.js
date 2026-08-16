@@ -9,6 +9,7 @@
       spectrumDisplayMode: [{ value: "Disabled", label: "关闭" }, { value: "PureMusicOnly", label: "仅纯音乐时" }, { value: "PureMusicOrNoLyrics", label: "纯音乐或无歌词时" }, { value: "Always", label: "始终显示" }],
       fontFamily: [],
       fontWeight: [{ value: "Light", label: "细体" }, { value: "Normal", label: "常规" }, { value: "Medium", label: "中等" }, { value: "SemiBold", label: "半粗体" }, { value: "Bold", label: "粗体" }],
+      lyricsTextAlignment: [{ value: "Left", label: "左对齐" }, { value: "Center", label: "居中" }, { value: "Right", label: "右对齐" }],
       foregroundColorMode: [{ value: "System", label: "跟随系统" }, { value: "Dark", label: "深色" }, { value: "Light", label: "浅色" }, { value: "Custom", label: "自定义" }],
       horizontalAnchor: [{ value: "Left", label: "左侧" }, { value: "Center", label: "居中" }, { value: "Right", label: "右侧" }],
       trackOffsetSourceFilter: [{ value: "All", label: "全部歌词源" }],
