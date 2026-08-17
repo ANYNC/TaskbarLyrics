@@ -789,9 +789,19 @@ describe("lyrics responsive layout", () => {
       runScripts: "outside-only"
     });
     dom.window.eval(presentation);
-    const { PresentationPlanner, TRANSITIONS, SCENES, LAYOUTS } = dom.window.taskbarLyricsPresentation;
+    const {
+      PresentationPlanner,
+      TRANSITIONS,
+      SCENES,
+      LAYOUTS,
+      DEFAULT_DURATION_MS
+    } = dom.window.taskbarLyricsPresentation;
     const planner = new PresentationPlanner();
-    const searching = { scene: SCENES.SEARCHING, current: "正在检索歌词..." };
+    const searching = {
+      scene: SCENES.SEARCHING,
+      current: "正在检索歌词...",
+      trackId: "track-a"
+    };
     const spectrum = { scene: SCENES.SPECTRUM, isPureMusic: true };
     const single = { scene: SCENES.LYRICS, layout: LAYOUTS.SINGLE, currentLineIndex: 0, trackId: "track" };
     const translationPair = {
@@ -801,13 +811,32 @@ describe("lyrics responsive layout", () => {
       trackId: "track"
     };
 
-    expect(planner.plan(searching, spectrum).kind).toBe(TRANSITIONS.SEARCHING_TO_SPECTRUM_ROLL);
+    expect(planner.plan(searching, spectrum)).toMatchObject({
+      kind: TRANSITIONS.SEARCHING_TO_SPECTRUM_ROLL,
+      durationMs: DEFAULT_DURATION_MS.translationPairRoll
+    });
+    expect(planner.plan(spectrum, searching)).toMatchObject({
+      kind: TRANSITIONS.LAYER_SWITCH,
+      durationMs: DEFAULT_DURATION_MS.translationPairRoll
+    });
+    expect(planner.plan(spectrum, single)).toMatchObject({
+      kind: TRANSITIONS.LAYER_SWITCH,
+      durationMs: DEFAULT_DURATION_MS.layerSwitch
+    });
     expect(planner.plan(single, translationPair).kind).toBe(TRANSITIONS.TRANSLATION_PAIR_ROLL);
     expect(planner.plan(single, { ...single, progress: 0.75 }).kind).toBe(TRANSITIONS.PROGRESS_PATCH);
     expect(planner.plan(single, { ...single, current: "updated" }).kind).toBe(TRANSITIONS.REPLACE_IN_PLACE);
     expect(planner.plan(single, searching).kind).toBe(TRANSITIONS.SINGLE_ROLL);
     expect(planner.plan(searching, { ...searching, progress: 0.5 }).kind).toBe(TRANSITIONS.PROGRESS_PATCH);
     expect(planner.plan(searching, { ...searching, current: "new search" }).kind).toBe(TRANSITIONS.REPLACE_IN_PLACE);
+    expect(planner.plan(searching, {
+      ...searching,
+      current: "next track",
+      trackId: "track-b"
+    })).toMatchObject({
+      kind: TRANSITIONS.SINGLE_ROLL,
+      durationMs: DEFAULT_DURATION_MS.singleRoll
+    });
     const message = { scene: SCENES.MESSAGE, current: "No lyrics", currentLineIndex: -1 };
     expect(planner.plan(searching, message).kind).toBe(TRANSITIONS.SINGLE_ROLL);
     expect(planner.plan(message, { ...message, current: "Still no lyrics" }).kind).toBe(TRANSITIONS.SINGLE_ROLL);
@@ -977,7 +1006,7 @@ describe("lyrics responsive layout", () => {
     }
   });
 
-  it("keeps the 900ms search dwell when duplicate lyric frames arrive", async () => {
+  it("enters lyrics without a separate dwell and coalesces duplicate result frames", async () => {
       const [html, bridge, state, presentation, script] = await Promise.all([
         read("TaskbarLyrics.App/Web/Lyrics/index.html"),
         read("TaskbarLyrics.App/Web/Lyrics/bridge.js"),
@@ -1041,23 +1070,21 @@ describe("lyrics responsive layout", () => {
       const nextLineText = dom.window.document.querySelector("#nextLineText");
       expect(nextLine.classList.contains("promoting")).toBe(false);
       expect(currentLineText.textContent).toBe(searchingLine);
-      expect(scheduledTimers.size).toBe(1);
-      const firstTimerId = [...scheduledTimers.keys()][0];
-      expect(scheduledTimers.get(firstTimerId)?.delay).toBe(800);
+      expect(nextLineText.textContent).toBe("found line");
+      const fallbackTimerId = [...scheduledTimers.keys()][0];
+      expect(scheduledTimers.get(fallbackTimerId)?.delay).toBe(680);
 
       now = 300;
       receive("found line");
       expect(nextLine.classList.contains("promoting")).toBe(false);
       expect(currentLineText.textContent).toBe(searchingLine);
-      expect(scheduledTimers.has(firstTimerId)).toBe(false);
-      expect(scheduledTimers.size).toBe(1);
-      const secondTimerId = [...scheduledTimers.keys()][0];
-      expect(scheduledTimers.get(secondTimerId)?.delay).toBe(700);
-
-      now = 1000;
-      scheduledTimers.get(secondTimerId)?.callback();
-      expect(currentLineText.textContent).toBe(searchingLine);
       expect(nextLineText.textContent).toBe("found line");
+      expect(scheduledTimers.size).toBe(1);
+
+      const transitionEnd = new dom.window.Event("transitionend", { bubbles: true });
+      Object.defineProperty(transitionEnd, "propertyName", { value: "transform" });
+      dom.window.document.querySelector("#track").dispatchEvent(transitionEnd);
+      expect(currentLineText.textContent).toBe("found line");
   });
 
   it("plans and executes a searching-to-spectrum line-pitch roll without rendering pure-music text", async () => {
@@ -1272,7 +1299,7 @@ describe("lyrics responsive layout", () => {
     expect(pendingAnimationFrames.length).toBeGreaterThan(0);
   });
 
-  it("renders search metadata above the prompt and enters lyrics after the 900ms dwell", async () => {
+  it("renders search metadata above the prompt and enters lyrics without an extra dwell", async () => {
     const [html, bridge, state, presentation, script] = await Promise.all([
       read("TaskbarLyrics.App/Web/Lyrics/index.html"),
       read("TaskbarLyrics.App/Web/Lyrics/bridge.js"),
@@ -1288,22 +1315,9 @@ describe("lyrics responsive layout", () => {
       .replace("{{APP_JS}}", ""), {
       runScripts: "outside-only"
     });
-    let now = 100;
-    const timers = new Map();
-    let timerId = 0;
     dom.window.CSS = { supports: () => true };
     dom.window.requestAnimationFrame = () => 1;
     dom.window.cancelAnimationFrame = () => {};
-    dom.window.setTimeout = (callback, delay) => {
-      const id = ++timerId;
-      timers.set(id, { callback, delay });
-      return id;
-    };
-    dom.window.clearTimeout = id => timers.delete(id);
-    Object.defineProperty(dom.window.performance, "now", {
-      configurable: true,
-      value: () => now
-    });
     dom.window.eval(bridge);
     dom.window.eval(state);
     dom.window.eval(presentation);
@@ -1329,7 +1343,6 @@ describe("lyrics responsive layout", () => {
     expect(currentLineText.textContent).toBe("Song - Artist");
     expect(nextLineText.textContent).toBe(searchingPrompt);
 
-    now = 200;
     receive({
       current: "Found lyric",
       next: "Next lyric",
@@ -1341,13 +1354,6 @@ describe("lyrics responsive layout", () => {
       scene: "lyrics"
     });
     expect(currentLineText.textContent).toBe("Song - Artist");
-    expect(nextLineText.textContent).toBe(searchingPrompt);
-    expect([...timers.values()].map(timer => timer.delay)).toContain(800);
-
-    now = 1000;
-    const dwellTimer = [...timers.values()].find(timer => timer.delay === 800);
-    dwellTimer?.callback();
-    expect(currentLineText.textContent).toBe("Song - Artist");
     expect(nextLineText.textContent).toBe("Found lyric");
     const transitionEnd = new dom.window.Event("transitionend", { bubbles: true });
     Object.defineProperty(transitionEnd, "propertyName", { value: "transform" });
@@ -1356,12 +1362,13 @@ describe("lyrics responsive layout", () => {
   });
 
   it("uses the searching scene for the search-to-spectrum roll even when metadata is shown", async () => {
-    const [html, bridge, state, presentation, script] = await Promise.all([
+    const [html, bridge, state, presentation, script, style] = await Promise.all([
       read("TaskbarLyrics.App/Web/Lyrics/index.html"),
       read("TaskbarLyrics.App/Web/Lyrics/bridge.js"),
       read("TaskbarLyrics.App/Web/Lyrics/state.js"),
       read("TaskbarLyrics.App/Web/Lyrics/presentation.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/app.js")
+      read("TaskbarLyrics.App/Web/Lyrics/app.js"),
+      read("TaskbarLyrics.App/Web/Lyrics/style.css")
     ]);
     const searchingPrompt = "\u6b63\u5728\u68c0\u7d22\u6b4c\u8bcd...";
     const dom = new JSDOM(html
@@ -1399,7 +1406,7 @@ describe("lyrics responsive layout", () => {
       isPlaying: true,
       scene: "searching"
     });
-    receive({
+    const spectrumPayload = {
       current: "Pure music marker",
       next: "",
       progress: 0,
@@ -1408,15 +1415,28 @@ describe("lyrics responsive layout", () => {
       isPureMusic: true,
       isPlaying: true,
       scene: "spectrum"
-    });
+    };
+    receive(spectrumPayload);
 
     const layout = dom.window.document.querySelector("#layout");
+    const spectrumLayer = dom.window.document.querySelector("#spectrumLayer");
     expect(layout.classList.contains("spectrum-transitioning")).toBe(true);
+    expect(layout.classList.contains("spectrum-entry-active")).toBe(false);
+    expect(layout.style.getPropertyValue("--layer-transition-duration")).toBe("760ms");
+    expect(spectrumLayer.style.transform).toMatch(/^translateY\(\d+(?:\.\d+)?px\)$/);
+    expect(style).toMatch(/\.layout\.spectrum-transitioning \.lyrics-layer,\s*\.layout\.spectrum-transitioning \.spectrum-layer\s*\{\s*transition:\s*none/s);
     expect(dom.window.document.querySelector("#currentLineText").textContent).toBe("Song - Artist");
+    receive({ ...spectrumPayload, trackId: "latest-spectrum-frame" });
+    expect(pendingAnimationFrames).toHaveLength(1);
+    const startEntry = pendingAnimationFrames.shift();
+    expect(startEntry).toBeTypeOf("function");
+    startEntry(0);
+    expect(layout.classList.contains("spectrum-entry-active")).toBe(true);
+    expect(spectrumLayer.style.transform).toBe("");
     pendingAnimationFrames.splice(0).forEach(callback => callback(0));
   });
 
-  it("updates metadata when switching directly between searching tracks", async () => {
+  it("finishes a direct searching-track roll before applying a fast lyric result", async () => {
     const [html, bridge, state, presentation, script] = await Promise.all([
       read("TaskbarLyrics.App/Web/Lyrics/index.html"),
       read("TaskbarLyrics.App/Web/Lyrics/bridge.js"),
@@ -1433,7 +1453,11 @@ describe("lyrics responsive layout", () => {
       runScripts: "outside-only"
     });
     dom.window.CSS = { supports: () => true };
-    dom.window.requestAnimationFrame = () => 1;
+    const pendingAnimationFrames = [];
+    dom.window.requestAnimationFrame = callback => {
+      pendingAnimationFrames.push(callback);
+      return pendingAnimationFrames.length;
+    };
     dom.window.cancelAnimationFrame = () => {};
     dom.window.eval(bridge);
     dom.window.eval(state);
@@ -1459,9 +1483,109 @@ describe("lyrics responsive layout", () => {
     receive(searchPayload("track-b", "Song B - Artist B"));
 
     expect(dom.window.document.querySelector("#currentLineText").textContent)
+      .toBe("Song A - Artist A");
+    expect(dom.window.document.querySelector("#nextLineText").textContent)
+      .toBe("Song B - Artist B");
+
+    receive({
+      current: "Found lyric",
+      next: "Next lyric",
+      progress: 0.2,
+      currentLineIndex: 0,
+      trackId: "track-b",
+      isPureMusic: false,
+      isPlaying: true,
+      scene: "lyrics"
+    });
+    expect(dom.window.document.querySelector("#currentLineText").textContent)
+      .toBe("Song A - Artist A");
+    expect(dom.window.document.querySelector("#nextLineText").textContent)
+      .toBe("Song B - Artist B");
+
+    pendingAnimationFrames.shift()(0);
+    expect(dom.window.document.querySelector("#track").classList.contains("animating")).toBe(true);
+    const transitionEnd = new dom.window.Event("transitionend", { bubbles: true });
+    Object.defineProperty(transitionEnd, "propertyName", { value: "transform" });
+    dom.window.document.querySelector("#track").dispatchEvent(transitionEnd);
+
+    expect(dom.window.document.querySelector("#currentLineText").textContent)
       .toBe("Song B - Artist B");
     expect(dom.window.document.querySelector("#nextLineText").textContent)
-      .toBe(searchingPrompt);
+      .toBe("Found lyric");
+  });
+
+  it("finishes a direct searching-track roll before entering a fast spectrum result", async () => {
+    const [html, bridge, state, presentation, script] = await Promise.all([
+      read("TaskbarLyrics.App/Web/Lyrics/index.html"),
+      read("TaskbarLyrics.App/Web/Lyrics/bridge.js"),
+      read("TaskbarLyrics.App/Web/Lyrics/state.js"),
+      read("TaskbarLyrics.App/Web/Lyrics/presentation.js"),
+      read("TaskbarLyrics.App/Web/Lyrics/app.js")
+    ]);
+    const searchingPrompt = "\u6b63\u5728\u68c0\u7d22\u6b4c\u8bcd...";
+    const dom = new JSDOM(html
+      .replace("TaskbarLyrics started", searchingPrompt)
+      .replace("Waiting for lyrics...", " ")
+      .replace("{{STYLE_CSS}}", "")
+      .replace("{{APP_JS}}", ""), {
+      runScripts: "outside-only"
+    });
+    const pendingAnimationFrames = [];
+    dom.window.CSS = { supports: () => true };
+    dom.window.requestAnimationFrame = callback => {
+      pendingAnimationFrames.push(callback);
+      return pendingAnimationFrames.length;
+    };
+    dom.window.cancelAnimationFrame = () => {};
+    dom.window.eval(bridge);
+    dom.window.eval(state);
+    dom.window.eval(presentation);
+    dom.window.eval(script);
+
+    const receive = payload => dom.window.taskbarLyrics.receive({
+      version: 1,
+      type: "lyrics",
+      payload
+    });
+    const searchPayload = (trackId, current) => ({
+      current,
+      next: searchingPrompt,
+      progress: 0,
+      currentLineIndex: -1,
+      trackId,
+      isPureMusic: false,
+      isPlaying: true,
+      scene: "searching"
+    });
+    const layout = dom.window.document.querySelector("#layout");
+    const track = dom.window.document.querySelector("#track");
+    const currentLineText = dom.window.document.querySelector("#currentLineText");
+    const nextLineText = dom.window.document.querySelector("#nextLineText");
+
+    receive(searchPayload("track-a", "Song A - Artist A"));
+    receive(searchPayload("track-b", "Song B - Artist B"));
+    receive({
+      current: "Pure music",
+      next: "",
+      progress: 0,
+      currentLineIndex: -1,
+      trackId: "track-b",
+      isPureMusic: true,
+      isPlaying: true,
+      scene: "spectrum"
+    });
+
+    expect(layout.classList.contains("spectrum-transitioning")).toBe(false);
+    expect(currentLineText.textContent).toBe("Song A - Artist A");
+    expect(nextLineText.textContent).toBe("Song B - Artist B");
+
+    const transitionEnd = new dom.window.Event("transitionend", { bubbles: true });
+    Object.defineProperty(transitionEnd, "propertyName", { value: "transform" });
+    track.dispatchEvent(transitionEnd);
+
+    expect(currentLineText.textContent).toBe("Song B - Artist B");
+    expect(nextLineText.textContent).toBe(searchingPrompt);
+    expect(layout.classList.contains("spectrum-transitioning")).toBe(true);
   });
 
   it("exits a stable spectrum toward searching from below and clears exit styles on completion", async () => {
@@ -1516,6 +1640,20 @@ describe("lyrics responsive layout", () => {
     expect(layout.classList.contains("spectrum-mode")).toBe(true);
 
     receive({
+      current: "Song A - Artist A",
+      next: searchingPrompt,
+      progress: 0,
+      currentLineIndex: -1,
+      trackId: "track-a",
+      isPureMusic: false,
+      isPlaying: true,
+      scene: "searching"
+    });
+    expect(layout.classList.contains("spectrum-mode")).toBe(true);
+    expect(layout.classList.contains("spectrum-exiting")).toBe(false);
+    expect(currentLineText.textContent).not.toBe("Song A - Artist A");
+
+    receive({
       current: "Song B - Artist B",
       next: searchingPrompt,
       progress: 0,
@@ -1527,6 +1665,7 @@ describe("lyrics responsive layout", () => {
     });
     expect(layout.classList.contains("spectrum-mode")).toBe(true);
     expect(layout.classList.contains("spectrum-exiting")).toBe(true);
+    expect(layout.style.getPropertyValue("--layer-transition-duration")).toBe("760ms");
     expect(lyricsLayer.style.transform).toMatch(/^translateY\(\d+(?:\.\d+)?px\)$/);
     expect(spectrumLayer.style.transform).toBe("translateY(0)");
     expect(currentLineText.textContent).toBe("Song B - Artist B");
@@ -1550,7 +1689,7 @@ describe("lyrics responsive layout", () => {
     expect(track.classList.contains("animating")).toBe(false);
   });
 
-  it("keeps search metadata through spectrum exit before applying queued lyrics after dwell", async () => {
+  it("applies queued lyrics as soon as the spectrum exit completes", async () => {
     const [html, bridge, state, presentation, script] = await Promise.all([
       read("TaskbarLyrics.App/Web/Lyrics/index.html"),
       read("TaskbarLyrics.App/Web/Lyrics/bridge.js"),
@@ -1560,9 +1699,6 @@ describe("lyrics responsive layout", () => {
     ]);
     const searchingPrompt = "\u6b63\u5728\u68c0\u7d22\u6b4c\u8bcd...";
     const pendingAnimationFrames = [];
-    const timers = new Map();
-    let timerId = 0;
-    let now = 100;
     const dom = new JSDOM(html
       .replace("TaskbarLyrics started", searchingPrompt)
       .replace("Waiting for lyrics...", " ")
@@ -1576,16 +1712,6 @@ describe("lyrics responsive layout", () => {
       return pendingAnimationFrames.length;
     };
     dom.window.cancelAnimationFrame = () => {};
-    dom.window.setTimeout = (callback, delay) => {
-      const id = ++timerId;
-      timers.set(id, { callback, delay });
-      return id;
-    };
-    dom.window.clearTimeout = id => timers.delete(id);
-    Object.defineProperty(dom.window.performance, "now", {
-      configurable: true,
-      value: () => now
-    });
     dom.window.eval(bridge);
     dom.window.eval(state);
     dom.window.eval(presentation);
@@ -1627,7 +1753,6 @@ describe("lyrics responsive layout", () => {
     expect(currentLineText.textContent).toBe("Song B - Artist B");
     expect(nextLineText.textContent).toBe(searchingPrompt);
 
-    now = 200;
     receive({
       current: "Found lyric",
       next: "Next lyric",
@@ -1644,18 +1769,10 @@ describe("lyrics responsive layout", () => {
     const startExit = pendingAnimationFrames.shift();
     expect(startExit).toBeTypeOf("function");
     startExit(0);
-    now = 300;
     const spectrumTransitionEnd = new dom.window.Event("transitionend", { bubbles: true });
     Object.defineProperty(spectrumTransitionEnd, "propertyName", { value: "transform" });
     spectrumLayer.dispatchEvent(spectrumTransitionEnd);
     expect(layout.classList.contains("spectrum-mode")).toBe(false);
-    expect(currentLineText.textContent).toBe("Song B - Artist B");
-    expect(nextLineText.textContent).toBe(searchingPrompt);
-    const dwellTimer = [...timers.values()].find(timer => timer.delay === 900);
-    expect(dwellTimer).toBeDefined();
-
-    now = 1200;
-    dwellTimer.callback();
     expect(currentLineText.textContent).toBe("Song B - Artist B");
     expect(nextLineText.textContent).toBe("Found lyric");
     const lyricTransitionEnd = new dom.window.Event("transitionend", { bubbles: true });

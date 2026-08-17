@@ -21,12 +21,84 @@
     IMMEDIATE: "immediate"
   });
 
+  const TRANSITION_PRIMITIVES = Object.freeze({
+    PATCH: "patch",
+    REPLACE: "replace",
+    ROLL: "roll",
+    LAYER: "layer"
+  });
+
+  const TRANSITION_PRIMITIVE_BY_PLAN_KIND = Object.freeze({
+    [TRANSITIONS.PROGRESS_PATCH]: TRANSITION_PRIMITIVES.PATCH,
+    [TRANSITIONS.REPLACE_IN_PLACE]: TRANSITION_PRIMITIVES.REPLACE,
+    [TRANSITIONS.IMMEDIATE]: TRANSITION_PRIMITIVES.REPLACE,
+    [TRANSITIONS.SINGLE_ROLL]: TRANSITION_PRIMITIVES.ROLL,
+    [TRANSITIONS.TRANSLATION_PAIR_ROLL]: TRANSITION_PRIMITIVES.ROLL,
+    [TRANSITIONS.SEARCHING_TO_SPECTRUM_ROLL]: TRANSITION_PRIMITIVES.LAYER,
+    [TRANSITIONS.LAYER_SWITCH]: TRANSITION_PRIMITIVES.LAYER
+  });
+
+  const TRANSITION_HANDLER_NAMES = Object.freeze({
+    [TRANSITION_PRIMITIVES.PATCH]: "patchTransition",
+    [TRANSITION_PRIMITIVES.REPLACE]: "replaceTransition",
+    [TRANSITION_PRIMITIVES.ROLL]: "rollTransition",
+    [TRANSITION_PRIMITIVES.LAYER]: "layerTransition"
+  });
+
+  const TRANSLATION_PAIR_ROLL_DURATION_MS = 760;
   const DEFAULT_DURATION_MS = Object.freeze({
     singleRoll: 560,
-    translationPairRoll: 760,
-    searchingToSpectrumRoll: 520,
+    translationPairRoll: TRANSLATION_PAIR_ROLL_DURATION_MS,
+    searchingSpectrumRoll: TRANSLATION_PAIR_ROLL_DURATION_MS,
     layerSwitch: 300
   });
+
+  function resolveTransitionPrimitive(planKind) {
+    if (typeof planKind !== "string") {
+      throw new TypeError("Transition plan kind must be a string.");
+    }
+
+    if (!Object.prototype.hasOwnProperty.call(TRANSITION_PRIMITIVE_BY_PLAN_KIND, planKind)) {
+      throw new RangeError(`Unknown transition plan kind: ${planKind}`);
+    }
+
+    return TRANSITION_PRIMITIVE_BY_PLAN_KIND[planKind];
+  }
+
+  function requireTransitionHandler(handlers, primitive) {
+    const handlerName = TRANSITION_HANDLER_NAMES[primitive];
+    const handler = handlers[handlerName];
+    if (typeof handler !== "function") {
+      throw new TypeError(`Transition handler '${handlerName}' must be a function.`);
+    }
+
+    return handler;
+  }
+
+  class TransitionDispatcher {
+    constructor(handlers) {
+      if (!handlers || typeof handlers !== "object") {
+        throw new TypeError("Transition handlers must be an object.");
+      }
+
+      this.handlers = Object.freeze({
+        [TRANSITION_PRIMITIVES.PATCH]: requireTransitionHandler(handlers, TRANSITION_PRIMITIVES.PATCH),
+        [TRANSITION_PRIMITIVES.REPLACE]: requireTransitionHandler(handlers, TRANSITION_PRIMITIVES.REPLACE),
+        [TRANSITION_PRIMITIVES.ROLL]: requireTransitionHandler(handlers, TRANSITION_PRIMITIVES.ROLL),
+        [TRANSITION_PRIMITIVES.LAYER]: requireTransitionHandler(handlers, TRANSITION_PRIMITIVES.LAYER)
+      });
+    }
+
+    execute(plan, parameters) {
+      if (!plan || typeof plan !== "object") {
+        throw new TypeError("Transition plan must be an object.");
+      }
+
+      const primitive = resolveTransitionPrimitive(plan.kind);
+      const handler = this.handlers[primitive];
+      return handler(plan, parameters);
+    }
+  }
 
   function normalizeScene(scene, frame) {
     if (Object.values(SCENES).includes(scene)) {
@@ -125,18 +197,32 @@
             TRANSITIONS.SEARCHING_TO_SPECTRUM_ROLL,
             current,
             target,
-            DEFAULT_DURATION_MS.searchingToSpectrumRoll);
+            DEFAULT_DURATION_MS.searchingSpectrumRoll);
         }
 
         return makePlan(TRANSITIONS.LAYER_SWITCH, current, target, DEFAULT_DURATION_MS.layerSwitch);
       }
 
       if (current.scene === SCENES.SPECTRUM) {
-        return makePlan(TRANSITIONS.LAYER_SWITCH, current, target, DEFAULT_DURATION_MS.layerSwitch);
+        const durationMs = target.scene === SCENES.SEARCHING
+          ? DEFAULT_DURATION_MS.searchingSpectrumRoll
+          : DEFAULT_DURATION_MS.layerSwitch;
+        return makePlan(TRANSITIONS.LAYER_SWITCH, current, target, durationMs);
       }
 
       if (target.scene === SCENES.SEARCHING) {
         if (current.scene === SCENES.SEARCHING) {
+          const trackChanged = current.trackId.length > 0 &&
+            target.trackId.length > 0 &&
+            current.trackId !== target.trackId;
+          if (trackChanged) {
+            return makePlan(
+              TRANSITIONS.SINGLE_ROLL,
+              current,
+              target,
+              DEFAULT_DURATION_MS.singleRoll);
+          }
+
           const textChanged = current.current !== target.current ||
             current.next !== target.next ||
             current.currentTranslation !== target.currentTranslation ||
@@ -394,9 +480,12 @@
     SCENES,
     LAYOUTS,
     TRANSITIONS,
+    TRANSITION_PRIMITIVES,
     DEFAULT_DURATION_MS,
     clamp01,
     normalizeFrame,
+    resolveTransitionPrimitive,
+    TransitionDispatcher,
     PresentationPlanner,
     PresentationCoordinator
   };

@@ -54,16 +54,12 @@ const transitionDurationMs = 560;
 const translationPairTransitionDurationMs = 760;
 const currentLineRestOpacity = 0.98;
 const leavingLineOpacity = 0.16;
-const trackSwitchSearchMinVisibleMs = 900;
-const searchingToSpectrumTransitionDurationMs = 520;
 const coverSwapDelayMs = 180;
 const coverSwitchMinVisibleMs = 420;
 const horizontalScrollAnchorRatio = 0.65;
 const SEARCHING_TEXT = "\u6b63\u5728\u68c0\u7d22\u6b4c\u8bcd...";
 const LEGACY_SEARCHING_TEXT = "\u6b63\u5728\u5339\u914d\u6b4c\u8bcd...";
-let trackSwitchSearchStartedAt = 0;
-let delayedFrameTimer = 0;
-let spectrumEntryTimer = 0;
+let trackSwitchSearchTransitionActive = false;
 let spectrumExitState = null;
 let coverUpdateTimer = 0;
 let coverStateTimer = 0;
@@ -92,6 +88,17 @@ const lyricsTextAlignments = new Set(["Left", "Center", "Right"]);
 const presentationApi = window.taskbarLyricsPresentation;
 const presentationPlanner = new presentationApi.PresentationPlanner();
 const presentationCoordinator = new presentationApi.PresentationCoordinator(presentationPlanner);
+const transitionOperations = Object.freeze({
+  LYRICS_FRAME: "lyricsFrame",
+  SPECTRUM_ENTRY: "spectrumEntry",
+  SPECTRUM_EXIT: "spectrumExit"
+});
+const transitionDispatcher = new presentationApi.TransitionDispatcher({
+  patchTransition: executePatchTransition,
+  replaceTransition: executeReplaceTransition,
+  rollTransition: executeRollTransition,
+  layerTransition: executeLayerTransition
+});
 
 function clamp01(value) {
   const parsed = Number(value);
@@ -461,7 +468,8 @@ function createPresentationFrame({
 }
 
 function clearSpectrumTransitionStyles() {
-  layoutEl.classList.remove("spectrum-transitioning");
+  layoutEl.classList.remove("spectrum-transitioning", "spectrum-entry-active");
+  layoutEl.style.removeProperty("--layer-transition-duration");
   lyricsLayerEl?.style.removeProperty("opacity");
   lyricsLayerEl?.style.removeProperty("transform");
   spectrumLayerEl?.style.removeProperty("opacity");
@@ -470,15 +478,30 @@ function clearSpectrumTransitionStyles() {
 
 function clearSpectrumExitStyles() {
   layoutEl.classList.remove("spectrum-exiting", "spectrum-exit-active");
+  layoutEl.style.removeProperty("--layer-transition-duration");
   lyricsLayerEl?.style.removeProperty("opacity");
   lyricsLayerEl?.style.removeProperty("transform");
   spectrumLayerEl?.style.removeProperty("opacity");
   spectrumLayerEl?.style.removeProperty("transform");
 }
 
+function setLayerTransitionDuration(durationMs) {
+  const normalizedDuration = Math.max(0, Number(durationMs) || 0);
+  layoutEl.style.setProperty("--layer-transition-duration", `${normalizedDuration}ms`);
+}
+
 function isSpectrumExitTransitionActive() {
   return spectrumExitState !== null &&
     presentationCoordinator.activeTransition?.plan?.kind === presentationApi.TRANSITIONS.LAYER_SWITCH;
+}
+
+function shouldKeepSpectrumForSameTrackSearch(targetFrame) {
+  const currentFrame = presentationCoordinator.currentFrame;
+  return !isSpectrumExitTransitionActive() &&
+    currentFrame.scene === presentationApi.SCENES.SPECTRUM &&
+    targetFrame.scene === presentationApi.SCENES.SEARCHING &&
+    targetFrame.trackId.length > 0 &&
+    targetFrame.trackId === currentFrame.trackId;
 }
 
 function renderSpectrumExitTarget(frame) {
@@ -512,12 +535,10 @@ function applySpectrumExitImmediately(targetFrame) {
   spectrumExitState = null;
   clearSpectrumExitStyles();
   clearSpectrumTransitionStyles();
-  clearSpectrumEntryTimer();
   clearSpectrumBars();
   const normalized = presentationApi.normalizeFrame(targetFrame);
   renderLyricsFrameContent(normalized, false);
   setDisplayMode(false);
-  trackSwitchSearchStartedAt = 0;
   presentationCoordinator.setCurrentFrame(normalized);
 }
 
@@ -528,18 +549,17 @@ function completeSpectrumExitTransition(initialTargetFrame) {
   const finalFrame = pending?.frame || state?.latestFrame || initialTargetFrame;
   const normalizedFinal = presentationApi.normalizeFrame(finalFrame);
   const searchingFrame = state?.searchingFrame;
-  const shouldResumeSearchDwell = state?.sawSearching === true &&
+  const shouldResumeFromSearch = state?.sawSearching === true &&
     normalizedFinal.scene === presentationApi.SCENES.LYRICS &&
     searchingFrame;
 
-  if (shouldResumeSearchDwell) {
+  if (shouldResumeFromSearch) {
     renderLyricsFrameContent(searchingFrame, false);
     clearSpectrumExitStyles();
     clearSpectrumTransitionStyles();
     setDisplayMode(false);
     presentationCoordinator.setCurrentFrame(searchingFrame);
-    trackSwitchSearchStartedAt = window.performance.now();
-    applyFrameAfterSearchDwell({ targetFrame: normalizedFinal });
+    applyFrameAfterSearchTransition({ targetFrame: normalizedFinal });
     return;
   }
 
@@ -547,30 +567,19 @@ function completeSpectrumExitTransition(initialTargetFrame) {
   clearSpectrumExitStyles();
   clearSpectrumTransitionStyles();
   setDisplayMode(false);
-  trackSwitchSearchStartedAt = normalizedFinal.scene === presentationApi.SCENES.SEARCHING
-    ? window.performance.now()
-    : 0;
   presentationCoordinator.setCurrentFrame(normalizedFinal);
 }
 
-function startSpectrumExitTransition(targetFrame) {
+function startSpectrumExitTransition(targetFrame, plan) {
   const normalizedTarget = presentationApi.normalizeFrame(targetFrame);
   if (isSpectrumExitTransitionActive()) {
     queueSpectrumExitTarget(normalizedTarget);
     return;
   }
 
-  const plan = presentationPlanner.plan(
-    presentationCoordinator.currentFrame,
-    normalizedTarget,
-    { animateTransition: true });
-  if (prefersReducedMotion() || plan.kind !== presentationApi.TRANSITIONS.LAYER_SWITCH) {
-    applySpectrumExitImmediately(normalizedTarget);
-    return;
-  }
-
   clearSpectrumTransitionStyles();
   clearSpectrumExitStyles();
+  setLayerTransitionDuration(plan.durationMs);
   setDisplayMode(true);
   const preparedTarget = renderSpectrumExitTarget(normalizedTarget);
   spectrumExitState = {
@@ -638,7 +647,6 @@ function startSpectrumExitTransition(targetFrame) {
 
 function applySpectrumImmediately(targetFrame = null) {
   cancelActiveTransition();
-  trackSwitchSearchStartedAt = 0;
   spectrumExitState = null;
   clearSpectrumExitStyles();
   clearSpectrumTransitionStyles();
@@ -651,7 +659,13 @@ function applySpectrumImmediately(targetFrame = null) {
   });
 }
 
-function startSearchingToSpectrumTransition(targetFrame) {
+function startSearchingToSpectrumTransition(targetFrame, plan) {
+  if (presentationCoordinator.activeTransition?.plan?.kind ===
+      presentationApi.TRANSITIONS.SEARCHING_TO_SPECTRUM_ROLL) {
+    presentationCoordinator.queueLatest(targetFrame);
+    return;
+  }
+
   if (presentationCoordinator.currentFrame.scene !== presentationApi.SCENES.SEARCHING ||
       prefersReducedMotion()) {
     applySpectrumImmediately(targetFrame);
@@ -659,10 +673,6 @@ function startSearchingToSpectrumTransition(targetFrame) {
   }
 
   cancelActiveTransition();
-  const plan = presentationPlanner.plan(
-    presentationCoordinator.currentFrame,
-    targetFrame,
-    { animateTransition: true });
   let hasFinished = false;
   const finish = () => {
     if (hasFinished) {
@@ -674,10 +684,10 @@ function startSearchingToSpectrumTransition(targetFrame) {
   };
   const context = presentationCoordinator.beginTransition(plan, {
     complete: () => {
-      trackSwitchSearchStartedAt = 0;
+      const latestTarget = presentationCoordinator.takeLatest()?.frame || targetFrame;
       clearSpectrumTransitionStyles();
       setDisplayMode(true);
-      presentationCoordinator.setCurrentFrame(targetFrame);
+      presentationCoordinator.setCurrentFrame(latestTarget);
     }
   });
 
@@ -688,7 +698,9 @@ function startSearchingToSpectrumTransition(targetFrame) {
   });
 
   clearSpectrumTransitionStyles();
+  setLayerTransitionDuration(plan.durationMs);
   setDisplayMode(false);
+  layoutEl.classList.add("spectrum-transitioning");
   if (lyricsLayerEl) {
     lyricsLayerEl.style.opacity = "1";
     lyricsLayerEl.style.transform = "translateY(0)";
@@ -698,13 +710,13 @@ function startSearchingToSpectrumTransition(targetFrame) {
     spectrumLayerEl.style.transform = `translateY(${linePitchPx}px)`;
   }
   void layoutEl.offsetHeight;
-  layoutEl.classList.add("spectrum-transitioning");
   setDisplayMode(true);
   context.requestFrame(() => {
     if (!context.isCurrent()) {
       return;
     }
 
+    layoutEl.classList.add("spectrum-entry-active");
     lyricsLayerEl?.style.removeProperty("opacity");
     lyricsLayerEl?.style.removeProperty("transform");
     spectrumLayerEl?.style.removeProperty("opacity");
@@ -712,7 +724,7 @@ function startSearchingToSpectrumTransition(targetFrame) {
   });
   // The class transition provides the line-pitch roll; the fallback keeps
   // the layer switch deterministic when WebView2 omits transitionend.
-  context.scheduleFallback(finish, searchingToSpectrumTransitionDurationMs + 120);
+  context.scheduleFallback(finish, plan.durationMs + 120);
 }
 
 function ensureSpectrumBarCount(value) {
@@ -987,66 +999,112 @@ function scheduleFallbackCoverUpdate(text, fallbackColor, onApplied) {
   }, coverSwapDelayMs);
 }
 
-function clearDelayedFrameTimer() {
-  if (delayedFrameTimer) {
-    window.clearTimeout(delayedFrameTimer);
-    delayedFrameTimer = 0;
-  }
-}
-
-function clearSpectrumEntryTimer() {
-  if (spectrumEntryTimer) {
-    window.clearTimeout(spectrumEntryTimer);
-    spectrumEntryTimer = 0;
-  }
-}
-
 function resolveQueuedPresentationFrame(frame) {
   return presentationApi.normalizeFrame(frame?.targetFrame || frame);
 }
 
-function shouldHoldAfterSearch(frame) {
+function applyFrameAfterSearchTransition(frame) {
   const target = resolveQueuedPresentationFrame(frame);
-  return trackSwitchSearchStartedAt > 0 &&
-    presentationCoordinator.currentFrame.scene === presentationApi.SCENES.SEARCHING &&
-    target.scene === presentationApi.SCENES.LYRICS &&
-    Number.isInteger(target.currentLineIndex) &&
-    target.currentLineIndex >= 0;
+  applyFrame(
+    target.current,
+    target.next,
+    target.progress,
+    target.currentLineIndex,
+    target.wordScanProgress,
+    target.currentTranslation,
+    target.nextTranslation,
+    target.translationMode,
+    target);
 }
 
-function applyFrameAfterSearchDwell(frame) {
-  const target = resolveQueuedPresentationFrame(frame);
-  clearDelayedFrameTimer();
-  if (!shouldHoldAfterSearch(frame)) {
-    applyFrame(
-      target.current,
-      target.next,
-      target.progress,
-      target.currentLineIndex,
-      target.wordScanProgress,
-      target.currentTranslation,
-      target.nextTranslation,
-      target.translationMode,
-      target);
+function applyPendingPresentation(pending) {
+  if (pending?.options?.presentation === "spectrum") {
+    presentSpectrumFrame(
+      pending.frame,
+      pending.options.isPlaying,
+      pending.options.animateTransition);
     return;
   }
 
-  const elapsed = window.performance.now() - trackSwitchSearchStartedAt;
-  const delay = Math.max(0, trackSwitchSearchMinVisibleMs - elapsed);
-  delayedFrameTimer = window.setTimeout(() => {
-    delayedFrameTimer = 0;
-    trackSwitchSearchStartedAt = 0;
-    applyFrame(
-      target.current,
-      target.next,
-      target.progress,
-      target.currentLineIndex,
-      target.wordScanProgress,
-      target.currentTranslation,
-      target.nextTranslation,
-      target.translationMode,
-      target);
-  }, delay);
+  applyFrameAfterSearchTransition(pending?.frame);
+}
+
+function unsupportedTransitionOperation(primitive, operation) {
+  throw new RangeError(`Unsupported ${primitive} operation: ${String(operation)}`);
+}
+
+function executePatchTransition(_plan, parameters) {
+  if (parameters?.operation !== transitionOperations.LYRICS_FRAME) {
+    unsupportedTransitionOperation("patchTransition", parameters?.operation);
+  }
+
+  applyProgressPatch(parameters.frame);
+}
+
+function executeReplaceTransition(_plan, parameters) {
+  const frame = parameters?.frame;
+  switch (parameters?.operation) {
+    case transitionOperations.LYRICS_FRAME:
+      applyFrameWithoutTransition(
+        frame.current,
+        frame.next,
+        frame.progress,
+        frame.currentLineIndex,
+        frame.wordScanProgress,
+        frame.currentTranslation,
+        frame.nextTranslation,
+        frame.translationMode,
+        frame);
+      return;
+    case transitionOperations.SPECTRUM_ENTRY:
+      applySpectrumFrame(frame, parameters.isPlaying);
+      return;
+    case transitionOperations.SPECTRUM_EXIT:
+      applySpectrumExitImmediately(frame);
+      return;
+    default:
+      unsupportedTransitionOperation("replaceTransition", parameters?.operation);
+  }
+}
+
+function executeRollTransition(_plan, parameters) {
+  if (parameters?.operation !== transitionOperations.LYRICS_FRAME) {
+    unsupportedTransitionOperation("rollTransition", parameters?.operation);
+  }
+
+  const frame = parameters.frame;
+  startTransition(
+    frame.current,
+    frame.next,
+    frame.progress,
+    frame.currentLineIndex,
+    frame.wordScanProgress,
+    frame.currentTranslation,
+    frame.nextTranslation,
+    frame.layout === presentationApi.LAYOUTS.TRANSLATION_PAIR,
+    frame);
+}
+
+function executeLayerTransition(plan, parameters) {
+  const frame = parameters?.frame;
+  switch (parameters?.operation) {
+    case transitionOperations.SPECTRUM_ENTRY:
+      if (plan.kind === presentationApi.TRANSITIONS.SEARCHING_TO_SPECTRUM_ROLL) {
+        startSearchingToSpectrumTransition(frame, plan);
+        if (parameters.isPlaying === false) {
+          setAudioDrivenSpectrum(spectrumSilence);
+        }
+      } else {
+        // Preserve the existing ordinary lyrics/message-to-spectrum behavior.
+        applySpectrumFrame(frame, parameters.isPlaying);
+      }
+      return;
+    case transitionOperations.SPECTRUM_EXIT:
+      startSpectrumExitTransition(frame, plan);
+      return;
+    default:
+      unsupportedTransitionOperation("layerTransition", parameters?.operation);
+  }
 }
 
 function applyFrameWithoutTransition(
@@ -1069,9 +1127,6 @@ function applyFrameWithoutTransition(
     translationMode
   });
   cancelActiveTransition();
-  if (resolvedTargetFrame.scene !== presentationApi.SCENES.SEARCHING) {
-    trackSwitchSearchStartedAt = 0;
-  }
   renderLyricsFrame(resolvedTargetFrame, false);
 }
 
@@ -1129,10 +1184,10 @@ function applyProgressPatch(frame) {
 function cancelActiveTransition() {
   const wasSpectrumExit = isSpectrumExitTransitionActive();
   presentationCoordinator.cancelTransition();
+  trackSwitchSearchTransitionActive = false;
   if (wasSpectrumExit) {
     spectrumExitState = null;
   }
-  clearDelayedFrameTimer();
   stopTransitionOpacityAnimation();
   presentationCoordinator.takeLatest();
   clearSpectrumExitStyles();
@@ -1175,7 +1230,6 @@ function resetForTrackSwitch(
   lastTrackId = trackId;
   lastCurrentLineIndex = -1;
   lastLineProgress = 0;
-  trackSwitchSearchStartedAt = window.performance.now();
   setCoverLoadingState(true);
 
   const target = presentationApi.normalizeFrame(targetFrame || {
@@ -1205,6 +1259,7 @@ function resetForTrackSwitch(
     presentationApi.SCENES.SEARCHING;
 
   if (!currentIsSearching) {
+    trackSwitchSearchTransitionActive = true;
     applyFrame(
       searchFrame.current,
       searchFrame.next,
@@ -1215,8 +1270,9 @@ function resetForTrackSwitch(
       "",
       false,
       searchFrame);
+    trackSwitchSearchTransitionActive = presentationCoordinator.isTransitioning;
     if (hasLyricFrame) {
-      applyFrameAfterSearchDwell({
+      applyFrameAfterSearchTransition({
         current: safeCurrent,
         next: safeNext,
         progress,
@@ -1231,6 +1287,7 @@ function resetForTrackSwitch(
   } else if (target.scene === presentationApi.SCENES.SEARCHING) {
     // A fast switch between tracks can keep the searching scene active. Apply
     // the new metadata frame so the previous track's title cannot linger.
+    trackSwitchSearchTransitionActive = true;
     applyFrame(
       searchFrame.current,
       searchFrame.next,
@@ -1241,12 +1298,13 @@ function resetForTrackSwitch(
       searchFrame.nextTranslation,
       searchFrame.translationMode,
       searchFrame);
+    trackSwitchSearchTransitionActive = presentationCoordinator.isTransitioning;
   } else {
     presentationCoordinator.setCurrentFrame(searchFrame);
     setSecondaryLine(" ");
     updateSecondaryOpacity(0);
     if (hasLyricFrame) {
-      applyFrameAfterSearchDwell({
+      applyFrameAfterSearchTransition({
         current: safeCurrent,
         next: safeNext,
         progress,
@@ -1317,52 +1375,10 @@ function applyFrame(
     resolvedTargetFrame,
     { animateTransition: true });
   const normalized = presentationApi.normalizeFrame(resolvedTargetFrame);
-  const useTranslationPair = normalized.layout === presentationApi.LAYOUTS.TRANSLATION_PAIR;
-
-  switch (plan.kind) {
-    case presentationApi.TRANSITIONS.PROGRESS_PATCH:
-      applyProgressPatch(normalized);
-      return;
-    case presentationApi.TRANSITIONS.SINGLE_ROLL:
-      startTransition(
-        normalized.current,
-        normalized.next,
-        normalized.progress,
-        normalized.currentLineIndex,
-        normalized.wordScanProgress,
-        normalized.currentTranslation,
-        normalized.nextTranslation,
-        false,
-        normalized);
-      return;
-    case presentationApi.TRANSITIONS.TRANSLATION_PAIR_ROLL:
-      startTransition(
-        normalized.current,
-        normalized.next,
-        normalized.progress,
-        normalized.currentLineIndex,
-        normalized.wordScanProgress,
-        normalized.currentTranslation,
-        normalized.nextTranslation,
-        true,
-        normalized);
-      return;
-    case presentationApi.TRANSITIONS.REPLACE_IN_PLACE:
-    case presentationApi.TRANSITIONS.LAYER_SWITCH:
-    case presentationApi.TRANSITIONS.IMMEDIATE:
-    default:
-      applyFrameWithoutTransition(
-        normalized.current,
-        normalized.next,
-        normalized.progress,
-        normalized.currentLineIndex,
-        normalized.wordScanProgress,
-        normalized.currentTranslation,
-        normalized.nextTranslation,
-        useTranslationPair,
-        normalized);
-      return;
-  }
+  transitionDispatcher.execute(plan, {
+    operation: transitionOperations.LYRICS_FRAME,
+    frame: normalized
+  });
 }
 
 function updateMetrics() {
@@ -1399,6 +1415,7 @@ function finalizeTransition(
   wordScanProgress = null,
   targetFrame = null) {
   const incomingEndOpacity = Number.parseFloat(window.getComputedStyle(incomingLineEl).opacity || "0.72");
+  trackSwitchSearchTransitionActive = false;
 
   // Freeze transitions while swapping layers to avoid visible "grow then shrink" rebound.
   trackEl.classList.add("no-anim");
@@ -1448,8 +1465,7 @@ function finalizeTransition(
 
   const pending = presentationCoordinator.takeLatest();
   if (pending) {
-    const frame = pending.frame;
-    applyFrameAfterSearchDwell(frame);
+    applyPendingPresentation(pending);
   }
 }
 
@@ -1539,8 +1555,7 @@ function finalizeTranslationPairTransition(
 
   const pending = presentationCoordinator.takeLatest();
   if (pending) {
-    const frame = pending.frame;
-    applyFrameAfterSearchDwell(frame);
+    applyPendingPresentation(pending);
   }
 }
 
@@ -1717,7 +1732,6 @@ function applySpectrumFrame(targetFrame, isPlaying) {
   spectrumExitState = null;
   clearSpectrumExitStyles();
   setTranslationMode(false);
-  trackSwitchSearchStartedAt = 0;
   clearSpectrumTransitionStyles();
   setWordScanProgress(null, false);
   setSecondaryLine(" ");
@@ -1743,6 +1757,15 @@ function cancelSpectrumPresentationIfActive() {
 }
 
 function presentSpectrumFrame(targetFrame, isPlaying, animateTransition) {
+  if (trackSwitchSearchTransitionActive && presentationCoordinator.isTransitioning) {
+    presentationCoordinator.queueLatest(targetFrame, {
+      presentation: "spectrum",
+      isPlaying,
+      animateTransition
+    });
+    return;
+  }
+
   if (!isSpectrumMode) {
     clearSpectrumBars();
   }
@@ -1753,39 +1776,12 @@ function presentSpectrumFrame(targetFrame, isPlaying, animateTransition) {
       animateTransition,
       reducedMotion: prefersReducedMotion()
     });
-  if (plan.kind !== presentationApi.TRANSITIONS.SEARCHING_TO_SPECTRUM_ROLL) {
-    applySpectrumFrame(targetFrame, isPlaying);
-    return;
-  }
-
-  // A confirmed spectrum target supersedes any lyric result waiting on the
-  // track-search dwell; keep the two pending-entry timers independent.
-  clearDelayedFrameTimer();
-
-  const showSpectrum = () => {
-    spectrumEntryTimer = 0;
-    if (presentationCoordinator.currentFrame.scene !== presentationApi.SCENES.SEARCHING) {
-      applySpectrumFrame(targetFrame, isPlaying);
-      return;
-    }
-
-    startSearchingToSpectrumTransition(targetFrame);
-    if (isPlaying === false) {
-      setAudioDrivenSpectrum(spectrumSilence);
-    }
-  };
-
-  if (trackSwitchSearchStartedAt > 0) {
-    const elapsed = Math.max(0, window.performance.now() - trackSwitchSearchStartedAt);
-    const delay = Math.max(0, trackSwitchSearchMinVisibleMs - elapsed);
-    if (delay > 0) {
-      clearSpectrumEntryTimer();
-      spectrumEntryTimer = window.setTimeout(showSpectrum, delay);
-      return;
-    }
-  }
-
-  showSpectrum();
+  transitionDispatcher.execute(plan, {
+    operation: transitionOperations.SPECTRUM_ENTRY,
+    frame: targetFrame,
+    isPlaying,
+    animateTransition
+  });
 }
 
 function updateResponsiveLayout() {
@@ -1869,32 +1865,41 @@ const lyricsApi = {
       return;
     }
 
+    if (shouldKeepSpectrumForSameTrackSearch(targetFrame)) {
+      return;
+    }
+
     if (presentationCoordinator.currentFrame.scene === presentationApi.SCENES.SPECTRUM ||
         isSpectrumExitTransitionActive()) {
-      if (animateTransition === false || prefersReducedMotion()) {
-        applySpectrumExitImmediately(targetFrame);
-      } else {
-        startSpectrumExitTransition(targetFrame);
-      }
+      const plan = presentationPlanner.plan(
+        presentationCoordinator.currentFrame,
+        targetFrame,
+        {
+          animateTransition,
+          reducedMotion: prefersReducedMotion()
+        });
+      transitionDispatcher.execute(plan, {
+        operation: transitionOperations.SPECTRUM_EXIT,
+        frame: targetFrame,
+        isPlaying,
+        animateTransition
+      });
       return;
     }
 
     cancelSpectrumPresentationIfActive();
     setDisplayMode(false);
-    clearSpectrumEntryTimer();
     clearSpectrumBars();
 
     if (animateTransition === false) {
-      applyFrameWithoutTransition(
-        safeCurrent,
-        safeNext,
-        p,
-        lineIndex,
-        wordScanProgress,
-        safeCurrentTranslation,
-        safeNextTranslation,
-        useTranslationPair,
-        targetFrame);
+      const plan = presentationPlanner.plan(
+        presentationCoordinator.currentFrame,
+        targetFrame,
+        { animateTransition: false });
+      transitionDispatcher.execute(plan, {
+        operation: transitionOperations.LYRICS_FRAME,
+        frame: targetFrame
+      });
       return;
     }
 
@@ -1915,21 +1920,6 @@ const lyricsApi = {
 
     if (normalizedTrackId.length > 0) {
       lastTrackId = normalizedTrackId;
-    }
-
-    if (shouldHoldAfterSearch(targetFrame)) {
-      applyFrameAfterSearchDwell({
-        current: safeCurrent,
-        next: safeNext,
-        progress: p,
-        currentLineIndex: lineIndex,
-        wordScanProgress,
-        currentTranslation: safeCurrentTranslation,
-        nextTranslation: safeNextTranslation,
-        translationMode: useTranslationPair,
-        targetFrame
-      });
-      return;
     }
 
     applyFrame(

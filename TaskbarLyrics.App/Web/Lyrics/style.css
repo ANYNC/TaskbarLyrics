@@ -177,8 +177,8 @@ html, body {
   min-width: 0;
   overflow: hidden;
   transition:
-    opacity 300ms cubic-bezier(0.2, 0.9, 0.1, 1),
-    transform 300ms cubic-bezier(0.2, 0.9, 0.1, 1);
+    opacity var(--layer-transition-duration, 300ms) cubic-bezier(0.2, 0.9, 0.1, 1),
+    transform var(--layer-transition-duration, 300ms) cubic-bezier(0.2, 0.9, 0.1, 1);
   will-change: opacity, transform;
 }
 
@@ -227,22 +227,28 @@ html, body {
   opacity: 1;
   transform: translateY(0);
   transition:
-    opacity 300ms cubic-bezier(0.2, 0.9, 0.1, 1),
-    transform 300ms cubic-bezier(0.2, 0.9, 0.1, 1);
+    opacity var(--layer-transition-duration, 300ms) cubic-bezier(0.2, 0.9, 0.1, 1),
+    transform var(--layer-transition-duration, 300ms) cubic-bezier(0.2, 0.9, 0.1, 1);
 }
 
 .layout.spectrum-mode.spectrum-exiting.spectrum-exit-active .spectrum-layer {
   opacity: 0;
   transform: translateY(calc(-1 * var(--line-pitch)));
   transition:
-    opacity 300ms cubic-bezier(0.2, 0.9, 0.1, 1),
-    transform 300ms cubic-bezier(0.2, 0.9, 0.1, 1);
+    opacity var(--layer-transition-duration, 300ms) cubic-bezier(0.2, 0.9, 0.1, 1),
+    transform var(--layer-transition-duration, 300ms) cubic-bezier(0.2, 0.9, 0.1, 1);
 }
 
 .layout.spectrum-transitioning .lyrics-layer,
 .layout.spectrum-transitioning .spectrum-layer {
-  transition-duration: 520ms;
-  transition-timing-function: cubic-bezier(0.22, 0.72, 0.24, 1);
+  transition: none;
+}
+
+.layout.spectrum-transitioning.spectrum-entry-active .lyrics-layer,
+.layout.spectrum-transitioning.spectrum-entry-active .spectrum-layer {
+  transition:
+    opacity var(--layer-transition-duration, 300ms) cubic-bezier(0.22, 0.72, 0.24, 1),
+    transform var(--layer-transition-duration, 300ms) cubic-bezier(0.22, 0.72, 0.24, 1);
 }
 
 .layout.spectrum-transitioning .lyrics-layer {
