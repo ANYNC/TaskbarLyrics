@@ -59,7 +59,10 @@ Assert-Condition ($restartScriptSource -match '\$process\.CloseMainWindow\(\)') 
 Assert-Condition ($restartScriptSource -match 'Timed out after') 'Startup timeout failure is not explicit.'
 Assert-Condition ($restartScriptSource -match "Start-Process") 'NoWait does not launch dotnet in the background.'
 Assert-Condition ($restartScriptSource -match "-FilePath 'dotnet'") 'NoWait launch executable changed.'
-Assert-Condition ($restartScriptSource -match "-ArgumentList @\('run', '--project', 'TaskbarLyrics\.App'\)") 'NoWait launch arguments changed.'
+Assert-Condition ($restartScriptSource -match "-ArgumentList @\('run', '--project', 'TaskbarLyrics\.App', '--no-build', '--no-restore'\)") 'NoWait launch arguments do not prevent an implicit restore.'
+Assert-Condition ($restartScriptSource -match '-RedirectStandardOutput \$standardOutputPath') 'NoWait does not capture launcher standard output.'
+Assert-Condition ($restartScriptSource -match '-RedirectStandardError \$standardErrorPath') 'NoWait does not capture launcher standard error.'
+Assert-Condition ($restartScriptSource -match '& dotnet build \$solutionPath --no-restore') 'Restart does not build the solution from restored dependencies.'
 Assert-Condition ($restartScriptSource -notmatch 'Get-Process\s+[*?]') 'Process discovery uses a wildcard instead of an exact name.'
 
 Assert-Condition ((Resolve-RestartMode) -eq 'Foreground') 'The no-argument mode changed.'
@@ -72,8 +75,22 @@ try {
     $script:StartupTimeoutSeconds = 0
     $script:fakeLaunchCalled = $false
     $timeoutMessage = & {
+        function Get-TaskbarLyricsProcesses { return @() }
         function Start-Process {
+            param(
+                $FilePath,
+                $ArgumentList,
+                $WorkingDirectory,
+                $WindowStyle,
+                $RedirectStandardOutput,
+                $RedirectStandardError,
+                [switch]$PassThru
+            )
+
             $script:fakeLaunchCalled = $true
+            $script:fakeLaunchArguments = $ArgumentList
+            $script:fakeStandardOutputPath = $RedirectStandardOutput
+            $script:fakeStandardErrorPath = $RedirectStandardError
             return [pscustomobject]@{
                 HasExited = $false
                 ExitCode = 0
@@ -90,11 +107,30 @@ try {
     }
     Assert-Condition $script:fakeLaunchCalled 'Startup timeout test did not use its side-effect-free launcher.'
     Assert-Condition ($timeoutMessage -match 'Timed out after 0 seconds') 'Startup timeout did not produce a clear failure.'
+    Assert-Condition ($script:fakeLaunchArguments -contains '--no-build') 'Background launch did not disable rebuilding.'
+    Assert-Condition ($script:fakeLaunchArguments -contains '--no-restore') 'Background launch did not disable restoring.'
+    Assert-Condition (-not [string]::IsNullOrWhiteSpace($script:fakeStandardOutputPath)) 'Background launch did not assign a standard-output log.'
+    Assert-Condition (-not [string]::IsNullOrWhiteSpace($script:fakeStandardErrorPath)) 'Background launch did not assign a standard-error log.'
+    Assert-Condition ($timeoutMessage -match 'Launcher logs:') 'Startup timeout did not identify its launcher logs.'
 }
 finally {
     $script:StartupTimeoutSeconds = $savedStartupTimeoutSeconds
     Remove-Variable -Name fakeLaunchCalled -Scope Script -ErrorAction SilentlyContinue
+    Remove-Variable -Name fakeLaunchArguments -Scope Script -ErrorAction SilentlyContinue
+    Remove-Variable -Name fakeStandardOutputPath -Scope Script -ErrorAction SilentlyContinue
+    Remove-Variable -Name fakeStandardErrorPath -Scope Script -ErrorAction SilentlyContinue
 }
+
+$failureLogDirectory = Join-Path (Split-Path -Parent $PSScriptRoot) 'tmp\restart-logs'
+$null = New-Item -ItemType Directory -Path $failureLogDirectory -Force
+$failureOutputPath = Join-Path $failureLogDirectory 'test-launcher.stdout.log'
+$failureErrorPath = Join-Path $failureLogDirectory 'test-launcher.stderr.log'
+Set-Content -LiteralPath $failureErrorPath -Value 'simulated launcher failure'
+$failureDetails = Get-LauncherFailureDetails `
+    -StandardOutputPath $failureOutputPath `
+    -StandardErrorPath $failureErrorPath
+Assert-Condition ($failureDetails -match 'simulated launcher failure') 'Launcher failure details omitted standard error.'
+Assert-Condition ($failureDetails -match [regex]::Escape($failureErrorPath)) 'Launcher failure details omitted the log path.'
 
 $exactProcess = [pscustomobject]@{ ProcessName = 'TaskbarLyrics.App'; Id = 101 }
 $secondExactProcess = [pscustomobject]@{ ProcessName = 'TaskbarLyrics.App'; Id = 102 }

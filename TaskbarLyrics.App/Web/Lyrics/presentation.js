@@ -3,6 +3,7 @@
     SEARCHING: "searching",
     LYRICS: "lyrics",
     SPECTRUM: "spectrum",
+    NO_PLAYBACK: "noPlayback",
     MESSAGE: "message"
   });
 
@@ -17,6 +18,7 @@
     SINGLE_ROLL: "singleRoll",
     TRANSLATION_PAIR_ROLL: "translationPairRoll",
     SEARCHING_TO_SPECTRUM_ROLL: "searchingToSpectrumRoll",
+    NO_PLAYBACK_TO_SPECTRUM_ROLL: "noPlaybackToSpectrumRoll",
     LAYER_SWITCH: "layerSwitch",
     IMMEDIATE: "immediate"
   });
@@ -35,6 +37,7 @@
     [TRANSITIONS.SINGLE_ROLL]: TRANSITION_PRIMITIVES.ROLL,
     [TRANSITIONS.TRANSLATION_PAIR_ROLL]: TRANSITION_PRIMITIVES.ROLL,
     [TRANSITIONS.SEARCHING_TO_SPECTRUM_ROLL]: TRANSITION_PRIMITIVES.LAYER,
+    [TRANSITIONS.NO_PLAYBACK_TO_SPECTRUM_ROLL]: TRANSITION_PRIMITIVES.LAYER,
     [TRANSITIONS.LAYER_SWITCH]: TRANSITION_PRIMITIVES.LAYER
   });
 
@@ -200,6 +203,14 @@
             DEFAULT_DURATION_MS.searchingSpectrumRoll);
         }
 
+        if (current.scene === SCENES.NO_PLAYBACK) {
+          return makePlan(
+            TRANSITIONS.NO_PLAYBACK_TO_SPECTRUM_ROLL,
+            current,
+            target,
+            DEFAULT_DURATION_MS.searchingSpectrumRoll);
+        }
+
         return makePlan(TRANSITIONS.LAYER_SWITCH, current, target, DEFAULT_DURATION_MS.layerSwitch);
       }
 
@@ -267,7 +278,8 @@
             : DEFAULT_DURATION_MS.singleRoll);
       }
 
-      if (target.scene === SCENES.LYRICS && current.scene === SCENES.SEARCHING) {
+      if (target.scene === SCENES.LYRICS &&
+          (current.scene === SCENES.SEARCHING || current.scene === SCENES.NO_PLAYBACK)) {
         const isTranslationPair = target.layout === LAYOUTS.TRANSLATION_PAIR;
         return makePlan(
           isTranslationPair
@@ -280,8 +292,8 @@
             : DEFAULT_DURATION_MS.singleRoll);
       }
 
-      if (target.scene === SCENES.MESSAGE) {
-        const textChanged = current.scene !== SCENES.MESSAGE ||
+      if (target.scene === SCENES.MESSAGE || target.scene === SCENES.NO_PLAYBACK) {
+        const textChanged = current.scene !== target.scene ||
           current.current !== target.current ||
           current.next !== target.next ||
           current.currentTranslation !== target.currentTranslation ||

@@ -43,7 +43,8 @@ internal static class PlaybackInputPolicy
 internal readonly record struct LyricsContentVisibilityTransition(
     bool IsVisible,
     int? CountdownSecondsRemaining,
-    bool PresentationChanged);
+    bool PresentationChanged,
+    bool EnteredNoPlayback);
 
 internal sealed class LyricsContentVisibilityStateMachine
 {
@@ -97,6 +98,7 @@ internal sealed class LyricsContentVisibilityStateMachine
         DateTimeOffset nowUtc)
     {
         var previous = CreatePresentationKey();
+        var enteredNoPlayback = inputKind == PlaybackInputKind.NoPlayback && !IsConfirmedNoPlayback;
         var isFirstPlaybackSnapshot = !_hasReceivedPlaybackSnapshot;
         _hasReceivedPlaybackSnapshot = true;
         _lastPlaybackInputWasValid = inputKind == PlaybackInputKind.ValidTrack;
@@ -129,7 +131,7 @@ internal sealed class LyricsContentVisibilityStateMachine
             }
         }
 
-        return CreateTransition(previous, isFirstPlaybackSnapshot);
+        return CreateTransition(previous, isFirstPlaybackSnapshot, enteredNoPlayback);
     }
 
     private void StartCountdown(DateTimeOffset nowUtc)
@@ -162,7 +164,8 @@ internal sealed class LyricsContentVisibilityStateMachine
 
     private LyricsContentVisibilityTransition CreateTransition(
         (bool IsVisible, int? CountdownSecondsRemaining) previous,
-        bool forcePresentationChange = false)
+        bool forcePresentationChange = false,
+        bool enteredNoPlayback = false)
     {
         var presentationChanged =
             forcePresentationChange ||
@@ -171,7 +174,8 @@ internal sealed class LyricsContentVisibilityStateMachine
         return new LyricsContentVisibilityTransition(
             _isVisible,
             _countdownSecondsRemaining,
-            presentationChanged);
+            presentationChanged,
+            enteredNoPlayback);
     }
 }
 

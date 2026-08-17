@@ -531,18 +531,21 @@ html, body {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .lyrics-layer,
+  .spectrum-layer,
   .layout.spectrum-mode.spectrum-exiting.spectrum-exit-active .lyrics-layer,
   .layout.spectrum-mode.spectrum-exiting.spectrum-exit-active .spectrum-layer,
   .layout.spectrum-transitioning .lyrics-layer,
   .layout.spectrum-transitioning .spectrum-layer {
     transition: none;
+    will-change: auto;
   }
 
   .line.word-scan-smoothing {
     transition: none;
   }
 
-  .track.animating.translation-pair-animating {
+  .track.animating {
     transition: none;
     will-change: auto;
   }

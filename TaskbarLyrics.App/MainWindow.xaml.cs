@@ -82,6 +82,7 @@ public partial class MainWindow : Window, IDisposable
     private AppSettings _currentSettings = new();
     private TrackInfo? _currentTrack;
     private readonly LyricsContentVisibilityStateMachine _lyricsContentVisibilityState = new();
+    private readonly PlaybackSnapshotStabilityGate _playbackSnapshotStabilityGate = new();
     private bool _hasAppliedSettings;
     private bool _isLyricsContentVisible = true;
     private bool _hasReportedWebViewControllerMonitoringFailure;
@@ -481,6 +482,30 @@ public partial class MainWindow : Window, IDisposable
 
             var snapshot = await _musicSessionProvider.GetCurrentAsync();
             var inputKind = PlaybackInputPolicy.Classify(snapshot);
+            var previousStabilityState = _playbackSnapshotStabilityGate.State;
+            var gateDecision = _playbackSnapshotStabilityGate.Observe(
+                snapshot,
+                inputKind,
+                DateTimeOffset.UtcNow);
+            var currentStabilityState = _playbackSnapshotStabilityGate.State;
+            if (previousStabilityState != currentStabilityState ||
+                gateDecision.Reason == PlaybackSnapshotGateReason.WeakMetadataChangeReplaced)
+            {
+                Log.Diagnostic(
+                    "PLAYBACK-STABILITY",
+                    $"PreviousState={previousStabilityState}; " +
+                    $"CurrentState={currentStabilityState}; " +
+                    $"Action={gateDecision.Action}; " +
+                    $"Reason={gateDecision.Reason}");
+            }
+
+            if (gateDecision.Action == PlaybackSnapshotGateAction.Hold)
+            {
+                return;
+            }
+
+            snapshot = gateDecision.Snapshot;
+            inputKind = PlaybackInputPolicy.Classify(snapshot);
             _currentTrack = inputKind == PlaybackInputKind.ValidTrack
                 ? snapshot.Track
                 : null;
@@ -504,7 +529,7 @@ public partial class MainWindow : Window, IDisposable
                 if (visibilityTransition.PresentationChanged)
                 {
                     ApplyNoPlaybackPresentation(visibilityTransition);
-                    PushCurrentLyricsToWebView(animateTransition: false);
+                    PushCurrentLyricsToWebView(visibilityTransition.EnteredNoPlayback);
                 }
 
                 return;
@@ -1698,7 +1723,7 @@ public partial class MainWindow : Window, IDisposable
         _lastWebTrackId = string.Empty;
         _isCurrentFramePureMusic = false;
         _isCurrentPlaybackPlaying = false;
-        _lyricsPresentationScene = LyricsPresentationScene.Message;
+        _lyricsPresentationScene = LyricsPresentationScene.NoPlayback;
         UpdateSpectrumCaptureState();
 
         if (_musicSessionProvider is SmtcMusicSessionProvider smtcProvider)

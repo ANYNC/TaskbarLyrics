@@ -403,7 +403,7 @@ describe("lyrics responsive layout", () => {
     expect(translationPairRule).toContain("display: none");
     expect(translationPairRule).not.toMatch(/\b(?:position|opacity|transform|transition)\s*:/);
     expect(style).not.toMatch(/^\.incoming-translation-pair\.entering\s*\{/m);
-    expect(style).toMatch(/@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*\.track\.animating\.translation-pair-animating[\s\S]*transition:\s*none/s);
+    expect(style).toMatch(/@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*\.track\.animating\s*\{[^}]*transition:\s*none/s);
 
     const receive = (
       current,
@@ -511,23 +511,13 @@ describe("lyrics responsive layout", () => {
 
     prefersReducedMotion = true;
     receive("Line three", "Line four", 2, 0.2, "", "译四", true);
-    expect(incomingPair.classList.contains("preparing")).toBe(true);
-    expect(incomingTranslationText.textContent).toBe("…");
-    expect(incomingTranslationLine.classList.contains("translation-placeholder")).toBe(true);
-    const reducedMotionStart = pendingAnimationFrames.shift();
-    expect(reducedMotionStart).toBeTypeOf("function");
-    reducedMotionStart(0);
-    const reducedMotionOffset = pendingAnimationFrames.shift();
-    expect(reducedMotionOffset).toBeTypeOf("function");
-    reducedMotionOffset(0);
-    const reducedMotionFinish = pendingAnimationFrames.shift();
-    expect(reducedMotionFinish).toBeTypeOf("function");
-    reducedMotionFinish(0);
     expect(track.style.transform).toBe("");
     expect(track.classList.contains("animating")).toBe(false);
     expect(track.classList.contains("translation-pair-animating")).toBe(false);
     expect(incomingPair.classList.contains("preparing")).toBe(false);
     expect(incomingPair.classList.contains("entering")).toBe(false);
+    expect(pendingAnimationFrames).toHaveLength(0);
+    expect(currentLineText.textContent).toBe("Line three");
     expect(nextLineText.textContent).toBe("…");
     expect(nextLine.classList.contains("translation-placeholder")).toBe(true);
 
@@ -655,7 +645,7 @@ describe("lyrics responsive layout", () => {
     expect(track.classList.contains("animating")).toBe(false);
   });
 
-  it("updates no-playback countdown prompts in place and preserves animation defaults", async () => {
+  it("rolls into and out of no playback while updating its countdown in place", async () => {
     const [html, bridge, state, presentation, script] = await Promise.all([
       read("TaskbarLyrics.App/Web/Lyrics/index.html"),
       read("TaskbarLyrics.App/Web/Lyrics/bridge.js"),
@@ -680,60 +670,87 @@ describe("lyrics responsive layout", () => {
 
     const track = dom.window.document.querySelector("#track");
     const currentLineText = dom.window.document.querySelector("#currentLineText");
-    const receiveCountdown = seconds => dom.window.taskbarLyrics.receive({
+    const receive = payload => dom.window.taskbarLyrics.receive({
       version: 1,
       type: "lyrics",
-      payload: {
-        current: `暂无播放内容，${seconds} 秒后自动隐藏`,
-        next: "",
-        progress: 0,
-        currentLineIndex: -1,
-        trackId: "",
-        isPureMusic: false,
-        isPlaying: false,
-        animateTransition: false
-      }
+      payload
     });
+    const completeTransition = () => {
+      const startFrame = pendingAnimationFrames.shift();
+      expect(startFrame).toBeTypeOf("function");
+      startFrame(0);
+      expect(track.classList.contains("animating")).toBe(true);
+      const event = new dom.window.Event("transitionend", { bubbles: true });
+      Object.defineProperty(event, "propertyName", { value: "transform" });
+      track.dispatchEvent(event);
+      expect(track.classList.contains("animating")).toBe(false);
+      pendingAnimationFrames.length = 0;
+    };
+    const playbackFrame = {
+      current: "First line",
+      next: "Next line",
+      progress: 0.25,
+      currentLineIndex: 0,
+      trackId: "track-a",
+      isPureMusic: false,
+      isPlaying: true,
+      scene: "lyrics"
+    };
 
-    receiveCountdown(3);
-    expect(currentLineText.textContent).toBe("暂无播放内容，3 秒后自动隐藏");
+    receive({ ...playbackFrame, animateTransition: false });
+    receive({
+      current: "First line - Artist",
+      next: "正在检索歌词...",
+      progress: 0,
+      currentLineIndex: -1,
+      trackId: "track-a",
+      isPureMusic: false,
+      isPlaying: true,
+      scene: "searching"
+    });
+    expect(currentLineText.textContent).toBe("First line");
     expect(track.classList.contains("animating")).toBe(false);
+    expect(pendingAnimationFrames).toHaveLength(0);
+    receive({
+      current: "暂无播放内容，3 秒后自动隐藏",
+      next: "",
+      progress: 0,
+      currentLineIndex: -1,
+      trackId: "",
+      isPureMusic: false,
+      isPlaying: false,
+      animateTransition: true,
+      scene: "noPlayback"
+    });
+    expect(pendingAnimationFrames).toHaveLength(1);
+    completeTransition();
+    expect(currentLineText.textContent).toBe("暂无播放内容，3 秒后自动隐藏");
     expect(track.classList.contains("translation-pair-animating")).toBe(false);
     expect(track.classList.contains("no-anim")).toBe(false);
     expect(track.style.transform).toBe("");
     expect(pendingAnimationFrames).toHaveLength(0);
 
-    receiveCountdown(2);
+    receive({
+      current: "暂无播放内容，2 秒后自动隐藏",
+      next: "",
+      progress: 0,
+      currentLineIndex: -1,
+      trackId: "",
+      isPureMusic: false,
+      isPlaying: false,
+      animateTransition: false,
+      scene: "noPlayback"
+    });
     expect(currentLineText.textContent).toBe("暂无播放内容，2 秒后自动隐藏");
     expect(track.classList.contains("animating")).toBe(false);
     expect(track.classList.contains("translation-pair-animating")).toBe(false);
     expect(track.style.transform).toBe("");
     expect(pendingAnimationFrames).toHaveLength(0);
 
-    const receiveDefault = (current, currentLineIndex) => dom.window.taskbarLyrics.receive({
-      version: 1,
-      type: "lyrics",
-      payload: {
-        current,
-        next: "Next line",
-        progress: 0.25,
-        currentLineIndex,
-        trackId: "",
-        isPureMusic: false,
-        isPlaying: true
-      }
-    });
-
-    receiveDefault("First line", 0);
-    receiveDefault("Second line", 1);
-    expect(pendingAnimationFrames).toHaveLength(1);
-    pendingAnimationFrames.shift()(0);
-    expect(track.classList.contains("animating")).toBe(true);
-
-    receiveCountdown(1);
-    expect(currentLineText.textContent).toBe("暂无播放内容，1 秒后自动隐藏");
-    expect(track.classList.contains("animating")).toBe(false);
-    expect(dom.window.document.querySelector("#incomingLineText").textContent.trim()).toBe("");
+    receive(playbackFrame);
+    completeTransition();
+    expect(currentLineText.textContent).toBe("First line");
+    expect(pendingAnimationFrames).toHaveLength(0);
   });
 
   it("keeps every spectrum bar visible when scaled geometry exceeds the viewport", async () => {
@@ -838,8 +855,21 @@ describe("lyrics responsive layout", () => {
       durationMs: DEFAULT_DURATION_MS.singleRoll
     });
     const message = { scene: SCENES.MESSAGE, current: "No lyrics", currentLineIndex: -1 };
+    const noPlayback = { scene: SCENES.NO_PLAYBACK, current: "No playback", currentLineIndex: -1 };
     expect(planner.plan(searching, message).kind).toBe(TRANSITIONS.SINGLE_ROLL);
     expect(planner.plan(message, { ...message, current: "Still no lyrics" }).kind).toBe(TRANSITIONS.SINGLE_ROLL);
+    expect(planner.plan(noPlayback, single)).toMatchObject({
+      kind: TRANSITIONS.SINGLE_ROLL,
+      durationMs: DEFAULT_DURATION_MS.singleRoll
+    });
+    expect(planner.plan(noPlayback, translationPair)).toMatchObject({
+      kind: TRANSITIONS.TRANSLATION_PAIR_ROLL,
+      durationMs: DEFAULT_DURATION_MS.translationPairRoll
+    });
+    expect(planner.plan(noPlayback, spectrum)).toMatchObject({
+      kind: TRANSITIONS.NO_PLAYBACK_TO_SPECTRUM_ROLL,
+      durationMs: DEFAULT_DURATION_MS.searchingSpectrumRoll
+    });
     expect(planner.plan(searching, spectrum, { reducedMotion: true }).kind).toBe(TRANSITIONS.IMMEDIATE);
     expect(dom.window.taskbarLyricsPresentation.normalizeFrame({
       scene: SCENES.LYRICS,
@@ -917,6 +947,53 @@ describe("lyrics responsive layout", () => {
     track.dispatchEvent(transitionEnd);
     expect(currentLineText.textContent).toBe("No lyrics available");
     pendingAnimationFrames.splice(0);
+  });
+
+  it("applies ordinary lyric rolls immediately when reduced motion is requested", async () => {
+    const [html, bridge, state, presentation, script, style] = await Promise.all([
+      read("TaskbarLyrics.App/Web/Lyrics/index.html"),
+      read("TaskbarLyrics.App/Web/Lyrics/bridge.js"),
+      read("TaskbarLyrics.App/Web/Lyrics/state.js"),
+      read("TaskbarLyrics.App/Web/Lyrics/presentation.js"),
+      read("TaskbarLyrics.App/Web/Lyrics/app.js"),
+      read("TaskbarLyrics.App/Web/Lyrics/style.css")
+    ]);
+    const dom = new JSDOM(html.replace("{{STYLE_CSS}}", "").replace("{{APP_JS}}", ""), {
+      runScripts: "outside-only"
+    });
+    dom.window.CSS = { supports: () => true };
+    dom.window.matchMedia = () => ({ matches: true, addEventListener() {}, removeEventListener() {} });
+    dom.window.requestAnimationFrame = () => 1;
+    dom.window.cancelAnimationFrame = () => {};
+    dom.window.eval(bridge);
+    dom.window.eval(state);
+    dom.window.eval(presentation);
+    dom.window.eval(script);
+
+    const receive = payload => dom.window.taskbarLyrics.receive({
+      version: 1,
+      type: "lyrics",
+      payload: {
+        next: "next",
+        progress: 0.25,
+        currentLineIndex: 0,
+        trackId: "",
+        isPureMusic: false,
+        isPlaying: true,
+        ...payload
+      }
+    });
+    receive({ current: "first line" });
+    receive({ current: "second line", next: "following", currentLineIndex: 1 });
+
+    const track = dom.window.document.querySelector("#track");
+    expect(track.classList.contains("animating")).toBe(false);
+    expect(dom.window.document.querySelector("#currentLineText").textContent).toBe("second line");
+    expect(dom.window.document.querySelector("#nextLineText").textContent).toBe("following");
+
+    const reducedMotionStyles = style.slice(style.indexOf("@media (prefers-reduced-motion: reduce)"));
+    expect(reducedMotionStyles).toMatch(/\.lyrics-layer,\s*\.spectrum-layer,[\s\S]*transition:\s*none/);
+    expect(reducedMotionStyles).toMatch(/\.track\.animating\s*\{[^}]*transition:\s*none[^}]*will-change:\s*auto/s);
   });
 
   it("keeps searching scene and track identity while a track-switch result rolls in", async () => {
@@ -1087,7 +1164,10 @@ describe("lyrics responsive layout", () => {
       expect(currentLineText.textContent).toBe("found line");
   });
 
-  it("plans and executes a searching-to-spectrum line-pitch roll without rendering pure-music text", async () => {
+  it.each([
+    { label: "searching", scene: "searching", sourceText: "正在检索歌词..." },
+    { label: "no-playback", scene: "noPlayback", sourceText: "暂无播放内容，3 秒后自动隐藏" }
+  ])("plans and executes a $label-to-spectrum line-pitch roll without rendering pure-music text", async ({ scene, sourceText }) => {
     const [html, bridge, state, presentation, script] = await Promise.all([
       read("TaskbarLyrics.App/Web/Lyrics/index.html"),
       read("TaskbarLyrics.App/Web/Lyrics/bridge.js"),
@@ -1095,9 +1175,8 @@ describe("lyrics responsive layout", () => {
       read("TaskbarLyrics.App/Web/Lyrics/presentation.js"),
       read("TaskbarLyrics.App/Web/Lyrics/app.js")
     ]);
-    const searchingLine = "正在检索歌词...";
     const dom = new JSDOM(html
-      .replace("TaskbarLyrics started", searchingLine)
+      .replace("TaskbarLyrics started", sourceText)
       .replace("Waiting for lyrics...", " ")
       .replace("{{STYLE_CSS}}", "")
       .replace("{{APP_JS}}", ""), {
@@ -1120,13 +1199,15 @@ describe("lyrics responsive layout", () => {
       version: 1,
       type: "lyrics",
       payload: {
-        current: searchingLine,
+        current: sourceText,
         next: "",
         progress: 0,
         currentLineIndex: -1,
         trackId: "",
         isPureMusic: false,
-        isPlaying: true
+        isPlaying: true,
+        animateTransition: false,
+        scene
       }
     });
     const pureMusicText = "纯音乐";
@@ -1150,7 +1231,7 @@ describe("lyrics responsive layout", () => {
     const currentLineText = dom.window.document.querySelector("#currentLineText");
     expect(layout.classList.contains("spectrum-mode")).toBe(true);
     expect(layout.classList.contains("spectrum-transitioning")).toBe(true);
-    expect(currentLineText.textContent).toBe(searchingLine);
+    expect(currentLineText.textContent).toBe(sourceText);
     expect(currentLineText.textContent).not.toBe(pureMusicText);
     expect(lyricsLayer.style.transform).toBe("translateY(0)");
     expect(spectrumLayer.style.transform).toMatch(/translateY\(\d+(?:\.\d+)?px\)/);
@@ -1168,7 +1249,7 @@ describe("lyrics responsive layout", () => {
     spectrumLayer.dispatchEvent(transitionEnd);
     expect(layout.classList.contains("spectrum-transitioning")).toBe(false);
     expect(layout.classList.contains("spectrum-mode")).toBe(true);
-    expect(currentLineText.textContent).toBe(searchingLine);
+    expect(currentLineText.textContent).toBe(sourceText);
   });
 
   it("switches searching to spectrum immediately when reduced motion is requested", async () => {
@@ -1677,6 +1758,19 @@ describe("lyrics responsive layout", () => {
     expect(lyricsLayer.style.transform).toBe("translateY(0)");
     expect(spectrumLayer.style.transform).toMatch(/^translateY\(-\d+(?:\.\d+)?px\)$/);
 
+    receive({
+      current: "暂无播放内容，3 秒后自动隐藏",
+      next: "",
+      progress: 0,
+      currentLineIndex: -1,
+      trackId: "",
+      isPureMusic: false,
+      isPlaying: false,
+      scene: "noPlayback"
+    });
+    expect(currentLineText.textContent).toBe("暂无播放内容，3 秒后自动隐藏");
+    expect(nextLineText.textContent.trim()).toBe("");
+
     const transitionEnd = new dom.window.Event("transitionend", { bubbles: true });
     Object.defineProperty(transitionEnd, "propertyName", { value: "transform" });
     spectrumLayer.dispatchEvent(transitionEnd);
@@ -1684,8 +1778,8 @@ describe("lyrics responsive layout", () => {
     expect(layout.classList.contains("spectrum-exiting")).toBe(false);
     expect(lyricsLayer.style.transform).toBe("");
     expect(spectrumLayer.style.transform).toBe("");
-    expect(currentLineText.textContent).toBe("Song B - Artist B");
-    expect(nextLineText.textContent).toBe(searchingPrompt);
+    expect(currentLineText.textContent).toBe("暂无播放内容，3 秒后自动隐藏");
+    expect(nextLineText.textContent.trim()).toBe("");
     expect(track.classList.contains("animating")).toBe(false);
   });
 

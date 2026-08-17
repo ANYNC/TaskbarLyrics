@@ -57,6 +57,22 @@ public sealed class LyricsWebViewScriptFactoryTests
     }
 
     [Fact]
+    public void SetLyricsEmitsNoPlaybackPresentationScene()
+    {
+        var script = LyricsWebViewScriptFactory.SetLyrics(
+            "暂无播放内容，3 秒后自动隐藏",
+            string.Empty,
+            0,
+            -1,
+            string.Empty,
+            isPureMusic: false,
+            isPlaying: false,
+            presentationScene: LyricsPresentationScene.NoPlayback);
+
+        Assert.Contains("\"scene\":\"noPlayback\"", script);
+    }
+
+    [Fact]
     public void SetLyricsClampsWordScanProgressAndEmitsNullWhenUnavailable()
     {
         var clampedHigh = LyricsWebViewScriptFactory.SetLyrics(

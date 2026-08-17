@@ -495,10 +495,11 @@ function isSpectrumExitTransitionActive() {
     presentationCoordinator.activeTransition?.plan?.kind === presentationApi.TRANSITIONS.LAYER_SWITCH;
 }
 
-function shouldKeepSpectrumForSameTrackSearch(targetFrame) {
+function shouldKeepStableContentForSameTrackSearch(targetFrame) {
   const currentFrame = presentationCoordinator.currentFrame;
   return !isSpectrumExitTransitionActive() &&
-    currentFrame.scene === presentationApi.SCENES.SPECTRUM &&
+    (currentFrame.scene === presentationApi.SCENES.LYRICS ||
+      currentFrame.scene === presentationApi.SCENES.SPECTRUM) &&
     targetFrame.scene === presentationApi.SCENES.SEARCHING &&
     targetFrame.trackId.length > 0 &&
     targetFrame.trackId === currentFrame.trackId;
@@ -517,14 +518,16 @@ function queueSpectrumExitTarget(frame) {
 
   const normalized = presentationApi.normalizeFrame(frame);
   spectrumExitState.latestFrame = normalized;
-  if (normalized.scene === presentationApi.SCENES.SEARCHING) {
-    // Searching metadata is the only queued content that may replace the
-    // hidden entry while the spectrum is still visible. Keep a queued lyric
-    // or message frame out of the layer until the exit has completed; this
-    // prevents a search result from flashing through the exit before dwell.
+  if (normalized.scene === presentationApi.SCENES.SEARCHING ||
+      normalized.scene === presentationApi.SCENES.NO_PLAYBACK) {
+    // Searching metadata and the terminal no-playback state may replace the
+    // hidden exit target. Keep ordinary lyric or message frames out of the
+    // layer until exit completes so fast results cannot flash through it.
     renderSpectrumExitTarget(normalized);
-    spectrumExitState.sawSearching = true;
-    spectrumExitState.searchingFrame = normalized;
+    if (normalized.scene === presentationApi.SCENES.SEARCHING) {
+      spectrumExitState.sawSearching = true;
+      spectrumExitState.searchingFrame = normalized;
+    }
   }
   presentationCoordinator.queueLatest(normalized);
   return normalized;
@@ -659,14 +662,20 @@ function applySpectrumImmediately(targetFrame = null) {
   });
 }
 
-function startSearchingToSpectrumTransition(targetFrame, plan) {
-  if (presentationCoordinator.activeTransition?.plan?.kind ===
-      presentationApi.TRANSITIONS.SEARCHING_TO_SPECTRUM_ROLL) {
+function isSpectrumEntryRollPlan(plan) {
+  return plan?.kind === presentationApi.TRANSITIONS.SEARCHING_TO_SPECTRUM_ROLL ||
+    plan?.kind === presentationApi.TRANSITIONS.NO_PLAYBACK_TO_SPECTRUM_ROLL;
+}
+
+function startSpectrumEntryRollTransition(targetFrame, plan) {
+  if (isSpectrumEntryRollPlan(presentationCoordinator.activeTransition?.plan)) {
     presentationCoordinator.queueLatest(targetFrame);
     return;
   }
 
-  if (presentationCoordinator.currentFrame.scene !== presentationApi.SCENES.SEARCHING ||
+  const currentScene = presentationCoordinator.currentFrame.scene;
+  if ((currentScene !== presentationApi.SCENES.SEARCHING &&
+       currentScene !== presentationApi.SCENES.NO_PLAYBACK) ||
       prefersReducedMotion()) {
     applySpectrumImmediately(targetFrame);
     return;
@@ -1089,8 +1098,8 @@ function executeLayerTransition(plan, parameters) {
   const frame = parameters?.frame;
   switch (parameters?.operation) {
     case transitionOperations.SPECTRUM_ENTRY:
-      if (plan.kind === presentationApi.TRANSITIONS.SEARCHING_TO_SPECTRUM_ROLL) {
-        startSearchingToSpectrumTransition(frame, plan);
+      if (isSpectrumEntryRollPlan(plan)) {
+        startSpectrumEntryRollTransition(frame, plan);
         if (parameters.isPlaying === false) {
           setAudioDrivenSpectrum(spectrumSilence);
         }
@@ -1373,7 +1382,10 @@ function applyFrame(
   const plan = presentationPlanner.plan(
     presentationCoordinator.currentFrame,
     resolvedTargetFrame,
-    { animateTransition: true });
+    {
+      animateTransition: true,
+      reducedMotion: prefersReducedMotion()
+    });
   const normalized = presentationApi.normalizeFrame(resolvedTargetFrame);
   transitionDispatcher.execute(plan, {
     operation: transitionOperations.LYRICS_FRAME,
@@ -1746,8 +1758,7 @@ function applySpectrumFrame(targetFrame, isPlaying) {
 }
 
 function cancelSpectrumPresentationIfActive() {
-  if (presentationCoordinator.activeTransition?.plan?.kind !==
-      presentationApi.TRANSITIONS.SEARCHING_TO_SPECTRUM_ROLL) {
+  if (!isSpectrumEntryRollPlan(presentationCoordinator.activeTransition?.plan)) {
     return;
   }
 
@@ -1865,7 +1876,7 @@ const lyricsApi = {
       return;
     }
 
-    if (shouldKeepSpectrumForSameTrackSearch(targetFrame)) {
+    if (shouldKeepStableContentForSameTrackSearch(targetFrame)) {
       return;
     }
 
@@ -1890,6 +1901,11 @@ const lyricsApi = {
     cancelSpectrumPresentationIfActive();
     setDisplayMode(false);
     clearSpectrumBars();
+
+    if (targetFrame.scene === presentationApi.SCENES.NO_PLAYBACK &&
+        presentationCoordinator.isTransitioning) {
+      cancelActiveTransition();
+    }
 
     if (animateTransition === false) {
       const plan = presentationPlanner.plan(

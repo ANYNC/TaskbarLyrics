@@ -35,7 +35,7 @@ function createHandlers(calls) {
 }
 
 describe("lyrics transition primitives", () => {
-  it("maps all seven presentation plans to the four primitives", async () => {
+  it("maps every presentation plan to the four primitives", async () => {
     const { api, dom } = await loadPresentation();
 
     const mappings = [
@@ -45,6 +45,7 @@ describe("lyrics transition primitives", () => {
       [api.TRANSITIONS.SINGLE_ROLL, api.TRANSITION_PRIMITIVES.ROLL],
       [api.TRANSITIONS.TRANSLATION_PAIR_ROLL, api.TRANSITION_PRIMITIVES.ROLL],
       [api.TRANSITIONS.SEARCHING_TO_SPECTRUM_ROLL, api.TRANSITION_PRIMITIVES.LAYER],
+      [api.TRANSITIONS.NO_PLAYBACK_TO_SPECTRUM_ROLL, api.TRANSITION_PRIMITIVES.LAYER],
       [api.TRANSITIONS.LAYER_SWITCH, api.TRANSITION_PRIMITIVES.LAYER]
     ];
 
@@ -66,6 +67,7 @@ describe("lyrics transition primitives", () => {
       { kind: api.TRANSITIONS.SINGLE_ROLL },
       { kind: api.TRANSITIONS.TRANSLATION_PAIR_ROLL },
       { kind: api.TRANSITIONS.SEARCHING_TO_SPECTRUM_ROLL },
+      { kind: api.TRANSITIONS.NO_PLAYBACK_TO_SPECTRUM_ROLL },
       { kind: api.TRANSITIONS.LAYER_SWITCH }
     ];
     const expectedHandlers = [
@@ -74,6 +76,7 @@ describe("lyrics transition primitives", () => {
       "replaceTransition",
       "rollTransition",
       "rollTransition",
+      "layerTransition",
       "layerTransition",
       "layerTransition"
     ];

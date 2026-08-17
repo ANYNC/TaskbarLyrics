@@ -45,6 +45,7 @@ public sealed class LyricsContentVisibilityPolicyTests
         Assert.True(transition.IsVisible);
         Assert.Equal(3, transition.CountdownSecondsRemaining);
         Assert.True(transition.PresentationChanged);
+        Assert.True(transition.EnteredNoPlayback);
         Assert.True(state.HasReceivedPlaybackSnapshot);
         Assert.True(state.IsConfirmedNoPlayback);
     }
@@ -74,6 +75,7 @@ public sealed class LyricsContentVisibilityPolicyTests
             Assert.Equal(expectedRemaining, transition.CountdownSecondsRemaining);
         }
         Assert.True(transition.PresentationChanged);
+        Assert.False(transition.EnteredNoPlayback);
     }
 
     [Fact]
@@ -89,6 +91,7 @@ public sealed class LyricsContentVisibilityPolicyTests
 
         Assert.Equal(3, transition.CountdownSecondsRemaining);
         Assert.False(transition.PresentationChanged);
+        Assert.False(transition.EnteredNoPlayback);
     }
 
     [Fact]
@@ -105,6 +108,12 @@ public sealed class LyricsContentVisibilityPolicyTests
         Assert.True(transition.IsVisible);
         Assert.Null(transition.CountdownSecondsRemaining);
         Assert.True(transition.PresentationChanged);
+        Assert.False(transition.EnteredNoPlayback);
+
+        var nextNoPlayback = state.ObservePlaybackInput(
+            PlaybackInputKind.NoPlayback,
+            start.AddSeconds(2));
+        Assert.True(nextNoPlayback.EnteredNoPlayback);
     }
 
     [Fact]

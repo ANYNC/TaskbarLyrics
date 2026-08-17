@@ -20,6 +20,7 @@ $script:TaskbarLyricsProcessName = 'TaskbarLyrics.App'
 $script:ShutdownGracePeriodMilliseconds = 800
 $script:StartupPollMilliseconds = 250
 $script:StartupTimeoutSeconds = 30
+$script:RestartLogDirectoryName = 'tmp\restart-logs'
 
 function Resolve-RestartMode {
     [CmdletBinding()]
@@ -141,11 +142,22 @@ function Start-TaskbarLyricsAndWait {
         [string]$RepositoryRoot
     )
 
+    $logDirectory = Join-Path $RepositoryRoot $script:RestartLogDirectoryName
+    $null = New-Item -ItemType Directory -Path $logDirectory -Force
+    $logIdentity = '{0:yyyyMMdd-HHmmssfff}-{1}-{2}' -f `
+        [DateTime]::Now, `
+        $PID, `
+        ([Guid]::NewGuid().ToString('N'))
+    $standardOutputPath = Join-Path $logDirectory "$logIdentity.stdout.log"
+    $standardErrorPath = Join-Path $logDirectory "$logIdentity.stderr.log"
+
     $launcher = Start-Process `
         -FilePath 'dotnet' `
-        -ArgumentList @('run', '--project', 'TaskbarLyrics.App') `
+        -ArgumentList @('run', '--project', 'TaskbarLyrics.App', '--no-build', '--no-restore') `
         -WorkingDirectory $RepositoryRoot `
         -WindowStyle Hidden `
+        -RedirectStandardOutput $standardOutputPath `
+        -RedirectStandardError $standardErrorPath `
         -PassThru
 
     $deadline = [DateTime]::UtcNow.AddSeconds($script:StartupTimeoutSeconds)
@@ -155,13 +167,58 @@ function Start-TaskbarLyricsAndWait {
         }
 
         if ($launcher.HasExited) {
-            throw "dotnet run exited with code $($launcher.ExitCode) before $script:TaskbarLyricsProcessName was detected."
+            $failureDetails = Get-LauncherFailureDetails `
+                -StandardOutputPath $standardOutputPath `
+                -StandardErrorPath $standardErrorPath
+            throw "dotnet run exited with code $($launcher.ExitCode) before $script:TaskbarLyricsProcessName was detected.$failureDetails"
         }
 
         Start-Sleep -Milliseconds $script:StartupPollMilliseconds
     }
 
-    throw "Timed out after $script:StartupTimeoutSeconds seconds waiting for $script:TaskbarLyricsProcessName to start."
+    $failureDetails = Get-LauncherFailureDetails `
+        -StandardOutputPath $standardOutputPath `
+        -StandardErrorPath $standardErrorPath
+    throw "Timed out after $script:StartupTimeoutSeconds seconds waiting for $script:TaskbarLyricsProcessName to start.$failureDetails"
+}
+
+function Get-LauncherFailureDetails {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$StandardOutputPath,
+
+        [Parameter(Mandatory)]
+        [string]$StandardErrorPath
+    )
+
+    $lines = @(
+        foreach ($path in @($StandardErrorPath, $StandardOutputPath)) {
+            if (Test-Path -LiteralPath $path) {
+                Get-Content -LiteralPath $path -Tail 20
+            }
+        }
+    )
+    $logSummary = " Launcher logs: '$StandardOutputPath', '$StandardErrorPath'."
+    if ($lines.Count -eq 0) {
+        return $logSummary
+    }
+
+    return "$logSummary$([Environment]::NewLine)$($lines -join [Environment]::NewLine)"
+}
+
+function Invoke-TaskbarLyricsBuild {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$RepositoryRoot
+    )
+
+    $solutionPath = Join-Path $RepositoryRoot 'TaskbarLyrics.sln'
+    & dotnet build $solutionPath --no-restore
+    if ($LASTEXITCODE -ne 0) {
+        throw "TaskbarLyrics solution build failed with exit code $LASTEXITCODE."
+    }
 }
 
 function Invoke-Restart {
@@ -181,12 +238,14 @@ function Invoke-Restart {
         return
     }
 
+    Invoke-TaskbarLyricsBuild -RepositoryRoot $RepositoryRoot
+
     if ($mode -eq 'NoWait') {
         Start-TaskbarLyricsAndWait -RepositoryRoot $RepositoryRoot
         return
     }
 
-    & dotnet run --project TaskbarLyrics.App
+    & dotnet run --project TaskbarLyrics.App --no-build --no-restore
 }
 
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
