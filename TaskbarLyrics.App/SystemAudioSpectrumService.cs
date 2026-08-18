@@ -11,6 +11,8 @@ public sealed class SystemAudioSpectrumService : IDisposable
     private const int AudclntStreamflagsLoopback = 0x00020000;
     private const int AudclntBufferflagsSilent = 0x00000002;
     private const int DefaultDeviceCheckIntervalMs = 500;
+    private const int CaptureRetryBaseDelayMs = 100;
+    private const int CaptureRetryMaxDelayMs = 2000;
     private const short WaveFormatPcm = 1;
     private const short WaveFormatIeeeFloat = 3;
     private const short WaveFormatExtensibleTag = -2;
@@ -25,6 +27,7 @@ public sealed class SystemAudioSpectrumService : IDisposable
     private float[] _smoothedBars = new float[SpectrumTuningSettings.DefaultBarCount];
     private CancellationTokenSource? _captureCancellation;
     private Thread? _captureThread;
+    private int _consecutiveCaptureFailures;
     private int _writeIndex;
     private int _sampleRate = 48000;
     private float _adaptivePeak = 0.035f;
@@ -182,6 +185,7 @@ public sealed class SystemAudioSpectrumService : IDisposable
             try
             {
                 RunCaptureSession(cancellationToken);
+                _consecutiveCaptureFailures = 0;
             }
             catch (Exception ex)
             {
@@ -191,7 +195,11 @@ public sealed class SystemAudioSpectrumService : IDisposable
                     _lastError = $"{ex.GetType().Name}: {ex.Message}";
                 }
 
-                break;
+                var failures = ++_consecutiveCaptureFailures;
+                var shift = Math.Clamp(failures - 1, 0, 5);
+                var delayMs = Math.Min(CaptureRetryBaseDelayMs << shift, CaptureRetryMaxDelayMs);
+                cancellationToken.WaitHandle.WaitOne(TimeSpan.FromMilliseconds(delayMs));
+                continue;
             }
 
             if (!cancellationToken.IsCancellationRequested)
@@ -619,6 +627,7 @@ public sealed class SystemAudioSpectrumService : IDisposable
             cancellation?.Dispose();
         }
         _isAvailable = false;
+        _consecutiveCaptureFailures = 0;
         lock (_sync)
         {
             Array.Clear(_ringBuffer);
