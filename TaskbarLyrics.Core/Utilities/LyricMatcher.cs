@@ -10,12 +10,17 @@ public static class LyricMatcher
 {
     private static readonly Regex BracketSuffixRegex = new(@"\s*[\(\[\{（【].*?[\)\]\}）】]\s*", RegexOptions.Compiled);
     private static readonly Regex FeatureSuffixRegex = new(@"\s+(feat\.?|ft\.?|with)\s+.*$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
-    private static readonly string[] ConflictKeywords = { "live", "remix", "acoustic", "demo", "instrumental", "vma", "award", "现场", "演唱会", "颁奖", "典礼" };
+    private static readonly string[] ConflictKeywords = { "live", "remix", "acoustic", "demo", "instrumental", "karaoke", "simlish", "from", "vma", "award", "现场", "演唱会", "颁奖", "典礼" };
 
     // JaroWinkler 算法，适合短文本匹配
     private static readonly JaroWinkler JaroWinklerAlgo = new();
 
-    public static int Score(TrackInfo target, string resultTitle, string resultArtist, int resultDurationInSeconds = 0)
+    public static int Score(
+        TrackInfo target,
+        string resultTitle,
+        string resultArtist,
+        int resultDurationInSeconds = 0,
+        string? resultAlbum = null)
     {
         if (IsUnknownTitle(target.Title) || IsUnknownTitle(resultTitle)) return 0;
 
@@ -29,6 +34,8 @@ public static class LyricMatcher
         var normalizedResultTitle = NormalizeForSearch(resultTitle);
         var normalizedTargetArtist = NormalizeForSearch(target.Artist);
         var normalizedResultArtist = NormalizeForSearch(resultArtist);
+        var normalizedTargetAlbum = NormalizeForSearch(target.Album);
+        var normalizedResultAlbum = NormalizeForSearch(resultAlbum);
 
         double titleSim = GetStringSimilarity(normalizedTargetTitle, normalizedResultTitle);
         double artistSim = GetStringSimilarity(normalizedTargetArtist, normalizedResultArtist);
@@ -83,6 +90,12 @@ public static class LyricMatcher
             totalScore = titleSim;
         }
 
+        if (HasUsefulAlbum(normalizedTargetAlbum) && HasUsefulAlbum(normalizedResultAlbum))
+        {
+            const double albumWeight = 0.05;
+            totalScore = (totalScore * (1 - albumWeight)) + (GetStringSimilarity(normalizedTargetAlbum, normalizedResultAlbum) * albumWeight);
+        }
+
         Log.Debug($"LyricMatcher: TitleSim={titleSim:F2}, ArtistSim={artistSim:F2}, DurationSim={durationSim:F2} -> BaseScore={(int)Math.Round(totalScore * 100)}");
         return (int)Math.Round(totalScore * 100);
     }
@@ -128,6 +141,12 @@ public static class LyricMatcher
     {
         return !string.IsNullOrWhiteSpace(normalizedArtist) &&
                !string.Equals(normalizedArtist, "unknown artist", StringComparison.Ordinal);
+    }
+
+    private static bool HasUsefulAlbum(string normalizedAlbum)
+    {
+        return !string.IsNullOrWhiteSpace(normalizedAlbum) &&
+               !string.Equals(normalizedAlbum, "unknown album", StringComparison.Ordinal);
     }
 
     private static bool IsUnknownTitle(string? title)
@@ -198,6 +217,12 @@ public static class LyricMatcher
         }
         
         return Regex.Replace(sb.ToString(), @"\s+", " ").Trim();
+    }
+
+    internal static bool ContainsContentVersionMarker(string? value)
+    {
+        return !string.IsNullOrWhiteSpace(value) &&
+               ConflictKeywords.Any(keyword => value.Contains(keyword, StringComparison.OrdinalIgnoreCase));
     }
 
     private static string RemoveDiacritics(string text)

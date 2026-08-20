@@ -31,7 +31,7 @@ internal sealed class PlayerPresenceMonitor : IDisposable
     {
         _provider.SetRecognitionOrder(
             settings.SourceRecognitionOrder,
-            BuildEnabledSources(settings));
+            PlayerSourcePolicy.BuildEnabledSources(settings));
     }
 
     public void Start()
@@ -63,6 +63,7 @@ internal sealed class PlayerPresenceMonitor : IDisposable
         _isDisposed = true;
         _timer.Stop();
         _timer.Tick -= OnTimerTick;
+        _provider.Dispose();
     }
 
     private async void OnTimerTick(object? sender, EventArgs e) => await RefreshAsync();
@@ -113,13 +114,4 @@ internal sealed class PlayerPresenceMonitor : IDisposable
         }
     }
 
-    private static IReadOnlyCollection<string> BuildEnabledSources(AppSettings settings)
-    {
-        var sources = new List<string>();
-        if (settings.EnableQQMusic) sources.Add("QQMusic");
-        if (settings.EnableNetease) sources.Add("Netease");
-        if (settings.EnableKugou) sources.Add("Kugou");
-        if (settings.EnableSpotify) sources.Add("Spotify");
-        return sources;
-    }
 }

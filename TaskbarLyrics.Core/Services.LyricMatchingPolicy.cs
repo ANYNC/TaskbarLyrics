@@ -4,7 +4,8 @@ namespace TaskbarLyrics.Core.Services;
 
 public static class LyricMatchingPolicy
 {
-    public const int MinimumAcceptedMatchScore = 70;
+    public const int MinimumAcceptedMatchScore = 80;
+    public const int ImmediateAcceptanceScore = 95;
     public const int OfficialImmediateAcceptScore = 90;
     public const int FallbackOverrideMargin = 8;
     public const int FallbackSoftWaitScore = 85;
@@ -15,6 +16,8 @@ public static class LyricMatchingPolicy
     public static readonly TimeSpan OfficialSourceTimeout = TimeSpan.FromSeconds(10);
     public static readonly TimeSpan FallbackProviderTimeout = TimeSpan.FromSeconds(5);
     public static readonly TimeSpan QqMusicUnreliableDurationThreshold = TimeSpan.FromSeconds(61);
+    public static readonly TimeSpan DurationConflictThreshold = TimeSpan.FromSeconds(20);
+    public static readonly TimeSpan OnlineSourceTimeout = TimeSpan.FromSeconds(5);
 
     public static readonly IReadOnlyDictionary<string, int> SourceQualityWeights =
         new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)

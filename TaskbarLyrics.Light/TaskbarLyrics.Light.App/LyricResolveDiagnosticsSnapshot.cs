@@ -1,3 +1,5 @@
+using TaskbarLyrics.Core.Models;
+
 namespace TaskbarLyrics.Light.App;
 
 public sealed record LyricResolveDiagnosticsSnapshot(
@@ -6,6 +8,8 @@ public sealed record LyricResolveDiagnosticsSnapshot(
     string TrackArtist,
     string TrackSourceApp,
     string SelectedSource,
+    LyricAcquisitionKind Acquisition,
+    long FetchElapsedMilliseconds,
     int BestScore,
     int LineCount,
     bool IsPureMusic,
@@ -21,6 +25,8 @@ public sealed record LyricResolveDiagnosticsSnapshot(
         string.Empty,
         string.Empty,
         string.Empty,
+        LyricAcquisitionKind.Unknown,
+        0,
         0,
         0,
         false,

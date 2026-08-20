@@ -9,6 +9,7 @@ public sealed class LyricSyncService : IDisposable
     public const string SearchingText = "正在检索歌词...";
     public const string NoLyricsText = "暂未找到歌词";
     private static readonly TimeSpan StartupLineGuardPositionThreshold = TimeSpan.FromMilliseconds(500);
+    private static readonly TimeSpan MetadataStabilizationDelay = TimeSpan.FromMilliseconds(750);
 
     private readonly ILyricProviderRegistry _registry;
     private readonly Func<string?, bool> _shouldShowTranslation;
@@ -51,7 +52,11 @@ public sealed class LyricSyncService : IDisposable
             _currentDocument = null;
             _currentLyricSourceApp = null;
             _lastEmittedLineIndex = -1;
-            _ = UpdateLyricsAsync(snapshot.Track, trackId);
+            _ = UpdateLyricsAsync(trackId);
+        }
+        else
+        {
+            _currentTrack = snapshot.Track;
         }
 
         if (_currentDocument == null || _currentDocument.Lines.Count == 0)
@@ -104,7 +109,17 @@ public sealed class LyricSyncService : IDisposable
                 nextTxt += " (" + lines[1].Translation + ")";
             }
 
-            return Task.FromResult(new LyricDisplayFrame(firstText, nextTxt, _currentTrack?.Title ?? "", 0, 0, _currentDocument.IsPureMusic));
+            var preparedWordScanProgress = CanShowTranslation() && !string.IsNullOrWhiteSpace(firstLine.Translation)
+                ? null
+                : CalculateWordScanProgress(firstLine, position, firstLine.Text.Length);
+            return Task.FromResult(new LyricDisplayFrame(
+                firstText,
+                nextTxt,
+                _currentTrack?.Title ?? "",
+                0,
+                0,
+                _currentDocument.IsPureMusic,
+                preparedWordScanProgress));
         }
 
         var currentLine = lines[displayIdx];
@@ -138,17 +153,21 @@ public sealed class LyricSyncService : IDisposable
             }
         }
 
+        var wordScanProgress = CanShowTranslation() && !string.IsNullOrWhiteSpace(currentLine.Translation)
+            ? null
+            : CalculateWordScanProgress(currentLine, position, currentLine.Text.Length);
         return Task.FromResult(new LyricDisplayFrame(
             currentText,
             nextText,
             _currentTrack?.Title ?? "",
             progress,
             displayIdx,
-            _currentDocument.IsPureMusic
+            _currentDocument.IsPureMusic,
+            wordScanProgress
         ));
     }
 
-    private async Task UpdateLyricsAsync(TrackInfo track, string trackId)
+    private async Task UpdateLyricsAsync(string trackId)
     {
         // Cancel any ongoing search for the previous track immediately
         CancelPendingSearch();
@@ -159,6 +178,12 @@ public sealed class LyricSyncService : IDisposable
 
         try
         {
+            await Task.Delay(MetadataStabilizationDelay, cts.Token);
+            if (_currentTrackId != trackId || _currentTrack is not { } track)
+            {
+                return;
+            }
+
             var results = await _registry.ResolveLyricsAsync(track, cts.Token);
 
             if (cts.IsCancellationRequested) return;
@@ -180,6 +205,10 @@ public sealed class LyricSyncService : IDisposable
         catch (OperationCanceledException) when (cts.IsCancellationRequested)
         {
             // A newer track replaced this request.
+        }
+        catch (Exception exception)
+        {
+            Log.Warn($"歌词更新失败 '{_currentTrack?.Title}' - '{_currentTrack?.Artist}': {exception}");
         }
         finally
         {
@@ -235,6 +264,89 @@ public sealed class LyricSyncService : IDisposable
         return currentIdx;
     }
 
+    private static double? CalculateWordScanProgress(
+        LyricLine line,
+        TimeSpan position,
+        int displayTextLength)
+    {
+        if (line.Syllables is not { Count: > 0 } syllables)
+        {
+            return null;
+        }
+
+        var elapsed = position - line.Timestamp;
+        double scannedTextLength = 0;
+        var textSearchIndex = 0;
+        var hasUsableSyllable = false;
+        var lastUsableSyllableEnd = TimeSpan.Zero;
+        foreach (var syllable in syllables)
+        {
+            if (string.IsNullOrEmpty(syllable.Text))
+            {
+                continue;
+            }
+
+            var syllableTextIndex = line.Text.IndexOf(
+                syllable.Text,
+                textSearchIndex,
+                StringComparison.Ordinal);
+            if (syllableTextIndex < 0)
+            {
+                syllableTextIndex = Math.Min(textSearchIndex, line.Text.Length);
+            }
+
+            var syllableTextLength = Math.Min(
+                syllable.Text.Length,
+                line.Text.Length - syllableTextIndex);
+            if (syllableTextLength <= 0)
+            {
+                continue;
+            }
+
+            hasUsableSyllable = true;
+            lastUsableSyllableEnd = syllable.RelativeOffset +
+                (syllable.Duration > TimeSpan.Zero ? syllable.Duration : TimeSpan.Zero);
+            if (elapsed <= syllable.RelativeOffset)
+            {
+                break;
+            }
+
+            if (syllable.Duration <= TimeSpan.Zero)
+            {
+                scannedTextLength = syllableTextIndex + syllableTextLength;
+                textSearchIndex = syllableTextIndex + syllableTextLength;
+                continue;
+            }
+
+            var syllableProgress = Math.Clamp(
+                (elapsed - syllable.RelativeOffset).TotalMilliseconds /
+                syllable.Duration.TotalMilliseconds,
+                0,
+                1);
+            scannedTextLength = syllableTextIndex + (syllableTextLength * syllableProgress);
+            if (syllableProgress < 1)
+            {
+                break;
+            }
+
+            textSearchIndex = syllableTextIndex + syllableTextLength;
+        }
+
+        if (!hasUsableSyllable)
+        {
+            return null;
+        }
+
+        if (scannedTextLength >= textSearchIndex &&
+            textSearchIndex > 0 &&
+            elapsed >= lastUsableSyllableEnd)
+        {
+            return 1;
+        }
+
+        return Math.Clamp(scannedTextLength / Math.Max(1, displayTextLength), 0, 1);
+    }
+
     private void CancelPendingSearch()
     {
         var cts = _searchCts;
@@ -252,6 +364,10 @@ public sealed class LyricSyncService : IDisposable
 
         _isDisposed = true;
         CancelPendingSearch();
+        if (_registry is IDisposable disposable)
+        {
+            disposable.Dispose();
+        }
     }
 
 }

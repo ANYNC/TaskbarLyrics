@@ -9,7 +9,7 @@ using Windows.Storage.Streams;
 
 namespace TaskbarLyrics.Light.App;
 
-public sealed class SmtcMusicSessionProvider : IMusicSessionProvider
+public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IDisposable
 {
     private static readonly string[] DefaultRecognitionOrder = { "QQMusic", "Netease", "Kugou", "Spotify" };
     private static readonly TimeSpan MissingCoverRetryInterval = TimeSpan.FromSeconds(5);
@@ -33,6 +33,7 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider
     private Task? _coverReadTask;
     private string _coverReadMetadataKey = string.Empty;
     private int _coverReadGeneration;
+    private int _isDisposed;
 
     public void SetRecognitionOrder(
         IReadOnlyList<string>? order,
@@ -454,14 +455,32 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider
 
     private async Task<GlobalSystemMediaTransportControlsSessionManager?> GetManagerAsync(CancellationToken cancellationToken)
     {
+        if (Volatile.Read(ref _isDisposed) != 0)
+        {
+            return null;
+        }
+
         if (_manager is not null)
         {
             return _manager;
         }
 
-        await _managerLock.WaitAsync(cancellationToken);
         try
         {
+            await _managerLock.WaitAsync(cancellationToken);
+        }
+        catch (ObjectDisposedException) when (Volatile.Read(ref _isDisposed) != 0)
+        {
+            return null;
+        }
+
+        try
+        {
+            if (Volatile.Read(ref _isDisposed) != 0)
+            {
+                return null;
+            }
+
             if (_manager is not null)
             {
                 return _manager;
@@ -476,8 +495,33 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider
         }
         finally
         {
-            _managerLock.Release();
+            try
+            {
+                _managerLock.Release();
+            }
+            catch (ObjectDisposedException) when (Volatile.Read(ref _isDisposed) != 0)
+            {
+            }
         }
+    }
+
+    public void Dispose()
+    {
+        if (Interlocked.Exchange(ref _isDisposed, 1) != 0)
+        {
+            return;
+        }
+
+        lock (_coverLock)
+        {
+            _coverReadGeneration++;
+            _coverReadTask = null;
+            _lastCoverImageBytes = null;
+        }
+
+        _manager = null;
+        _managerLock.Dispose();
+        GC.SuppressFinalize(this);
     }
 
     private static string NormalizeSource(string sourceAppUserModelId)
@@ -570,7 +614,7 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider
         return processNames;
     }
 
-    private static bool IsAnyProcessRunning(IReadOnlyCollection<string> runningProcessNames, params string[] names)
+    private static bool IsAnyProcessRunning(HashSet<string> runningProcessNames, params string[] names)
     {
         if (runningProcessNames.Count == 0)
         {
@@ -691,7 +735,7 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider
 
     private static List<string> NormalizeRecognitionOrder(
         IReadOnlyList<string>? order,
-        IReadOnlySet<string> enabledSources)
+        HashSet<string> enabledSources)
     {
         var result = new List<string>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);

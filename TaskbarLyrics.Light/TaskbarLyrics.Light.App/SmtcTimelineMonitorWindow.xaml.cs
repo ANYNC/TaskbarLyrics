@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Windows;
 using System.Windows.Threading;
@@ -52,24 +53,24 @@ public partial class SmtcTimelineMonitorWindow : Window
 
         var drift = diagnostics.ExtrapolatedPosition - diagnostics.RawPosition;
         var builder = new StringBuilder();
-        builder.AppendLine($"Captured(UTC):     {diagnostics.CapturedAtUtc:yyyy-MM-dd HH:mm:ss.fff}");
-        builder.AppendLine($"SourceAppId:       {diagnostics.SourceAppUserModelId}");
-        builder.AppendLine($"NormalizedSource:  {diagnostics.NormalizedSource}");
-        builder.AppendLine($"ResolvedSource:    {diagnostics.ResolvedSource}");
-        builder.AppendLine($"LyricSource:       {_provider.GetCurrentLyricSource()}");
-        builder.AppendLine($"IsPlaying:         {diagnostics.IsPlaying}");
-        builder.AppendLine($"IsFallback:        {diagnostics.IsFallbackSnapshot}");
+        builder.AppendLine(CultureInfo.InvariantCulture, $"Captured(UTC):     {diagnostics.CapturedAtUtc:yyyy-MM-dd HH:mm:ss.fff}");
+        builder.AppendLine(CultureInfo.InvariantCulture, $"SourceAppId:       {diagnostics.SourceAppUserModelId}");
+        builder.AppendLine(CultureInfo.InvariantCulture, $"NormalizedSource:  {diagnostics.NormalizedSource}");
+        builder.AppendLine(CultureInfo.InvariantCulture, $"ResolvedSource:    {diagnostics.ResolvedSource}");
+        builder.AppendLine(CultureInfo.InvariantCulture, $"LyricSource:       {_provider.GetCurrentLyricSource()}");
+        builder.AppendLine(CultureInfo.InvariantCulture, $"IsPlaying:         {diagnostics.IsPlaying}");
+        builder.AppendLine(CultureInfo.InvariantCulture, $"IsFallback:        {diagnostics.IsFallbackSnapshot}");
         builder.AppendLine();
-        builder.AppendLine($"RawPosition:       {FormatTimeSpan(diagnostics.RawPosition)}");
-        builder.AppendLine($"LastUpdatedTime:   {diagnostics.LastUpdatedTimeUtc:yyyy-MM-dd HH:mm:ss.fff}");
-        builder.AppendLine($"LastUpdateAge:     {FormatTimeSpan(diagnostics.LastUpdateAge)}");
-        builder.AppendLine($"Extrapolated:      {FormatTimeSpan(diagnostics.ExtrapolatedPosition)}");
-        builder.AppendLine($"Extrapolated-Raw:  {FormatTimeSpan(drift)}");
-        builder.AppendLine($"SelectedPosition:  {FormatTimeSpan(diagnostics.SelectedPosition)}");
-        builder.AppendLine($"Strategy:          {diagnostics.StrategyName}");
+        builder.AppendLine(CultureInfo.InvariantCulture, $"RawPosition:       {FormatTimeSpan(diagnostics.RawPosition)}");
+        builder.AppendLine(CultureInfo.InvariantCulture, $"LastUpdatedTime:   {diagnostics.LastUpdatedTimeUtc:yyyy-MM-dd HH:mm:ss.fff}");
+        builder.AppendLine(CultureInfo.InvariantCulture, $"LastUpdateAge:     {FormatTimeSpan(diagnostics.LastUpdateAge)}");
+        builder.AppendLine(CultureInfo.InvariantCulture, $"Extrapolated:      {FormatTimeSpan(diagnostics.ExtrapolatedPosition)}");
+        builder.AppendLine(CultureInfo.InvariantCulture, $"Extrapolated-Raw:  {FormatTimeSpan(drift)}");
+        builder.AppendLine(CultureInfo.InvariantCulture, $"SelectedPosition:  {FormatTimeSpan(diagnostics.SelectedPosition)}");
+        builder.AppendLine(CultureInfo.InvariantCulture, $"Strategy:          {diagnostics.StrategyName}");
         builder.AppendLine();
-        builder.AppendLine($"Title:             {diagnostics.Title}");
-        builder.AppendLine($"Artist:            {diagnostics.Artist}");
+        builder.AppendLine(CultureInfo.InvariantCulture, $"Title:             {diagnostics.Title}");
+        builder.AppendLine(CultureInfo.InvariantCulture, $"Artist:            {diagnostics.Artist}");
 
         TimelineTextBox.Text = builder.ToString();
     }

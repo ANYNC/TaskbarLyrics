@@ -12,6 +12,8 @@ namespace TaskbarLyrics.Core.Services;
 
 public abstract class LyricProviderBase : ILyricProvider
 {
+    private const int CurrentCacheFormatVersion = 10;
+
     // --- BetterLyrics 风格的严苛正则 ---
     
     // 只匹配标准 LRC 时间轴，不进行模糊匹配
@@ -50,17 +52,20 @@ public abstract class LyricProviderBase : ILyricProvider
 
     public async Task<LyricDocument?> GetLyricsAsync(TrackInfo track, CancellationToken cancellationToken)
     {
-        var cacheKey = BuildCacheKey(track);
-        if (MemoryCache.TryGetValue(cacheKey, out var cachedDoc)) return cachedDoc;
+        var cacheKey = HasStableCacheIdentity(track) ? BuildCacheKey(track) : null;
+        if (cacheKey is not null && MemoryCache.TryGetValue(cacheKey, out var cachedDoc)) return cachedDoc;
 
-        lock (DiskCacheLock)
+        if (cacheKey is not null)
         {
-            EnsureDiskCacheLoaded();
-            if (_diskCache!.TryGetValue(cacheKey, out var diskDoc))
+            lock (DiskCacheLock)
             {
-                var processedDiskDoc = ProcessDocument(diskDoc);
-                MemoryCache[cacheKey] = processedDiskDoc;
-                return processedDiskDoc;
+                EnsureDiskCacheLoaded();
+                if (_diskCache!.TryGetValue(cacheKey, out var diskDoc))
+                {
+                    var processedDiskDoc = ProcessDocument(diskDoc);
+                    MemoryCache[cacheKey] = processedDiskDoc;
+                    return processedDiskDoc;
+                }
             }
         }
 
@@ -68,8 +73,11 @@ public abstract class LyricProviderBase : ILyricProvider
         if (result != null)
         {
             result = ProcessDocument(result);
-            MemoryCache[cacheKey] = result;
-            lock (DiskCacheLock) { EnsureDiskCacheLoaded(); _diskCache![cacheKey] = result; SaveDiskCache(); }
+            if (cacheKey is not null)
+            {
+                MemoryCache[cacheKey] = result;
+                lock (DiskCacheLock) { EnsureDiskCacheLoaded(); _diskCache![cacheKey] = result; SaveDiskCache(); }
+            }
         }
         return result;
     }
@@ -358,22 +366,20 @@ public abstract class LyricProviderBase : ILyricProvider
     // ========================================================
     protected string BuildCacheKey(TrackInfo track)
     {
-        return $"{SourceApp}|{NormalizeForCache(track.Title)}|{NormalizeForCache(track.Artist)}|{NormalizeDurationForCache(track.Duration)}";
+        return $"v{CurrentCacheFormatVersion}|{NormalizeForCache(SourceApp)}|{NormalizeForCache(track.SourceApp)}|song:{NormalizeForCache(track.SongId)}";
     }
 
-    private string NormalizeForCache(string s) 
-    { 
-        var n = ChineseScriptConverter.ToSimplified(s).ToLowerInvariant(); 
-        var sb = new StringBuilder(); 
-        foreach (var ch in n) if (char.IsLetterOrDigit(ch)) sb.Append(ch); 
-        return sb.ToString(); 
-    }
-
-    private static int NormalizeDurationForCache(TimeSpan duration)
+    private static bool HasStableCacheIdentity(TrackInfo track)
     {
-        return duration > TimeSpan.Zero
-            ? (int)Math.Round(duration.TotalSeconds / 2, MidpointRounding.AwayFromZero) * 2
-            : 0;
+        return !string.IsNullOrWhiteSpace(track.SongId);
+    }
+
+    private string NormalizeForCache(string? s)
+    {
+        var n = ChineseScriptConverter.ToSimplified(s ?? string.Empty).ToLowerInvariant();
+        var sb = new StringBuilder();
+        foreach (var ch in n) if (char.IsLetterOrDigit(ch)) sb.Append(ch);
+        return sb.ToString();
     }
 
     protected string NormalizeForSearch(string? value)
@@ -442,7 +448,7 @@ public abstract class LyricProviderBase : ILyricProvider
         try { 
             var dir = Path.GetDirectoryName(CacheFilePathStatic); 
             if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir); 
-            File.WriteAllText(CacheFilePathStatic, JsonSerializer.Serialize(_diskCache)); 
+            AtomicFile.WriteAllText(CacheFilePathStatic, JsonSerializer.Serialize(_diskCache));
         } catch { } 
     }
 
@@ -466,5 +472,9 @@ public abstract class LyricProviderBase : ILyricProvider
         }
     }
 
-    private static string CacheFilePathStatic => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "TaskbarLyrics", "cache", "unified-lyrics-v8.json");
+    private static string CacheFilePathStatic => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+        "TaskbarLyrics",
+        "cache",
+        $"unified-lyrics-v{CurrentCacheFormatVersion}.json");
 }

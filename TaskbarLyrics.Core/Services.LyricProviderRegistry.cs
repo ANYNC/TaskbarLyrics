@@ -398,7 +398,7 @@ public sealed class LyricProviderRegistry : ILyricProviderRegistry
         {
             using var providerCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             providerTask = provider.GetLyricsAsync(track, providerCts.Token);
-            var timeoutTask = Task.Delay(timeout);
+            var timeoutTask = Task.Delay(timeout, CancellationToken.None);
             var cancellationTask = Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
             var completedTask = await Task.WhenAny(providerTask, timeoutTask, cancellationTask);
             if (completedTask == timeoutTask)

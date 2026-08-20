@@ -1083,7 +1083,7 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
             TryDecodeWithImageSharp(imageBytes);
     }
 
-    private static BitmapSource? TryDecodeWpfBitmap(byte[] imageBytes)
+    private static BitmapImage? TryDecodeWpfBitmap(byte[] imageBytes)
     {
         try
         {
@@ -1140,7 +1140,7 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         }
     }
 
-    private static BitmapSource? TryDecodeWithImageSharp(byte[] imageBytes)
+    private static BitmapImage? TryDecodeWithImageSharp(byte[] imageBytes)
     {
         try
         {
@@ -1156,7 +1156,7 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         }
     }
 
-    private static BitmapSource DecodeWpfBitmap(Stream stream)
+    private static BitmapImage DecodeWpfBitmap(Stream stream)
     {
         var bitmap = new BitmapImage();
         bitmap.BeginInit();
@@ -1806,7 +1806,7 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         _transitionFallbackTimer.Start();
     }
 
-    private (string Primary, string Secondary, bool SecondaryIsTranslation) GetTwoRowTransitionRows(
+    private static (string Primary, string Secondary, bool SecondaryIsTranslation) GetTwoRowTransitionRows(
         string current,
         string next,
         bool currentUsesTranslationPair)
@@ -2324,7 +2324,7 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         }
     }
 
-    private Media.Effects.Effect? CreateTextEffect()
+    private Media.Effects.DropShadowEffect? CreateTextEffect()
     {
         var contrastColor = GetTextEffectContrastColor();
         var glowColor = GetTextGlowColor(contrastColor);
@@ -2394,7 +2394,7 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
             (0.0722 * Linearize(color.B));
     }
 
-    private Media.Brush GetSpectrumBrush(int index)
+    private Media.SolidColorBrush GetSpectrumBrush(int index)
     {
         if (_spectrumColorMode == SpectrumColorMode.Text)
         {
@@ -3037,14 +3037,14 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         var top = inset;
         var right = width - inset;
         var bottom = height - inset;
-        var points = radius <= 0
+        IReadOnlyList<System.Windows.Point> points = radius <= 0
             ? CreateSharpRectangleProgressPoints(width, height, left, top, right, bottom)
             : CreateRoundedRectangleProgressPoints(width, height, left, top, right, bottom, radius);
 
         return CreatePartialPolylineGeometry(points, progress);
     }
 
-    private static IReadOnlyList<System.Windows.Point> CreateSharpRectangleProgressPoints(
+    private static System.Windows.Point[] CreateSharpRectangleProgressPoints(
         double width,
         double height,
         double left,
@@ -3061,7 +3061,7 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
             new System.Windows.Point(width / 2, top)
         };
 
-    private static IReadOnlyList<System.Windows.Point> CreateRoundedRectangleProgressPoints(
+    private static List<System.Windows.Point> CreateRoundedRectangleProgressPoints(
         double width,
         double height,
         double left,
@@ -3568,7 +3568,7 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         return Math.Ceiling(width + 8);
     }
 
-    private static void AddLineIfMeaningful(ISet<string> lines, string? text)
+    private static void AddLineIfMeaningful(HashSet<string> lines, string? text)
     {
         if (string.IsNullOrWhiteSpace(text) || text == " ")
         {
@@ -3763,7 +3763,7 @@ public partial class LyricsDisplayControl : System.Windows.Controls.UserControl
         }
     }
 
-    private bool ShouldRenderTranslationAsNewLine(bool isPrimary) =>
+    private static bool ShouldRenderTranslationAsNewLine(bool isPrimary) =>
         false;
 
     private static (string Main, string? Translation) SplitTranslation(string text)

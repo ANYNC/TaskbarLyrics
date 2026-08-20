@@ -20,12 +20,23 @@ namespace TaskbarLyrics.Light.App;
 
 public partial class SettingsWindow : Window
 {
+    private static readonly JsonSerializerOptions ExportSerializerOptions = new()
+    {
+        WriteIndented = true
+    };
+
     private static readonly HashSet<string> LocalAudioExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
         ".mp3", ".flac", ".m4a", ".aac", ".wav", ".ogg", ".opus", ".wma"
     };
 
     private static readonly string[] KnownPlayerSources = ["QQMusic", "Netease", "Kugou", "Spotify"];
+
+    private static readonly float[] PreviewSpectrumBars =
+    [
+        0.22f, 0.45f, 0.72f, 0.38f, 0.61f, 0.86f, 0.54f, 0.31f,
+        0.66f, 0.92f, 0.58f, 0.37f, 0.74f, 0.49f, 0.83f, 0.41f
+    ];
 
     private static readonly TimeSpan SaveDebounceInterval = TimeSpan.FromMilliseconds(90);
 
@@ -97,7 +108,7 @@ public partial class SettingsWindow : Window
         SpotifyIcon.Source = LoadPlayerIcon("spotify.png");
     }
 
-    private static ImageSource? LoadPlayerIcon(string fileName)
+    private static BitmapImage? LoadPlayerIcon(string fileName)
     {
         var path = Path.Combine(AppContext.BaseDirectory, "Assets", "PlayerIcons", fileName);
         if (!File.Exists(path))
@@ -691,11 +702,7 @@ public partial class SettingsWindow : Window
         var showSpectrum = previewSettings.EnableSpectrum && previewSettings.ShowSpectrumWhenLyricsAvailable;
         PreviewDisplay.SetLyrics(current, "下一句歌词会在这里", 0.46, -1, null, showSpectrum, true);
         PreviewDisplay.SetSongProgress(TimeSpan.FromSeconds(83), TimeSpan.FromSeconds(225), true);
-        PreviewDisplay.SetSpectrum(new[]
-        {
-            0.22f, 0.45f, 0.72f, 0.38f, 0.61f, 0.86f, 0.54f, 0.31f,
-            0.66f, 0.92f, 0.58f, 0.37f, 0.74f, 0.49f, 0.83f, 0.41f
-        });
+        PreviewDisplay.SetSpectrum(PreviewSpectrumBars);
         UpdatePreviewHostHeight(previewSettings);
     }
 
@@ -1256,10 +1263,7 @@ public partial class SettingsWindow : Window
             return;
         }
 
-        var json = JsonSerializer.Serialize(_settings.Clone(), new JsonSerializerOptions
-        {
-            WriteIndented = true
-        });
+        var json = JsonSerializer.Serialize(_settings.Clone(), ExportSerializerOptions);
         File.WriteAllText(dialog.FileName, json);
         UpdateStatusText.Text = $"已导出设置：{dialog.FileName}";
     }
@@ -1657,6 +1661,7 @@ public partial class SettingsWindow : Window
         }
         else
         {
+            LyricPipelineCache.ClearDefault();
             LyricProviderBase.ClearCache();
             GenericSmtcLyricProvider.ClearCache();
         }
@@ -1679,7 +1684,7 @@ public partial class SettingsWindow : Window
             : snapshot.SelectedSource;
         LyricDiagnosticsText.Text =
             $"歌曲：{snapshot.TrackTitle} - {snapshot.TrackArtist}\n" +
-            $"播放器：{snapshot.TrackSourceApp}，歌词源：{selectedSource}，分数：{snapshot.BestScore}，行数：{snapshot.LineCount}\n" +
+            $"播放器：{snapshot.TrackSourceApp}，歌词源：{selectedSource}，获取：{snapshot.Acquisition}，耗时：{snapshot.FetchElapsedMilliseconds} ms，行数：{snapshot.LineCount}\n" +
             $"位置：{FormatTimeSpan(snapshot.PlaybackPosition)}，偏移：{snapshot.AppliedOffsetMs} ms，行号：{snapshot.CurrentLineIndex}，进度：{snapshot.LineProgress:P0}\n" +
             $"候选：{snapshot.Candidates}\n" +
             $"视觉：进度={_settings.SongProgressStyle}/{_settings.SongProgressColorMode}，频谱={_settings.SpectrumStyle}/{_settings.SpectrumColorMode}，动画={_settings.AnimationIntensity}\n" +

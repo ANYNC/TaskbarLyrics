@@ -46,7 +46,15 @@ internal sealed class DeferredLyricSyncService : IDisposable
     {
         if (snapshot.Track is null)
         {
-            return Task.FromResult(new LyricDisplayFrame("", "", "", 0, -1));
+            LyricSyncService? inner;
+            lock (_gate)
+            {
+                ThrowIfDisposed();
+                inner = _inner;
+            }
+
+            return inner?.GetDisplayFrameAsync(snapshot)
+                ?? Task.FromResult(new LyricDisplayFrame("", "", "", 0, -1));
         }
 
         return EnsureInner().GetDisplayFrameAsync(snapshot);
@@ -101,8 +109,8 @@ internal sealed class DeferredLyricSyncService : IDisposable
             ? "None"
             : string.Join(", ", results.Select(result =>
                 result.Document is null
-                    ? $"{result.SourceApp}:none"
-                    : $"{result.SourceApp}:score={result.Document.BestScore},lines={result.Document.Lines.Count}"));
+                    ? $"{result.SourceApp}:{result.Acquisition},none,{result.ElapsedMilliseconds}ms"
+                    : $"{result.SourceApp}:{result.Acquisition},lines={result.Document.Lines.Count},{result.ElapsedMilliseconds}ms"));
 
         LyricResolveDiagnosticsState.Update(new LyricResolveDiagnosticsSnapshot(
             DateTimeOffset.UtcNow,
@@ -110,6 +118,8 @@ internal sealed class DeferredLyricSyncService : IDisposable
             track.Artist,
             track.SourceApp,
             best?.SourceApp ?? string.Empty,
+            best?.Acquisition ?? LyricAcquisitionKind.NotFound,
+            best?.ElapsedMilliseconds ?? (long)Math.Round(elapsed.TotalMilliseconds),
             best?.Document?.BestScore ?? 0,
             best?.Document?.Lines.Count ?? 0,
             best?.Document?.IsPureMusic ?? false,
@@ -124,17 +134,12 @@ internal sealed class DeferredLyricSyncService : IDisposable
         previous.EnableNetease != current.EnableNetease ||
         previous.EnableQQMusic != current.EnableQQMusic ||
         previous.EnableKugou != current.EnableKugou ||
-        previous.EnableSpotify != current.EnableSpotify ||
         previous.EnableLocalLyrics != current.EnableLocalLyrics ||
         previous.LocalLyricsSearchMode != current.LocalLyricsSearchMode ||
-        !previous.LocalMusicFolders.SequenceEqual(current.LocalMusicFolders) ||
-        !previous.SourceRecognitionOrder.SequenceEqual(current.SourceRecognitionOrder);
+        !previous.LocalMusicFolders.SequenceEqual(current.LocalMusicFolders);
 
     private void ThrowIfDisposed()
     {
-        if (_isDisposed)
-        {
-            throw new ObjectDisposedException(nameof(DeferredLyricSyncService));
-        }
+        ObjectDisposedException.ThrowIf(_isDisposed, this);
     }
 }

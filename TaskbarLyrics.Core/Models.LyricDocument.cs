@@ -1,8 +1,16 @@
+using System.Text.Json.Serialization;
+
 namespace TaskbarLyrics.Core.Models;
 
 public sealed class LyricDocument
 {
     public LyricDocument(IEnumerable<LyricLine> lines, int bestScore = 0, bool isPureMusic = false)
+        : this(lines as IReadOnlyList<LyricLine> ?? lines.ToArray(), bestScore, isPureMusic)
+    {
+    }
+
+    [JsonConstructor]
+    public LyricDocument(IReadOnlyList<LyricLine> lines, int bestScore = 0, bool isPureMusic = false)
     {
         Lines = lines.OrderBy(x => x.Timestamp).ToArray();
         BestScore = bestScore;

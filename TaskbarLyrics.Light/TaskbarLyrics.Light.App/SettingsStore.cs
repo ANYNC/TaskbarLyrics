@@ -1,10 +1,16 @@
 ﻿using System.IO;
 using System.Text.Json;
+using TaskbarLyrics.Core.Utilities;
 
 namespace TaskbarLyrics.Light.App;
 
 public sealed class SettingsStore
 {
+    private static readonly JsonSerializerOptions SerializerOptions = new()
+    {
+        WriteIndented = true
+    };
+
     private readonly string _filePath;
 
     public SettingsStore(string filePath)
@@ -27,27 +33,67 @@ public sealed class SettingsStore
             NormalizeCurrentSettings(settings);
             return settings;
         }
-        catch
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException)
         {
+            Log.Warn($"读取设置失败 '{_filePath}': {exception.Message}");
             return new AppSettings();
         }
     }
 
-    public void Save(AppSettings settings)
+    public bool Save(AppSettings settings)
     {
-        NormalizeCurrentSettings(settings);
-        var dir = Path.GetDirectoryName(_filePath);
-        if (!string.IsNullOrWhiteSpace(dir))
+        string? temporaryPath = null;
+        try
         {
-            Directory.CreateDirectory(dir);
+            NormalizeCurrentSettings(settings);
+            var directory = Path.GetDirectoryName(_filePath);
+            if (!string.IsNullOrWhiteSpace(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            var settingsDirectory = string.IsNullOrWhiteSpace(directory)
+                ? AppContext.BaseDirectory
+                : directory;
+            temporaryPath = Path.Combine(
+                settingsDirectory,
+                $".{Path.GetFileName(_filePath)}.{Guid.NewGuid():N}.tmp");
+            var serializedSettings = JsonSerializer.SerializeToUtf8Bytes(settings, SerializerOptions);
+            using (var stream = new FileStream(
+                       temporaryPath,
+                       FileMode.CreateNew,
+                       FileAccess.Write,
+                       FileShare.None,
+                       bufferSize: 4096,
+                       FileOptions.WriteThrough))
+            {
+                stream.Write(serializedSettings);
+                stream.Flush(flushToDisk: true);
+            }
+
+            File.Move(temporaryPath, _filePath, overwrite: true);
+            temporaryPath = null;
+            return true;
         }
-
-        var json = JsonSerializer.Serialize(settings, new JsonSerializerOptions
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException or NotSupportedException)
         {
-            WriteIndented = true
-        });
-
-        File.WriteAllText(_filePath, json);
+            Log.Error($"保存设置失败 '{_filePath}': {exception}");
+            return false;
+        }
+        finally
+        {
+            if (!string.IsNullOrWhiteSpace(temporaryPath))
+            {
+                try
+                {
+                    File.Delete(temporaryPath);
+                }
+                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                {
+                    Log.Warn($"清理设置临时文件失败 '{temporaryPath}': {exception.Message}");
+                }
+            }
+        }
     }
 
     private static void ApplyLegacyDefaults(string json, AppSettings settings)

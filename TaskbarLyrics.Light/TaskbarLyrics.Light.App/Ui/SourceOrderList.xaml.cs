@@ -103,7 +103,7 @@ public partial class SourceOrderList : System.Windows.Controls.UserControl
     private static string GetDisplayName(string source) =>
         SourceNames.TryGetValue(source, out var name) ? name : source;
 
-    private static ImageSource? LoadIcon(string source)
+    private static BitmapImage? LoadIcon(string source)
     {
         if (!SourceIcons.TryGetValue(source, out var file))
         {

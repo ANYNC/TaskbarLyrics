@@ -4,7 +4,7 @@ using TaskbarLyrics.Core.Services;
 
 namespace TaskbarLyrics.Light.App;
 
-internal sealed class FallbackLocalLyricProviderRegistry : ILyricProviderRegistry
+internal sealed class FallbackLocalLyricProviderRegistry : ILyricProviderRegistry, IDisposable
 {
     private readonly ILyricProviderRegistry _onlineRegistry;
     private readonly ILyricProvider _localProvider;
@@ -47,7 +47,10 @@ internal sealed class FallbackLocalLyricProviderRegistry : ILyricProviderRegistr
         }
 
         var results = onlineResults.ToList();
-        results.Add(new LyricResolveResult(_localProvider.SourceApp, localDocument));
+        results.Add(new LyricResolveResult(
+            _localProvider.SourceApp,
+            localDocument,
+            LyricAcquisitionKind.LocalFile));
         return results;
     }
 
@@ -66,5 +69,18 @@ internal sealed class FallbackLocalLyricProviderRegistry : ILyricProviderRegistr
     private static bool HasUsableDocument(IEnumerable<LyricResolveResult> results)
     {
         return results.Any(result => result.Document is { Lines.Count: > 0 });
+    }
+
+    public void Dispose()
+    {
+        if (_onlineRegistry is IDisposable onlineDisposable)
+        {
+            onlineDisposable.Dispose();
+        }
+
+        if (_localProvider is IDisposable localDisposable)
+        {
+            localDisposable.Dispose();
+        }
     }
 }

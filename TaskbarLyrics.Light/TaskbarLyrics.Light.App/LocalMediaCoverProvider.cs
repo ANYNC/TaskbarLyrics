@@ -24,7 +24,7 @@ internal sealed class LocalMediaCoverProvider
         @"^\s*\[(?<artist>[^\]]+)\]\s*(?<title>.+)$",
         RegexOptions.Compiled);
 
-    private readonly IReadOnlyList<string> _rootFolders;
+    private readonly List<string> _rootFolders;
     private readonly object _indexLock = new();
     private readonly Dictionary<string, byte[]?> _coverCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<LocalMediaEntry> _index = new();
@@ -92,7 +92,7 @@ internal sealed class LocalMediaCoverProvider
         }
     }
 
-    private IReadOnlyList<LocalMediaEntry> SnapshotIndex()
+    private List<LocalMediaEntry> SnapshotIndex()
     {
         lock (_indexLock)
         {

@@ -4,7 +4,7 @@ using TaskbarLyrics.Core.Models;
 
 namespace TaskbarLyrics.Light.App;
 
-internal sealed class DiagnosticLyricProviderRegistry : ILyricProviderRegistry
+internal sealed class DiagnosticLyricProviderRegistry : ILyricProviderRegistry, IDisposable
 {
     private readonly ILyricProviderRegistry _inner;
     private readonly Action<TrackInfo, IReadOnlyList<LyricResolveResult>, TimeSpan> _publish;
@@ -38,5 +38,13 @@ internal sealed class DiagnosticLyricProviderRegistry : ILyricProviderRegistry
             .OrderByDescending(result => result.Document!.BestScore)
             .Select(result => result.Document)
             .FirstOrDefault();
+    }
+
+    public void Dispose()
+    {
+        if (_inner is IDisposable disposable)
+        {
+            disposable.Dispose();
+        }
     }
 }

@@ -12,11 +12,10 @@ using TaskbarLyrics.Core.Abstractions;
 using TaskbarLyrics.Core.Models;
 using TaskbarLyrics.Core.Services;
 using TaskbarLyrics.Core.Utilities;
-using Forms = System.Windows.Forms;
 
 namespace TaskbarLyrics.Light.App;
 
-public partial class MainWindow : Window
+public partial class MainWindow : Window, IDisposable
 {
     private const int WmShowWindow = 0x0018;
     private const int FrameTimerMs = 16;
@@ -42,6 +41,7 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer _anchorTimer;
     private readonly uint _taskbarCreatedMessage;
     private readonly DeferredLyricSyncService _lyricSyncService = new();
+    private readonly PlaybackSnapshotStabilityGate _playbackSnapshotStabilityGate = new();
     private LocalMediaCoverProvider? _localMediaCoverProvider;
     private IReadOnlyList<string> _localMediaCoverFolders = Array.Empty<string>();
     private AppSettings _settings = new();
@@ -92,6 +92,8 @@ public partial class MainWindow : Window
     private int _spectrumTickInterval = 2;
     private int _visibilityAnimationGeneration;
     private bool _isSoftHiding;
+    private bool _isDpiLayoutRefreshPending;
+    private int _isDisposed;
 
     public MainWindow()
     {
@@ -234,7 +236,7 @@ public partial class MainWindow : Window
         {
             smtcProvider.SetRecognitionOrder(
                 settings.SourceRecognitionOrder,
-                BuildEnabledPlayerSources(settings));
+                PlayerSourcePolicy.BuildEnabledSources(settings));
         }
 
         try
@@ -419,7 +421,7 @@ public partial class MainWindow : Window
         return true;
     }
 
-    private List<Media.Color> SampleScreenColors(IEnumerable<System.Windows.Point> points)
+    private static List<Media.Color> SampleScreenColors(IEnumerable<System.Windows.Point> points)
     {
         var samples = new List<Media.Color>();
         var screenWidth = NativeMethods.GetSystemMetrics(NativeMethods.SM_CXSCREEN);
@@ -606,16 +608,6 @@ public partial class MainWindow : Window
         ClearRejectedCover();
     }
 
-    private static IReadOnlyCollection<string> BuildEnabledPlayerSources(AppSettings settings)
-    {
-        var sources = new List<string>();
-        if (settings.EnableQQMusic) sources.Add("QQMusic");
-        if (settings.EnableNetease) sources.Add("Netease");
-        if (settings.EnableKugou) sources.Add("Kugou");
-        if (settings.EnableSpotify) sources.Add("Spotify");
-        return sources;
-    }
-
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
         AnchorToTaskbar(animate: false);
@@ -674,6 +666,16 @@ public partial class MainWindow : Window
 
     private void OnClosed(object? sender, EventArgs e)
     {
+        Dispose();
+    }
+
+    public void Dispose()
+    {
+        if (Interlocked.Exchange(ref _isDisposed, 1) != 0)
+        {
+            return;
+        }
+
         CancelCoverRefresh();
         CloseSmtcTimelineMonitorWindow();
         _anchorTimer.Stop();
@@ -683,6 +685,8 @@ public partial class MainWindow : Window
         UpdateSpectrumCaptureState(false);
         _lyricSyncService.Dispose();
         _audioSpectrumService.Dispose();
+        (_musicSessionProvider as IDisposable)?.Dispose();
+        GC.SuppressFinalize(this);
     }
 
     private void OnDisplaySettingsChanged(object? sender, EventArgs e)
@@ -729,6 +733,28 @@ public partial class MainWindow : Window
             EnsureVisibleIfExpected();
 
             var snapshot = await _musicSessionProvider.GetCurrentAsync();
+            var inputKind = PlaybackInputPolicy.Classify(snapshot);
+            var previousStabilityState = _playbackSnapshotStabilityGate.State;
+            var gateDecision = _playbackSnapshotStabilityGate.Observe(snapshot, inputKind, DateTimeOffset.UtcNow);
+            if (previousStabilityState != _playbackSnapshotStabilityGate.State ||
+                gateDecision.Reason == PlaybackSnapshotGateReason.WeakMetadataChangeReplaced)
+            {
+                Log.Debug(
+                    $"Playback stability: {previousStabilityState} -> {_playbackSnapshotStabilityGate.State}, " +
+                    $"Action={gateDecision.Action}, Reason={gateDecision.Reason}");
+            }
+
+            if (gateDecision.Action == PlaybackSnapshotGateAction.Hold)
+            {
+                return;
+            }
+
+            snapshot = gateDecision.Snapshot;
+            if (PlaybackInputPolicy.Classify(snapshot) == PlaybackInputKind.NoPlayback && snapshot.Track is not null)
+            {
+                snapshot = snapshot with { Track = null };
+            }
+
             UpdateCover(snapshot);
 
             var lyricSnapshot = ApplyLyricOffset(snapshot, out var appliedOffsetMs);
@@ -758,7 +784,7 @@ public partial class MainWindow : Window
             PushLyricsToDisplay(
                 current,
                 next,
-                frame.LineProgress,
+                frame.WordScanProgress ?? frame.LineProgress,
                 frame.CurrentLineIndex,
                 _lastTrackId,
                 _isShowingSpectrum,
@@ -1535,7 +1561,7 @@ public partial class MainWindow : Window
         var desiredTop = taskbarPlacement.Edge == TaskbarEdge.Top
             ? metrics.Bounds.Top + ((taskbarHeight - bottomAnchorHeight) / 2.0) + settings.YOffset
             : metrics.Bounds.Bottom - taskbarHeight + ((taskbarHeight - bottomAnchorHeight) / 2.0) + settings.YOffset - verticalGrowth;
-        ApplyAnchorBounds(desiredLeft, desiredTop, desiredWidth, desiredHeight);
+        ApplyAnchorBounds(desiredLeft, desiredTop, desiredWidth, desiredHeight, metrics.PixelsPerDip);
     }
 
     private static TaskbarPlacement GetTaskbarPlacement(Rect bounds, Rect workArea)
@@ -1572,13 +1598,35 @@ public partial class MainWindow : Window
         double left,
         double top,
         double width,
-        double height)
+        double height,
+        double pixelsPerDip)
     {
         StopAnchorAnimations();
         Left = left;
         Top = top;
         Width = width;
         Height = height;
+
+        var hwnd = new WindowInteropHelper(this).Handle;
+        if (hwnd == IntPtr.Zero)
+        {
+            return;
+        }
+
+        NativeMethods.SetWindowPos(
+            hwnd,
+            IntPtr.Zero,
+            AlignPhysicalPixel(left, pixelsPerDip),
+            AlignPhysicalPixel(top, pixelsPerDip),
+            Math.Max(1, AlignPhysicalPixel(width, pixelsPerDip)),
+            Math.Max(1, AlignPhysicalPixel(height, pixelsPerDip)),
+            NativeMethods.SWP_NOZORDER | NativeMethods.SWP_NOACTIVATE);
+    }
+
+    private static int AlignPhysicalPixel(double value, double pixelsPerDip)
+    {
+        pixelsPerDip = double.IsFinite(pixelsPerDip) && pixelsPerDip > 0 ? pixelsPerDip : 1;
+        return checked((int)Math.Round(value * pixelsPerDip, MidpointRounding.AwayFromZero));
     }
 
     private void StopAnchorAnimations()
@@ -1589,39 +1637,39 @@ public partial class MainWindow : Window
         BeginAnimation(HeightProperty, null);
     }
 
-    private (Rect Bounds, Rect WorkArea) GetTargetScreenMetrics()
+    private DisplayMonitorMetrics GetTargetScreenMetrics()
     {
         var settings = (System.Windows.Application.Current as App)?.Settings ?? new AppSettings();
-        var screens = Forms.Screen.AllScreens;
-        var screen = settings.TargetScreenMode switch
+        var metrics = DisplayMonitorMetricsService.Resolve(settings);
+        if (metrics is not null)
         {
-            TargetScreenMode.Cursor => Forms.Screen.FromPoint(Forms.Cursor.Position),
-            TargetScreenMode.ScreenIndex when screens.Length > 0 =>
-                screens[Math.Clamp(settings.TargetScreenIndex, 0, screens.Length - 1)],
-            _ => Forms.Screen.PrimaryScreen ?? screens.FirstOrDefault()
-        };
-
-        if (screen is null)
-        {
-            return (
-                new Rect(0, 0, SystemParameters.PrimaryScreenWidth, SystemParameters.PrimaryScreenHeight),
-                SystemParameters.WorkArea);
+            return metrics;
         }
 
         var dpi = Media.VisualTreeHelper.GetDpi(this);
-        var scaleX = dpi.DpiScaleX <= 0 ? 1 : dpi.DpiScaleX;
-        var scaleY = dpi.DpiScaleY <= 0 ? 1 : dpi.DpiScaleY;
-        var bounds = new Rect(
-            screen.Bounds.Left / scaleX,
-            screen.Bounds.Top / scaleY,
-            screen.Bounds.Width / scaleX,
-            screen.Bounds.Height / scaleY);
-        var workArea = new Rect(
-            screen.WorkingArea.Left / scaleX,
-            screen.WorkingArea.Top / scaleY,
-            screen.WorkingArea.Width / scaleX,
-            screen.WorkingArea.Height / scaleY);
-        return (bounds, workArea);
+        var pixelsPerDip = dpi.DpiScaleY <= 0 ? 1 : dpi.DpiScaleY;
+        return new DisplayMonitorMetrics(
+            new Rect(0, 0, SystemParameters.PrimaryScreenWidth, SystemParameters.PrimaryScreenHeight),
+            SystemParameters.WorkArea,
+            pixelsPerDip);
+    }
+
+    protected override void OnDpiChanged(DpiScale oldDpi, DpiScale newDpi)
+    {
+        base.OnDpiChanged(oldDpi, newDpi);
+        if (_isDpiLayoutRefreshPending || Dispatcher.HasShutdownStarted || Dispatcher.HasShutdownFinished)
+        {
+            return;
+        }
+
+        _isDpiLayoutRefreshPending = true;
+        Dispatcher.BeginInvoke(() =>
+        {
+            _isDpiLayoutRefreshPending = false;
+            LyricsDisplay.NotifyScreenMetricsChanged();
+            AnchorToTaskbar(animate: false);
+            AttachToTaskbarHost();
+        }, DispatcherPriority.Loaded);
     }
 
     private void AttachToTaskbarHost()
@@ -1702,6 +1750,7 @@ internal static class NativeMethods
     internal static readonly IntPtr HWND_NOTOPMOST = new(-2);
     internal const uint SWP_NOSIZE = 0x0001;
     internal const uint SWP_NOMOVE = 0x0002;
+    internal const uint SWP_NOZORDER = 0x0004;
     internal const uint SWP_NOACTIVATE = 0x0010;
     internal const uint SWP_ASYNCWINDOWPOS = 0x4000;
     internal const uint SWP_SHOWWINDOW = 0x0040;

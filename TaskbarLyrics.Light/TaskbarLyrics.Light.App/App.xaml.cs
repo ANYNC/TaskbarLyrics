@@ -8,7 +8,7 @@ using TaskbarLyrics.Core.Utilities;
 
 namespace TaskbarLyrics.Light.App;
 
-public partial class App : System.Windows.Application
+public partial class App : System.Windows.Application, IDisposable
 {
     private static readonly TimeSpan AutoUpdateCheckDelay = TimeSpan.FromSeconds(8);
     private static readonly TimeSpan AutoUpdateCheckInterval = TimeSpan.FromDays(1);
@@ -22,6 +22,7 @@ public partial class App : System.Windows.Application
     private CancellationTokenSource? _activationServerCancellation;
     private SpectrumTuningSettings _spectrumTuningSettings = SpectrumTuningSettings.CreateDefault();
     private bool? _lastAppliedStartWithWindows;
+    private int _isDisposed;
     private bool _userDismissedAutoLyrics;
 
     public AppSettings Settings { get; private set; } = new();
@@ -76,11 +77,22 @@ public partial class App : System.Windows.Application
         StartActivationServer();
         SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
         ConfigurePlayerPresenceMonitor();
-        _ = RunAutomaticUpdateCheckAsync();
+        TaskObserver.Observe(RunAutomaticUpdateCheckAsync(), "automatic update check");
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
+        Dispose();
+        base.OnExit(e);
+    }
+
+    public void Dispose()
+    {
+        if (Interlocked.Exchange(ref _isDisposed, 1) != 0)
+        {
+            return;
+        }
+
         _activationServerCancellation?.Cancel();
         _activationServerCancellation?.Dispose();
         SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
@@ -90,7 +102,7 @@ public partial class App : System.Windows.Application
         _lyricsWindowHost?.Dispose();
         _trayService?.Dispose();
         SingleInstanceService.Release();
-        base.OnExit(e);
+        GC.SuppressFinalize(this);
     }
 
     private async Task RunAutomaticUpdateCheckAsync()
@@ -142,9 +154,11 @@ public partial class App : System.Windows.Application
     private void StartActivationServer()
     {
         _activationServerCancellation = new CancellationTokenSource();
-        _ = Task.Run(() => SingleInstanceService.ListenForActivationAsync(
-            () => Dispatcher.InvokeAsync(OpenSettingsWindow).Task,
-            _activationServerCancellation.Token));
+        TaskObserver.Observe(
+            Task.Run(() => SingleInstanceService.ListenForActivationAsync(
+                () => Dispatcher.InvokeAsync(OpenSettingsWindow).Task,
+                _activationServerCancellation.Token)),
+            "activation server");
     }
 
     public void SaveSettings(AppSettings settings)
@@ -181,6 +195,7 @@ public partial class App : System.Windows.Application
 
     public void ClearLyricCaches()
     {
+        LyricPipelineCache.ClearDefault();
         LyricProviderBase.ClearCache();
         GenericSmtcLyricProvider.ClearCache();
     }

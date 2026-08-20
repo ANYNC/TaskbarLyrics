@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.IO;
 using System.Text;
 
@@ -30,8 +31,10 @@ public static class Log
 
         try
         {
-            var logPath = GetDebugLogPath();
-            LogFileWriter.AppendLine(logPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] [{level.ToString().ToUpper()}] {message}", MaxLogFileSizeBytes);
+            var logPath = level == Level.Error
+                ? GetErrorLogPath()
+                : GetDebugLogPath();
+            LogFileWriter.AppendLine(logPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] [{level.ToString().ToUpperInvariant()}] {message}", MaxLogFileSizeBytes);
         }
         catch
         {
@@ -43,6 +46,23 @@ public static class Log
     public static void Info(string message) => Write(Level.Info, message);
     public static void Warn(string message) => Write(Level.Warn, message);
     public static void Error(string message) => Write(Level.Error, message);
+
+    public static void Diagnostic(string category, string message)
+    {
+        try
+        {
+            var safeCategory = string.IsNullOrWhiteSpace(category) ? "DIAGNOSTIC" : category.Trim();
+            LogFileWriter.AppendLine(
+                GetDebugLogPath(),
+                $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] [{safeCategory}] {message}",
+                MaxLogFileSizeBytes,
+                LogRetentionDays);
+        }
+        catch
+        {
+            // Diagnostics must never affect the application flow.
+        }
+    }
 
     public static void SetVerboseEnabled(bool enabled)
     {
@@ -125,7 +145,7 @@ public static class LogFileWriter
         var fileName = Path.GetFileName(logPath);
         var (prefix, date) = GetLogNameParts(fileName);
         var extension = Path.GetExtension(fileName);
-        var today = DateTime.Now.ToString("yyyy-MM-dd");
+        var today = DateTime.Now.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
         if (!string.Equals(date, today, StringComparison.Ordinal))
         {

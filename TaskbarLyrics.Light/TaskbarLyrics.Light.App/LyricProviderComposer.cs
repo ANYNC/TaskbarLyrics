@@ -22,53 +22,49 @@ internal static class LyricProviderComposer
 
     private static ILyricProviderRegistry CreateRegistry(AppSettings settings)
     {
-        var onlineProviders = CreateOnlineProviders(settings);
+        var sources = CreateOnlineSources(settings);
         var localProvider = CreateLocalProvider(settings);
-        if (localProvider is null)
+        var providerOrder = sources.Select(source => source.ProviderId).ToArray();
+        var coordinator = new LyricResolutionCoordinator(
+            sources,
+            [new LyricifyPayloadDecoder()],
+            [new LyricifyPayloadParser()],
+            LyricPipelineCache.CreateDefault(),
+            localProvider: settings.LocalLyricsSearchMode == LocalLyricsSearchMode.PreferLocal
+                ? localProvider
+                : null,
+            trustPolicy: new LyricProviderTrustPolicy(providerOrder, providerOrder));
+        ILyricProviderRegistry registry = new PipelineLyricProviderRegistry(coordinator);
+
+        if (localProvider is not null && settings.LocalLyricsSearchMode == LocalLyricsSearchMode.OnlineFallback)
         {
-            return new LyricProviderRegistry(onlineProviders);
+            registry = new FallbackLocalLyricProviderRegistry(registry, localProvider);
         }
 
-        if (settings.LocalLyricsSearchMode == LocalLyricsSearchMode.OnlineFallback)
-        {
-            return new FallbackLocalLyricProviderRegistry(
-                new LyricProviderRegistry(onlineProviders),
-                localProvider);
-        }
-
-        onlineProviders.Add(localProvider);
-        return new LyricProviderRegistry(onlineProviders);
+        return registry;
     }
 
-    private static List<ILyricProvider> CreateOnlineProviders(AppSettings settings)
+    private static List<ILyricSource> CreateOnlineSources(AppSettings settings)
     {
-        var providers = new List<ILyricProvider>
-        {
-            new LazyLyricProvider("LRCLIB", () => new GenericSmtcLyricProvider())
-        };
-
-        if (settings.EnableNetease)
-        {
-            providers.Add(new LazyLyricProvider(
-                "Netease",
-                () => new LyricifyLyricProvider("Netease", Lyricify.Lyrics.Searchers.Searchers.Netease)));
-        }
+        var sources = new List<ILyricSource>();
 
         if (settings.EnableQQMusic)
         {
-            providers.Add(new LazyLyricProvider(
-                "QQMusic",
-                () => new LyricifyLyricProvider("QQMusic", Lyricify.Lyrics.Searchers.Searchers.QQMusic)));
+            sources.Add(new QqMusicLyricSource());
         }
 
         if (settings.EnableKugou)
         {
-            providers.Add(new LazyLyricProvider(
-                "Kugou",
-                () => new LyricifyLyricProvider("Kugou", Lyricify.Lyrics.Searchers.Searchers.Kugou)));
+            sources.Add(new KugouLyricSource());
         }
 
-        return providers;
+        if (settings.EnableNetease)
+        {
+            sources.Add(new NeteaseLyricSource());
+        }
+
+        sources.Add(new LrcLibLyricSource());
+        return sources;
     }
 
     private static ILyricProvider? CreateLocalProvider(AppSettings settings)
