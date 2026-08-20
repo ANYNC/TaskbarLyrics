@@ -1,4 +1,6 @@
 param(
+    [Parameter(Position = 0)]
+    [string]$Version,
     [string]$Configuration = "Release",
     [string]$Runtime = "win-x64",
     [switch]$FrameworkDependent,
@@ -28,12 +30,22 @@ if (-not (Test-Path -LiteralPath $projectPath)) {
 $versionNode = $projectXml.Project.PropertyGroup |
     Where-Object { -not [string]::IsNullOrWhiteSpace($_.Version) } |
     Select-Object -First 1
-$version = $versionNode.Version
-if ([string]::IsNullOrWhiteSpace($version)) {
+$projectVersion = $versionNode.Version
+if ([string]::IsNullOrWhiteSpace($Version) -and [string]::IsNullOrWhiteSpace($projectVersion)) {
     throw "Version is not set in $projectPath"
 }
 
-$packageBaseName = "TaskbarLyrics_light_v$version"
+$packageVersion = if ([string]::IsNullOrWhiteSpace($Version)) {
+    $projectVersion.Trim()
+} else {
+    $Version.Trim()
+}
+
+if ($packageVersion -notmatch '^\d+\.\d+\.\d+(?:\.\d+)?(?:-[0-9A-Za-z.-]+)?$') {
+    throw "Invalid version '$packageVersion'. Expected a version such as 1.2.9 or 1.2.9-beta.1."
+}
+
+$packageBaseName = "TaskbarLyrics_light_v$packageVersion"
 $stageDir = Join-Path $publishRoot $packageBaseName
 $packagePath = Join-Path $publishRoot "$packageBaseName.zip"
 
@@ -70,6 +82,7 @@ $selfContainedValue = if ($FrameworkDependent) { "false" } else { "true" }
     -c $Configuration `
     -r $Runtime `
     --self-contained $selfContainedValue `
+    "-p:Version=$packageVersion" `
     -p:DebugType=None `
     -p:DebugSymbols=false `
     -o $stageDir
