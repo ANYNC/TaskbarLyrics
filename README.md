@@ -1,6 +1,6 @@
 # TaskbarLyrics Light
 
-原生 WPF 轻量版（当前 **v1.2.8**）。Light 版与原版共享 `TaskbarLyrics.Core` 歌词检索逻辑，但歌词窗、设置页、托盘菜单和诊断窗口都使用原生 WPF 实现，不依赖 WebView2 / Chromium 渲染栈，目标是更低进程数、更低内存占用，以及更贴近任务栏常驻场景的交互。
+原生 WPF 轻量版（当前 **v1.2.9**）。Light 版与原版共享 `TaskbarLyrics.Core` 歌词检索逻辑，但歌词窗、设置页、托盘菜单和诊断窗口都使用原生 WPF 实现，不依赖 WebView2 / Chromium 渲染栈，目标是更低进程数、更低内存占用，以及更贴近任务栏常驻场景的交互。
 
 ## 与原版对比
 
@@ -157,7 +157,7 @@
 
 - 关于页支持检查 GitHub Release，并可下载 Light 更新包后自动覆盖安装
 - 优先使用 GitHub API，并从 Release assets 中识别 Light 更新包
-- Light 更新包文件名建议使用 `TaskbarLyrics_light_v1.2.8.zip`；不带 `.zip` 后缀但内容为 zip 的 `TaskbarLyrics_light_v1.2.8` 也会尝试识别
+- Light 更新包文件名建议使用 `TaskbarLyrics_light_v1.2.9.zip`；不带 `.zip` 后缀但内容为 zip 的 `TaskbarLyrics_light_v1.2.9` 也会尝试识别
 - 点击“下载并安装更新”后，会下载到本地临时目录、解压、退出当前进程、覆盖安装目录并自动重启；安装目录无写入权限时会请求管理员权限
 - API 失败时回退到 `releases/latest` 跳转地址解析，降低部分网络环境下误报“网络不行”的概率
 - 自动检查更新每天最多一次
@@ -197,7 +197,7 @@ Light 版设置页已按功能域重排，后续新增功能请按下面规则�
 | 开机自启动 | 支持 | 支持（独立注册表项） |
 | 播放器打开/关闭联动 | 无 | 支持 |
 | WebView2 Runtime | 需要 | 不需要 |
-| 当前版本号 | 主仓库 Release | Light 程序集版本 **1.2.8** |
+| 当前版本号 | 主仓库 Release | Light 程序集版本 **1.2.9** |
 
 ## 系统要求
 
@@ -213,10 +213,16 @@ dotnet run --project TaskbarLyrics.Light/TaskbarLyrics.Light.App
 
 ## 发布
 
-推荐使用 Light 打包脚本，默认独立发布并生成 `publish/TaskbarLyrics_light_v1.2.8.zip` 这种格式的更新包：
+推荐使用 Light 打包脚本，默认独立发布并生成 `publish/TaskbarLyrics_light_v1.2.9.zip` 这种格式的更新包：
 
 ```powershell
 .\TaskbarLyrics.Light\scripts\publish-light.ps1
+```
+
+也可以在命令末尾直接指定版本号；该版本会同时写入程序集和发布包名：
+
+```powershell
+.\TaskbarLyrics.Light\scripts\publish-light.ps1 1.2.9
 ```
 
 如需框架依赖发布（目标机器需安装 .NET 8），使用：
@@ -225,7 +231,7 @@ dotnet run --project TaskbarLyrics.Light/TaskbarLyrics.Light.App
 .\TaskbarLyrics.Light\scripts\publish-light.ps1 -FrameworkDependent
 ```
 
-脚本会读取 `TaskbarLyrics.Light.App.csproj` 中的 `<Version>`，发布目录名和 zip 文件名统一为 `TaskbarLyrics_light_v{版本}`。发布包请完整解压后运行 `TaskbarLyrics.Light.exe`，需要保留 `Assets` 等目录。
+未指定版本号时，脚本会读取 `TaskbarLyrics.Light.App.csproj` 中的 `<Version>`。发布目录名和 zip 文件名统一为 `TaskbarLyrics_light_v{版本}`。发布包请完整解压后运行 `TaskbarLyrics.Light.exe`，需要保留 `Assets` 等目录。
 
 ## 配置与数据目录
 
@@ -245,6 +251,20 @@ dotnet run --project TaskbarLyrics.Light/TaskbarLyrics.Light.App
 - 优先原版：希望完全跟随主仓库 WebView2 设置页体验
 
 ## 版本记录
+
+### 1.2.9
+
+- `light` 分支正式调整为仅维护 Light 版，移除原版 App、原版根解决方案及原版专用启动脚本；`main` 分支不受影响
+- Light 打包脚本支持在命令末尾指定版本号，并同步覆盖程序集与发布包版本
+- 歌词检索升级为分阶段解析管线，加入多级查询计划、来源可信顺序、原始/解析双层缓存和逐字歌词进度
+- 收紧 Light 设置差量判断，播放器识别顺序或 Spotify 开关变化不再无关重建歌词管线
+- 歌词诊断增加远程/内存/磁盘缓存来源、解析耗时和实际候选信息
+- 修复模糊元数据歌词被持久缓存、缓存重启后无法可靠反序列化，以及无播放状态未取消后台检索的问题
+- 增加 750 ms 元数据稳定窗口和 SMTC 弱元数据防抖，减少切歌期间的重复检索与错误过渡
+- 设置保存改为临时文件落盘后原子替换，读取和保存失败时记录诊断日志
+- 频谱捕获支持默认输出设备切换检测、异常指数退避和安全的捕获线程重启
+- 启用 Per-Monitor V2，并按目标显示器实际 DPI 计算、提交歌词窗口位置
+- 补齐后台任务异常观察和应用、窗口、SMTC 服务的幂等资源释放
 
 ### 1.2.8
 
