@@ -2,6 +2,8 @@ namespace TaskbarLyrics.App;
 
 public sealed class TimelinePositionStrategyRegistry
 {
+    private static readonly TimeSpan MaximumDeferredPausedAdvance = TimeSpan.FromSeconds(1);
+
     private readonly IReadOnlyList<ITimelinePositionStrategy> _strategies;
     private readonly ITimelinePositionStrategy _defaultStrategy;
     private string _lastTrackIdentity = string.Empty;
@@ -87,26 +89,30 @@ public sealed class TimelinePositionStrategyRegistry
 
         if (_wasPlaying)
         {
-            _timelineRefreshWaitState =
-                diagnostics.LastUpdatedTimeUtc <= _lastTimelineUpdatedAtUtc
-                    ? TimelineRefreshWaitState.WaitingForPausedTimeline
-                    : TimelineRefreshWaitState.None;
             _wasPlaying = false;
+            _timelineRefreshWaitState = TimelineRefreshWaitState.None;
         }
 
-        if (_timelineRefreshWaitState == TimelineRefreshWaitState.WaitingForPausedTimeline &&
-            diagnostics.LastUpdatedTimeUtc <= _lastTimelineUpdatedAtUtc)
+        if (diagnostics.LastUpdatedTimeUtc <= _lastTimelineUpdatedAtUtc)
         {
-            _lastSelectedPosition = selectedPosition > _lastSelectedPosition
-                ? selectedPosition
-                : _lastSelectedPosition;
+            return _lastSelectedPosition;
+        }
+
+        _lastTimelineUpdatedAtUtc = diagnostics.LastUpdatedTimeUtc;
+        if (ShouldDeferPausedAdvance(selectedPosition))
+        {
             return _lastSelectedPosition;
         }
 
         _timelineRefreshWaitState = TimelineRefreshWaitState.None;
-        _lastTimelineUpdatedAtUtc = diagnostics.LastUpdatedTimeUtc;
         _lastSelectedPosition = selectedPosition;
         return selectedPosition;
+    }
+
+    private bool ShouldDeferPausedAdvance(TimeSpan selectedPosition)
+    {
+        var advance = selectedPosition - _lastSelectedPosition;
+        return advance > TimeSpan.Zero && advance <= MaximumDeferredPausedAdvance;
     }
 
     public static TimelinePositionStrategyRegistry CreateDefault()
@@ -123,7 +129,6 @@ public sealed class TimelinePositionStrategyRegistry
     private enum TimelineRefreshWaitState
     {
         None,
-        WaitingForPausedTimeline,
         WaitingForResumedTimeline
     }
 }

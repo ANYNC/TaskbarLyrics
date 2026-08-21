@@ -557,6 +557,11 @@ public partial class MainWindow : Window, IDisposable
             UpdateCover(snapshot);
 
             var frame = await _lyricSyncService.GetDisplayFrameAsync(snapshot);
+            if (_musicSessionProvider is SmtcMusicSessionProvider playbackStateProvider)
+            {
+                snapshot = playbackStateProvider.RefreshPlaybackState(snapshot);
+            }
+
             LogTickDiagnostics(snapshot, frame);
 
             if (_musicSessionProvider is SmtcMusicSessionProvider smtcProvider)

@@ -14,6 +14,7 @@ public sealed class ActiveSessionCacheTests
         var result = cache.FindIn([new object(), activeSession]);
 
         Assert.Same(activeSession, result);
+        Assert.Same(activeSession, cache.Current);
     }
 
     [Fact]
@@ -26,6 +27,7 @@ public sealed class ActiveSessionCacheTests
         var result = cache.FindIn([new object()]);
 
         Assert.Null(result);
+        Assert.Null(cache.Current);
         Assert.Null(cache.FindIn([activeSession]));
     }
 }

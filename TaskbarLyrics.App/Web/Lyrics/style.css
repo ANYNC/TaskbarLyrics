@@ -33,6 +33,7 @@
   --primary: rgba(255, 255, 255, 1);
   --secondary: rgba(255, 255, 255, 0.60);
   --translation: rgba(255, 255, 255, 0.70);
+  --word-scan-feather-width: 0.18em;
   --row-height: 14px;
   --row-gap: 1px;
   --line-pitch: 15px;
@@ -405,6 +406,37 @@ html, body {
 .next-line.promoting.word-scanning .line-text-scan {
   visibility: visible;
   clip-path: inset(0 calc(100% - var(--word-scan-progress)) 0 0);
+}
+
+@supports ((mask-image: linear-gradient(to right, #000, transparent)) or
+  (-webkit-mask-image: linear-gradient(to right, #000, transparent))) {
+  .current-line.word-scanning .line-text-base,
+  .next-line.promoting.word-scanning .line-text-base {
+    clip-path: none;
+  }
+
+  .current-line.word-scanning .line-text-scan,
+  .next-line.promoting.word-scanning .line-text-scan {
+    --word-scan-effective-feather: min(
+      var(--word-scan-feather-width),
+      var(--word-scan-progress),
+      calc(100% - var(--word-scan-progress)));
+    clip-path: none;
+    -webkit-mask-image: linear-gradient(
+      to right,
+      #000 0,
+      #000 calc(var(--word-scan-progress) - var(--word-scan-effective-feather)),
+      transparent calc(var(--word-scan-progress) + var(--word-scan-effective-feather)),
+      transparent 100%);
+    mask-image: linear-gradient(
+      to right,
+      #000 0,
+      #000 calc(var(--word-scan-progress) - var(--word-scan-effective-feather)),
+      transparent calc(var(--word-scan-progress) + var(--word-scan-effective-feather)),
+      transparent 100%);
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+  }
 }
 
 .next-line {

@@ -5,6 +5,8 @@ internal sealed class ActiveSessionCache<TSession>
 {
     private TSession? _session;
 
+    public TSession? Current => _session;
+
     public void Remember(TSession? session)
     {
         _session = session;

@@ -39,6 +39,7 @@ describe("lyrics responsive layout", () => {
     expect(style).toMatch(/@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*\.line\.horizontal-scrolling\.word-scan-smoothing \.line-text-stack\s*\{[^}]*transition:\s*none;[^}]*will-change:\s*auto/s);
     expect(style).toContain("--primary: rgba(255, 255, 255, 1)");
     expect(style).toContain("--secondary: rgba(255, 255, 255, 0.60)");
+    expect(style).toContain("--word-scan-feather-width: 0.18em");
     const primaryFallback = style.match(/--primary:\s*rgba\((\d+),\s*(\d+),\s*(\d+),/);
     const secondaryFallback = style.match(/--secondary:\s*rgba\((\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\)/);
     expect(primaryFallback).not.toBeNull();
@@ -51,8 +52,13 @@ describe("lyrics responsive layout", () => {
     expect(style).toContain("clip-path: inset(0 100% 0 0)");
     expect(style).toContain("clip-path: inset(0 0 0 var(--word-scan-progress))");
     expect(style).toContain("clip-path: inset(0 calc(100% - var(--word-scan-progress)) 0 0)");
-    expect(style).not.toContain("mask-image");
-    expect(style).not.toContain("-webkit-mask-image");
+    expect(style).toContain("@supports ((mask-image: linear-gradient(to right, #000, transparent)) or");
+    expect(style).toContain("(-webkit-mask-image: linear-gradient(to right, #000, transparent)))");
+    expect(style).toMatch(/--word-scan-effective-feather:\s*min\(\s*var\(--word-scan-feather-width\),\s*var\(--word-scan-progress\),\s*calc\(100% - var\(--word-scan-progress\)\)\)/s);
+    expect(style).toMatch(/-webkit-mask-image:\s*linear-gradient\(\s*to right,\s*#000 0,\s*#000 calc\(var\(--word-scan-progress\) - var\(--word-scan-effective-feather\)\),\s*transparent calc\(var\(--word-scan-progress\) \+ var\(--word-scan-effective-feather\)\),\s*transparent 100%\)/s);
+    expect(style).toMatch(/(?<!-webkit-)mask-image:\s*linear-gradient\(\s*to right,\s*#000 0,\s*#000 calc\(var\(--word-scan-progress\) - var\(--word-scan-effective-feather\)\),\s*transparent calc\(var\(--word-scan-progress\) \+ var\(--word-scan-effective-feather\)\),\s*transparent 100%\)/s);
+    expect(style).toContain("-webkit-mask-repeat: no-repeat");
+    expect(style).toContain("mask-repeat: no-repeat");
     expect(style).not.toContain("word-scan-active");
     expect(style).not.toContain("word-scan-complete");
     expect(style).not.toContain("background-clip: text");
@@ -140,12 +146,15 @@ describe("lyrics responsive layout", () => {
 
     receiveLyrics(0.9, true);
     expect(currentLine.classList.contains("word-scan-smoothing")).toBe(true);
-    expect(currentLine.style.getPropertyValue("--word-scan-progress")).toBe("90.000%");
-    expect(currentLineStack.style.getPropertyValue("--line-scroll-offset")).toBe("-200px");
+    expect(currentLine.style.getPropertyValue("--word-scan-progress")).toBe("80.000%");
+    expect(currentLineStack.style.getPropertyValue("--line-scroll-offset")).toBe("-175.2px");
 
     receiveLyrics(0.2, false);
     expect(currentLine.classList.contains("word-scan-smoothing")).toBe(false);
     expect(currentLineStack.style.getPropertyValue("--line-scroll-offset")).toBe("0px");
+
+    receiveLyrics(0.8, true);
+    expect(currentLine.style.getPropertyValue("--word-scan-progress")).toBe("20.000%");
 
     receiveLyrics(null);
     expect(currentLine.classList.contains("word-scanning")).toBe(false);
@@ -212,6 +221,89 @@ describe("lyrics responsive layout", () => {
     expect(currentLine.classList.contains("word-scanning")).toBe(true);
     expect(currentLine.classList.contains("word-scan-smoothing")).toBe(false);
     expect(currentLine.style.getPropertyValue("--word-scan-progress")).toBe("10.000%");
+
+    receiveLyrics(0.2, false);
+    receiveLyrics(0.3, true);
+    expect(currentLine.style.getPropertyValue("--word-scan-progress")).toBe("30.000%");
+  });
+
+  it("freezes the interpolated word-scan value across pause frames", async () => {
+    const [html, bridge, state, presentation, script] = await Promise.all([
+      read("TaskbarLyrics.App/Web/Lyrics/index.html"),
+      read("TaskbarLyrics.App/Web/Lyrics/bridge.js"),
+      read("TaskbarLyrics.App/Web/Lyrics/state.js"),
+      read("TaskbarLyrics.App/Web/Lyrics/presentation.js"),
+      read("TaskbarLyrics.App/Web/Lyrics/app.js")
+    ]);
+    const dom = new JSDOM(html.replace("{{STYLE_CSS}}", "").replace("{{APP_JS}}", ""), {
+      runScripts: "outside-only"
+    });
+    dom.window.CSS = { supports: () => true };
+    dom.window.requestAnimationFrame = () => 1;
+    dom.window.cancelAnimationFrame = () => {};
+    let computedProgress = "24.500%";
+    let nowMs = 1000;
+    Object.defineProperty(dom.window.performance, "now", {
+      configurable: true,
+      value: () => nowMs
+    });
+    dom.window.getComputedStyle = () => ({
+      getPropertyValue: property => property === "--word-scan-progress"
+        ? computedProgress
+        : ""
+    });
+    dom.window.eval(bridge);
+    dom.window.eval(state);
+    dom.window.eval(presentation);
+    dom.window.eval(script);
+
+    const currentLine = dom.window.document.querySelector("#currentLine");
+    const currentLineText = dom.window.document.querySelector("#currentLineText");
+    const currentLineViewport = currentLine.querySelector(".line-text-viewport");
+    const currentLineStack = currentLine.querySelector(".line-text-stack");
+    Object.defineProperty(currentLineViewport, "clientWidth", { configurable: true, value: 100 });
+    Object.defineProperty(currentLineText, "scrollWidth", { configurable: true, value: 300 });
+    const receive = payload => dom.window.taskbarLyrics.receive({
+      version: 1,
+      type: "lyrics",
+      payload: {
+        current: "Interpolated line",
+        next: "Next line",
+        progress: 0.5,
+        currentLineIndex: 0,
+        trackId: "track-a",
+        isPureMusic: false,
+        ...payload
+      }
+    });
+
+    receive({ isPlaying: true, wordScanProgress: 0.2, animateTransition: false });
+    receive({ isPlaying: true, wordScanProgress: 0.3 });
+    expect(currentLine.classList.contains("word-scan-smoothing")).toBe(true);
+
+    receive({ isPlaying: false, wordScanProgress: 0.4 });
+    expect(currentLine.classList.contains("word-scan-smoothing")).toBe(false);
+    expect(currentLine.style.getPropertyValue("--word-scan-progress")).toBe("24.500%");
+    expect(currentLineStack.style.getPropertyValue("--line-scroll-offset")).toBe("-9px");
+
+    computedProgress = "30.000%";
+    receive({ isPlaying: false, wordScanProgress: 0.4 });
+    expect(currentLine.style.getPropertyValue("--word-scan-progress")).toBe("24.500%");
+
+    receive({ isPlaying: false, wordScanProgress: 0.6 });
+    expect(currentLine.style.getPropertyValue("--word-scan-progress")).toBe("60.000%");
+
+    receive({ isPlaying: true, wordScanProgress: 0.7 });
+    expect(currentLine.classList.contains("word-scan-smoothing")).toBe(true);
+    expect(currentLine.style.getPropertyValue("--word-scan-progress")).toBe("60.000%");
+
+    nowMs += 90;
+    receive({ isPlaying: true, wordScanProgress: 0.75 });
+    expect(currentLine.style.getPropertyValue("--word-scan-progress")).toBe("70.000%");
+
+    nowMs += 90;
+    receive({ isPlaying: true, wordScanProgress: 0.8 });
+    expect(currentLine.style.getPropertyValue("--word-scan-progress")).toBe("80.000%");
   });
 
   it("carries word-scan progress through queued line transitions", async () => {

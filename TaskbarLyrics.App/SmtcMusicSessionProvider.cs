@@ -146,6 +146,8 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
     private string _lastCoverThumbnailDiagnosticsKey = string.Empty;
     private string _lastMediaPropertiesErrorKey = string.Empty;
     private DateTimeOffset _nextMediaPropertiesErrorLogUtc;
+    private string _lastPlaybackStateRefreshErrorKey = string.Empty;
+    private DateTimeOffset _nextPlaybackStateRefreshErrorLogUtc;
     private int _isDisposed;
 
     public void SetRecognitionOrder(
@@ -163,6 +165,52 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
     public SmtcTimelineDiagnostics? GetLastTimelineDiagnostics()
     {
         return _lastTimelineDiagnostics;
+    }
+
+    internal PlaybackSnapshot RefreshPlaybackState(PlaybackSnapshot snapshot)
+    {
+        var session = _activeSessionCache.Current;
+        if (session is null)
+        {
+            return snapshot;
+        }
+
+        try
+        {
+            var playbackInfo = session.GetPlaybackInfo();
+            var isPlaying = playbackInfo?.PlaybackStatus ==
+                GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
+            return ApplyLatestPlaybackState(snapshot, isPlaying);
+        }
+        catch (Exception exception)
+        {
+            var nowUtc = DateTimeOffset.UtcNow;
+            var errorKey = $"{exception.GetType().FullName}|{exception.HResult:X8}";
+            if (!string.Equals(
+                    errorKey,
+                    _lastPlaybackStateRefreshErrorKey,
+                    StringComparison.Ordinal) ||
+                nowUtc >= _nextPlaybackStateRefreshErrorLogUtc)
+            {
+                _lastPlaybackStateRefreshErrorKey = errorKey;
+                _nextPlaybackStateRefreshErrorLogUtc = nowUtc.AddSeconds(30);
+                Log.Diagnostic(
+                    "SMTC",
+                    $"PlaybackStateRefreshFailed Exception='{exception.GetType().Name}' " +
+                    $"HResult=0x{exception.HResult:X8}");
+            }
+
+            return snapshot;
+        }
+    }
+
+    internal static PlaybackSnapshot ApplyLatestPlaybackState(
+        PlaybackSnapshot snapshot,
+        bool isPlaying)
+    {
+        return snapshot.IsPlaying == isPlaying
+            ? snapshot
+            : snapshot with { IsPlaying = isPlaying };
     }
 
     public void SetCurrentLyricSource(string? sourceApp)
