@@ -5,12 +5,12 @@ namespace TaskbarLyrics.App.Tests;
 public sealed class EmbeddedTaskbarLayoutCalculatorTests
 {
     [Theory]
-    [InlineData(EmbeddedTaskbarHorizontalAnchor.Left, 0, 0)]
-    [InlineData(EmbeddedTaskbarHorizontalAnchor.Left, 40, 40)]
-    [InlineData(EmbeddedTaskbarHorizontalAnchor.Center, 0, 190)]
-    [InlineData(EmbeddedTaskbarHorizontalAnchor.Right, 0, 380)]
-    public void CalculateHorizontalLeftFollowsAnchor(
-        EmbeddedTaskbarHorizontalAnchor anchor,
+    [InlineData(LyricsHorizontalAnchor.Left, 0, 0)]
+    [InlineData(LyricsHorizontalAnchor.Left, 40, 40)]
+    [InlineData(LyricsHorizontalAnchor.Center, 0, 190)]
+    [InlineData(LyricsHorizontalAnchor.Right, 0, 380)]
+    public void CalculateHorizontalLeftFollowsSharedHorizontalAnchor(
+        LyricsHorizontalAnchor anchor,
         double offset,
         double expected)
     {
@@ -63,6 +63,84 @@ public sealed class EmbeddedTaskbarLayoutCalculatorTests
         Assert.Equal(10, bounds.Left);
         Assert.Equal(20, bounds.Top);
         Assert.Equal(100, bounds.Width);
+    }
+
+    [Fact]
+    public void NeedsNativeBoundsUpdateSkipsIdenticalPhysicalBounds()
+    {
+        var bounds = new EmbeddedTaskbarNativeBounds(10, 20, 300, 40);
+
+        Assert.False(EmbeddedTaskbarLayoutCalculator.NeedsNativeBoundsUpdate(bounds, bounds));
+    }
+
+    [Fact]
+    public void NeedsNativeBoundsUpdateRequiresInitialPositioning()
+    {
+        var bounds = new EmbeddedTaskbarNativeBounds(10, 20, 300, 40);
+
+        Assert.True(EmbeddedTaskbarLayoutCalculator.NeedsNativeBoundsUpdate(null, bounds));
+    }
+
+    [Theory]
+    [InlineData(1, 0, 0, 0)]
+    [InlineData(0, 1, 0, 0)]
+    [InlineData(0, 0, 1, 0)]
+    [InlineData(0, 0, 0, 1)]
+    public void NeedsNativeBoundsUpdateDetectsAnyPhysicalBoundaryChange(
+        int leftDelta,
+        int topDelta,
+        int widthDelta,
+        int heightDelta)
+    {
+        var previousBounds = new EmbeddedTaskbarNativeBounds(10, 20, 300, 40);
+        var targetBounds = new EmbeddedTaskbarNativeBounds(
+            previousBounds.Left + leftDelta,
+            previousBounds.Top + topDelta,
+            previousBounds.Width + widthDelta,
+            previousBounds.Height + heightDelta);
+
+        Assert.True(EmbeddedTaskbarLayoutCalculator.NeedsNativeBoundsUpdate(previousBounds, targetBounds));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void AttachResultPreservesEstablishedEmbeddingWhenPositioningIsPending(bool positioned)
+    {
+        var result = EmbeddedTaskbarEmbeddingPolicy.FromPositionResult(positioned);
+        var expected = positioned
+            ? EmbeddedTaskbarAttachResult.Attached
+            : EmbeddedTaskbarAttachResult.AttachedPositionPending;
+
+        Assert.Equal(expected, result);
+        Assert.True(EmbeddedTaskbarEmbeddingPolicy.ShouldKeepEmbedded(result));
+    }
+
+    [Fact]
+    public void UnavailableAttachResultFallsBackToTransparentWindow()
+    {
+        Assert.False(
+            EmbeddedTaskbarEmbeddingPolicy.ShouldKeepEmbedded(
+                EmbeddedTaskbarAttachResult.Unavailable));
+    }
+
+    [Theory]
+    [InlineData(true, true, true, true)]
+    [InlineData(false, true, true, false)]
+    [InlineData(true, false, true, false)]
+    [InlineData(true, true, false, false)]
+    public void ExistingAttachmentIsRetainedOnlyForSameValidTarget(
+        bool sameWindow,
+        bool sameTargetDisplay,
+        bool parentIsValid,
+        bool expected)
+    {
+        Assert.Equal(
+            expected,
+            EmbeddedTaskbarEmbeddingPolicy.ShouldKeepExistingAttachment(
+                sameWindow,
+                sameTargetDisplay,
+                parentIsValid));
     }
 
     [Fact]

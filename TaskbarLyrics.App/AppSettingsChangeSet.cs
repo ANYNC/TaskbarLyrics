@@ -102,7 +102,6 @@ internal readonly record struct AppSettingsChangeSet(
         var taskbarEmbeddingChanged = isInitialApplication ||
             current.TaskbarEmbeddingEnabled != next.TaskbarEmbeddingEnabled ||
             current.EmbeddedTaskbarWidth != next.EmbeddedTaskbarWidth ||
-            current.EmbeddedTaskbarHorizontalAnchor != next.EmbeddedTaskbarHorizontalAnchor ||
             current.EmbeddedTaskbarHorizontalOffset != next.EmbeddedTaskbarHorizontalOffset ||
             current.EmbeddedTaskbarVerticalOffset != next.EmbeddedTaskbarVerticalOffset;
 

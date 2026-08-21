@@ -936,7 +936,6 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             ForceAlwaysOnTop = _settings.ForceAlwaysOnTop,
             TaskbarEmbeddingEnabled = _settings.TaskbarEmbeddingEnabled,
             EmbeddedTaskbarWidth = _settings.EmbeddedTaskbarWidth,
-            EmbeddedTaskbarHorizontalAnchor = _settings.EmbeddedTaskbarHorizontalAnchor,
             EmbeddedTaskbarHorizontalOffset = _settings.EmbeddedTaskbarHorizontalOffset,
             EmbeddedTaskbarVerticalOffset = _settings.EmbeddedTaskbarVerticalOffset,
             LyricsDisplayMode = _settings.LyricsDisplayMode,
@@ -1127,11 +1126,6 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             case "embeddedTaskbarWidth":
                 _settings.EmbeddedTaskbarWidth = AppSettings.ClampEmbeddedTaskbarWidth(
                     ReadDouble(element, _settings.EmbeddedTaskbarWidth));
-                break;
-            case "embeddedTaskbarHorizontalAnchor":
-                _settings.EmbeddedTaskbarHorizontalAnchor = ReadEnum(
-                    element,
-                    _settings.EmbeddedTaskbarHorizontalAnchor);
                 break;
             case "embeddedTaskbarHorizontalOffset":
                 _settings.EmbeddedTaskbarHorizontalOffset = AppSettings.ClampEmbeddedTaskbarOffset(
@@ -1624,7 +1618,6 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         target.ForceAlwaysOnTop = source.ForceAlwaysOnTop;
         target.TaskbarEmbeddingEnabled = source.TaskbarEmbeddingEnabled;
         target.EmbeddedTaskbarWidth = source.EmbeddedTaskbarWidth;
-        target.EmbeddedTaskbarHorizontalAnchor = source.EmbeddedTaskbarHorizontalAnchor;
         target.EmbeddedTaskbarHorizontalOffset = source.EmbeddedTaskbarHorizontalOffset;
         target.EmbeddedTaskbarVerticalOffset = source.EmbeddedTaskbarVerticalOffset;
         target.LyricsDisplayMode = source.LyricsDisplayMode;
@@ -1766,8 +1759,6 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         public bool TaskbarEmbeddingEnabled { get; set; }
 
         public double EmbeddedTaskbarWidth { get; set; }
-
-        public EmbeddedTaskbarHorizontalAnchor EmbeddedTaskbarHorizontalAnchor { get; set; }
 
         public double EmbeddedTaskbarHorizontalOffset { get; set; }
 

@@ -43,13 +43,6 @@ public enum LyricsDisplayMode
     Selected
 }
 
-public enum EmbeddedTaskbarHorizontalAnchor
-{
-    Left,
-    Center,
-    Right
-}
-
 public sealed class AppSettings
 {
     public const int MinimumPlayerLyricOffsetMilliseconds = -5000;
@@ -188,9 +181,6 @@ public sealed class AppSettings
 
     public double EmbeddedTaskbarWidth { get; set; } = DefaultEmbeddedTaskbarWidth;
 
-    public EmbeddedTaskbarHorizontalAnchor EmbeddedTaskbarHorizontalAnchor { get; set; } =
-        EmbeddedTaskbarHorizontalAnchor.Right;
-
     public double EmbeddedTaskbarHorizontalOffset { get; set; }
 
     public double EmbeddedTaskbarVerticalOffset { get; set; }
@@ -290,10 +280,6 @@ public sealed class AppSettings
         EmbeddedTaskbarWidth = ClampEmbeddedTaskbarWidth(EmbeddedTaskbarWidth);
         EmbeddedTaskbarHorizontalOffset = ClampEmbeddedTaskbarOffset(EmbeddedTaskbarHorizontalOffset);
         EmbeddedTaskbarVerticalOffset = ClampEmbeddedTaskbarOffset(EmbeddedTaskbarVerticalOffset);
-        if (!Enum.IsDefined(EmbeddedTaskbarHorizontalAnchor))
-        {
-            EmbeddedTaskbarHorizontalAnchor = EmbeddedTaskbarHorizontalAnchor.Right;
-        }
     }
 
     public int GetPlayerLyricOffsetMilliseconds(string? sourceApp)

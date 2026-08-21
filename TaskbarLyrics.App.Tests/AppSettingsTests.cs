@@ -89,12 +89,11 @@ public sealed class AppSettingsTests
     }
 
     [Fact]
-    public void NormalizeTaskbarEmbeddingClampsValuesAndRestoresUnknownAnchor()
+    public void NormalizeTaskbarEmbeddingClampsValues()
     {
         var settings = new AppSettings
         {
             EmbeddedTaskbarWidth = 5000,
-            EmbeddedTaskbarHorizontalAnchor = (EmbeddedTaskbarHorizontalAnchor)999,
             EmbeddedTaskbarHorizontalOffset = -5000,
             EmbeddedTaskbarVerticalOffset = 5000
         };
@@ -102,7 +101,6 @@ public sealed class AppSettingsTests
         settings.NormalizeTaskbarEmbedding();
 
         Assert.Equal(AppSettings.MaximumWindowWidth, settings.EmbeddedTaskbarWidth);
-        Assert.Equal(EmbeddedTaskbarHorizontalAnchor.Right, settings.EmbeddedTaskbarHorizontalAnchor);
         Assert.Equal(AppSettings.MinimumWindowOffset, settings.EmbeddedTaskbarHorizontalOffset);
         Assert.Equal(AppSettings.MaximumWindowOffset, settings.EmbeddedTaskbarVerticalOffset);
     }

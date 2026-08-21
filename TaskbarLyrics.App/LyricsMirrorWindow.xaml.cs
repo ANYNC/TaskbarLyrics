@@ -27,6 +27,8 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
         Closed += OnClosed;
     }
 
+    internal bool IsEmbeddedInTaskbar => _embeddedTaskbarAnchor.IsAttached;
+
     public void SetDisplayMonitor(DisplayMonitor displayMonitor)
     {
         _displayMonitor = displayMonitor;
@@ -52,8 +54,10 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
         LyricsContentRoot.MinHeight = metrics.MinimumContentHeight;
         LyricsWebView.Margin = new Thickness(0, 0, 0, -metrics.ViewportDescenderBuffer);
         _pendingScripts["style"] = LyricsStyleScriptFactory.Create(_settings, pixelsPerDip);
-        if (_settings.TaskbarEmbeddingEnabled &&
-            _embeddedTaskbarAnchor.Attach(this, _settings, _displayMonitor))
+        var attachResult = _settings.TaskbarEmbeddingEnabled
+            ? _embeddedTaskbarAnchor.Attach(this, _settings, _displayMonitor)
+            : EmbeddedTaskbarAttachResult.Unavailable;
+        if (EmbeddedTaskbarEmbeddingPolicy.ShouldKeepEmbedded(attachResult))
         {
             ExecutePendingScript("style");
             return;

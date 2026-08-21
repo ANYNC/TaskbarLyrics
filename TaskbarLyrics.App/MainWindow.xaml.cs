@@ -89,11 +89,14 @@ public partial class MainWindow : Window, IDisposable
     private bool _hasReportedWebViewControllerMonitoringFailure;
     private int _displayLayoutRefreshPending;
     private int _isDisposed;
+    private bool _isClosingForRecreation;
     private DisplayMonitor? _displayMonitor;
 
     internal event Action<LyricsPresentationCommand>? PresentationCommandCreated;
 
     internal event EventHandler<LyricsContentVisibilityChangedEventArgs>? LyricsContentVisibilityChanged;
+
+    internal event EventHandler? RecreateWindowRequested;
 
     internal DisplayMonitor? DisplayMonitor => _displayMonitor;
 
@@ -213,11 +216,8 @@ public partial class MainWindow : Window, IDisposable
 
         if (changes.WindowLayoutChanged || changes.LyricsLayoutChanged || changes.TaskbarEmbeddingChanged)
         {
-            if (!snapshot.TaskbarEmbeddingEnabled)
-            {
-                _embeddedTaskbarAnchor.Detach();
-            }
-
+            // AnchorToTaskbar owns the detach: leaving an established embedding
+            // requests window recreation from the host instead of reusing this HWND.
             AnchorToTaskbar();
             AttachToTaskbarHost();
         }
@@ -374,9 +374,17 @@ public partial class MainWindow : Window, IDisposable
         UpdateSpectrumCaptureState();
     }
 
+    internal void CloseForRecreation()
+    {
+        _isClosingForRecreation = true;
+        Close();
+    }
+
     private void OnClosing(object? sender, CancelEventArgs e)
     {
-        if (System.Windows.Application.Current is App app && !app.IsExiting)
+        if (!_isClosingForRecreation &&
+            System.Windows.Application.Current is App app &&
+            !app.IsExiting)
         {
             e.Cancel = true;
             app.MarkLyricsHiddenByUser();
@@ -1601,14 +1609,26 @@ public partial class MainWindow : Window, IDisposable
 
     private void AnchorToTaskbar()
     {
+        var wasEmbedded = _embeddedTaskbarAnchor.IsAttached;
         if (_currentSettings.TaskbarEmbeddingEnabled)
         {
-            if (_embeddedTaskbarAnchor.Attach(this, _currentSettings, _displayMonitor))
+            var attachResult = _embeddedTaskbarAnchor.Attach(this, _currentSettings, _displayMonitor);
+            if (EmbeddedTaskbarEmbeddingPolicy.ShouldKeepEmbedded(attachResult))
             {
                 return;
             }
+        }
 
+        if (wasEmbedded)
+        {
+            // Leaving an established cross-process embedding permanently invalidates
+            // this HWND's layered composition surface: the window keeps its content
+            // but DWM never composites it as a top-level window again (verified with
+            // native probes; no style, visibility, or reparent sequence revives it).
+            // Delegate to the host to replace this window with a fresh one.
             _embeddedTaskbarAnchor.Detach();
+            RecreateWindowRequested?.Invoke(this, EventArgs.Empty);
+            return;
         }
 
         TaskbarPlacementService.Anchor(this, _currentSettings, _displayMonitor);

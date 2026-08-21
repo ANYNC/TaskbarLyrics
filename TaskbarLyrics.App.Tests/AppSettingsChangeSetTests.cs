@@ -254,13 +254,25 @@ public sealed class AppSettingsChangeSetTests
         var current = new AppSettings();
         var next = current.Clone();
         next.EmbeddedTaskbarWidth = 500;
-        next.EmbeddedTaskbarHorizontalAnchor = EmbeddedTaskbarHorizontalAnchor.Center;
         next.EmbeddedTaskbarHorizontalOffset = 10;
         next.EmbeddedTaskbarVerticalOffset = -2;
 
         var changes = AppSettingsChangeSet.Create(current, next);
 
         Assert.True(changes.TaskbarEmbeddingChanged);
+        Assert.True(changes.RequiresLyricsWindowApply);
+    }
+
+    [Fact]
+    public void CreateWhenHorizontalAnchorChangesReappliesWindowLayoutForEmbedding()
+    {
+        var current = new AppSettings();
+        var next = current.Clone();
+        next.HorizontalAnchor = LyricsHorizontalAnchor.Center;
+
+        var changes = AppSettingsChangeSet.Create(current, next);
+
+        Assert.True(changes.WindowLayoutChanged);
         Assert.True(changes.RequiresLyricsWindowApply);
     }
 }

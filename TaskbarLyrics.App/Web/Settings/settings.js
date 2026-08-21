@@ -12,7 +12,6 @@
       lyricsTextAlignment: [{ value: "Left", label: "左对齐" }, { value: "Center", label: "居中" }, { value: "Right", label: "右对齐" }],
       foregroundColorMode: [{ value: "System", label: "跟随系统" }, { value: "Dark", label: "深色" }, { value: "Light", label: "浅色" }, { value: "Custom", label: "自定义" }],
       horizontalAnchor: [{ value: "Left", label: "左侧" }, { value: "Center", label: "居中" }, { value: "Right", label: "右侧" }],
-      embeddedTaskbarHorizontalAnchor: [{ value: "Left", label: "左侧" }, { value: "Center", label: "居中" }, { value: "Right", label: "右侧" }],
       trackOffsetSourceFilter: [{ value: "All", label: "全部歌词源" }],
       trackOffsetSort: [{ value: "updated", label: "最近修改" }, { value: "title", label: "歌曲名称" }, { value: "offset", label: "偏移量" }]
     };
