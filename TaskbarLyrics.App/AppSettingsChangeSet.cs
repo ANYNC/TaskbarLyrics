@@ -12,6 +12,7 @@ internal readonly record struct AppSettingsChangeSet(
     bool VisualStyleChanged,
     bool LyricsLayoutChanged,
     bool WindowLayoutChanged,
+    bool TaskbarEmbeddingChanged,
     bool GlobalMediaHotkeysChanged)
 {
     public bool RequiresLyricsWindowApply =>
@@ -25,7 +26,8 @@ internal readonly record struct AppSettingsChangeSet(
         SpectrumDisplayChanged ||
         VisualStyleChanged ||
         LyricsLayoutChanged ||
-        WindowLayoutChanged;
+        WindowLayoutChanged ||
+        TaskbarEmbeddingChanged;
 
     public static AppSettingsChangeSet Create(
         AppSettings current,
@@ -97,6 +99,13 @@ internal readonly record struct AppSettingsChangeSet(
             current.LyricsDisplayMode != next.LyricsDisplayMode ||
             !AreSameStrings(current.SelectedDisplayIds, next.SelectedDisplayIds);
 
+        var taskbarEmbeddingChanged = isInitialApplication ||
+            current.TaskbarEmbeddingEnabled != next.TaskbarEmbeddingEnabled ||
+            current.EmbeddedTaskbarWidth != next.EmbeddedTaskbarWidth ||
+            current.EmbeddedTaskbarHorizontalAnchor != next.EmbeddedTaskbarHorizontalAnchor ||
+            current.EmbeddedTaskbarHorizontalOffset != next.EmbeddedTaskbarHorizontalOffset ||
+            current.EmbeddedTaskbarVerticalOffset != next.EmbeddedTaskbarVerticalOffset;
+
         var globalMediaHotkeysChanged = isInitialApplication ||
             !AreSameGlobalMediaHotkeys(current.GlobalMediaHotkeys, next.GlobalMediaHotkeys);
 
@@ -112,6 +121,7 @@ internal readonly record struct AppSettingsChangeSet(
             visualStyleChanged,
             lyricsLayoutChanged,
             windowLayoutChanged,
+            taskbarEmbeddingChanged,
             globalMediaHotkeysChanged);
     }
 

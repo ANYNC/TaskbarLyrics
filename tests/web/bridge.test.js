@@ -877,7 +877,7 @@ describe("settings WebView bridge", () => {
     const document = dom.window.document;
     const sliders = Array.from(document.querySelectorAll('input[type="range"][data-setting]'));
 
-    expect(sliders).toHaveLength(7);
+    expect(sliders).toHaveLength(10);
     sliders.forEach(slider => {
       const control = slider.closest(".slider-number-control");
       expect(control).not.toBeNull();
@@ -885,6 +885,58 @@ describe("settings WebView bridge", () => {
       expect(control.querySelector(".compact-number-input")).not.toBeNull();
     });
     expect(document.querySelector("#hueSlider").closest(".slider-number-control").querySelector("#hueNumberInput")).not.toBeNull();
+  });
+
+  it("enables and clamps taskbar embedding controls", async () => {
+    const { dom, sent, script } = await createSettingsDom();
+    const document = dom.window.document;
+    dom.window.eval(script);
+    dom.window.settingsApp.receive({
+      version: 1,
+      type: "settingsState",
+      payload: {
+        settings: {
+          sourceRecognitionOrder: [],
+          playerLyricOffsets: {},
+          defaultPlayerLyricOffsets: {},
+          mediaHotkeys: [],
+          mediaHotkeyStatuses: {},
+          foregroundColorMode: "Light",
+          foregroundColor: "#FFFFFFFF",
+          taskbarEmbeddingEnabled: false,
+          embeddedTaskbarWidth: 320,
+          embeddedTaskbarHorizontalAnchor: "Right",
+          embeddedTaskbarHorizontalOffset: 0,
+          embeddedTaskbarVerticalOffset: 0
+        },
+        fonts: []
+      }
+    });
+
+    const switchControl = document.querySelector('[data-setting="taskbarEmbeddingEnabled"]');
+    const dependentControls = [...document.querySelectorAll('[data-depends="taskbarEmbeddingEnabled"] input, [data-depends="taskbarEmbeddingEnabled"] button')];
+    expect(dependentControls.every(control => control.disabled)).toBe(true);
+
+    switchControl.checked = true;
+    switchControl.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+
+    expect(dependentControls.every(control => !control.disabled)).toBe(true);
+    expect(sent.at(-1)).toEqual({
+      version: 1,
+      type: "update",
+      payload: { key: "taskbarEmbeddingEnabled", value: true }
+    });
+
+    const widthInput = document.querySelector('input[type="number"][data-setting="embeddedTaskbarWidth"]');
+    widthInput.value = "5000";
+    widthInput.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+
+    expect(widthInput.value).toBe("1400");
+    expect(sent.at(-1)).toEqual({
+      version: 1,
+      type: "update",
+      payload: { key: "embeddedTaskbarWidth", value: 1400 }
+    });
   });
 
   it("previews scaled numeric input and commits the canonical setting value", async () => {

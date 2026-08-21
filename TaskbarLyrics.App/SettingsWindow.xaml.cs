@@ -934,6 +934,11 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             XOffset = _settings.XOffset,
             YOffset = _settings.YOffset,
             ForceAlwaysOnTop = _settings.ForceAlwaysOnTop,
+            TaskbarEmbeddingEnabled = _settings.TaskbarEmbeddingEnabled,
+            EmbeddedTaskbarWidth = _settings.EmbeddedTaskbarWidth,
+            EmbeddedTaskbarHorizontalAnchor = _settings.EmbeddedTaskbarHorizontalAnchor,
+            EmbeddedTaskbarHorizontalOffset = _settings.EmbeddedTaskbarHorizontalOffset,
+            EmbeddedTaskbarVerticalOffset = _settings.EmbeddedTaskbarVerticalOffset,
             LyricsDisplayMode = _settings.LyricsDisplayMode,
             SelectedDisplayIds = _settings.SelectedDisplayIds.ToList(),
             AvailableDisplays = DisplayMonitorService.GetDisplays()
@@ -1116,6 +1121,26 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             case "forceAlwaysOnTop":
                 _settings.ForceAlwaysOnTop = ReadBool(element, _settings.ForceAlwaysOnTop);
                 break;
+            case "taskbarEmbeddingEnabled":
+                _settings.TaskbarEmbeddingEnabled = ReadBool(element, _settings.TaskbarEmbeddingEnabled);
+                break;
+            case "embeddedTaskbarWidth":
+                _settings.EmbeddedTaskbarWidth = AppSettings.ClampEmbeddedTaskbarWidth(
+                    ReadDouble(element, _settings.EmbeddedTaskbarWidth));
+                break;
+            case "embeddedTaskbarHorizontalAnchor":
+                _settings.EmbeddedTaskbarHorizontalAnchor = ReadEnum(
+                    element,
+                    _settings.EmbeddedTaskbarHorizontalAnchor);
+                break;
+            case "embeddedTaskbarHorizontalOffset":
+                _settings.EmbeddedTaskbarHorizontalOffset = AppSettings.ClampEmbeddedTaskbarOffset(
+                    ReadDouble(element, _settings.EmbeddedTaskbarHorizontalOffset));
+                break;
+            case "embeddedTaskbarVerticalOffset":
+                _settings.EmbeddedTaskbarVerticalOffset = AppSettings.ClampEmbeddedTaskbarOffset(
+                    ReadDouble(element, _settings.EmbeddedTaskbarVerticalOffset));
+                break;
             case "lyricsDisplayMode":
                 _settings.LyricsDisplayMode = ReadEnum(element, _settings.LyricsDisplayMode);
                 break;
@@ -1237,7 +1262,10 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             "lyricsLayoutScalePercent" or
             "windowWidth" or
             "xOffset" or
-            "yOffset";
+            "yOffset" or
+            "embeddedTaskbarWidth" or
+            "embeddedTaskbarHorizontalOffset" or
+            "embeddedTaskbarVerticalOffset";
     }
 
     private static string ReadHotkeyBinding(JsonElement element, string fallback)
@@ -1594,6 +1622,11 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         target.XOffset = source.XOffset;
         target.YOffset = source.YOffset;
         target.ForceAlwaysOnTop = source.ForceAlwaysOnTop;
+        target.TaskbarEmbeddingEnabled = source.TaskbarEmbeddingEnabled;
+        target.EmbeddedTaskbarWidth = source.EmbeddedTaskbarWidth;
+        target.EmbeddedTaskbarHorizontalAnchor = source.EmbeddedTaskbarHorizontalAnchor;
+        target.EmbeddedTaskbarHorizontalOffset = source.EmbeddedTaskbarHorizontalOffset;
+        target.EmbeddedTaskbarVerticalOffset = source.EmbeddedTaskbarVerticalOffset;
         target.LyricsDisplayMode = source.LyricsDisplayMode;
         target.SelectedDisplayIds = source.SelectedDisplayIds.ToList();
     }
@@ -1729,6 +1762,16 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         public double XOffset { get; set; }
         public double YOffset { get; set; }
         public bool ForceAlwaysOnTop { get; set; }
+
+        public bool TaskbarEmbeddingEnabled { get; set; }
+
+        public double EmbeddedTaskbarWidth { get; set; }
+
+        public EmbeddedTaskbarHorizontalAnchor EmbeddedTaskbarHorizontalAnchor { get; set; }
+
+        public double EmbeddedTaskbarHorizontalOffset { get; set; }
+
+        public double EmbeddedTaskbarVerticalOffset { get; set; }
 
         public LyricsDisplayMode LyricsDisplayMode { get; set; }
 

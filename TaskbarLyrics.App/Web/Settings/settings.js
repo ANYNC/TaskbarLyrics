@@ -12,6 +12,7 @@
       lyricsTextAlignment: [{ value: "Left", label: "左对齐" }, { value: "Center", label: "居中" }, { value: "Right", label: "右对齐" }],
       foregroundColorMode: [{ value: "System", label: "跟随系统" }, { value: "Dark", label: "深色" }, { value: "Light", label: "浅色" }, { value: "Custom", label: "自定义" }],
       horizontalAnchor: [{ value: "Left", label: "左侧" }, { value: "Center", label: "居中" }, { value: "Right", label: "右侧" }],
+      embeddedTaskbarHorizontalAnchor: [{ value: "Left", label: "左侧" }, { value: "Center", label: "居中" }, { value: "Right", label: "右侧" }],
       trackOffsetSourceFilter: [{ value: "All", label: "全部歌词源" }],
       trackOffsetSort: [{ value: "updated", label: "最近修改" }, { value: "title", label: "歌曲名称" }, { value: "offset", label: "偏移量" }]
     };
@@ -26,6 +27,7 @@
       general: ["常规", "管理启动行为与界面主题。"],
       advanced: ["高级", "用于诊断播放同步问题和维护缓存数据。"],
       lyricDiagnostics: ["歌词诊断", "针对当前 SMTC 歌曲查看歌词检索候选、匹配分和最终结果。"],
+      taskbarEmbedding: ["任务栏嵌入", "将歌词窗口直接嵌入所选显示器的任务栏；这是测试版的新实现，默认关闭。"],
       about: ["关于", "查看版本、许可证与项目技术信息。"]
     };
 
@@ -1232,6 +1234,9 @@
       state.xOffset = Math.min(2000, Math.max(-2000, Number(state.xOffset) || 0));
       state.yOffset = Math.min(2000, Math.max(-2000, Number(state.yOffset) || 0));
       state.windowWidth = Math.min(1400, Math.max(320, Number(state.windowWidth) || 420));
+      state.embeddedTaskbarWidth = Math.min(1400, Math.max(320, Number(state.embeddedTaskbarWidth) || 320));
+      state.embeddedTaskbarHorizontalOffset = Math.min(2000, Math.max(-2000, Number(state.embeddedTaskbarHorizontalOffset) || 0));
+      state.embeddedTaskbarVerticalOffset = Math.min(2000, Math.max(-2000, Number(state.embeddedTaskbarVerticalOffset) || 0));
     }
 
     function applyDependencies() {

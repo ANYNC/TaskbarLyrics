@@ -30,6 +30,7 @@ public partial class MainWindow : Window, IDisposable
     private readonly DispatcherTimer _timer;
     private readonly DispatcherTimer _spectrumTimer;
     private readonly TaskbarPlacementService _taskbarPlacementService = new();
+    private readonly EmbeddedTaskbarAnchor _embeddedTaskbarAnchor = new();
     private LocalMediaCoverProvider? _localMediaCoverProvider;
     private Media.Color _primaryTextColor = Media.Colors.White;
     private Media.Color _secondaryTextColor = ForegroundColorPolicy.CreateSecondaryColor(Media.Colors.White);
@@ -150,12 +151,14 @@ public partial class MainWindow : Window, IDisposable
                 _compositionRoot.GetEnabledPlayerSources(snapshot));
         }
 
-        if (changes.WindowLayoutChanged || changes.LyricsLayoutChanged)
+        if (changes.WindowLayoutChanged || changes.LyricsLayoutChanged || changes.TaskbarEmbeddingChanged)
         {
-            Width = AppSettings.ClampEffectiveWindowWidth(
-                snapshot.WindowWidth,
-                snapshot.LyricsLayoutScalePercent,
-                GetTargetWorkAreaWidth());
+            Width = snapshot.TaskbarEmbeddingEnabled
+                ? AppSettings.ClampEmbeddedTaskbarWidth(snapshot.EmbeddedTaskbarWidth)
+                : AppSettings.ClampEffectiveWindowWidth(
+                    snapshot.WindowWidth,
+                    snapshot.LyricsLayoutScalePercent,
+                    GetTargetWorkAreaWidth());
         }
 
         if (changes.WindowLayoutChanged)
@@ -208,8 +211,13 @@ public partial class MainWindow : Window, IDisposable
             }
         }
 
-        if (changes.WindowLayoutChanged || changes.LyricsLayoutChanged)
+        if (changes.WindowLayoutChanged || changes.LyricsLayoutChanged || changes.TaskbarEmbeddingChanged)
         {
+            if (!snapshot.TaskbarEmbeddingEnabled)
+            {
+                _embeddedTaskbarAnchor.Detach();
+            }
+
             AnchorToTaskbar();
             AttachToTaskbarHost();
         }
@@ -230,10 +238,12 @@ public partial class MainWindow : Window, IDisposable
             return;
         }
 
-        Width = AppSettings.ClampEffectiveWindowWidth(
-            _currentSettings.WindowWidth,
-            _currentSettings.LyricsLayoutScalePercent,
-            GetTargetWorkAreaWidth());
+        Width = _currentSettings.TaskbarEmbeddingEnabled
+            ? AppSettings.ClampEmbeddedTaskbarWidth(_currentSettings.EmbeddedTaskbarWidth)
+            : AppSettings.ClampEffectiveWindowWidth(
+                _currentSettings.WindowWidth,
+                _currentSettings.LyricsLayoutScalePercent,
+                GetTargetWorkAreaWidth());
         ApplyHostLayout(CreateLayoutMetrics(_currentSettings));
         AnchorToTaskbar();
         AttachToTaskbarHost();
@@ -410,6 +420,7 @@ public partial class MainWindow : Window, IDisposable
         _lyricSyncService.Dispose();
         _localMediaCoverProvider?.Dispose();
         _audioSpectrumService.Dispose();
+        _embeddedTaskbarAnchor.Dispose();
         (_musicSessionProvider as IDisposable)?.Dispose();
         GC.SuppressFinalize(this);
     }
@@ -1590,6 +1601,16 @@ public partial class MainWindow : Window, IDisposable
 
     private void AnchorToTaskbar()
     {
+        if (_currentSettings.TaskbarEmbeddingEnabled)
+        {
+            if (_embeddedTaskbarAnchor.Attach(this, _currentSettings, _displayMonitor))
+            {
+                return;
+            }
+
+            _embeddedTaskbarAnchor.Detach();
+        }
+
         TaskbarPlacementService.Anchor(this, _currentSettings, _displayMonitor);
     }
 
@@ -1651,6 +1672,11 @@ public partial class MainWindow : Window, IDisposable
 
     private void AttachToTaskbarHost()
     {
+        if (_currentSettings.TaskbarEmbeddingEnabled)
+        {
+            return;
+        }
+
         TaskbarPlacementService.Attach(this, _forceAlwaysOnTop);
     }
 

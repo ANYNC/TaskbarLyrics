@@ -28,7 +28,7 @@ foreach ($artifact in $developmentArtifacts) {
     $errors.Add("development artifact is inside production Web assets: $relativePath")
 }
 
-$pages = @('sources', 'shortcuts', 'lyrics', 'trackOffsets', 'displayArea', 'general', 'advanced', 'lyricDiagnostics', 'about')
+$pages = @('sources', 'shortcuts', 'lyrics', 'trackOffsets', 'displayArea', 'general', 'advanced', 'lyricDiagnostics', 'taskbarEmbedding', 'about')
 foreach ($page in $pages) {
     if (-not $html.Contains("data-nav=`"$page`"")) { $errors.Add("missing nav: $page") }
     if (-not $html.Contains("data-page=`"$page`"")) { $errors.Add("missing page: $page") }
@@ -40,7 +40,9 @@ $settings = @(
     'coverSize', 'coverGap', 'coverCornerRadius', 'fontFamily',
     'fontWeight', 'lyricsTextAlignment', 'foregroundColorMode', 'showTextShadow', 'toolWindowTheme', 'showBackground',
     'backgroundOpacity', 'showBorder', 'windowWidth', 'horizontalAnchor', 'xOffset',
-    'yOffset', 'forceAlwaysOnTop', 'startWithWindows', 'autoCheckUpdates'
+    'yOffset', 'forceAlwaysOnTop', 'taskbarEmbeddingEnabled', 'embeddedTaskbarWidth',
+    'embeddedTaskbarHorizontalAnchor', 'embeddedTaskbarHorizontalOffset', 'embeddedTaskbarVerticalOffset',
+    'startWithWindows', 'autoCheckUpdates'
 )
 foreach ($key in $settings) {
     if (-not $html.Contains("data-setting=`"$key`"")) { $errors.Add("missing setting control: $key") }
@@ -167,6 +169,8 @@ if (-not $appSettings.Contains('public bool SpectrumAudioAccessGranted')) { $err
 if (-not $appSettings.Contains('public LyricsTextAlignment LyricsTextAlignment')) { $errors.Add('lyrics text alignment setting missing') }
 if (-not $appSettings.Contains('public LyricsDisplayMode LyricsDisplayMode')) { $errors.Add('lyrics display mode setting missing') }
 if (-not $appSettings.Contains('public List<string> SelectedDisplayIds')) { $errors.Add('selected display ids setting missing') }
+if (-not $appSettings.Contains('public bool TaskbarEmbeddingEnabled')) { $errors.Add('taskbar embedding switch setting missing') }
+if (-not $appSettings.Contains('public EmbeddedTaskbarHorizontalAnchor EmbeddedTaskbarHorizontalAnchor')) { $errors.Add('embedded taskbar anchor setting missing') }
 if (-not $appSettings.Contains('public const string DefaultFontFamily = BundledFontFamily;')) { $errors.Add('bundled font is not the default') }
 if (-not $app.Contains('Settings.FontFamily = AppSettings.NormalizeFontFamily(Settings.FontFamily);')) { $errors.Add('startup font normalization missing') }
 if (-not $lyricsStyleFactory.Contains('fontFamily = AppSettings.NormalizeFontFamily(settings.FontFamily)')) { $errors.Add('lyrics font normalization missing') }

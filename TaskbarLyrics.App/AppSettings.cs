@@ -43,6 +43,13 @@ public enum LyricsDisplayMode
     Selected
 }
 
+public enum EmbeddedTaskbarHorizontalAnchor
+{
+    Left,
+    Center,
+    Right
+}
+
 public sealed class AppSettings
 {
     public const int MinimumPlayerLyricOffsetMilliseconds = -5000;
@@ -64,6 +71,10 @@ public sealed class AppSettings
     public const double DefaultWindowWidth = 420;
     public const double MinimumWindowWidth = 320;
     public const double MaximumWindowWidth = 1400;
+
+    public const double DefaultEmbeddedTaskbarWidth = 320;
+    public const double MinimumWindowOffset = -2000;
+    public const double MaximumWindowOffset = 2000;
 
     public const string BundledFontFamily = "Source Han Sans SC";
 
@@ -173,6 +184,17 @@ public sealed class AppSettings
 
     public List<string> SelectedDisplayIds { get; set; } = new();
 
+    public bool TaskbarEmbeddingEnabled { get; set; }
+
+    public double EmbeddedTaskbarWidth { get; set; } = DefaultEmbeddedTaskbarWidth;
+
+    public EmbeddedTaskbarHorizontalAnchor EmbeddedTaskbarHorizontalAnchor { get; set; } =
+        EmbeddedTaskbarHorizontalAnchor.Right;
+
+    public double EmbeddedTaskbarHorizontalOffset { get; set; }
+
+    public double EmbeddedTaskbarVerticalOffset { get; set; }
+
     public GlobalMediaHotkeySettings GlobalMediaHotkeys { get; set; } = new();
 
     public static string NormalizeFontFamily(string? fontFamily)
@@ -261,6 +283,17 @@ public sealed class AppSettings
             .Select(id => id.Trim())
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
+    }
+
+    public void NormalizeTaskbarEmbedding()
+    {
+        EmbeddedTaskbarWidth = ClampEmbeddedTaskbarWidth(EmbeddedTaskbarWidth);
+        EmbeddedTaskbarHorizontalOffset = ClampEmbeddedTaskbarOffset(EmbeddedTaskbarHorizontalOffset);
+        EmbeddedTaskbarVerticalOffset = ClampEmbeddedTaskbarOffset(EmbeddedTaskbarVerticalOffset);
+        if (!Enum.IsDefined(EmbeddedTaskbarHorizontalAnchor))
+        {
+            EmbeddedTaskbarHorizontalAnchor = EmbeddedTaskbarHorizontalAnchor.Right;
+        }
     }
 
     public int GetPlayerLyricOffsetMilliseconds(string? sourceApp)
@@ -364,6 +397,16 @@ public sealed class AppSettings
         var scale = ClampLyricsLayoutScalePercent(scalePercent) / 100.0;
         var baseWidth = Math.Clamp(baseWindowWidth, MinimumWindowWidth, MaximumWindowWidth);
         return Math.Clamp(baseWidth * scale, MinimumWindowWidth, maxWidth);
+    }
+
+    public static double ClampEmbeddedTaskbarWidth(double value)
+    {
+        return Math.Clamp(value, MinimumWindowWidth, MaximumWindowWidth);
+    }
+
+    public static double ClampEmbeddedTaskbarOffset(double value)
+    {
+        return Math.Clamp(value, MinimumWindowOffset, MaximumWindowOffset);
     }
 }
 

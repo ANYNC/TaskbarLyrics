@@ -9,6 +9,7 @@ namespace TaskbarLyrics.App;
 internal partial class LyricsMirrorWindow : Window, IDisposable
 {
     private readonly Dictionary<string, string> _pendingScripts = new(StringComparer.Ordinal);
+    private readonly EmbeddedTaskbarAnchor _embeddedTaskbarAnchor = new();
     private DisplayMonitor _displayMonitor;
     private AppSettings _settings = new();
     private bool _isWebReady;
@@ -36,10 +37,12 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
         _settings = settings.Clone();
         var pixelsPerDip = _displayMonitor.PixelsPerDip;
         var metrics = LyricsLayoutMetrics.Create(_settings, pixelsPerDip);
-        Width = AppSettings.ClampEffectiveWindowWidth(
-            _settings.WindowWidth,
-            _settings.LyricsLayoutScalePercent,
-            _displayMonitor.WorkAreaWidth / pixelsPerDip);
+        Width = _settings.TaskbarEmbeddingEnabled
+            ? AppSettings.ClampEmbeddedTaskbarWidth(_settings.EmbeddedTaskbarWidth)
+            : AppSettings.ClampEffectiveWindowWidth(
+                _settings.WindowWidth,
+                _settings.LyricsLayoutScalePercent,
+                _displayMonitor.WorkAreaWidth / pixelsPerDip);
         Height = metrics.DesiredWindowHeight;
         RootBorder.Padding = new Thickness(
             metrics.HostHorizontalPadding,
@@ -49,6 +52,14 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
         LyricsContentRoot.MinHeight = metrics.MinimumContentHeight;
         LyricsWebView.Margin = new Thickness(0, 0, 0, -metrics.ViewportDescenderBuffer);
         _pendingScripts["style"] = LyricsStyleScriptFactory.Create(_settings, pixelsPerDip);
+        if (_settings.TaskbarEmbeddingEnabled &&
+            _embeddedTaskbarAnchor.Attach(this, _settings, _displayMonitor))
+        {
+            ExecutePendingScript("style");
+            return;
+        }
+
+        _embeddedTaskbarAnchor.Detach();
         TaskbarPlacementService.Anchor(this, _settings, _displayMonitor);
         TaskbarPlacementService.Attach(this, _settings.ForceAlwaysOnTop);
         ExecutePendingScript("style");
@@ -93,6 +104,7 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
         Closed -= OnClosed;
         LyricsWebView.NavigationCompleted -= OnNavigationCompleted;
         LyricsWebView.Dispose();
+        _embeddedTaskbarAnchor.Dispose();
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
