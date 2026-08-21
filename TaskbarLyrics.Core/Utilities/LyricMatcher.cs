@@ -55,13 +55,17 @@ public static class LyricMatcher
         bool hasTargetArtist = HasUsefulArtist(normalizedTargetArtist);
         bool hasResultArtist = HasUsefulArtist(normalizedResultArtist);
         bool hasDuration = target.Duration.TotalSeconds > 0 && resultDurationInSeconds > 0;
+        // 跨文字系统的歌手名（如「魚韻」vs「sakanaction」）通常是同一艺人的别名，
+        // 相似度算法无法比较；将歌手视为缺失证据而不是 0 分，避免错误惩罚正确候选。
+        bool artistsComparable = !IsCrossScript(normalizedTargetArtist, normalizedResultArtist);
+        bool scoreArtist = hasTargetArtist && hasResultArtist && artistsComparable;
 
         double totalScore;
-        if (hasTargetArtist && hasResultArtist && hasDuration)
+        if (scoreArtist && hasDuration)
         {
             totalScore = (titleSim * 0.50) + (artistSim * 0.30) + (durationSim * 0.20);
         }
-        else if (hasTargetArtist && hasResultArtist)
+        else if (scoreArtist)
         {
             totalScore = (titleSim * 0.60) + (artistSim * 0.40);
         }
@@ -121,6 +125,63 @@ public static class LyricMatcher
         return !string.IsNullOrWhiteSpace(normalizedAlbum) &&
                !string.Equals(normalizedAlbum, "unknown album", StringComparison.Ordinal);
     }
+
+    private enum TextScriptKind
+    {
+        Latin,
+        Cjk
+    }
+
+    private static bool IsCrossScript(string left, string right)
+    {
+        return TryGetPureScript(left, out var leftScript) &&
+               TryGetPureScript(right, out var rightScript) &&
+               leftScript != rightScript;
+    }
+
+    private static bool TryGetPureScript(string value, out TextScriptKind script)
+    {
+        script = default;
+        TextScriptKind? found = null;
+        foreach (var ch in value)
+        {
+            if (!char.IsLetter(ch))
+            {
+                continue;
+            }
+
+            var charScript = GetLetterScript(ch);
+            if (charScript is null)
+            {
+                return false;
+            }
+
+            if (found is null)
+            {
+                found = charScript;
+            }
+            else if (found != charScript)
+            {
+                return false;
+            }
+        }
+
+        if (found is null)
+        {
+            return false;
+        }
+
+        script = found.Value;
+        return true;
+    }
+
+    private static TextScriptKind? GetLetterScript(char ch) => ch switch
+    {
+        >= 'A' and <= 'Z' or >= 'a' and <= 'z' or >= '\u00C0' and <= '\u024F' => TextScriptKind.Latin,
+        >= '\u3040' and <= '\u30FF' or >= '\u3400' and <= '\u4DBF' or >= '\u4E00' and <= '\u9FFF' or
+            >= '\uAC00' and <= '\uD7AF' or >= '\uF900' and <= '\uFAFF' => TextScriptKind.Cjk,
+        _ => null
+    };
 
     private static bool IsUnknownTitle(string? title)
     {

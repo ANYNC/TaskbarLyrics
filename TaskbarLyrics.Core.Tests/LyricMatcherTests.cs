@@ -131,6 +131,56 @@ public sealed class LyricMatcherTests
         Assert.InRange(differentAlbum, 90, 99);
     }
 
+    [Fact]
+    public void ScoreTreatsCrossScriptArtistAliasAsNotComparable()
+    {
+        var track = CreateTrack("新宝島", "魚韻", 305) with { Album = "834.194" };
+
+        var score = LyricMatcher.Score(track, "新宝島", "sakanaction", 306, "新宝島");
+
+        Assert.True(score >= LyricMatchingPolicy.ImmediateAcceptanceScore);
+    }
+
+    [Fact]
+    public void ScoreTreatsKanaVersusLatinArtistNamesAsNotComparable()
+    {
+        var track = CreateTrack("新宝島", "サカナクション", 305);
+
+        var score = LyricMatcher.Score(track, "新宝島", "sakanaction", 305);
+
+        Assert.True(score >= LyricMatchingPolicy.MinimumAcceptedMatchScore);
+    }
+
+    [Fact]
+    public void ScoreAdmitsCrossScriptArtistAliasWithDurationDrift()
+    {
+        var track = CreateTrack("新宝島", "魚韻", 300);
+
+        var score = LyricMatcher.Score(track, "新宝島", "sakanaction", 305);
+
+        Assert.True(score >= LyricMatchingPolicy.MinimumAcceptedMatchScore);
+    }
+
+    [Fact]
+    public void ScoreStillPenalizesDifferentArtistsWithinSameScript()
+    {
+        var track = CreateTrack("Midnight City", "M83", 244);
+
+        var score = LyricMatcher.Score(track, "Midnight City", "Coldplay", 244);
+
+        Assert.True(score < LyricMatchingPolicy.MinimumAcceptedMatchScore);
+    }
+
+    [Fact]
+    public void ScoreComparesMixedScriptArtistNamesNormally()
+    {
+        var track = CreateTrack("新宝島", "X玖少年团", 305);
+
+        var score = LyricMatcher.Score(track, "新宝島", "sakanaction", 305);
+
+        Assert.True(score < LyricMatchingPolicy.MinimumAcceptedMatchScore);
+    }
+
     private static TrackInfo CreateTrack(string title, string artist, int durationSeconds) => new(
         "track-id",
         title,
