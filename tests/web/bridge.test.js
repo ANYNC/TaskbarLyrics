@@ -194,7 +194,7 @@ describe("settings WebView bridge", () => {
       payload: { key: "lyricsDisplayMode", value: "All" }
     });
     expect(document.querySelector('input[data-display-id="display-a"]')).toBeNull();
-    expect(document.querySelector('[data-display-id="display-a"] .is-enabled').textContent).toBe("已启用");
+    expect(document.querySelector('[data-display-id="display-a"] .is-enabled')).toBeNull();
     expect(document.querySelector("#displayMonitorHint").textContent).toBe("已连接 2 台显示器，歌词将在全部任务栏显示。");
   });
 
@@ -385,6 +385,10 @@ describe("settings WebView bridge", () => {
     expect(document.querySelector("#lyricDiagnosticsStatus").textContent).toContain("Song");
     expect(document.querySelector("#lyricDiagnosticsTrackPanel").hidden).toBe(false);
     expect(document.querySelector("#lyricDiagnosticsTrack").textContent).toContain("QQMusic");
+    expect(document.querySelector("#lyricDiagnosticsTrackPanel .panel-head p").textContent)
+      .toContain("清除歌词缓存时会一并删除");
+    expect(document.querySelector("#clearDialogDescription").textContent)
+      .toContain("“使用并记住”的指定记录");
   });
 
   it("renders diagnostic providers, rejected candidates, and the final selection", async () => {
@@ -410,7 +414,7 @@ describe("settings WebView bridge", () => {
               state: "Succeeded",
               detail: "selected candidate",
               selected: true,
-              candidates: [{ candidateId: "qq-1", title: "<unsafe>", artists: ["Artist with an intentionally long diagnostic display name"], album: "Album", durationSeconds: 198, queryVariantId: "strict", fetchMetadataKeys: ["tokenType"], isAdmitted: false, score: 61, rejectionReasons: ["below-admission-threshold"] }]
+              candidates: [{ candidateId: "qq-1", title: "<unsafe>", artists: ["Artist with an intentionally long diagnostic display name"], album: "Album", durationSeconds: 198, queryVariantId: "strict", fetchMetadataKeys: ["tokenType", "metadata-key-with-an-intentionally-long-unbroken-value"], isAdmitted: false, score: 61, rejectionReasons: ["below-admission-threshold"] }]
             },
             { providerId: "Netease", state: "NoLyrics", detail: "not found", selected: false, candidates: [] }
           ],
@@ -429,6 +433,7 @@ describe("settings WebView bridge", () => {
     expect(providerDetails).toHaveLength(2);
     expect(providerDetails.every(provider => provider.open)).toBe(true);
     expect(providerDetails[0].querySelector(".diagnostics-provider-toggle-meta").textContent).toContain("1 个候选");
+    expect(providerDetails[1].querySelector(".diagnostics-provider-toggle-meta").textContent).toContain("0 个候选");
     providerDetails[0].querySelector("summary").click();
     expect(providerDetails[0].open).toBe(false);
     expect(document.querySelector(".diagnostics-candidate strong").textContent).toBe("<unsafe>");
@@ -437,10 +442,11 @@ describe("settings WebView bridge", () => {
     expect(document.querySelector(".diagnostics-selection-card").textContent).toContain("QQMusic");
     expect(document.querySelector("#lyricDiagnosticsVariantsPanel").hidden).toBe(false);
     expect(css).toMatch(/\.diagnostics-candidate-title small\s*\{[^}]*min-width:\s*0;[^}]*text-overflow:\s*ellipsis/s);
+    expect(css).toMatch(/\.diagnostics-candidate\.is-selected\s*\{[^}]*var\(--success\)/s);
     expect(css).toMatch(/\.diagnostics-selection-meta (?:span|code)[\s\S]*overflow-wrap:\s*anywhere/s);
   });
 
-  it("marks high-confidence candidates and reflects trust-priority selection", async () => {
+  it("marks the selected candidate and reflects trust-priority selection", async () => {
     const { dom, script } = await createSettingsDom();
     const document = dom.window.document;
     dom.window.eval(script);
@@ -478,7 +484,7 @@ describe("settings WebView bridge", () => {
               candidates: [{ candidateId: "netease-1", title: "Priority Song", artists: ["Artist"], album: "Album", durationSeconds: 200, queryVariantId: "exact", fetchMetadataKeys: [], isAdmitted: true, isHighConfidence: true, score: 100, rejectionReasons: [] }]
             }
           ],
-          selection: { providerId: "Kugou", candidateId: "kugou-1", acquisition: "Remote", format: "Lrc", timingKind: "Timed", timingProvenance: "Provider", lineCount: 30, diagnostics: { identityScore: "96" } },
+          selection: { providerId: "kugou", candidateId: "kugou-1", acquisition: "Remote", format: "Lrc", timingKind: "Timed", timingProvenance: "Provider", lineCount: 30, diagnostics: { identityScore: "96" } },
           error: null
         }
       }
@@ -489,18 +495,117 @@ describe("settings WebView bridge", () => {
 
     const kugouProvider = providers.find(p => p.querySelector(".diagnostics-provider-title strong").textContent === "Kugou");
     expect(kugouProvider.querySelector('[data-state="selected"]').textContent).toBe("最终采用");
+    expect(kugouProvider.querySelector(".diagnostics-provider-title").textContent).toContain("成功");
+    expect(kugouProvider.querySelector(".diagnostics-candidate.is-selected")).not.toBeNull();
+    expect(kugouProvider.querySelector(".diagnostics-candidate.is-selected [data-state=\"selected\"]").textContent).toBe("当前采用");
 
     const highConfidenceBadges = document.querySelectorAll('[data-state="high-confidence"]');
     expect(highConfidenceBadges).toHaveLength(2);
     expect([...highConfidenceBadges].every(badge => badge.textContent === "高置信")).toBe(true);
 
-    const qqCandidate = providers.find(p => p.querySelector(".diagnostics-provider-title strong").textContent === "QQMusic").querySelector(".diagnostics-candidate-side");
-    expect(qqCandidate.querySelector('[data-state="high-confidence"]')).toBeNull();
+    const qqCandidate = providers.find(p => p.querySelector(".diagnostics-provider-title strong").textContent === "QQMusic").querySelector(".diagnostics-candidate-controls");
+    expect(providers.find(p => p.querySelector(".diagnostics-provider-title strong").textContent === "QQMusic").querySelector(".diagnostics-provider-title").textContent).toContain("成功");
     expect(qqCandidate.querySelector(".diagnostics-score").textContent).toBe("84 分");
+    const neteaseCandidate = providers.find(p => p.querySelector(".diagnostics-provider-title strong").textContent === "Netease").querySelector(".diagnostics-candidate-summary");
+    expect(neteaseCandidate.textContent).toContain("已接纳");
+    expect(providers[0].querySelector(".diagnostics-provider-toggle-meta").textContent).toContain("1 个候选");
 
     const selectionText = document.querySelector(".diagnostics-selection-card").textContent;
-    expect(selectionText).toContain("Kugou");
+    expect(selectionText).toContain("kugou");
     expect(document.querySelector("#lyricDiagnosticsReportSummary").textContent).toContain("首选来源：未指定");
+  });
+
+  it("shows current and remembered apply actions for every candidate and reports async states", async () => {
+    const { dom, sent, script } = await createSettingsDom();
+    const document = dom.window.document;
+    dom.window.eval(script);
+
+    dom.window.settingsApp.receive({
+      version: 1,
+      type: "lyricDiagnosticsState",
+      payload: {
+        status: "success",
+        report: {
+          originalTrack: { title: "Song", artist: "Artist", sourceApp: "QQMusic" },
+          providers: [{
+            providerId: "QQMusic",
+            state: "IdentityRejected",
+            candidates: [
+              { candidateId: "rejected-1", title: "Wrong Song", artists: ["Artist"], isAdmitted: false, score: 42, rejectionReasons: ["below-admission-threshold"] },
+              { candidateId: "accepted-1", title: "Song", artists: ["Artist"], isAdmitted: true, score: 96, rejectionReasons: [] },
+              { title: "Missing Id Song", artists: ["Artist"], isAdmitted: true, score: 90, rejectionReasons: [] }
+            ]
+          }]
+        }
+      }
+    });
+
+    const buttons = [...document.querySelectorAll("[data-lyric-diagnostics-apply]")];
+    expect(buttons).toHaveLength(4);
+    expect(buttons.every(button => button.dataset.providerId && button.dataset.candidateId)).toBe(true);
+    expect(buttons.filter(button => button.dataset.applyMode === "current").every(button => button.textContent.includes("本次使用"))).toBe(true);
+    expect(buttons.filter(button => button.dataset.applyMode === "remember").every(button => button.textContent.includes("使用并记住"))).toBe(true);
+    expect(buttons.filter(button => button.dataset.applyMode === "current").every(button => button.classList.contains("secondary"))).toBe(true);
+    expect(buttons.filter(button => button.dataset.applyMode === "remember").every(button => button.classList.contains("ghost"))).toBe(true);
+    const acceptedControls = document.querySelector('[data-candidate-id="accepted-1"]').closest(".diagnostics-candidate-controls");
+    const acceptedSummary = acceptedControls.querySelector(".diagnostics-candidate-summary");
+    expect(acceptedSummary.textContent).toContain("已接纳");
+    expect(acceptedSummary.textContent).toContain("96 分");
+    expect(acceptedSummary.firstElementChild.classList.contains("diagnostics-candidate-badges")).toBe(true);
+    expect(acceptedSummary.lastElementChild.classList.contains("diagnostics-score")).toBe(true);
+    expect(acceptedControls.lastElementChild.classList.contains("diagnostics-candidate-actions")).toBe(true);
+
+    const currentButton = document.querySelector('[data-candidate-id="rejected-1"][data-apply-mode="current"]');
+    currentButton.click();
+    expect(sent.at(-1)).toEqual({
+      version: 1,
+      type: "applyLyricDiagnosticCandidate",
+      payload: { providerId: "QQMusic", candidateId: "rejected-1", mode: "current" }
+    });
+    const loadingButton = document.querySelector('[data-candidate-id="rejected-1"][data-apply-mode="current"]');
+    expect(loadingButton.disabled).toBe(true);
+    expect(loadingButton.getAttribute("aria-busy")).toBe("true");
+    expect(document.querySelector('[data-candidate-id="rejected-1"][data-apply-mode="remember"]').disabled).toBe(true);
+    expect(document.querySelector("#runLyricDiagnosticsButton").disabled).toBe(true);
+    expect(document.querySelector("#runLyricDiagnosticsButton").getAttribute("aria-busy")).toBe("true");
+    expect(document.querySelector("#lyricDiagnosticsStatus").textContent).toContain("正在获取并应用歌词");
+
+    const sentCountWhileLoading = sent.length;
+    loadingButton.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+    expect(sent).toHaveLength(sentCountWhileLoading);
+
+    dom.window.settingsApp.receive({
+      version: 1,
+      type: "lyricDiagnosticsState",
+      payload: {
+        status: "success",
+        apply: { status: "success", providerId: "QQMusic", candidateId: "rejected-1", mode: "current", message: "已应用当前歌词。" }
+      }
+    });
+    expect(document.querySelector("#lyricDiagnosticsStatus").dataset.state).toBe("success");
+    expect(document.querySelector("#lyricDiagnosticsStatus").textContent).toBe("已应用当前歌词。");
+    expect(document.querySelector('[data-candidate-id="rejected-1"][data-apply-mode="current"]').textContent).toContain("已应用");
+    expect(document.querySelector("#runLyricDiagnosticsButton").disabled).toBe(false);
+
+    const rememberButton = document.querySelector('[data-candidate-id="accepted-1"][data-apply-mode="remember"]');
+    rememberButton.click();
+    expect(sent.at(-1)).toEqual({
+      version: 1,
+      type: "applyLyricDiagnosticCandidate",
+      payload: { providerId: "QQMusic", candidateId: "accepted-1", mode: "remember" }
+    });
+    expect(document.querySelector("#lyricDiagnosticsStatus").textContent).toContain("写入歌词缓存");
+
+    dom.window.settingsApp.receive({
+      version: 1,
+      type: "lyricDiagnosticsState",
+      payload: {
+        status: "success",
+        apply: { status: "error", providerId: "QQMusic", candidateId: "accepted-1", mode: "remember", message: "当前歌曲已切换，请重新查找。" }
+      }
+    });
+    expect(document.querySelector("#lyricDiagnosticsStatus").dataset.state).toBe("error");
+    expect(document.querySelector("#lyricDiagnosticsStatus").textContent).toContain("当前歌曲已切换");
   });
 
   it("shows empty and error diagnostic states without stale report content", async () => {

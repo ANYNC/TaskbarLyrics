@@ -6,6 +6,44 @@ namespace TaskbarLyrics.App.Tests;
 public sealed class ForegroundColorPolicyTests
 {
     [Theory]
+    [InlineData(255, 229)]
+    [InlineData(128, 115)]
+    public void CreatePrimaryColorPreservesForegroundRgbAndScalesAlphaByByteTruncated90Percent(
+        int foregroundAlpha,
+        int expectedPrimaryAlpha)
+    {
+        var foreground = Color.FromArgb((byte)foregroundAlpha, 12, 34, 56);
+
+        var primary = ForegroundColorPolicy.CreatePrimaryColor(foreground);
+
+        Assert.Equal(foreground.R, primary.R);
+        Assert.Equal(foreground.G, primary.G);
+        Assert.Equal(foreground.B, primary.B);
+        Assert.Equal((byte)expectedPrimaryAlpha, primary.A);
+    }
+
+    [Theory]
+    [InlineData(255, 190)]
+    [InlineData(128, 55)]
+    public void CreateWordScanOverlayColorCompositesToPrimaryAlphaOverSecondaryColor(
+        int foregroundAlpha,
+        int expectedOverlayAlpha)
+    {
+        var foreground = Color.FromArgb((byte)foregroundAlpha, 12, 34, 56);
+
+        var overlay = ForegroundColorPolicy.CreateWordScanOverlayColor(foreground);
+        var primary = ForegroundColorPolicy.CreatePrimaryColor(foreground);
+        var secondary = ForegroundColorPolicy.CreateSecondaryColor(foreground);
+        var compositedAlpha = overlay.A + (secondary.A * (byte.MaxValue - overlay.A) / byte.MaxValue);
+
+        Assert.Equal((byte)expectedOverlayAlpha, overlay.A);
+        Assert.InRange(Math.Abs(compositedAlpha - primary.A), 0, 1);
+        Assert.Equal(foreground.R, overlay.R);
+        Assert.Equal(foreground.G, overlay.G);
+        Assert.Equal(foreground.B, overlay.B);
+    }
+
+    [Theory]
     [InlineData(255, 153)]
     [InlineData(128, 76)]
     public void CreateSecondaryColorPreservesPrimaryRgbAndScalesAlphaByByteTruncated60Percent(

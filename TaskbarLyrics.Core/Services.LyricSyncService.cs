@@ -194,6 +194,45 @@ public sealed class LyricSyncService : IDisposable
         ));
     }
 
+    public bool TryApplyResolvedLyrics(TrackInfo track, ResolvedLyrics resolved)
+    {
+        ArgumentNullException.ThrowIfNull(track);
+        ArgumentNullException.ThrowIfNull(resolved);
+        if (_isDisposed ||
+            _currentTrackId is null ||
+            !string.Equals(
+                _currentTrackId,
+                BuildStableTrackIdentity(track),
+                StringComparison.Ordinal) ||
+            resolved.Content.Lines.Count == 0)
+        {
+            return false;
+        }
+
+        var document = ResolvedLyricsCompatibilityProjector.ToLyricDocument(
+            resolved,
+            includeInformationLines: false);
+        if (document.Lines.Count == 0)
+        {
+            return false;
+        }
+
+        CancelPendingSearch();
+        _currentTrack = track;
+        _currentDocument = document;
+        _currentDocumentHasTranslation = document.Lines.Any(
+            line => !string.IsNullOrWhiteSpace(line.Translation));
+        _currentLyricSourceApp = resolved.ProviderId.Value;
+        _currentLyricAcquisition = resolved.Acquisition;
+        _currentLyricFetchElapsedMilliseconds = ReadElapsedMilliseconds(resolved.Diagnostics);
+        _currentLyricResolvedAtUtc = DateTimeOffset.UtcNow;
+        _documentLoadedTicks = Environment.TickCount64;
+        _lastEmittedLineIndex = -1;
+        _lastSearchDuration = NormalizeDuration(track.Duration);
+        _durationCorrectionConsumed = true;
+        return true;
+    }
+
     private void StartLyricsUpdate(string trackId)
     {
         CancelPendingSearch();
@@ -209,7 +248,9 @@ public sealed class LyricSyncService : IDisposable
         try
         {
             await Task.Delay(_metadataStabilizationDelay, cts.Token);
-            if (_currentTrackId != trackId || _currentTrack is not { } track)
+            if (!ReferenceEquals(_searchCts, cts) ||
+                _currentTrackId != trackId ||
+                _currentTrack is not { } track)
             {
                 return;
             }
@@ -218,13 +259,16 @@ public sealed class LyricSyncService : IDisposable
             _lastSearchDuration = NormalizeDuration(track.Duration);
             var resolved = await _coordinator.ResolveAsync(track, cts.Token);
 
-            if (cts.IsCancellationRequested) return;
+            if (cts.IsCancellationRequested || !ReferenceEquals(_searchCts, cts)) return;
             var document = resolved is null
                 ? null
                 : ResolvedLyricsCompatibilityProjector.ToLyricDocument(
                     resolved,
                     includeInformationLines: false);
-            if (resolved is not null && document is { Lines.Count: > 0 } && _currentTrackId == trackId)
+            if (resolved is not null &&
+                document is { Lines.Count: > 0 } &&
+                ReferenceEquals(_searchCts, cts) &&
+                _currentTrackId == trackId)
             {
                 _currentDocument = document;
                 _currentDocumentHasTranslation = document.Lines.Any(
@@ -236,7 +280,7 @@ public sealed class LyricSyncService : IDisposable
                 _documentLoadedTicks = Environment.TickCount64;
                 _lastEmittedLineIndex = -1;
             }
-            else if (_currentTrackId == trackId)
+            else if (ReferenceEquals(_searchCts, cts) && _currentTrackId == trackId)
             {
                 _currentLyricAcquisition = LyricAcquisitionKind.NotFound;
                 _currentLyricFetchElapsedMilliseconds = 0;

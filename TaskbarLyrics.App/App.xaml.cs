@@ -21,7 +21,7 @@ public partial class App : System.Windows.Application, IDisposable
     private LyricsWindowHost? _lyricsWindowHost;
     private TrackLyricOffsetStore? _trackLyricOffsetStore;
     private GlobalMediaHotkeyService? _mediaHotkeyService;
-    private IAppCompositionRoot? _compositionRoot;
+    private AppCompositionRoot? _compositionRoot;
     private CancellationTokenSource? _activationServerCancellation;
     private SpectrumTuningSettings _spectrumTuningSettings = SpectrumTuningSettings.CreateDefault();
     private int _isDisposed;
@@ -122,6 +122,7 @@ public partial class App : System.Windows.Application, IDisposable
         _spectrumTuningWindow?.Close();
         _mediaHotkeyService?.Dispose();
         _lyricsWindowHost?.Dispose();
+        _compositionRoot?.Dispose();
         _trayService?.Dispose();
         _trackLyricOffsetStore?.Dispose();
         SingleInstanceService.Release();
@@ -433,7 +434,16 @@ public partial class App : System.Windows.Application, IDisposable
             _trackLyricOffsetStore,
             () => _lyricsWindowHost?.GetCurrentTrackLyricsContextAsync()
                 ?? Task.FromResult<CurrentTrackLyricsContext?>(null),
-            _compositionRoot.CreateLyricDiagnosticRunner);
+            _compositionRoot.CreateLyricDiagnosticRunner,
+            (track, resolved, cancellationToken) => _lyricsWindowHost?.TryApplyResolvedLyricsAsync(
+                track,
+                resolved,
+                cancellationToken) ?? Task.FromResult(false),
+            (track, resolved, cancellationToken) => _compositionRoot.RememberResolvedLyricsAsync(
+                track,
+                resolved,
+                cancellationToken).AsTask(),
+            _compositionRoot.ClearLyricCache);
         _settingsWindow.Closed += SettingsWindow_Closed;
         _settingsWindow.Show();
         if (!string.IsNullOrWhiteSpace(pageId))

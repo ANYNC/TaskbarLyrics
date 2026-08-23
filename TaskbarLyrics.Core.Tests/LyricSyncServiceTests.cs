@@ -300,6 +300,68 @@ public sealed class LyricSyncServiceTests
     }
 
     [Fact]
+    public async Task TryApplyResolvedLyricsForSameTrackCancelsSearchAndPublishesCandidate()
+    {
+        var coordinator = new BlockingCoordinator();
+        using var service = new LyricSyncService(
+            coordinator,
+            metadataStabilizationDelay: TimeSpan.Zero);
+        var track = CreateTrack();
+
+        await service.GetDisplayFrameAsync(new PlaybackSnapshot(true, TimeSpan.Zero, track));
+        await coordinator.SearchStarted.Task.WaitAsync(TimeSpan.FromSeconds(1));
+
+        var applied = service.TryApplyResolvedLyrics(track, CreateResolved("manual", "Manual lyric"));
+
+        Assert.True(applied);
+        await coordinator.SearchCancelled.Task.WaitAsync(TimeSpan.FromSeconds(1));
+        var frame = await service.GetDisplayFrameAsync(new PlaybackSnapshot(true, TimeSpan.Zero, track));
+        Assert.Equal("Manual lyric", frame.CurrentLine);
+    }
+
+    [Fact]
+    public async Task TryApplyResolvedLyricsRejectsDifferentTrack()
+    {
+        var coordinator = new BlockingCoordinator();
+        using var service = new LyricSyncService(
+            coordinator,
+            metadataStabilizationDelay: TimeSpan.Zero);
+        var track = CreateTrack();
+
+        await service.GetDisplayFrameAsync(new PlaybackSnapshot(true, TimeSpan.Zero, track));
+        await coordinator.SearchStarted.Task.WaitAsync(TimeSpan.FromSeconds(1));
+
+        var applied = service.TryApplyResolvedLyrics(
+            track with { Title = "A different song" },
+            CreateResolved("manual", "Manual lyric"));
+
+        Assert.False(applied);
+        Assert.False(coordinator.SearchCancelled.Task.IsCompleted);
+    }
+
+    [Fact]
+    public async Task TryApplyResolvedLyricsIgnoresLaterDurationCorrectionForTheSameTrack()
+    {
+        var coordinator = new ImmediateCoordinator(CreateResolved("automatic", "Automatic lyric"));
+        using var service = new LyricSyncService(
+            coordinator,
+            metadataStabilizationDelay: TimeSpan.Zero);
+        var initialTrack = CreateTrack(duration: TimeSpan.FromSeconds(242));
+
+        await service.GetDisplayFrameAsync(new PlaybackSnapshot(true, TimeSpan.Zero, initialTrack));
+        await coordinator.SearchStarted.Task.WaitAsync(TimeSpan.FromSeconds(1));
+        await Task.Delay(20);
+        Assert.True(service.TryApplyResolvedLyrics(initialTrack, CreateResolved("manual", "Manual lyric")));
+
+        var correctedTrack = initialTrack with { Duration = TimeSpan.FromSeconds(389) };
+        var frame = await service.GetDisplayFrameAsync(
+            new PlaybackSnapshot(true, TimeSpan.Zero, correctedTrack));
+
+        Assert.Equal("Manual lyric", frame.CurrentLine);
+        Assert.Equal(1, coordinator.ResolveCallCount);
+    }
+
+    [Fact]
     public async Task DisposeCancelsActiveSearchAndDisposesCoordinator()
     {
         var coordinator = new BlockingCoordinator();

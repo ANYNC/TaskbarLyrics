@@ -25,7 +25,7 @@
       displayArea: ["显示与外观", "调整歌词显示的尺寸、文字、窗口外观与位置，并在歌词窗口中即时检查效果。"],
       general: ["常规", "管理启动行为与界面主题。"],
       advanced: ["高级", "用于诊断播放同步问题和维护缓存数据。"],
-      lyricDiagnostics: ["歌词诊断", "针对当前 SMTC 歌曲查看歌词检索候选、匹配分和最终结果。"],
+      lyricDiagnostics: ["歌词匹配", "查找当前 SMTC 歌曲的歌词候选，比较匹配分并选择结果。"],
       taskbarEmbedding: ["任务栏嵌入", "将歌词窗口直接嵌入所选显示器的任务栏；这是测试版的新实现，默认关闭。"],
       about: ["关于", "查看版本、许可证与项目技术信息。"]
     };
@@ -59,7 +59,7 @@
     const pendingRangePreviews = new Map();
     let rangePreviewFrame = 0;
     let announceNextLayoutPreview = false;
-    let lyricDiagnosticsState = { status: "idle", track: null, report: null, message: "" };
+    let lyricDiagnosticsState = { status: "idle", track: null, report: null, message: "", apply: null };
     let pendingSpectrumDisplayMode = null;
     let spectrumCaptureState = { state: "disabled", message: "" };
 
@@ -278,10 +278,27 @@
       return "unknown";
     }
 
+    function diagnosticRawIdentifier(value) {
+      return value === null || value === undefined ? "" : String(value);
+    }
+
+    function diagnosticCandidateMatchesSelection(selection, providerId, candidateId) {
+      if (!selection || typeof selection !== "object") return false;
+      const selectedProviderId = diagnosticRawIdentifier(selection.providerId);
+      const selectedCandidateId = diagnosticRawIdentifier(selection.candidateId);
+      return Boolean(selectedProviderId && selectedCandidateId && providerId && candidateId) &&
+        selectedProviderId.toLowerCase() === providerId.toLowerCase() &&
+        selectedCandidateId === candidateId;
+    }
+
     function formatDiagnosticTimestamp(value) {
       const date = new Date(value);
       if (Number.isNaN(date.getTime())) return "";
       return new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(date);
+    }
+
+    function diagnosticCandidateKey(providerId, candidateId, mode = "current") {
+      return `${providerId}\u0000${candidateId}\u0000${mode}`;
     }
 
     function renderLyricDiagnosticsTrack(track) {
@@ -319,7 +336,8 @@
       }
 
       container.innerHTML = providers.map(provider => {
-        const providerId = diagnosticString(provider?.providerId, "未知来源");
+        const providerIdentifier = diagnosticRawIdentifier(provider?.providerId);
+        const providerId = diagnosticString(providerIdentifier, "未知来源");
         const providerState = provider?.state ?? null;
         const providerStateClass = diagnosticProviderStateClass(providerState);
         const candidates = Array.isArray(provider?.candidates) ? provider.candidates : [];
@@ -333,13 +351,27 @@
             const metadataKeys = Array.isArray(candidate?.fetchMetadataKeys) ? candidate.fetchMetadataKeys.filter(Boolean) : [];
             const title = diagnosticString(candidate?.title, "未知候选");
             const artist = diagnosticArtists(candidate?.artists, "未知歌手");
-            return `<article class="diagnostics-candidate">
+            const candidateIdentifier = diagnosticRawIdentifier(candidate?.candidateId);
+            const candidateId = diagnosticString(candidateIdentifier);
+            const candidateIsSelected = diagnosticCandidateMatchesSelection(report?.selection, providerIdentifier, candidateIdentifier);
+            const apply = lyricDiagnosticsState.apply;
+            const currentApplyState = apply && apply.key === diagnosticCandidateKey(providerIdentifier, candidateIdentifier, "current") ? apply.status : "idle";
+            const rememberApplyState = apply && apply.key === diagnosticCandidateKey(providerIdentifier, candidateIdentifier, "remember") ? apply.status : "idle";
+            const candidateApplyRunning = currentApplyState === "running" || rememberApplyState === "running";
+            const currentApplyLabel = currentApplyState === "running" ? "正在应用…" : currentApplyState === "success" ? "已应用" : "本次使用";
+            const rememberApplyLabel = rememberApplyState === "running" ? "正在记住…" : rememberApplyState === "success" ? "已记住" : "使用并记住";
+            const applyActions = providerIdentifier && candidateIdentifier
+              ? `<div class="diagnostics-candidate-actions"><button class="btn secondary small diagnostics-apply-button" type="button" data-lyric-diagnostics-apply data-apply-mode="current" data-provider-id="${escapeHtml(providerIdentifier)}" data-candidate-id="${escapeHtml(candidateIdentifier)}"${candidateApplyRunning ? " disabled" : ""}${currentApplyState === "running" ? " aria-busy=\"true\"" : ""}>${currentApplyState === "running" ? '<span class="spinner" aria-hidden="true"></span>' : ""}${currentApplyLabel}</button><button class="btn ghost small diagnostics-apply-button" type="button" data-lyric-diagnostics-apply data-apply-mode="remember" data-provider-id="${escapeHtml(providerIdentifier)}" data-candidate-id="${escapeHtml(candidateIdentifier)}"${candidateApplyRunning ? " disabled" : ""}${rememberApplyState === "running" ? " aria-busy=\"true\"" : ""}>${rememberApplyState === "running" ? '<span class="spinner" aria-hidden="true"></span>' : ""}${rememberApplyLabel}</button></div>`
+              : "";
+            const candidateState = candidateIsSelected ? "selected" : admitted ? "accepted" : "rejected";
+            const candidateStateLabel = candidateIsSelected ? "当前采用" : admitted ? "已接纳" : "已拒绝";
+            return `<article class="diagnostics-candidate${candidateIsSelected ? " is-selected" : ""}">
               <div class="diagnostics-candidate-main">
                 <div class="diagnostics-candidate-title"><strong title="${escapeHtml(title)}">${escapeHtml(title)}</strong><small title="${escapeHtml(artist)}">${escapeHtml(artist)}</small></div>
-                <div class="diagnostics-candidate-meta"><span>专辑：${escapeHtml(diagnosticString(candidate?.album))}</span><span>时长：${escapeHtml(formatDiagnosticDuration(candidate?.durationSeconds ?? candidate?.duration))}</span><span>查询变体：${escapeHtml(diagnosticString(candidate?.queryVariantId))}</span><span>候选 ID：<code title="${escapeHtml(diagnosticString(candidate?.candidateId))}">${escapeHtml(diagnosticString(candidate?.candidateId))}</code></span>${metadataKeys.length ? `<span>元数据：${escapeHtml(metadataKeys.join("、"))}</span>` : ""}</div>
+                <div class="diagnostics-candidate-meta"><span>专辑：${escapeHtml(diagnosticString(candidate?.album))}</span><span>时长：${escapeHtml(formatDiagnosticDuration(candidate?.durationSeconds ?? candidate?.duration))}</span><span>查询变体：${escapeHtml(diagnosticString(candidate?.queryVariantId))}</span><span>候选 ID：<code title="${escapeHtml(candidateId)}">${escapeHtml(candidateId)}</code></span>${metadataKeys.length ? `<span>元数据：${escapeHtml(metadataKeys.join("、"))}</span>` : ""}</div>
                 ${reasons.length ? `<ul class="diagnostics-reasons" aria-label="拒绝原因">${reasons.map(reason => `<li>${escapeHtml(reason)}</li>`).join("")}</ul>` : ""}
               </div>
-              <div class="diagnostics-candidate-side"><span class="diagnostics-badge" data-state="${admitted ? "accepted" : "rejected"}">${admitted ? "已接纳" : "已拒绝"}</span>${admitted && candidate?.isHighConfidence ? '<span class="diagnostics-badge" data-state="high-confidence">高置信</span>' : ""}<strong class="diagnostics-score">${score === null ? "--" : score} 分</strong></div>
+              <div class="diagnostics-candidate-controls"><div class="diagnostics-candidate-summary"><div class="diagnostics-candidate-badges"><span class="diagnostics-badge" data-state="${candidateState}">${candidateStateLabel}</span>${admitted && candidate?.isHighConfidence ? '<span class="diagnostics-badge" data-state="high-confidence">高置信</span>' : ""}</div><strong class="diagnostics-score">${score === null ? "--" : score} 分</strong></div>${applyActions}</div>
             </article>`;
           }).join("")
           : `<div class="diagnostics-candidate-empty">该来源没有返回候选。</div>`;
@@ -395,16 +427,21 @@
       const report = current.report;
       const track = current.track ?? report?.effectiveTrack ?? report?.originalTrack;
       const title = diagnosticString(track?.title, "当前歌曲");
-      let message = "尚未运行诊断。点击“开始诊断”获取当前歌曲的检索过程。";
-      if (current.status === "running") message = `正在诊断“${title}”……`;
-      else if (current.status === "success") message = report?.selection ? "诊断完成，已找到可用歌词。" : "诊断完成，但没有候选通过完整校验。";
-      else if (current.status === "empty") message = diagnosticString(current.message, "当前没有可诊断的 SMTC 歌曲。");
-      else if (current.status === "error") message = diagnosticString(current.message, "歌词诊断失败，请稍后重试。");
-      status.dataset.state = current.status;
+      const apply = current.apply;
+      let message = "尚未查找。点击“查找歌词”查看当前歌曲的匹配结果。";
+      if (current.status === "running") message = `正在查找“${title}”的歌词…`;
+      else if (current.status === "success") message = report?.selection ? "匹配完成，已找到可用歌词。" : "匹配完成，但没有候选通过完整校验。";
+      else if (current.status === "empty") message = diagnosticString(current.message, "当前没有可匹配的 SMTC 歌曲。");
+      else if (current.status === "error") message = diagnosticString(current.message, "歌词匹配失败，请稍后重试。");
+      if (apply?.status === "running") message = diagnosticString(apply.message, "正在应用当前歌词…");
+      else if (apply?.status === "success") message = diagnosticString(apply.message, "已应用当前歌词。");
+      else if (apply?.status === "error") message = diagnosticString(apply.message, "应用当前歌词失败。");
+      status.dataset.state = apply?.status === "running" ? "running" : apply?.status === "error" ? "error" : apply?.status === "success" ? "success" : current.status;
       status.textContent = message;
-      button.disabled = current.status === "running";
-      button.setAttribute("aria-busy", String(current.status === "running"));
-      button.innerHTML = current.status === "running" ? '<span class="spinner" aria-hidden="true"></span>诊断中……' : current.status === "idle" ? "开始诊断" : "重新诊断";
+      const applyBusy = current.apply?.status === "running";
+      button.disabled = current.status === "running" || applyBusy;
+      button.setAttribute("aria-busy", String(current.status === "running" || applyBusy));
+      button.innerHTML = current.status === "running" ? '<span class="spinner" aria-hidden="true"></span>查找中…' : current.status === "idle" ? "查找歌词" : "重新查找";
 
       renderLyricDiagnosticsTrack(track);
       reportPanel.hidden = !report || current.status !== "success";
@@ -428,12 +465,33 @@
 
     function setLyricDiagnosticsState(payload = {}) {
       const status = ["running", "success", "empty", "error"].includes(payload?.status) ? payload.status : "error";
-      const report = status === "success" && payload.report && typeof payload.report === "object" ? payload.report : null;
+      const hasApply = payload.apply && typeof payload.apply === "object";
+      const report = status === "success" && payload.report && typeof payload.report === "object"
+        ? payload.report
+        : hasApply
+          ? lyricDiagnosticsState.report
+          : null;
+      const track = payload.track && typeof payload.track === "object"
+        ? payload.track
+        : hasApply
+          ? lyricDiagnosticsState.track
+          : null;
+      const apply = hasApply
+        ? {
+          status: ["running", "success", "error"].includes(payload.apply.status) ? payload.apply.status : "error",
+          key: diagnosticCandidateKey(
+            diagnosticRawIdentifier(payload.apply.providerId),
+            diagnosticRawIdentifier(payload.apply.candidateId),
+            payload.apply.mode === "remember" ? "remember" : "current"),
+          message: diagnosticString(payload.apply.message)
+        }
+        : null;
       lyricDiagnosticsState = {
         status: status === "success" && !report ? "error" : status,
-        track: payload.track && typeof payload.track === "object" ? payload.track : null,
+        track,
         report,
-        message: diagnosticString(payload.message, status === "success" && !report ? "诊断结果无效。" : "")
+        message: diagnosticString(payload.message, status === "success" && !report ? "匹配结果无效。" : ""),
+        apply
       };
       renderLyricDiagnosticsState();
     }
@@ -845,7 +903,7 @@
       const primaryBadge = display.isPrimary ? '<span class="monitor-badge">主显示器</span>' : "";
       const copy = `<span class="monitor-option-copy"><span class="monitor-option-title"><strong title="${displayName}">${displayName}</strong>${primaryBadge}</span><small>${Number(display.width) || 0} × ${Number(display.height) || 0}</small></span>`;
       if (mode === "All") {
-        return `<div class="monitor-option is-readonly" data-display-id="${displayId}">${copy}<span class="monitor-badge is-enabled">已启用</span></div>`;
+        return `<div class="monitor-option is-readonly" data-display-id="${displayId}">${copy}</div>`;
       }
 
       return `<label class="monitor-option">${copy}<input type="checkbox" data-display-id="${displayId}" ${selected.has(display.id) ? "checked" : ""} aria-label="在 ${displayName} 显示歌词"></label>`;
@@ -1658,7 +1716,7 @@
     $("#restoreButton").addEventListener("click", () => $("#restoreDialog").showModal());
     $("#clearCacheButton").addEventListener("click", () => $("#clearDialog").showModal());
     $("#confirmRestore").addEventListener("click", () => { closeDialogWithAnimation($("#restoreDialog")); resetState(); });
-    $("#confirmClear").addEventListener("click", () => { closeDialogWithAnimation($("#clearDialog")); bridge.post({ type: "clearCache" }); showToast("歌词与封面缓存已清理"); });
+    $("#confirmClear").addEventListener("click", () => { closeDialogWithAnimation($("#clearDialog")); bridge.post({ type: "clearCache" }); showToast("歌词、封面缓存及指定记录已清理"); });
     $("#confirmSpectrumAudioAccess").addEventListener("click", () => {
       const mode = pendingSpectrumDisplayMode;
       if (!mode) return;
@@ -1717,6 +1775,25 @@
       if (lyricDiagnosticsState.status === "running") return;
       setLyricDiagnosticsState({ status: "running" });
       bridge.post({ type: "runLyricDiagnostics" });
+    });
+    document.addEventListener("click", event => {
+      const button = event.target.closest?.("[data-lyric-diagnostics-apply]");
+      if (!button || button.disabled) return;
+      const providerId = button.dataset.providerId;
+      const candidateId = button.dataset.candidateId;
+      const mode = button.dataset.applyMode === "remember" ? "remember" : "current";
+      if (!providerId || !candidateId) return;
+      const key = diagnosticCandidateKey(providerId, candidateId, mode);
+      lyricDiagnosticsState.apply = {
+        status: "running",
+        key,
+        message: mode === "remember" ? "正在获取、应用并写入歌词缓存…" : "正在获取并应用歌词…"
+      };
+      renderLyricDiagnosticsState();
+      bridge.post({
+        type: "applyLyricDiagnosticCandidate",
+        value: { providerId, candidateId, mode }
+      });
     });
     const openRepository = () => { if (repositoryUrl) bridge.post({ type: "openExternalLink", value: repositoryUrl }); };
     $("#repositoryButton").addEventListener("click", openRepository);

@@ -4,7 +4,7 @@ using TaskbarLyrics.Core.Models;
 
 namespace TaskbarLyrics.Core.Services;
 
-public sealed class LyricDiagnosticRunner
+public sealed class LyricDiagnosticRunner : IDisposable
 {
     private readonly ILyricSource[] _sources;
     private readonly ILyricPayloadDecoder[] _decoders;
@@ -12,6 +12,13 @@ public sealed class LyricDiagnosticRunner
     private readonly ILyricMappingResolver? _mappingResolver;
     private readonly LyricProviderTrustPolicy _trustPolicy;
     private readonly TimeSpan? _sourceTimeout;
+    private readonly object _stateGate = new();
+    private LyricResolutionCoordinator? _coordinator;
+    private TrackInfo? _diagnosticTrack;
+    private Dictionary<CandidateKey, SourceTrackCandidate> _candidates = new();
+    private HashSet<CandidateKey> _ambiguousCandidates = new();
+    private bool _runCompleted;
+    private bool _isDisposed;
     private int _hasRun;
 
     public IReadOnlyList<LyricProviderId> ProviderTrustOrder => _trustPolicy.Order;
@@ -42,6 +49,7 @@ public sealed class LyricDiagnosticRunner
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(track);
+        ThrowIfDisposed();
         if (Interlocked.Exchange(ref _hasRun, 1) != 0)
         {
             throw new InvalidOperationException("A lyric diagnostic runner can only be used once.");
@@ -49,7 +57,7 @@ public sealed class LyricDiagnosticRunner
 
         var mapping = (_mappingResolver ?? new SongSearchMapResolver()).Resolve(track);
         var trace = new CollectingTraceSink();
-        using var coordinator = new LyricResolutionCoordinator(
+        var coordinator = new LyricResolutionCoordinator(
             _sources,
             _decoders,
             _parsers,
@@ -59,8 +67,132 @@ public sealed class LyricDiagnosticRunner
             sourceTimeout: _sourceTimeout,
             traceSink: trace,
             completeAllSourcesForTrace: true);
-        var resolved = await coordinator.ResolveAsync(track, cancellationToken);
-        return trace.CreateReport(track, _trustPolicy.Order, resolved, mapping.PreferredProvider);
+        lock (_stateGate)
+        {
+            _coordinator = coordinator;
+            _diagnosticTrack = track;
+        }
+
+        try
+        {
+            var resolved = await coordinator.ResolveAsync(track, cancellationToken);
+            if (IsDisposed)
+            {
+                throw new OperationCanceledException();
+            }
+
+            var report = trace.CreateReport(track, _trustPolicy.Order, resolved, mapping.PreferredProvider);
+            lock (_stateGate)
+            {
+                if (_isDisposed || !ReferenceEquals(_coordinator, coordinator))
+                {
+                    throw new OperationCanceledException();
+                }
+
+                _candidates = trace.CreateCandidateLookup(out _ambiguousCandidates);
+                _runCompleted = true;
+            }
+
+            return report;
+        }
+        catch
+        {
+            lock (_stateGate)
+            {
+                if (ReferenceEquals(_coordinator, coordinator))
+                {
+                    _coordinator = null;
+                    _diagnosticTrack = null;
+                }
+            }
+
+            coordinator.Dispose();
+            throw;
+        }
+    }
+
+    public async Task<ResolvedLyrics?> ResolveCandidateAsync(
+        TrackInfo track,
+        string providerId,
+        string candidateId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(track);
+        if (string.IsNullOrWhiteSpace(providerId) || string.IsNullOrWhiteSpace(candidateId))
+        {
+            return null;
+        }
+
+        LyricResolutionCoordinator? coordinator;
+        SourceTrackCandidate? candidate;
+        lock (_stateGate)
+        {
+            if (_isDisposed ||
+                !_runCompleted ||
+                _diagnosticTrack is null ||
+                !string.Equals(
+                    LyricSyncService.BuildStableTrackIdentity(_diagnosticTrack),
+                    LyricSyncService.BuildStableTrackIdentity(track),
+                    StringComparison.Ordinal))
+            {
+                return null;
+            }
+
+            var key = new CandidateKey(providerId, candidateId);
+            if (_ambiguousCandidates.Contains(key) ||
+                !_candidates.TryGetValue(key, out candidate) ||
+                candidate is null)
+            {
+                return null;
+            }
+
+            coordinator = _coordinator;
+        }
+
+        if (coordinator is null || IsDisposed)
+        {
+            return null;
+        }
+
+        return await coordinator.ResolveCandidateAsync(track, candidate, cancellationToken);
+    }
+
+    public void Dispose()
+    {
+        LyricResolutionCoordinator? coordinator;
+        lock (_stateGate)
+        {
+            if (_isDisposed)
+            {
+                return;
+            }
+
+            _isDisposed = true;
+            coordinator = _coordinator;
+            _coordinator = null;
+            _diagnosticTrack = null;
+            _candidates = new();
+            _ambiguousCandidates = new();
+            _runCompleted = false;
+        }
+
+        coordinator?.Dispose();
+    }
+
+    private bool IsDisposed
+    {
+        get
+        {
+            lock (_stateGate)
+            {
+                return _isDisposed;
+            }
+        }
+    }
+
+    private void ThrowIfDisposed()
+    {
+        ObjectDisposedException.ThrowIf(IsDisposed, nameof(LyricDiagnosticRunner));
     }
 
     private sealed class CollectingTraceSink : ILyricResolutionTraceSink
@@ -113,6 +245,29 @@ public sealed class LyricDiagnosticRunner
                 request is null ? "The coordinator did not prepare a searchable request." : null);
         }
 
+        public Dictionary<CandidateKey, SourceTrackCandidate> CreateCandidateLookup(
+            out HashSet<CandidateKey> ambiguousCandidates)
+        {
+            var candidates = new Dictionary<CandidateKey, SourceTrackCandidate>();
+            ambiguousCandidates = new HashSet<CandidateKey>();
+            foreach (var trace in _candidates)
+            {
+                var key = new CandidateKey(trace.Candidate.ProviderId.Value, trace.Candidate.CandidateId);
+                if (ambiguousCandidates.Contains(key))
+                {
+                    continue;
+                }
+
+                if (!candidates.TryAdd(key, trace.Candidate))
+                {
+                    candidates.Remove(key);
+                    ambiguousCandidates.Add(key);
+                }
+            }
+
+            return candidates;
+        }
+
         private LyricDiagnosticProvider CreateProvider(
             LyricProviderId providerId,
             Dictionary<LyricProviderId, LyricResolutionSourceTrace> sourceLookup,
@@ -155,6 +310,17 @@ public sealed class LyricDiagnosticRunner
                 resolved.Content.TimingProvenance,
                 resolved.Content.Lines.Count,
                 resolved.Diagnostics);
+    }
+
+    private readonly record struct CandidateKey(string ProviderId, string CandidateId)
+    {
+        public bool Equals(CandidateKey other) =>
+            string.Equals(ProviderId, other.ProviderId, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(CandidateId, other.CandidateId, StringComparison.Ordinal);
+
+        public override int GetHashCode() => HashCode.Combine(
+            StringComparer.OrdinalIgnoreCase.GetHashCode(ProviderId),
+            StringComparer.Ordinal.GetHashCode(CandidateId));
     }
 
     private sealed class DiagnosticMappingResolver(LyricMapping mapping) : ILyricMappingResolver

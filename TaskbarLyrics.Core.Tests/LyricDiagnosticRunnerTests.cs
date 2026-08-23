@@ -94,6 +94,67 @@ public sealed class LyricDiagnosticRunnerTests
     }
 
     [Fact]
+    public async Task ResolveCandidateAsyncCanForceARejectedCandidateUsingItsExactIdentity()
+    {
+        var track = CreateTrack();
+        var source = new TestSource(KnownLyricProviders.QQMusic);
+        source.SearchHandler = (plan, _) => Task.FromResult<IReadOnlyList<SourceTrackCandidate>>
+        ([
+            CreateCandidate(source, plan, "rejected", "A Completely Different Song")
+        ]);
+        source.FetchHandler = (candidate, _) => Task.FromResult<RawLyricPayload?>(CreatePayload(source, candidate));
+        using var runner = CreateRunner([source]);
+
+        var report = await runner.RunAsync(track);
+        var resolved = await runner.ResolveCandidateAsync(track, "QQMusic", "rejected");
+
+        Assert.Null(report.Selection);
+        Assert.NotNull(resolved);
+        Assert.Equal("rejected", resolved.CandidateId);
+        Assert.Equal("lyrics:rejected", resolved.Content.Lines[0].Text);
+        Assert.Equal(1, source.FetchCalls);
+    }
+
+    [Fact]
+    public async Task ResolveCandidateAsyncRejectsUnknownCandidateAndDifferentTrack()
+    {
+        var track = CreateTrack();
+        var source = CreateSuccessfulSource(KnownLyricProviders.QQMusic, searchDelayMilliseconds: 0);
+        using var runner = CreateRunner([source]);
+        await runner.RunAsync(track);
+
+        Assert.Null(await runner.ResolveCandidateAsync(track, "QQMusic", "unknown"));
+        Assert.Null(await runner.ResolveCandidateAsync(
+            track with { Title = "Another song" },
+            "QQMusic",
+            "QQMusic-candidate"));
+    }
+
+    [Fact]
+    public async Task ResolveCandidateAsyncRejectsPayloadWithAStaleCandidateIdentity()
+    {
+        var source = new TestSource(KnownLyricProviders.QQMusic);
+        source.SearchHandler = (plan, _) => Task.FromResult<IReadOnlyList<SourceTrackCandidate>>
+        ([CreateCandidate(source, plan, "candidate", plan.OriginalTrack.Title)]);
+        source.FetchHandler = (candidate, _) => Task.FromResult<RawLyricPayload?>(
+            new RawLyricPayload(
+                source.ProviderId,
+                "different-candidate",
+                LyricPayloadFormat.PlainText,
+                "stale lyrics",
+                null,
+                false,
+                false,
+                new Dictionary<string, string>(StringComparer.Ordinal)));
+        using var runner = CreateRunner([source]);
+
+        var report = await runner.RunAsync(CreateTrack());
+
+        Assert.Null(report.Selection);
+        Assert.Null(await runner.ResolveCandidateAsync(CreateTrack(), "QQMusic", "candidate"));
+    }
+
+    [Fact]
     public async Task RunAsyncUsesNoOpCacheAndDoesNotReuseResultsAcrossRuns()
     {
         var source = CreateSuccessfulSource(KnownLyricProviders.QQMusic, searchDelayMilliseconds: 0);

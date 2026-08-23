@@ -30,10 +30,11 @@
   --font-family: "Source Han Sans SC", "SF Pro Display", "Segoe UI Variable Display", "Segoe UI Variable Text", "Microsoft YaHei UI", sans-serif;
   --font-size: 13px;
   --font-weight: 500;
-  --primary: rgba(255, 255, 255, 1);
+  --primary: rgba(255, 255, 255, 0.90);
   --secondary: rgba(255, 255, 255, 0.60);
   --translation: rgba(255, 255, 255, 0.70);
-  --word-scan-feather-width: 0.18em;
+  --word-scan-overlay: rgba(255, 255, 255, 0.75);
+  --word-scan-feather-width: 0.12em;
   --row-height: 14px;
   --row-gap: 1px;
   --line-pitch: 15px;
@@ -422,6 +423,7 @@ html, body {
       var(--word-scan-progress),
       calc(100% - var(--word-scan-progress)));
     clip-path: none;
+    color: var(--word-scan-overlay);
     -webkit-mask-image: linear-gradient(
       to right,
       #000 0,

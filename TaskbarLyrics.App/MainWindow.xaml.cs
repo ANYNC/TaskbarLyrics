@@ -321,6 +321,22 @@ public partial class MainWindow : Window, IDisposable
             : new CurrentTrackLyricsContext(_currentTrack, lyricSource ?? string.Empty);
     }
 
+    internal bool TryApplyResolvedLyrics(TrackInfo diagnosticTrack, ResolvedLyrics resolved)
+    {
+        ArgumentNullException.ThrowIfNull(diagnosticTrack);
+        ArgumentNullException.ThrowIfNull(resolved);
+        if (_currentTrack is null ||
+            !string.Equals(
+                LyricSyncService.BuildStableTrackIdentity(_currentTrack),
+                LyricSyncService.BuildStableTrackIdentity(diagnosticTrack),
+                StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        return _lyricSyncService.TryApplyResolvedLyrics(_currentTrack, resolved);
+    }
+
     internal Task ExecuteMediaHotkeyAsync(MediaHotkeyAction action, CancellationToken cancellationToken)
     {
         return _mediaPlaybackController.ExecuteAsync(action, cancellationToken);

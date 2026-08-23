@@ -9,9 +9,11 @@ internal static class LyricsStyleScriptFactory
     {
         ArgumentNullException.ThrowIfNull(settings);
         settings.NormalizeLyricsTextAlignment();
-        var primaryColor = ParseColor(settings.ForegroundColor);
-        var secondaryColor = ForegroundColorPolicy.CreateSecondaryColor(primaryColor);
-        var translationColor = ForegroundColorPolicy.CreateTranslationColor(primaryColor);
+        var foregroundColor = ParseColor(settings.ForegroundColor);
+        var primaryColor = ForegroundColorPolicy.CreatePrimaryColor(foregroundColor);
+        var secondaryColor = ForegroundColorPolicy.CreateSecondaryColor(foregroundColor);
+        var translationColor = ForegroundColorPolicy.CreateTranslationColor(foregroundColor);
+        var wordScanOverlayColor = ForegroundColorPolicy.CreateWordScanOverlayColor(foregroundColor);
         var metrics = LyricsLayoutMetrics.Create(settings, pixelsPerDip);
         var stylePayload = new
         {
@@ -45,6 +47,7 @@ internal static class LyricsStyleScriptFactory
             primaryColor = ToCssColor(primaryColor),
             secondaryColor = ToCssColor(secondaryColor),
             translationColor = ToCssColor(translationColor),
+            wordScanOverlayColor = ToCssColor(wordScanOverlayColor),
             surfaceColor = settings.ShowBackground
                 ? $"rgba(18, 18, 24, {Math.Clamp(settings.BackgroundOpacity, 0, 1).ToString("0.####", CultureInfo.InvariantCulture)})"
                 : "transparent",

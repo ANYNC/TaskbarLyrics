@@ -28,6 +28,7 @@ let spectrumBarEls = Array.from(document.querySelectorAll(".spectrum span"));
 let displayedCurrent = currentLineTextEl?.textContent || "";
 let displayedNext = nextLineTextEl?.textContent || "";
 let requestedFontSize = 13;
+let currentSize = 13;
 let viewportDescenderBufferPx = 2;
 let layoutScaleFactor = 1;
 let requestedSpectrumBarWidthPx = 3;
@@ -2325,6 +2326,10 @@ const lyricsApi = {
 
     if (payload.translationColor && CSS.supports("color", payload.translationColor)) {
       root.style.setProperty("--translation", payload.translationColor);
+    }
+
+    if (payload.wordScanOverlayColor && CSS.supports("color", payload.wordScanOverlayColor)) {
+      root.style.setProperty("--word-scan-overlay", payload.wordScanOverlayColor);
     }
 
     if (payload.surfaceColor && CSS.supports("background-color", payload.surfaceColor)) {

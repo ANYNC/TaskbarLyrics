@@ -7,6 +7,7 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Win32;
+using TaskbarLyrics.Core.Models;
 using TaskbarLyrics.Core.Services;
 using TaskbarLyrics.Core.Utilities;
 using Drawing = System.Drawing;
@@ -20,6 +21,9 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
     private readonly TrackLyricOffsetStore _trackLyricOffsetStore;
     private readonly Func<Task<CurrentTrackLyricsContext?>> _getCurrentTrackLyricsContext;
     private readonly Func<LyricDiagnosticRunner> _createLyricDiagnosticRunner;
+    private readonly Func<TrackInfo, ResolvedLyrics, CancellationToken, Task<bool>> _tryApplyResolvedLyrics;
+    private readonly Func<TrackInfo, ResolvedLyrics, CancellationToken, Task<bool>> _rememberResolvedLyrics;
+    private readonly Action _clearLyricCache;
     private readonly DispatcherTimer _trackOffsetRefreshTimer;
     private bool _isWebReady;
     private bool _isTrackOffsetRefreshRunning;
@@ -33,12 +37,17 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
     private SpectrumDisplayMode? _pendingSpectrumDisplayMode;
     private string _lastSpectrumCaptureStateJson = string.Empty;
     private CancellationTokenSource? _lyricDiagnosticsCancellation;
+    private CancellationTokenSource? _lyricDiagnosticsApplyCancellation;
+    private LyricDiagnosticRunner? _lyricDiagnosticRunner;
 
     internal SettingsWindow(
         AppSettings settings,
         TrackLyricOffsetStore trackLyricOffsetStore,
         Func<Task<CurrentTrackLyricsContext?>> getCurrentTrackLyricsContext,
-        Func<LyricDiagnosticRunner> createLyricDiagnosticRunner)
+        Func<LyricDiagnosticRunner> createLyricDiagnosticRunner,
+        Func<TrackInfo, ResolvedLyrics, CancellationToken, Task<bool>> tryApplyResolvedLyrics,
+        Func<TrackInfo, ResolvedLyrics, CancellationToken, Task<bool>> rememberResolvedLyrics,
+        Action clearLyricCache)
     {
         InitializeComponent();
         AppIconProvider.ApplyWindowIcon(this);
@@ -46,6 +55,9 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         _trackLyricOffsetStore = trackLyricOffsetStore;
         _getCurrentTrackLyricsContext = getCurrentTrackLyricsContext;
         _createLyricDiagnosticRunner = createLyricDiagnosticRunner;
+        _tryApplyResolvedLyrics = tryApplyResolvedLyrics;
+        _rememberResolvedLyrics = rememberResolvedLyrics;
+        _clearLyricCache = clearLyricCache;
         _trackOffsetRefreshTimer = new DispatcherTimer(DispatcherPriority.Background)
         {
             Interval = TimeSpan.FromMilliseconds(600)
@@ -112,6 +124,11 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         var diagnosticsCancellation = Interlocked.Exchange(ref _lyricDiagnosticsCancellation, null);
         diagnosticsCancellation?.Cancel();
         diagnosticsCancellation?.Dispose();
+        var diagnosticsApplyCancellation = Interlocked.Exchange(ref _lyricDiagnosticsApplyCancellation, null);
+        diagnosticsApplyCancellation?.Cancel();
+        diagnosticsApplyCancellation?.Dispose();
+        var diagnosticRunner = Interlocked.Exchange(ref _lyricDiagnosticRunner, null);
+        diagnosticRunner?.Dispose();
         _trackOffsetRefreshTimer.Stop();
         _trackOffsetRefreshTimer.Tick -= TrackOffsetRefreshTimer_Tick;
 
@@ -250,7 +267,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 await PushSettingsToWebAsync();
                 break;
             case "clearCache":
-                ClearLyricCache();
+                _clearLyricCache();
                 break;
             case "openSmtcMonitor":
                 if (System.Windows.Application.Current is App smtcApp)
@@ -282,6 +299,9 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 break;
             case "runLyricDiagnostics":
                 await RunLyricDiagnosticsAsync();
+                break;
+            case "applyLyricDiagnosticCandidate":
+                await ApplyLyricDiagnosticCandidateAsync(message.Value);
                 break;
             case "trackOffsetsPageActivated":
                 _isTrackOffsetsPageActive = true;
@@ -388,6 +408,14 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             cancellation);
         previousCancellation?.Cancel();
         previousCancellation?.Dispose();
+        var previousApplyCancellation = Interlocked.Exchange(
+            ref _lyricDiagnosticsApplyCancellation,
+            null);
+        previousApplyCancellation?.Cancel();
+        previousApplyCancellation?.Dispose();
+        var previousRunner = Interlocked.Exchange(ref _lyricDiagnosticRunner, null);
+        previousRunner?.Dispose();
+        LyricDiagnosticRunner? runner = null;
 
         try
         {
@@ -419,7 +447,8 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                     track.SongId
                 }
             });
-            var runner = _createLyricDiagnosticRunner();
+            runner = _createLyricDiagnosticRunner();
+            Interlocked.Exchange(ref _lyricDiagnosticRunner, runner)?.Dispose();
             var report = await runner.RunAsync(track, cancellation.Token);
             cancellation.Token.ThrowIfCancellationRequested();
             await PushLyricDiagnosticsStateAsync(new
@@ -433,15 +462,29 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         }
         catch (Exception exception)
         {
+            if (runner is not null &&
+                !ReferenceEquals(Volatile.Read(ref _lyricDiagnosticRunner), runner))
+            {
+                return;
+            }
+
             Log.Warn($"Lyric diagnostics failed: {exception.Message}");
             await PushLyricDiagnosticsStateAsync(new
             {
                 status = "error",
-                message = "歌词诊断失败，请稍后重试。"
+                message = "歌词匹配失败，请稍后重试。"
             });
         }
         finally
         {
+            if (runner is not null &&
+                ReferenceEquals(Volatile.Read(ref _lyricDiagnosticRunner), runner) &&
+                cancellation.IsCancellationRequested)
+            {
+                Interlocked.CompareExchange(ref _lyricDiagnosticRunner, null, runner);
+                runner.Dispose();
+            }
+
             if (ReferenceEquals(
                     Interlocked.CompareExchange(ref _lyricDiagnosticsCancellation, null, cancellation),
                     cancellation))
@@ -449,6 +492,175 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 cancellation.Dispose();
             }
         }
+    }
+
+    private async Task ApplyLyricDiagnosticCandidateAsync(JsonElement? value)
+    {
+        if (!SettingsWebMessageRouter.TryParseLyricDiagnosticCandidateApplyRequest(
+                value,
+                out var request))
+        {
+            return;
+        }
+
+        var providerId = request.ProviderId;
+        var candidateId = request.CandidateId;
+        var mode = request.Mode;
+
+        var runner = Volatile.Read(ref _lyricDiagnosticRunner);
+        if (runner is null)
+        {
+            await PushLyricDiagnosticsApplyStateAsync(
+                "error",
+                providerId,
+                candidateId,
+                mode,
+                "匹配候选已失效，请重新查找。");
+            return;
+        }
+
+        var cancellation = new CancellationTokenSource();
+        var previousCancellation = Interlocked.Exchange(
+            ref _lyricDiagnosticsApplyCancellation,
+            cancellation);
+        previousCancellation?.Cancel();
+        previousCancellation?.Dispose();
+
+        try
+        {
+            await PushLyricDiagnosticsApplyStateAsync(
+                "running",
+                providerId,
+                candidateId,
+                mode,
+                mode == LyricDiagnosticApplyMode.Remember
+                    ? "正在获取、应用并写入歌词缓存…"
+                    : "正在获取并应用歌词…");
+            var context = await _getCurrentTrackLyricsContext();
+            cancellation.Token.ThrowIfCancellationRequested();
+            if (context is null ||
+                string.IsNullOrWhiteSpace(context.Track.Title) ||
+                string.Equals(context.Track.Title, "Unknown Title", StringComparison.OrdinalIgnoreCase))
+            {
+                await PushLyricDiagnosticsApplyStateAsync(
+                    "error",
+                    providerId,
+                    candidateId,
+                    mode,
+                    "当前没有可应用歌词的歌曲，请重新查找。");
+                return;
+            }
+
+            var resolved = await runner.ResolveCandidateAsync(
+                context.Track,
+                providerId,
+                candidateId,
+                cancellation.Token);
+            cancellation.Token.ThrowIfCancellationRequested();
+            if (!ReferenceEquals(Volatile.Read(ref _lyricDiagnosticRunner), runner))
+            {
+                return;
+            }
+
+            if (resolved is null)
+            {
+                await PushLyricDiagnosticsApplyStateAsync(
+                    "error",
+                    providerId,
+                    candidateId,
+                    mode,
+                    "候选歌词未通过内容校验，请重新查找或选择其他候选。");
+                return;
+            }
+
+            var applied = await _tryApplyResolvedLyrics(
+                context.Track,
+                resolved,
+                cancellation.Token);
+            cancellation.Token.ThrowIfCancellationRequested();
+            if (!applied)
+            {
+                await PushLyricDiagnosticsApplyStateAsync(
+                    "error",
+                    providerId,
+                    candidateId,
+                    mode,
+                    "当前歌曲已切换，请重新查找。");
+                return;
+            }
+
+            if (mode == LyricDiagnosticApplyMode.Remember)
+            {
+                var remembered = await _rememberResolvedLyrics(
+                    context.Track,
+                    resolved,
+                    cancellation.Token);
+                cancellation.Token.ThrowIfCancellationRequested();
+                await PushLyricDiagnosticsApplyStateAsync(
+                    remembered ? "success" : "error",
+                    providerId,
+                    candidateId,
+                    mode,
+                    remembered
+                        ? "已应用并写入歌词缓存；再次匹配到相同标题和歌手时会直接使用。"
+                        : "歌词已应用，但未能写入歌词缓存。");
+                return;
+            }
+
+            await PushLyricDiagnosticsApplyStateAsync(
+                "success",
+                providerId,
+                candidateId,
+                mode,
+                "已应用当前歌词。");
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception)
+        {
+            if (ReferenceEquals(Volatile.Read(ref _lyricDiagnosticRunner), runner) &&
+                ReferenceEquals(Volatile.Read(ref _lyricDiagnosticsApplyCancellation), cancellation))
+            {
+                Log.Warn($"Applying lyric diagnostic candidate failed: {exception.Message}");
+                await PushLyricDiagnosticsApplyStateAsync(
+                    "error",
+                    providerId,
+                    candidateId,
+                    mode,
+                    "应用歌词失败，请重新查找或选择其他候选。");
+            }
+        }
+        finally
+        {
+            if (ReferenceEquals(
+                    Interlocked.CompareExchange(ref _lyricDiagnosticsApplyCancellation, null, cancellation),
+                    cancellation))
+            {
+                cancellation.Dispose();
+            }
+        }
+    }
+
+    private Task PushLyricDiagnosticsApplyStateAsync(
+        string status,
+        string providerId,
+        string candidateId,
+        LyricDiagnosticApplyMode mode,
+        string message)
+    {
+        return PushLyricDiagnosticsStateAsync(new
+        {
+            status = "success",
+            apply = new
+            {
+                status,
+                providerId,
+                candidateId,
+                mode = mode == LyricDiagnosticApplyMode.Remember ? "remember" : "current",
+                message
+            }
+        });
     }
 
     private async Task PushLyricDiagnosticsStateAsync(object payload)
@@ -1335,11 +1547,6 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         ForegroundColorPolicy.ApplySelectedMode(
             _settings,
             App.IsSystemUiUsingLightTheme());
-    }
-
-    private static void ClearLyricCache()
-    {
-        LyricPipelineCache.ClearDefault();
     }
 
     private async Task CheckForUpdatesAsync()

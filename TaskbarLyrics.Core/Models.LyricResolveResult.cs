@@ -9,7 +9,8 @@ public enum LyricAcquisitionKind
     Remote,
     LocalFile,
     SongMapping,
-    NotFound
+    NotFound,
+    UserBinding
 }
 
 public sealed record LyricFetchResult(

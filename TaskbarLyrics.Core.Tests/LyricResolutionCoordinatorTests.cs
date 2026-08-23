@@ -37,10 +37,12 @@ public sealed class LyricResolutionCoordinatorTests
     }
 
     [Fact]
-    public async Task PrimarySourceImmediateAcceptanceWhenScoreAtLeast95()
+    public async Task PrimarySourceImmediateAcceptanceWhenScoreAtLeast90()
     {
         var track = CreateTrack("Perfect Song");
-        var qq = CreateValidSource(KnownLyricProviders.QQMusic);
+        var qq = CreateValidSource(
+            KnownLyricProviders.QQMusic,
+            candidateDuration: track.Duration - TimeSpan.FromSeconds(5));
         var kugou = CreateValidSource(
             KnownLyricProviders.Kugou,
             searchDelay: TimeSpan.FromMilliseconds(200));
@@ -56,11 +58,11 @@ public sealed class LyricResolutionCoordinatorTests
         var score = int.Parse(
             resolved.Diagnostics["identityScore"],
             System.Globalization.CultureInfo.InvariantCulture);
-        Assert.True(score >= LyricMatchingPolicy.ImmediateAcceptanceScore);
+        Assert.InRange(score, LyricMatchingPolicy.ImmediateAcceptanceScore, 94);
     }
 
     [Fact]
-    public async Task PrimarySourceBelow95SelectsHighestTrust95PlusSource()
+    public async Task PrimarySourceBelow90SelectsHighestTrust90PlusSource()
     {
         var track = CreateTrack("Edge Song");
         var qq = CreateValidSource(
@@ -84,7 +86,7 @@ public sealed class LyricResolutionCoordinatorTests
     }
 
     [Fact]
-    public async Task TrustOrderTakesPrecedenceOverScoreWhenMultiple95PlusSources()
+    public async Task TrustOrderTakesPrecedenceOverScoreWhenMultiple90PlusSources()
     {
         var track = CreateTrack("Priority Song");
         var qq = CreateValidSource(
@@ -110,7 +112,7 @@ public sealed class LyricResolutionCoordinatorTests
     }
 
     [Fact]
-    public async Task FallbackTo80PlusTrustOrderedWhenNo95PlusSource()
+    public async Task FallbackTo80PlusTrustOrderedWhenNo90PlusSource()
     {
         var track = CreateTrack("Fuzzy Song");
         var qq = CreateValidSource(
@@ -119,7 +121,7 @@ public sealed class LyricResolutionCoordinatorTests
             candidateDuration: track.Duration - TimeSpan.FromSeconds(8));
         var kugou = CreateValidSource(
             KnownLyricProviders.Kugou,
-            candidateDuration: track.Duration - TimeSpan.FromSeconds(5));
+            candidateDuration: track.Duration - TimeSpan.FromSeconds(8));
         var netease = CreateNoLyricsSource(KnownLyricProviders.Netease);
         var lrclib = CreateNoLyricsSource(KnownLyricProviders.LrcLib);
 

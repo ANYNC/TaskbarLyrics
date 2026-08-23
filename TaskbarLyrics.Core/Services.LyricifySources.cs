@@ -1,3 +1,4 @@
+using System.Net.Http;
 using Lyricify.Lyrics.Helpers;
 using Lyricify.Lyrics.Searchers;
 using TaskbarLyrics.Core.Abstractions;
@@ -36,8 +37,8 @@ public sealed class QqMusicLyricSource : ILyricSource
             plan,
             async (variant, token) =>
             {
-                var response = await LyricifyTask.WaitAsync(
-                    ProviderHelper.QQMusicApi.Search(
+                var response = await LyricifyTask.WaitWithProxyRecoveryAsync(
+                    () => ProviderHelper.QQMusicApi.Search(
                         BuildQuery(variant),
                         Lyricify.Lyrics.Providers.Web.QQMusic.Api.SearchTypeEnum.SONG_ID),
                     token);
@@ -56,8 +57,8 @@ public sealed class QqMusicLyricSource : ILyricSource
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(candidate);
-        var qrc = await LyricifyTask.WaitAsync(
-            ProviderHelper.QQMusicApi.GetLyricsAsync(candidate.CandidateId),
+        var qrc = await LyricifyTask.WaitWithProxyRecoveryAsync(
+            () => ProviderHelper.QQMusicApi.GetLyricsAsync(candidate.CandidateId),
             cancellationToken);
         var qrcPayload = MapQrc(candidate, qrc);
         if (qrcPayload is not null)
@@ -71,8 +72,8 @@ public sealed class QqMusicLyricSource : ILyricSource
             return null;
         }
 
-        var lrc = await LyricifyTask.WaitAsync(
-            ProviderHelper.QQMusicApi.GetLyric(mid),
+        var lrc = await LyricifyTask.WaitWithProxyRecoveryAsync(
+            () => ProviderHelper.QQMusicApi.GetLyric(mid),
             cancellationToken);
         return MapLrc(candidate, lrc);
     }
@@ -171,8 +172,8 @@ public sealed class KugouLyricSource : ILyricSource
             plan,
             async (variant, token) =>
             {
-                var response = await LyricifyTask.WaitAsync(
-                    ProviderHelper.KugouApi.GetSearchSong(BuildQuery(variant)),
+                var response = await LyricifyTask.WaitWithProxyRecoveryAsync(
+                    () => ProviderHelper.KugouApi.GetSearchSong(BuildQuery(variant)),
                     token);
                 var candidates = new List<SourceTrackCandidate>();
                 foreach (var song in response?.Data?.Info ?? [])
@@ -256,8 +257,8 @@ public sealed class KugouLyricSource : ILyricSource
     private static async Task<IReadOnlyList<Lyricify.Lyrics.Providers.Web.Kugou.SearchLyricsResponse.Candidate>>
         SearchLyricCandidatesAsync(string hash, CancellationToken cancellationToken)
     {
-        var response = await LyricifyTask.WaitAsync(
-            ProviderHelper.KugouApi.GetSearchLyrics(hash: hash),
+        var response = await LyricifyTask.WaitWithProxyRecoveryAsync(
+            () => ProviderHelper.KugouApi.GetSearchLyrics(hash: hash),
             cancellationToken);
         if (response?.Candidates is { Count: > 0 })
         {
@@ -265,8 +266,8 @@ public sealed class KugouLyricSource : ILyricSource
         }
 
         await Task.Delay(TimeSpan.FromMilliseconds(150), cancellationToken);
-        response = await LyricifyTask.WaitAsync(
-            ProviderHelper.KugouApi.GetSearchLyrics(hash: hash),
+        response = await LyricifyTask.WaitWithProxyRecoveryAsync(
+            () => ProviderHelper.KugouApi.GetSearchLyrics(hash: hash),
             cancellationToken);
         return response?.Candidates ?? [];
     }
@@ -314,8 +315,8 @@ public sealed class NeteaseLyricSource : ILyricSource
             plan,
             async (variant, token) =>
             {
-                var response = await LyricifyTask.WaitAsync(
-                    ProviderHelper.NeteaseApi.SearchNew(BuildQuery(variant)),
+                var response = await LyricifyTask.WaitWithProxyRecoveryAsync(
+                    () => ProviderHelper.NeteaseApi.SearchNew(BuildQuery(variant)),
                     token);
                 return (response?.Result?.Songs ?? [])
                     .Select(song => MapSong(song, variant))
@@ -331,8 +332,8 @@ public sealed class NeteaseLyricSource : ILyricSource
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(candidate);
-        var response = await LyricifyTask.WaitAsync(
-            ProviderHelper.NeteaseApi.GetLyricNew(candidate.CandidateId),
+        var response = await LyricifyTask.WaitWithProxyRecoveryAsync(
+            () => ProviderHelper.NeteaseApi.GetLyricNew(candidate.CandidateId),
             cancellationToken);
         return MapLyrics(candidate, response);
     }
@@ -410,8 +411,8 @@ public sealed class LrcLibLyricSource : ILyricSource
             plan,
             async (variant, token) =>
             {
-                var response = await LyricifyTask.WaitAsync(
-                    ProviderHelper.LRCLIBApi.Search(
+                var response = await LyricifyTask.WaitWithProxyRecoveryAsync(
+                    () => ProviderHelper.LRCLIBApi.Search(
                         variant.Title,
                         string.Join(", ", variant.Artists),
                         variant.Album,
@@ -440,8 +441,8 @@ public sealed class LrcLibLyricSource : ILyricSource
             return null;
         }
 
-        var response = await LyricifyTask.WaitAsync(
-            ProviderHelper.LRCLIBApi.GetById(candidateId),
+        var response = await LyricifyTask.WaitWithProxyRecoveryAsync(
+            () => ProviderHelper.LRCLIBApi.GetById(candidateId),
             cancellationToken);
         return MapLyrics(candidate, response);
     }
@@ -501,6 +502,8 @@ public sealed class LrcLibLyricSource : ILyricSource
 
 internal static class LyricifyTask
 {
+    private static readonly LyricifyProxyRecovery ProxyRecovery = LyricifyProxyRecovery.CreateDefault();
+
     public static async Task<T> WaitAsync<T>(Task<T> helperTask, CancellationToken cancellationToken)
     {
         try
@@ -515,6 +518,65 @@ internal static class LyricifyTask
                 TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
                 TaskScheduler.Default);
             throw;
+        }
+    }
+
+    public static Task<T> WaitWithProxyRecoveryAsync<T>(
+        Func<Task<T>> taskFactory,
+        CancellationToken cancellationToken) =>
+        WaitWithProxyRecoveryAsync(taskFactory, ProxyRecovery, cancellationToken);
+
+    internal static async Task<T> WaitWithProxyRecoveryAsync<T>(
+        Func<Task<T>> taskFactory,
+        LyricifyProxyRecovery proxyRecovery,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(taskFactory);
+        ArgumentNullException.ThrowIfNull(proxyRecovery);
+
+        var failedClient = proxyRecovery.GetCurrentClient();
+        try
+        {
+            return await WaitAsync(taskFactory(), cancellationToken);
+        }
+        catch (HttpRequestException) when (!cancellationToken.IsCancellationRequested)
+        {
+            proxyRecovery.RefreshIfCurrent(failedClient);
+            return await WaitAsync(taskFactory(), cancellationToken);
+        }
+    }
+}
+
+internal sealed class LyricifyProxyRecovery
+{
+    private readonly object _refreshLock = new();
+    private readonly Func<HttpClient> _getCurrentClient;
+    private readonly Action _clearProxy;
+
+    public LyricifyProxyRecovery(Func<HttpClient> getCurrentClient, Action clearProxy)
+    {
+        ArgumentNullException.ThrowIfNull(getCurrentClient);
+        ArgumentNullException.ThrowIfNull(clearProxy);
+        _getCurrentClient = getCurrentClient;
+        _clearProxy = clearProxy;
+    }
+
+    public static LyricifyProxyRecovery CreateDefault() =>
+        new(
+            static () => Lyricify.Lyrics.Providers.Web.BaseApi.HttpClient,
+            static () => Lyricify.Lyrics.Providers.Web.Proxy.ClearProxy());
+
+    public HttpClient GetCurrentClient() => _getCurrentClient();
+
+    public void RefreshIfCurrent(HttpClient failedClient)
+    {
+        ArgumentNullException.ThrowIfNull(failedClient);
+        lock (_refreshLock)
+        {
+            if (ReferenceEquals(_getCurrentClient(), failedClient))
+            {
+                _clearProxy();
+            }
         }
     }
 }

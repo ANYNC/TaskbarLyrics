@@ -2,6 +2,7 @@ namespace TaskbarLyrics.App;
 
 internal static class ForegroundColorPolicy
 {
+    private const double PrimaryTextOpacityRatio = 0.90;
     private const double SecondaryTextOpacityRatio = 0.60;
     private const double TranslationTextOpacityRatio = 0.70;
 
@@ -54,6 +55,11 @@ internal static class ForegroundColorPolicy
         return true;
     }
 
+    public static System.Windows.Media.Color CreatePrimaryColor(System.Windows.Media.Color foregroundColor)
+    {
+        return CreateAlphaScaledColor(foregroundColor, PrimaryTextOpacityRatio);
+    }
+
     public static System.Windows.Media.Color CreateSecondaryColor(System.Windows.Media.Color primaryColor)
     {
         return CreateAlphaScaledColor(primaryColor, SecondaryTextOpacityRatio);
@@ -62,6 +68,24 @@ internal static class ForegroundColorPolicy
     public static System.Windows.Media.Color CreateTranslationColor(System.Windows.Media.Color primaryColor)
     {
         return CreateAlphaScaledColor(primaryColor, TranslationTextOpacityRatio);
+    }
+
+    public static System.Windows.Media.Color CreateWordScanOverlayColor(System.Windows.Media.Color foregroundColor)
+    {
+        var primaryAlpha = CreatePrimaryColor(foregroundColor).A;
+        var secondaryAlpha = CreateSecondaryColor(foregroundColor).A;
+        if (primaryAlpha <= secondaryAlpha || secondaryAlpha == byte.MaxValue)
+        {
+            return System.Windows.Media.Color.FromArgb(0, foregroundColor.R, foregroundColor.G, foregroundColor.B);
+        }
+
+        var overlayAlpha = (primaryAlpha - secondaryAlpha) * byte.MaxValue /
+            (byte.MaxValue - secondaryAlpha);
+        return System.Windows.Media.Color.FromArgb(
+            (byte)Math.Clamp(overlayAlpha, 0, byte.MaxValue),
+            foregroundColor.R,
+            foregroundColor.G,
+            foregroundColor.B);
     }
 
     private static System.Windows.Media.Color CreateAlphaScaledColor(

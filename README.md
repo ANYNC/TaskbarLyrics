@@ -138,11 +138,11 @@ TaskbarLyrics 会优先尝试与当前播放器对应的歌词来源。如果没
 | 数据 | 位置 |
 | --- | --- |
 | 设置 | `%APPDATA%\TaskbarLyrics\settings.json` |
-| 歌词缓存 | `%APPDATA%\TaskbarLyrics\cache` |
+| 歌词缓存 | `%APPDATA%\TaskbarLyrics\database\lyric-*.json`、`resolved-lyrics-v1.json` |
 | 歌曲映射和单曲偏移 | `%APPDATA%\TaskbarLyrics\database` |
 | 日志 | 程序目录下的 `Logs` 文件夹 |
 
-清理歌词缓存不会删除应用设置或单曲偏移。恢复默认设置也不会删除已经保存的单曲偏移。
+清理歌词缓存不会删除应用设置或单曲偏移，但会删除歌词匹配中“使用并记住”的指定记录。恢复默认设置不会删除已经保存的单曲偏移。
 
 程序无需传统安装。退出程序并删除解压目录即可移除程序文件；如果希望同时删除所有个人设置和缓存，再删除 `%APPDATA%\TaskbarLyrics`。
 

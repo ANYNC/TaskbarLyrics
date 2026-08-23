@@ -313,6 +313,7 @@
     .monitor-option { justify-content: space-between; min-height: 52px; padding: 9px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--card); }
     .monitor-option:not(.is-readonly) { cursor: pointer; }
     .monitor-option:has(input:checked) { border-color: var(--primary); background: var(--accent); }
+    .monitor-option:has(input:checked):not(.is-readonly):hover { background: var(--accent); }
     .monitor-option-copy { min-width: 0; display: grid; gap: 2px; }
     .monitor-option-title { min-width: 0; display: flex; align-items: center; gap: 6px; }
     .monitor-option-title strong { min-width: 0; overflow: hidden; font-size: 13px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
@@ -320,7 +321,6 @@
     .monitor-option-copy small, .monitor-hint { color: var(--muted-foreground); font-size: 11px; }
     .monitor-hint { text-align: right; }
     .monitor-badge { flex: 0 0 auto; padding: 2px 6px; border-radius: 999px; background: var(--muted); color: var(--muted-foreground); font-size: 10px; font-weight: 600; line-height: 1.4; }
-    .monitor-badge.is-enabled { background: color-mix(in oklch, var(--success) 18%, transparent); color: var(--success); box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--success) 32%, transparent); }
     .setting-label { min-width: 0; display: grid; gap: 3px; }
     .setting-label strong { font-size: 13px; font-weight: 600; }
     .setting-label small { color: var(--muted-foreground); font-size: 11px; line-height: 1.45; }
@@ -562,6 +562,7 @@
     .diagnostics-badge[data-state="running"] { color: var(--foreground); }
     .diagnostics-candidates { display: grid; gap: 7px; padding: 9px 12px 12px; }
     .diagnostics-candidate { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; padding: 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--card); }
+    .diagnostics-candidate.is-selected { border-color: color-mix(in oklch, var(--success) 45%, var(--border)); background: color-mix(in oklch, var(--success) 7%, var(--card)); }
     .diagnostics-candidate-main { min-width: 0; display: grid; gap: 5px; }
     .diagnostics-candidate-title { min-width: 0; display: flex; align-items: baseline; gap: 7px; }
     .diagnostics-candidate-title strong { min-width: 0; overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
@@ -570,8 +571,12 @@
     .diagnostics-candidate-meta span { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .diagnostics-candidate-meta code,
     .diagnostics-selection code { font-family: Consolas, "Cascadia Mono", monospace; font-size: 10px; }
-    .diagnostics-candidate-side { display: grid; justify-items: end; align-content: start; gap: 6px; }
+    .diagnostics-candidate-controls { min-width: 0; display: grid; grid-template-columns: 136px 112px; align-items: center; gap: 10px; }
+    .diagnostics-candidate-summary { min-width: 0; display: grid; justify-items: end; align-content: center; gap: 5px; }
+    .diagnostics-candidate-badges { min-width: 0; display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 4px 7px; }
     .diagnostics-score { color: var(--foreground); font-size: 12px; font-variant-numeric: tabular-nums; font-weight: 700; white-space: nowrap; }
+    .diagnostics-candidate-actions { width: 112px; display: grid; gap: 6px; }
+    .diagnostics-apply-button { width: 100%; min-width: 0; }
     .diagnostics-reasons { display: flex; flex-wrap: wrap; gap: 4px; margin: 0; padding: 0; list-style: none; }
     .diagnostics-reasons li { padding: 3px 6px; border-radius: 4px; background: var(--destructive-soft); color: var(--destructive); font-size: 10px; line-height: 1.25; }
     .diagnostics-candidate-empty { padding: 12px 10px; color: var(--muted-foreground); font-size: 11px; }
@@ -706,7 +711,10 @@
       .diagnostics-run-panel .panel-head { align-items: flex-start; }
       .diagnostics-track { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .diagnostics-candidate { grid-template-columns: minmax(0, 1fr); }
-      .diagnostics-candidate-side { grid-template-columns: auto auto; justify-items: start; align-items: center; }
+      .diagnostics-candidate-controls { width: 100%; grid-template-columns: minmax(0, 1fr) auto; }
+      .diagnostics-candidate-summary { justify-items: start; }
+      .diagnostics-candidate-badges { justify-content: flex-start; }
+      .diagnostics-candidate-actions { width: auto; grid-template-columns: repeat(2, minmax(112px, auto)); }
       .diagnostics-variant { grid-template-columns: auto minmax(0, 1fr); }
       .diagnostics-variant-reasons { grid-column: 2; justify-self: start; text-align: left; }
     }

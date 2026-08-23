@@ -17,6 +17,7 @@ public sealed class LyricResolutionCoordinator : ILyricResolutionCoordinator
     private readonly ILyricPipelineCache _cache;
     private readonly LyricProviderTrustPolicy _trustPolicy;
     private readonly ILyricProvider? _localProvider;
+    private readonly IResolvedLyricCache? _resolvedLyricCache;
     private readonly ILyricResolutionTraceSink? _traceSink;
     private readonly bool _completeAllSourcesForTrace;
     private readonly TimeSpan _sourceTimeout;
@@ -39,7 +40,8 @@ public sealed class LyricResolutionCoordinator : ILyricResolutionCoordinator
         LyricProviderTrustPolicy? trustPolicy = null,
         TimeSpan? sourceTimeout = null,
         ILyricResolutionTraceSink? traceSink = null,
-        bool completeAllSourcesForTrace = false)
+        bool completeAllSourcesForTrace = false,
+        IResolvedLyricCache? resolvedLyricCache = null)
     {
         ArgumentNullException.ThrowIfNull(sources);
         ArgumentNullException.ThrowIfNull(decoders);
@@ -71,6 +73,7 @@ public sealed class LyricResolutionCoordinator : ILyricResolutionCoordinator
             StringComparer.OrdinalIgnoreCase);
         _mappingResolver = mappingResolver ?? new SongSearchMapResolver();
         _localProvider = localProvider;
+        _resolvedLyricCache = resolvedLyricCache;
         _traceSink = traceSink;
         _completeAllSourcesForTrace = completeAllSourcesForTrace;
         _trustPolicy = trustPolicy ?? LyricProviderTrustPolicy.CreateDefault(sourceArray.Select(source => source.ProviderId));
@@ -109,6 +112,12 @@ public sealed class LyricResolutionCoordinator : ILyricResolutionCoordinator
                 return null;
             }
 
+            if (TryGetCachedLyrics(track, out var cachedLyrics))
+            {
+                LogSelection(requestId, cachedLyrics);
+                return cachedLyrics;
+            }
+
             var mapping = _mappingResolver.Resolve(track);
             var mappedTrack = track with
             {
@@ -139,6 +148,7 @@ public sealed class LyricResolutionCoordinator : ILyricResolutionCoordinator
                     mapping.PreferredProvider,
                     requestId,
                     token);
+                TryStoreAutomaticResolution(track, preferred);
                 LogSelection(requestId, preferred);
                 return preferred;
             }
@@ -151,6 +161,7 @@ public sealed class LyricResolutionCoordinator : ILyricResolutionCoordinator
             }
 
             var online = await ResolveOnlineAsync(mappedTrack, searchPlan, requestId, token);
+            TryStoreAutomaticResolution(track, online);
             LogSelection(requestId, online);
             return online;
         }
@@ -163,6 +174,109 @@ public sealed class LyricResolutionCoordinator : ILyricResolutionCoordinator
         {
             Log.Diagnostic("LYRIC_PIPELINE", $"Request='{requestId}' State='Cancelled'.");
             throw;
+        }
+        finally
+        {
+            ExitOperation();
+        }
+    }
+
+    private bool TryGetCachedLyrics(
+        TrackInfo track,
+        out ResolvedLyrics? resolvedLyrics)
+    {
+        resolvedLyrics = null;
+        if (_resolvedLyricCache is null)
+        {
+            return false;
+        }
+
+        try
+        {
+            return _resolvedLyricCache.TryGet(track, out resolvedLyrics) && resolvedLyrics is not null;
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            Log.Warn($"Resolved lyric cache lookup failed: {exception.Message}");
+            return false;
+        }
+    }
+
+    private void TryStoreAutomaticResolution(TrackInfo track, ResolvedLyrics? resolvedLyrics)
+    {
+        if (_resolvedLyricCache is null ||
+            resolvedLyrics is null ||
+            !TryGetIdentityScore(resolvedLyrics, out var score) ||
+            score < LyricMatchingPolicy.MinimumAcceptedMatchScore)
+        {
+            return;
+        }
+
+        try
+        {
+            if (!_resolvedLyricCache.Store(track, resolvedLyrics))
+            {
+                Log.Warn("Resolved lyric cache rejected an automatic lyric selection.");
+            }
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            Log.Warn($"Resolved lyric cache store failed: {exception.Message}");
+        }
+    }
+
+    public async Task<ResolvedLyrics?> ResolveCandidateAsync(
+        TrackInfo track,
+        SourceTrackCandidate candidate,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(track);
+        ArgumentNullException.ThrowIfNull(candidate);
+        if (!TryEnterOperation())
+        {
+            return null;
+        }
+
+        using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(
+            cancellationToken,
+            _lifetimeCancellation.Token);
+        var requestId = Guid.NewGuid().ToString("N");
+        try
+        {
+            linkedCancellation.Token.ThrowIfCancellationRequested();
+            if (!_sources.TryGetValue(candidate.ProviderId.Value, out var source))
+            {
+                return null;
+            }
+
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(linkedCancellation.Token);
+            timeout.CancelAfter(_sourceTimeout);
+            var gate = _sourceGates[source.ProviderId.Value];
+            await gate.WaitAsync(timeout.Token);
+            try
+            {
+                var evaluation = LyricIdentityEvaluator.Evaluate(
+                    TrackIdentity.FromTrackInfo(track),
+                    candidate);
+                var resolution = await ResolveCandidateAsync(
+                    source,
+                    new CandidateAdmission(candidate, evaluation),
+                    requestId,
+                    timeout.Token);
+                return resolution.Lyrics;
+            }
+            finally
+            {
+                gate.Release();
+            }
+        }
+        catch (OperationCanceledException) when (_lifetimeCancellation.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        {
+            return null;
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return null;
         }
         finally
         {
@@ -477,6 +591,12 @@ public sealed class LyricResolutionCoordinator : ILyricResolutionCoordinator
             try
             {
                 var decoded = await DecodeAsync(rawPayload, cancellationToken);
+                if (decoded.ProviderId != source.ProviderId ||
+                    !string.Equals(decoded.CandidateId, candidate.CandidateId, StringComparison.Ordinal))
+                {
+                    return CandidateResolution.Invalid;
+                }
+
                 parsed = await parser.ParseAsync(decoded, cancellationToken);
             }
             catch (Exception exception) when (exception is FormatException or NotSupportedException or ArgumentException)

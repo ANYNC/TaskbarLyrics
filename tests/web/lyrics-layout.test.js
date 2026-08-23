@@ -37,14 +37,16 @@ describe("lyrics responsive layout", () => {
     expect(style).toMatch(/\.line\.horizontal-scrolling\.word-scan-smoothing \.line-text-stack\s*\{[^}]*transition:\s*transform 90ms linear;[^}]*will-change:\s*transform/s);
     expect(style).toMatch(/@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*\.line\.word-scan-smoothing\s*\{[^}]*transition:\s*none/s);
     expect(style).toMatch(/@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*\.line\.horizontal-scrolling\.word-scan-smoothing \.line-text-stack\s*\{[^}]*transition:\s*none;[^}]*will-change:\s*auto/s);
-    expect(style).toContain("--primary: rgba(255, 255, 255, 1)");
+    expect(style).toContain("--primary: rgba(255, 255, 255, 0.90)");
     expect(style).toContain("--secondary: rgba(255, 255, 255, 0.60)");
-    expect(style).toContain("--word-scan-feather-width: 0.18em");
-    const primaryFallback = style.match(/--primary:\s*rgba\((\d+),\s*(\d+),\s*(\d+),/);
+    expect(style).toContain("--word-scan-overlay: rgba(255, 255, 255, 0.75)");
+    expect(style).toContain("--word-scan-feather-width: 0.12em");
+    const primaryFallback = style.match(/--primary:\s*rgba\((\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\)/);
     const secondaryFallback = style.match(/--secondary:\s*rgba\((\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\)/);
     expect(primaryFallback).not.toBeNull();
     expect(secondaryFallback).not.toBeNull();
     expect(secondaryFallback?.slice(1, 4)).toEqual(primaryFallback?.slice(1, 4));
+    expect(Number(primaryFallback?.[4])).toBeCloseTo(0.90, 5);
     expect(Number(secondaryFallback?.[4])).toBeCloseTo(0.60, 5);
     expect(style).toMatch(/@property\s+--word-scan-progress\s*\{[^}]*syntax:\s*"<percentage>"[^}]*initial-value:\s*0%/s);
     expect(style).toMatch(/\.line\.word-scan-smoothing\s*\{[^}]*--word-scan-progress\s+90ms\s+linear/s);
@@ -59,6 +61,7 @@ describe("lyrics responsive layout", () => {
     expect(style).toMatch(/(?<!-webkit-)mask-image:\s*linear-gradient\(\s*to right,\s*#000 0,\s*#000 calc\(var\(--word-scan-progress\) - var\(--word-scan-effective-feather\)\),\s*transparent calc\(var\(--word-scan-progress\) \+ var\(--word-scan-effective-feather\)\),\s*transparent 100%\)/s);
     expect(style).toContain("-webkit-mask-repeat: no-repeat");
     expect(style).toContain("mask-repeat: no-repeat");
+    expect(style).toMatch(/@supports[\s\S]*\.current-line\.word-scanning \.line-text-scan,[\s\S]*color:\s*var\(--word-scan-overlay\)/s);
     expect(style).not.toContain("word-scan-active");
     expect(style).not.toContain("word-scan-complete");
     expect(style).not.toContain("background-clip: text");
@@ -878,7 +881,10 @@ describe("lyrics responsive layout", () => {
         layoutScalePercent: 300,
         spectrumWidth: 630,
         spectrumGap: 9,
-        spectrumBarWidth: 9
+        spectrumBarWidth: 9,
+        primaryColor: "rgba(255, 255, 255, 0.9)",
+        secondaryColor: "rgba(255, 255, 255, 0.6)",
+        wordScanOverlayColor: "rgba(255, 255, 255, 0.75)"
       }
     });
 
@@ -890,6 +896,12 @@ describe("lyrics responsive layout", () => {
     expect(fittedBarWidth).toBeGreaterThanOrEqual(1);
     expect(fittedGap).toBeGreaterThanOrEqual(0);
     expect(fittedTotalWidth).toBeLessThanOrEqual(120);
+    expect(dom.window.document.documentElement.style.getPropertyValue("--primary"))
+      .toBe("rgba(255, 255, 255, 0.9)");
+    expect(dom.window.document.documentElement.style.getPropertyValue("--secondary"))
+      .toBe("rgba(255, 255, 255, 0.6)");
+    expect(dom.window.document.documentElement.style.getPropertyValue("--word-scan-overlay"))
+      .toBe("rgba(255, 255, 255, 0.75)");
   });
 
   it("selects presentation transitions from scene and layout without DOM dependencies", async () => {

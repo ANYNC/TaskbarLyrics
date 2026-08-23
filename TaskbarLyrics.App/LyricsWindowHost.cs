@@ -2,6 +2,7 @@ using System.Threading;
 using System.Windows;
 using System.Windows.Threading;
 using Microsoft.Win32;
+using TaskbarLyrics.Core.Models;
 using TaskbarLyrics.Core.Services;
 using TaskbarLyrics.Core.Utilities;
 
@@ -115,6 +116,24 @@ internal sealed class LyricsWindowHost : IDisposable
         return _dispatcher.InvokeAsync(
             () => _window?.GetCurrentTrackLyricsContextSnapshot(),
             DispatcherPriority.Normal).Task;
+    }
+
+    public Task<bool> TryApplyResolvedLyricsAsync(
+        TrackInfo track,
+        ResolvedLyrics resolved,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(track);
+        ArgumentNullException.ThrowIfNull(resolved);
+        if (_disposed || _dispatcher is null)
+        {
+            return Task.FromResult(false);
+        }
+
+        return _dispatcher.InvokeAsync(
+            () => _window?.TryApplyResolvedLyrics(track, resolved) ?? false,
+            DispatcherPriority.Normal,
+            cancellationToken).Task;
     }
 
     public Task ExecuteMediaHotkeyAsync(MediaHotkeyAction action, CancellationToken cancellationToken)

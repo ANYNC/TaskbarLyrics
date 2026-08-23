@@ -1,4 +1,5 @@
 using TaskbarLyrics.Core.Abstractions;
+using TaskbarLyrics.Core.Models;
 using TaskbarLyrics.Core.Services;
 
 namespace TaskbarLyrics.App;
@@ -8,7 +9,7 @@ internal sealed record MusicSessionServices(
     IMediaPlaybackController PlaybackController,
     IPlayerRecognitionController PlayerRecognitionController);
 
-internal interface IAppCompositionRoot
+internal interface IAppCompositionRoot : IDisposable
 {
     MusicSessionServices CreateMusicSessionServices();
 
@@ -18,6 +19,13 @@ internal interface IAppCompositionRoot
 
     LyricDiagnosticRunner CreateLyricDiagnosticRunner();
 
+    ValueTask<bool> RememberResolvedLyricsAsync(
+        TrackInfo track,
+        ResolvedLyrics resolvedLyrics,
+        CancellationToken cancellationToken);
+
+    void ClearLyricCache();
+
     LocalMediaCoverProvider? CreateLocalMediaCoverProvider(AppSettings settings);
 
     IReadOnlyCollection<string> GetEnabledPlayerSources(AppSettings settings);
@@ -25,6 +33,23 @@ internal interface IAppCompositionRoot
 
 internal sealed class AppCompositionRoot : IAppCompositionRoot
 {
+    private readonly IResolvedLyricCache _resolvedLyricCache;
+    private readonly Action _clearPipelineCache;
+
+    public AppCompositionRoot()
+        : this(JsonResolvedLyricCache.CreateDefault(), LyricPipelineCache.ClearDefault)
+    {
+    }
+
+    internal AppCompositionRoot(
+        IResolvedLyricCache resolvedLyricCache,
+        Action? clearPipelineCache = null)
+    {
+        _resolvedLyricCache = resolvedLyricCache ??
+            throw new ArgumentNullException(nameof(resolvedLyricCache));
+        _clearPipelineCache = clearPipelineCache ?? LyricPipelineCache.ClearDefault;
+    }
+
     public MusicSessionServices CreateMusicSessionServices()
     {
         var provider = new SmtcMusicSessionProvider();
@@ -35,7 +60,7 @@ internal sealed class AppCompositionRoot : IAppCompositionRoot
         AppSettings settings,
         TrackLyricOffsetStore trackLyricOffsetStore)
     {
-        var coordinator = CreateLyricResolutionCoordinator(settings);
+        var coordinator = CreateLyricResolutionCoordinator(settings, _resolvedLyricCache);
         return new LyricSyncService(
             coordinator,
             sourceApp => TimeSpan.FromMilliseconds(settings.GetPlayerLyricOffsetMilliseconds(sourceApp)),
@@ -43,7 +68,9 @@ internal sealed class AppCompositionRoot : IAppCompositionRoot
                 trackLyricOffsetStore.GetOffsetMilliseconds(track, lyricSource)));
     }
 
-    internal static LyricResolutionCoordinator CreateLyricResolutionCoordinator(AppSettings settings)
+    internal static LyricResolutionCoordinator CreateLyricResolutionCoordinator(
+        AppSettings settings,
+        IResolvedLyricCache? resolvedLyricCache = null)
     {
         var sources = new ILyricSource[]
         {
@@ -61,7 +88,8 @@ internal sealed class AppCompositionRoot : IAppCompositionRoot
             [new LyricifyPayloadDecoder()],
             [new LyricifyPayloadParser()],
             cache,
-            localProvider: localProvider);
+            localProvider: localProvider,
+            resolvedLyricCache: resolvedLyricCache);
     }
 
     public LyricDiagnosticRunner CreateLyricDiagnosticRunner() =>
@@ -74,6 +102,29 @@ internal sealed class AppCompositionRoot : IAppCompositionRoot
             ],
             [new LyricifyPayloadDecoder()],
             [new LyricifyPayloadParser()]);
+
+    public ValueTask<bool> RememberResolvedLyricsAsync(
+        TrackInfo track,
+        ResolvedLyrics resolvedLyrics,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return ValueTask.FromResult(_resolvedLyricCache.Store(track, resolvedLyrics));
+    }
+
+    public void ClearLyricCache()
+    {
+        _clearPipelineCache();
+        _resolvedLyricCache.Clear();
+    }
+
+    public void Dispose()
+    {
+        if (_resolvedLyricCache is IDisposable disposable)
+        {
+            disposable.Dispose();
+        }
+    }
 
     public LocalMediaCoverProvider? CreateLocalMediaCoverProvider(AppSettings settings)
     {

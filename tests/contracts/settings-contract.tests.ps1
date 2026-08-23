@@ -83,7 +83,9 @@ $requiredHtml = @(
     'type="range" min="-2000" max="2000" step="1" data-setting="xOffset"',
     'type="number" min="-2000" max="2000" step="1" inputmode="numeric" data-setting="xOffset"',
     'type="range" min="-2000" max="2000" step="1" data-setting="yOffset"',
-    'type="number" min="-2000" max="2000" step="1" inputmode="numeric" data-setting="yOffset"'
+    'type="number" min="-2000" max="2000" step="1" inputmode="numeric" data-setting="yOffset"',
+    [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('5Lya5Yib5bu65oyH5a6a6K6w5b2V77yM5riF6Zmk5q2M6K+N57yT5a2Y5pe25Lya5LiA5bm25Yig6Zmk44CC')),
+    [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('5bCG5Yig6Zmk5q2M6K+N44CB5bCB6Z2i57yT5a2Y77yM5Lul5Y+K5q2M6K+N5Yy56YWN5Lit'))
 )
 foreach ($marker in $requiredHtml) {
     if (-not $html.Contains($marker)) { $errors.Add("missing html marker: $marker") }
@@ -115,7 +117,8 @@ $requiredScript = @(
     'type: "openSmtcMonitor"', 'type: "openSpectrumTuning"',
     'type: "confirmSpectrumAudioAccess"', 'type: "revokeSpectrumAudioAccess"',
     'type: "retrySpectrumCapture"', 'type: "disableSpectrum"',
-    'type: "runLyricDiagnostics"',
+    'type: "runLyricDiagnostics"', 'type: "applyLyricDiagnosticCandidate"',
+    'data-apply-mode="current"', 'data-apply-mode="remember"',
     'type: "windowDrag"', 'type: "windowResizeStart"', 'type: "windowMinimize"', 'type: "windowMaximize"', 'type: "windowClose"',
     'function openSelect', 'function closeSelect', 'function rgbToHex', 'function toArgb',
     'function activatePage', 'function renderSources', 'function renderPriority', 'function setWindowState',
@@ -151,11 +154,12 @@ foreach ($unsupported in @('AppleMusic', 'Foobar', 'MusicBee', 'AIMP', 'VLC', 'W
     if ($script.Contains($unsupported)) { $errors.Add("unsupported source exposed: $unsupported") }
 }
 
-foreach ($marker in @('case "pickLocalFolder":', 'case "showLyricsWindow":', 'case "openSmtcMonitor":', 'case "openSpectrumTuning":', 'case "confirmSpectrumAudioAccess":', 'case "revokeSpectrumAudioAccess":', 'case "retrySpectrumCapture":', 'case "disableSpectrum":', 'case "runLyricDiagnostics":', 'case "settingsPageChanged":', 'case "queryTrackOffsets":', 'case "setCurrentTrackOffset":', 'case "setStoredTrackOffset":', 'case "deleteTrackOffset":', 'case "clearTrackOffsets":', 'case "resetMediaHotkey":', 'case "resetLyricsLayoutBase":', 'case "previewUpdate":', 'case "windowDrag":', 'case "windowResizeStart":', 'case "windowClose":')) {
+foreach ($marker in @('case "pickLocalFolder":', 'case "showLyricsWindow":', 'case "openSmtcMonitor":', 'case "openSpectrumTuning":', 'case "confirmSpectrumAudioAccess":', 'case "revokeSpectrumAudioAccess":', 'case "retrySpectrumCapture":', 'case "disableSpectrum":', 'case "runLyricDiagnostics":', 'case "applyLyricDiagnosticCandidate":', 'case "settingsPageChanged":', 'case "queryTrackOffsets":', 'case "setCurrentTrackOffset":', 'case "setStoredTrackOffset":', 'case "deleteTrackOffset":', 'case "clearTrackOffsets":', 'case "resetMediaHotkey":', 'case "resetLyricsLayoutBase":', 'case "previewUpdate":', 'case "windowDrag":', 'case "windowResizeStart":', 'case "windowClose":')) {
     if (-not $settingsWindow.Contains($marker)) { $errors.Add("missing desktop message: $marker") }
 }
 if (-not $settingsWindow.Contains('"settingsSaveResult"')) { $errors.Add('missing settings save result dispatch') }
 if (-not $settingsWindow.Contains('"lyricDiagnosticsState"')) { $errors.Add('missing lyric diagnostics state dispatch') }
+if (-not $settingsWindow.Contains('LyricDiagnosticApplyMode.Remember')) { $errors.Add('missing remembered lyric diagnostic apply mode') }
 if (-not $settingsWindow.Contains('"requestSpectrumDisplayMode"')) { $errors.Add('missing spectrum mode request dispatch') }
 if (-not $settingsWindow.Contains('"spectrumCaptureState"')) { $errors.Add('missing spectrum capture state dispatch') }
 if (-not $settingsWindow.Contains('SystemParameters.WorkArea')) { $errors.Add('settings window work-area bounds missing') }
