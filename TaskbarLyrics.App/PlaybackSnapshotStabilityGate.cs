@@ -35,8 +35,10 @@ internal readonly record struct PlaybackSnapshotGateDecision(
     PlaybackSnapshotGateReason Reason);
 
 /// <summary>
-/// Prevents a short-lived, not-playing SMTC metadata regression from starting a
-/// new lyric search while the current track identity is still stable.
+/// Prevents a short-lived SMTC metadata regression (for example a player
+/// rewinding artist metadata around a pause or resume transition) from
+/// starting a new lyric search while the current track identity is still
+/// stable.
 /// </summary>
 internal sealed class PlaybackSnapshotStabilityGate
 {
@@ -197,7 +199,7 @@ internal sealed class PlaybackSnapshotStabilityGate
 
     private bool ShouldHoldWeakChange(PlaybackSnapshot snapshot)
     {
-        if (_stableTrack is null || snapshot.Track is null || snapshot.IsPlaying)
+        if (_stableTrack is null || snapshot.Track is null)
         {
             return false;
         }

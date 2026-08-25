@@ -196,6 +196,43 @@ public sealed class PlaybackSnapshotStabilityGateTests
     }
 
     [Fact]
+    public void DegradedArtistWhilePlayingIsHeldUntilIdentityRestores()
+    {
+        var gate = new PlaybackSnapshotStabilityGate();
+        Observe(gate, CreateSnapshot("Owl City / Lindsey Stirling", isPlaying: false), At(0));
+
+        var held = Observe(gate, CreateSnapshot("Owl City", isPlaying: true), At(60));
+        var pendingState = gate.State;
+        var restored = Observe(
+            gate,
+            CreateSnapshot("Owl City / Lindsey Stirling", isPlaying: true),
+            At(120));
+
+        Assert.Equal(PlaybackSnapshotGateAction.Hold, held.Action);
+        Assert.Equal(PlaybackSnapshotGateReason.WeakMetadataChange, held.Reason);
+        Assert.Equal(PlaybackSnapshotStabilityState.PendingWeakChange, pendingState);
+        Assert.Equal(PlaybackSnapshotGateAction.Accept, restored.Action);
+        Assert.Equal(PlaybackSnapshotGateReason.StableIdentityRestored, restored.Reason);
+        Assert.Equal(PlaybackSnapshotStabilityState.Stable, gate.State);
+    }
+
+    [Fact]
+    public void ArtistFormattingChangeWhilePlayingIsHeld()
+    {
+        var gate = new PlaybackSnapshotStabilityGate();
+        Observe(gate, CreateSnapshot("Owl City/Lindsey Stirling", isPlaying: true), At(0));
+
+        var held = Observe(
+            gate,
+            CreateSnapshot("Owl City / Lindsey Stirling", isPlaying: true),
+            At(60));
+
+        Assert.Equal(PlaybackSnapshotGateAction.Hold, held.Action);
+        Assert.Equal(PlaybackSnapshotGateReason.WeakMetadataChange, held.Reason);
+        Assert.Equal(PlaybackSnapshotStabilityState.PendingWeakChange, gate.State);
+    }
+
+    [Fact]
     public void NoPlaybackClearsIdentityAndNextTrackIsAcceptedAsInitial()
     {
         var gate = new PlaybackSnapshotStabilityGate();
