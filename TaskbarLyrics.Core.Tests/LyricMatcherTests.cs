@@ -132,13 +132,14 @@ public sealed class LyricMatcherTests
     }
 
     [Fact]
-    public void ScoreTreatsCrossScriptArtistAliasAsNotComparable()
+    public void ScoreAdmitsCrossScriptArtistAliasWithoutImmediateAcceptance()
     {
         var track = CreateTrack("新宝島", "魚韻", 305) with { Album = "834.194" };
 
         var score = LyricMatcher.Score(track, "新宝島", "sakanaction", 306, "新宝島");
 
-        Assert.True(score >= LyricMatchingPolicy.ImmediateAcceptanceScore);
+        Assert.True(score >= LyricMatchingPolicy.MinimumAcceptedMatchScore);
+        Assert.True(score < LyricMatchingPolicy.ImmediateAcceptanceScore);
     }
 
     [Fact]
@@ -179,6 +180,56 @@ public sealed class LyricMatcherTests
         var score = LyricMatcher.Score(track, "新宝島", "sakanaction", 305);
 
         Assert.True(score < LyricMatchingPolicy.MinimumAcceptedMatchScore);
+    }
+
+    [Fact]
+    public void ScoreRanksVerifiedSameScriptArtistAboveCrossScriptCandidate()
+    {
+        var track = CreateTrack("Love Me Back", "RITUAL / Tove Styrke", 178);
+
+        var verifiedScore = LyricMatcher.Score(
+            track,
+            "Love Me Back",
+            "R I T U A L / Tove Styrke",
+            178,
+            "Love Me Back");
+        var crossScriptScore = LyricMatcher.Score(
+            track,
+            "Love Me Back (爱我)",
+            "倖田來未",
+            177,
+            "Love Me Back");
+
+        Assert.True(verifiedScore > crossScriptScore);
+    }
+
+    [Fact]
+    public void ScoreTreatsSpacedLetterArtistStylingAsExactMatch()
+    {
+        var track = CreateTrack("Love Me Back", "RITUAL / Tove Styrke", 178) with
+        {
+            Album = "Love Me Back"
+        };
+
+        var score = LyricMatcher.Score(
+            track,
+            "Love Me Back",
+            "R I T U A L / Tove Styrke",
+            178,
+            "Love Me Back");
+
+        Assert.Equal(100, score);
+    }
+
+    [Fact]
+    public void ScoreKeepsCrossScriptArtistBelowImmediateAcceptance()
+    {
+        var track = CreateTrack("Love Me Back", "RITUAL / Tove Styrke", 178);
+
+        var score = LyricMatcher.Score(track, "Love Me Back", "倖田來未", 178, "Love Me Back");
+
+        Assert.True(score >= LyricMatchingPolicy.MinimumAcceptedMatchScore);
+        Assert.True(score < LyricMatchingPolicy.ImmediateAcceptanceScore);
     }
 
     private static TrackInfo CreateTrack(string title, string artist, int durationSeconds) => new(

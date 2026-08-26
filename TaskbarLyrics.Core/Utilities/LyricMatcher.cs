@@ -57,8 +57,9 @@ public static class LyricMatcher
         bool hasDuration = target.Duration.TotalSeconds > 0 && resultDurationInSeconds > 0;
         // 跨文字系统的歌手名（如「魚韻」vs「sakanaction」）通常是同一艺人的别名，
         // 相似度算法无法比较；将歌手视为缺失证据而不是 0 分，避免错误惩罚正确候选。
-        bool artistsComparable = !IsCrossScript(normalizedTargetArtist, normalizedResultArtist);
-        bool scoreArtist = hasTargetArtist && hasResultArtist && artistsComparable;
+        bool artistsCrossScript = hasTargetArtist && hasResultArtist &&
+            IsCrossScript(normalizedTargetArtist, normalizedResultArtist);
+        bool scoreArtist = hasTargetArtist && hasResultArtist && !artistsCrossScript;
 
         double totalScore;
         if (scoreArtist && hasDuration)
@@ -82,6 +83,13 @@ public static class LyricMatcher
         {
             const double AlbumWeight = 0.05;
             totalScore = (totalScore * (1 - AlbumWeight)) + (albumSim * AlbumWeight);
+        }
+
+        // 跨语言歌手是「未验证的别名假设」，缺失的歌手证据不得在总分上
+        // 压过歌手证据确凿的同语言候选（如同名不同歌手的翻唱版本）。
+        if (artistsCrossScript)
+        {
+            totalScore = Math.Min(totalScore, LyricMatchingPolicy.CrossScriptArtistMaxScore / 100.0);
         }
 
         Log.Debug($"LyricMatcher: TitleSim={titleSim:F2}, ArtistSim={artistSim:F2}, AlbumSim={albumSim:F2}, DurationSim={durationSim:F2} -> BaseScore={(int)Math.Round(totalScore * 100)}");
@@ -244,7 +252,43 @@ public static class LyricMatcher
             else sb.Append(' ');
         }
 
-        return Regex.Replace(sb.ToString(), @"\s+", " ").Trim();
+        var collapsed = Regex.Replace(sb.ToString(), @"\s+", " ").Trim();
+        return CollapseSpacedCharacterRuns(collapsed);
+    }
+
+    // 部分平台会把名称按字符空格排版（如 QQ 音乐的歌手名「R I T U A L」）。
+    // 单字符 token 会被 token 重叠比较忽略，JaroWinkler 又惩罚插入的空格，
+    // 因此把连续单字符 token 折叠成整词；两侧对称应用，普通文本不受影响。
+    private static string CollapseSpacedCharacterRuns(string value)
+    {
+        var tokens = value.Split(' ');
+        var collapsed = new List<string>(tokens.Length);
+        var run = new StringBuilder();
+        foreach (var token in tokens)
+        {
+            if (token.Length != 1)
+            {
+                FlushCharacterRun(collapsed, run);
+                collapsed.Add(token);
+                continue;
+            }
+
+            run.Append(token);
+        }
+
+        FlushCharacterRun(collapsed, run);
+        return string.Join(' ', collapsed);
+    }
+
+    private static void FlushCharacterRun(List<string> collapsed, StringBuilder run)
+    {
+        if (run.Length == 0)
+        {
+            return;
+        }
+
+        collapsed.Add(run.ToString());
+        run.Clear();
     }
 
     private static string RemoveBracketedContent(Match _) => " ";
