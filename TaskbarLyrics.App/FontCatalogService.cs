@@ -39,14 +39,20 @@ internal static class FontCatalogService
     }
 
     public static string? ResolveInstalledFamily(string? fontFamily)
+        => ResolveInstalledFamily(fontFamily, GetOptions());
+
+    internal static string? ResolveInstalledFamily(
+        string? fontFamily,
+        IReadOnlyList<FontCatalogOption> fonts)
     {
         if (string.IsNullOrWhiteSpace(fontFamily))
         {
             return null;
         }
 
-        var fonts = GetOptions();
-        var byValue = fonts.ToDictionary(option => option.Value, option => option.Value, StringComparer.OrdinalIgnoreCase);
+        var byValue = fonts
+            .GroupBy(option => option.Value, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First().Value, StringComparer.OrdinalIgnoreCase);
         var byLabel = fonts
             .GroupBy(option => option.Label, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(group => group.Key, group => group.First().Value, StringComparer.OrdinalIgnoreCase);
