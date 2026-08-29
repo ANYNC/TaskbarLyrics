@@ -63,6 +63,19 @@ public partial class App : System.Windows.Application, IDisposable
         ApplyStartupForegroundColor(Settings);
         Settings.StartWithWindows = Settings.StartWithWindows || StartupService.IsEnabled();
         StartupService.SetEnabled(Settings.StartWithWindows);
+        var startupDisplays = DisplayMonitorService.GetDisplays();
+        var startupTargets = LyricsDisplayTargetSelector.Select(
+            startupDisplays,
+            Settings.LyricsDisplayMode,
+            Settings.SelectedDisplayIds);
+        if (startupTargets.Count > 0 && NormalizeStartupWindowPresentation(
+                Settings,
+                TaskbarEmbeddingLayoutPolicy.FromDisplays(startupTargets),
+                out var presentationMessage))
+        {
+            _settingsStore.Save(Settings);
+            Log.Warn(presentationMessage);
+        }
 
         _compositionRoot = new AppCompositionRoot();
         _trackLyricOffsetStore = new TrackLyricOffsetStore();
@@ -231,6 +244,29 @@ public partial class App : System.Windows.Application, IDisposable
     internal static void ApplyStartupForegroundColor(AppSettings settings)
     {
         ForegroundColorPolicy.ApplyStartup(settings, IsSystemUiUsingLightTheme());
+    }
+
+    internal static bool NormalizeStartupWindowPresentation(
+        AppSettings settings,
+        TaskbarEmbeddingConstraints constraints,
+        out string message)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        message = string.Empty;
+        if (settings.UseFloatingWindow)
+        {
+            return false;
+        }
+
+        var result = TaskbarEmbeddingLayoutPolicy.NormalizeForEmbedding(settings, constraints);
+        message = result.Message;
+        if (result.CanEmbed)
+        {
+            return result.Changed;
+        }
+
+        settings.UseFloatingWindow = true;
+        return true;
     }
 
     internal static bool ApplySystemThemeForegroundColor(AppSettings settings)

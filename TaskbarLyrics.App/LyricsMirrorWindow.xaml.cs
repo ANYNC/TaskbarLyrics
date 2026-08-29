@@ -39,8 +39,11 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
         _settings = settings.Clone();
         var pixelsPerDip = _displayMonitor.PixelsPerDip;
         var metrics = LyricsLayoutMetrics.Create(_settings, pixelsPerDip);
-        Width = _settings.TaskbarEmbeddingEnabled
-            ? AppSettings.ClampEmbeddedTaskbarWidth(_settings.EmbeddedTaskbarWidth)
+        Width = !_settings.UseFloatingWindow
+            ? AppSettings.ClampEffectiveWindowWidth(
+                _settings.WindowWidth,
+                _settings.LyricsLayoutScalePercent,
+                TaskbarEmbeddingLayoutPolicy.FromDisplay(_displayMonitor).MaxWidth)
             : AppSettings.ClampEffectiveWindowWidth(
                 _settings.WindowWidth,
                 _settings.LyricsLayoutScalePercent,
@@ -54,7 +57,7 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
         LyricsContentRoot.MinHeight = metrics.MinimumContentHeight;
         LyricsWebView.Margin = new Thickness(0, 0, 0, -metrics.ViewportDescenderBuffer);
         _pendingScripts["style"] = LyricsStyleScriptFactory.Create(_settings, pixelsPerDip);
-        var attachResult = _settings.TaskbarEmbeddingEnabled
+        var attachResult = !_settings.UseFloatingWindow
             ? _embeddedTaskbarAnchor.Attach(this, _settings, _displayMonitor)
             : EmbeddedTaskbarAttachResult.Unavailable;
         if (EmbeddedTaskbarEmbeddingPolicy.ShouldKeepEmbedded(attachResult))
@@ -65,7 +68,9 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
 
         _embeddedTaskbarAnchor.Detach();
         TaskbarPlacementService.Anchor(this, _settings, _displayMonitor);
-        TaskbarPlacementService.Attach(this, _settings.ForceAlwaysOnTop);
+        TaskbarPlacementService.Attach(
+            this,
+            _settings.UseFloatingWindow && _settings.ForceAlwaysOnTop);
         ExecutePendingScript("style");
     }
 

@@ -26,7 +26,6 @@
       general: ["常规", "管理启动行为与界面主题。"],
       advanced: ["高级", "用于诊断播放同步问题和维护缓存数据。"],
       lyricDiagnostics: ["歌词匹配", "查找当前 SMTC 歌曲的歌词候选，比较匹配分并选择结果。"],
-      taskbarEmbedding: ["任务栏嵌入", "将歌词窗口直接嵌入所选显示器的任务栏；这是测试版的新实现，默认关闭。"],
       about: ["关于", "查看版本、许可证与项目技术信息。"]
     };
 
@@ -871,9 +870,19 @@
       trigger.querySelector(".select-trigger-value").textContent = selected?.label ?? "请选择";
     }
 
+    function syncWindowModeSelection() {
+      const selectedMode = state.useFloatingWindow === true ? "floating" : "embedded";
+      $$('[data-window-mode]').forEach(option => {
+        const selected = option.dataset.windowMode === selectedMode;
+        option.checked = selected;
+        option.tabIndex = selected ? 0 : -1;
+      });
+    }
+
     function syncControls() {
       if (!state) return;
       $$('[data-setting]').forEach(control => control.classList.contains("select-trigger") ? syncSelectTrigger(control) : setControlValue(control, state[control.dataset.setting]));
+      syncWindowModeSelection();
       $$('input[type="range"][data-setting]').forEach(syncSliderProgress);
       $$('[data-color-text="foregroundColor"]').forEach(control => {
         if (!control.classList.contains("invalid")) control.value = state.foregroundColor.toUpperCase();
@@ -1291,9 +1300,51 @@
       state.xOffset = Math.min(2000, Math.max(-2000, Number(state.xOffset) || 0));
       state.yOffset = Math.min(2000, Math.max(-2000, Number(state.yOffset) || 0));
       state.windowWidth = Math.min(1400, Math.max(320, Number(state.windowWidth) || 420));
-      state.embeddedTaskbarWidth = Math.min(1400, Math.max(320, Number(state.embeddedTaskbarWidth) || 320));
-      state.embeddedTaskbarHorizontalOffset = Math.min(2000, Math.max(-2000, Number(state.embeddedTaskbarHorizontalOffset) || 0));
-      state.embeddedTaskbarVerticalOffset = Math.min(2000, Math.max(-2000, Number(state.embeddedTaskbarVerticalOffset) || 0));
+      const embedded = state.useFloatingWindow === false;
+      const limitOr = (value, fallback) => Number.isFinite(Number(value)) ? Number(value) : fallback;
+      const bound = (key, min, max) => {
+        const safeMin = Number.isFinite(Number(min)) ? Number(min) : 0;
+        const safeMax = Number.isFinite(Number(max)) ? Math.max(safeMin, Number(max)) : safeMin;
+        $$(`[data-setting="${key}"]`).forEach(control => {
+          control.min = String(safeMin);
+          control.max = String(safeMax);
+        });
+        state[key] = Math.min(safeMax, Math.max(safeMin, Number(state[key]) || safeMin));
+      };
+      bound(
+        "lyricsLayoutScalePercent",
+        25,
+        embedded ? limitOr(state.taskbarMaxScalePercent, 300) : 300);
+      bound(
+        "fontSize",
+        6,
+        embedded ? limitOr(state.taskbarMaxFontSize, 96) : 96);
+      bound(
+        "coverSize",
+        12,
+        embedded ? limitOr(state.taskbarMaxCoverSize, 200) : 200);
+      bound(
+        "coverGap",
+        0,
+        embedded ? limitOr(state.taskbarMaxCoverGap, 240) : 240);
+      bound(
+        "windowWidth",
+        320,
+        embedded ? limitOr(state.taskbarMaxWindowWidth, 1400) : 1400);
+      state.coverCornerRadius = Math.min(
+        Math.max(0, Number(state.coverCornerRadius) || 0),
+        state.coverSize / 2);
+      $$('[data-setting="coverCornerRadius"]').forEach(control => {
+        control.max = String(state.coverSize / 2);
+      });
+      bound(
+        "xOffset",
+        embedded ? limitOr(state.taskbarMinXOffset, -2000) : -2000,
+        embedded ? limitOr(state.taskbarMaxXOffset, 2000) : 2000);
+      bound(
+        "yOffset",
+        embedded ? limitOr(state.taskbarMinYOffset, -2000) : -2000,
+        embedded ? limitOr(state.taskbarMaxYOffset, 2000) : 2000);
     }
 
     function applyDependencies() {
@@ -1317,6 +1368,17 @@
       }
     }
 
+    function renderTaskbarEmbeddingStatus() {
+      const status = $("#taskbarEmbeddingStatus");
+      if (!status) return;
+      const message = typeof state.taskbarEmbeddingStatus === "string"
+        ? state.taskbarEmbeddingStatus.trim()
+        : "";
+      status.hidden = !message;
+      status.textContent = message;
+      if (message) showToast(message);
+    }
+
     function formatLayoutMetric(value) {
       const numeric = Number(value);
       return Number.isFinite(numeric)
@@ -1331,6 +1393,9 @@
         if (!Number.isFinite(value)) return;
         const stateKey = key === "scalePercent" ? "lyricsLayoutScalePercent" : key;
         state[stateKey] = value;
+      });
+      ["taskbarEmbeddingAvailable", "taskbarMaxWidth", "taskbarMaxHeight", "taskbarMaxScalePercent", "taskbarMaxFontSize", "taskbarMaxCoverSize", "taskbarMaxCoverGap", "taskbarMaxWindowWidth", "taskbarMinXOffset", "taskbarMaxXOffset", "taskbarMinYOffset", "taskbarMaxYOffset"].forEach(key => {
+        if (Object.prototype.hasOwnProperty.call(payload, key)) state[key] = payload[key];
       });
       syncLayoutBounds();
       syncWindowBounds();
@@ -1359,6 +1424,7 @@
       applyDependencies();
       renderSpectrumAudioAccess();
       updateOutputs();
+      renderTaskbarEmbeddingStatus();
       activatePage(state.page, false);
     }
 
@@ -1545,6 +1611,21 @@
     });
 
     document.addEventListener("keydown", event => {
+      const windowModeOption = event.target.closest("[data-window-mode]");
+      if (windowModeOption && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) {
+        event.preventDefault();
+        const options = $$('[data-window-mode]');
+        const current = options.indexOf(windowModeOption);
+        const next = event.key === "Home"
+          ? 0
+          : event.key === "End"
+            ? options.length - 1
+            : (current + (["ArrowRight", "ArrowDown"].includes(event.key) ? 1 : -1) + options.length) % options.length;
+        options[next].focus({ preventScroll: true });
+        if (!options[next].checked) commitSetting("useFloatingWindow", options[next].dataset.windowMode === "floating");
+        return;
+      }
+
       const themeOption = event.target.closest("[data-theme-value]");
       if (themeOption && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) {
         event.preventDefault();
@@ -1674,6 +1755,12 @@
       }
 
       if (event.target === $("#playerOffsetInput")) { commitPlayerOffset(event.target.value); return; }
+
+      const windowModeOption = event.target.closest("[data-window-mode]");
+      if (windowModeOption) {
+        commitSetting("useFloatingWindow", windowModeOption.dataset.windowMode === "floating");
+        return;
+      }
 
       const control = event.target.closest("[data-setting]");
       if (!control) return;

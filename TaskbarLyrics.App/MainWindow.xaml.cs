@@ -156,8 +156,11 @@ public partial class MainWindow : Window, IDisposable
 
         if (changes.WindowLayoutChanged || changes.LyricsLayoutChanged || changes.TaskbarEmbeddingChanged)
         {
-            Width = snapshot.TaskbarEmbeddingEnabled
-                ? AppSettings.ClampEmbeddedTaskbarWidth(snapshot.EmbeddedTaskbarWidth)
+            Width = !snapshot.UseFloatingWindow
+                ? AppSettings.ClampEffectiveWindowWidth(
+                    snapshot.WindowWidth,
+                    snapshot.LyricsLayoutScalePercent,
+                    GetTargetTaskbarWidth())
                 : AppSettings.ClampEffectiveWindowWidth(
                     snapshot.WindowWidth,
                     snapshot.LyricsLayoutScalePercent,
@@ -238,8 +241,11 @@ public partial class MainWindow : Window, IDisposable
             return;
         }
 
-        Width = _currentSettings.TaskbarEmbeddingEnabled
-            ? AppSettings.ClampEmbeddedTaskbarWidth(_currentSettings.EmbeddedTaskbarWidth)
+        Width = !_currentSettings.UseFloatingWindow
+            ? AppSettings.ClampEffectiveWindowWidth(
+                _currentSettings.WindowWidth,
+                _currentSettings.LyricsLayoutScalePercent,
+                GetTargetTaskbarWidth())
             : AppSettings.ClampEffectiveWindowWidth(
                 _currentSettings.WindowWidth,
                 _currentSettings.LyricsLayoutScalePercent,
@@ -262,6 +268,16 @@ public partial class MainWindow : Window, IDisposable
         _displayMonitor is null
             ? SystemParameters.WorkArea.Width
             : _displayMonitor.WorkAreaWidth / _displayMonitor.PixelsPerDip;
+
+    private double GetTargetTaskbarWidth()
+    {
+        if (_displayMonitor is null)
+        {
+            return SystemParameters.WorkArea.Width;
+        }
+
+        return TaskbarEmbeddingLayoutPolicy.FromDisplay(_displayMonitor).MaxWidth;
+    }
 
     private void ReconfigureLocalMedia(AppSettings settings)
     {
@@ -1631,7 +1647,7 @@ public partial class MainWindow : Window, IDisposable
     private void AnchorToTaskbar()
     {
         var wasEmbedded = _embeddedTaskbarAnchor.IsAttached;
-        if (_currentSettings.TaskbarEmbeddingEnabled)
+        if (!_currentSettings.UseFloatingWindow)
         {
             var attachResult = _embeddedTaskbarAnchor.Attach(this, _currentSettings, _displayMonitor);
             if (EmbeddedTaskbarEmbeddingPolicy.ShouldKeepEmbedded(attachResult))
@@ -1713,7 +1729,7 @@ public partial class MainWindow : Window, IDisposable
 
     private void AttachToTaskbarHost()
     {
-        if (_currentSettings.TaskbarEmbeddingEnabled)
+        if (!_currentSettings.UseFloatingWindow)
         {
             return;
         }

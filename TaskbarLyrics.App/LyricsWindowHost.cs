@@ -309,7 +309,7 @@ internal sealed class LyricsWindowHost : IDisposable
         foreach (var display in mirrorDisplays.Values)
         {
             if (_mirrorWindows.TryGetValue(display.Id, out var existingMirror) &&
-                !_currentSettings.TaskbarEmbeddingEnabled &&
+                _currentSettings.UseFloatingWindow &&
                 existingMirror.IsEmbeddedInTaskbar)
             {
                 // A mirror that leaves cross-process taskbar embedding can no longer

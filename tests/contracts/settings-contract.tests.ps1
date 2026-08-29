@@ -28,10 +28,17 @@ foreach ($artifact in $developmentArtifacts) {
     $errors.Add("development artifact is inside production Web assets: $relativePath")
 }
 
-$pages = @('sources', 'shortcuts', 'lyrics', 'trackOffsets', 'displayArea', 'general', 'advanced', 'lyricDiagnostics', 'taskbarEmbedding', 'about')
+$pages = @('sources', 'shortcuts', 'lyrics', 'trackOffsets', 'displayArea', 'general', 'advanced', 'lyricDiagnostics', 'about')
 foreach ($page in $pages) {
     if (-not $html.Contains("data-nav=`"$page`"")) { $errors.Add("missing nav: $page") }
     if (-not $html.Contains("data-page=`"$page`"")) { $errors.Add("missing page: $page") }
+}
+foreach ($legacyMarker in @(
+    'data-nav="taskbarEmbedding"', 'data-page="taskbarEmbedding"',
+    'data-setting="taskbarEmbeddingEnabled"', 'data-setting="embeddedTaskbarWidth"',
+    'data-setting="embeddedTaskbarHorizontalOffset"', 'data-setting="embeddedTaskbarVerticalOffset"'
+)) {
+    if ($html.Contains($legacyMarker)) { $errors.Add("legacy taskbar embedding marker remains: $legacyMarker") }
 }
 
 $settings = @(
@@ -40,8 +47,7 @@ $settings = @(
     'coverSize', 'coverGap', 'coverCornerRadius', 'fontFamily',
     'fontWeight', 'lyricsTextAlignment', 'foregroundColorMode', 'showTextShadow', 'toolWindowTheme', 'showBackground',
     'backgroundOpacity', 'showBorder', 'windowWidth', 'horizontalAnchor', 'xOffset',
-    'yOffset', 'forceAlwaysOnTop', 'taskbarEmbeddingEnabled', 'embeddedTaskbarWidth',
-    'embeddedTaskbarHorizontalOffset', 'embeddedTaskbarVerticalOffset',
+    'yOffset', 'forceAlwaysOnTop',
     'startWithWindows', 'autoCheckUpdates'
 )
 foreach ($key in $settings) {
@@ -84,6 +90,10 @@ $requiredHtml = @(
     'type="number" min="-2000" max="2000" step="1" inputmode="numeric" data-setting="xOffset"',
     'type="range" min="-2000" max="2000" step="1" data-setting="yOffset"',
     'type="number" min="-2000" max="2000" step="1" inputmode="numeric" data-setting="yOffset"',
+    'data-depends="useFloatingWindow"', 'name="windowPresentationMode"',
+    'value="embedded" data-window-mode="embedded"', 'value="floating" data-window-mode="floating"',
+    [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('5Lu75Yqh5qCP5bWM5YWl')),
+    [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('5oKs5rWu56qX5Y+j')),
     [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('5Lya5Yib5bu65oyH5a6a6K6w5b2V77yM5riF6Zmk5q2M6K+N57yT5a2Y5pe25Lya5LiA5bm25Yig6Zmk44CC')),
     [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('5bCG5Yig6Zmk5q2M6K+N44CB5bCB6Z2i57yT5a2Y77yM5Lul5Y+K5q2M6K+N5Yy56YWN5Lit'))
 )
@@ -173,7 +183,7 @@ if (-not $appSettings.Contains('public bool SpectrumAudioAccessGranted')) { $err
 if (-not $appSettings.Contains('public LyricsTextAlignment LyricsTextAlignment')) { $errors.Add('lyrics text alignment setting missing') }
 if (-not $appSettings.Contains('public LyricsDisplayMode LyricsDisplayMode')) { $errors.Add('lyrics display mode setting missing') }
 if (-not $appSettings.Contains('public List<string> SelectedDisplayIds')) { $errors.Add('selected display ids setting missing') }
-if (-not $appSettings.Contains('public bool TaskbarEmbeddingEnabled')) { $errors.Add('taskbar embedding switch setting missing') }
+if (-not $appSettings.Contains('public bool UseFloatingWindow')) { $errors.Add('floating window setting missing') }
 if (-not $appSettings.Contains('public const string DefaultFontFamily = BundledFontFamily;')) { $errors.Add('bundled font is not the default') }
 if (-not $app.Contains('Settings.FontFamily = AppSettings.NormalizeFontFamily(Settings.FontFamily);')) { $errors.Add('startup font normalization missing') }
 if (-not $lyricsStyleFactory.Contains('fontFamily = AppSettings.NormalizeFontFamily(settings.FontFamily)')) { $errors.Add('lyrics font normalization missing') }

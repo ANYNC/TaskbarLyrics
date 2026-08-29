@@ -28,12 +28,14 @@ internal sealed class TaskbarPlacementService
         var metrics = LyricsLayoutMetrics.Create(settings, pixelsPerDip);
         window.Height = Math.Min(metrics.DesiredWindowHeight, display.Height);
 
-        window.Left = settings.HorizontalAnchor switch
+        var requestedLeft = settings.HorizontalAnchor switch
         {
-            LyricsHorizontalAnchor.Left => Math.Max(display.Left, display.Left + settings.XOffset),
+            LyricsHorizontalAnchor.Left => display.Left + settings.XOffset,
             LyricsHorizontalAnchor.Center => display.Left + ((display.Width - window.Width) / 2.0) + settings.XOffset,
-            _ => Math.Max(display.Left, display.Right - window.Width - 230 + settings.XOffset)
+            _ => display.Right - window.Width - 230 + settings.XOffset
         };
+        var maximumLeft = Math.Max(display.Left, display.Right - window.Width);
+        window.Left = Math.Clamp(requestedLeft, display.Left, maximumLeft);
 
         window.Top = display.Top + CalculateVerticalPosition(
             taskbar.CenterY - display.Top,

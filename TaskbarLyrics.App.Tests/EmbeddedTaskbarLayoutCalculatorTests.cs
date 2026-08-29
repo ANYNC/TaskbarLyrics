@@ -27,6 +27,32 @@ public sealed class EmbeddedTaskbarLayoutCalculatorTests
         Assert.Equal(15, EmbeddedTaskbarLayoutCalculator.CalculateVerticalTop(80, 40, -5));
     }
 
+    [Theory]
+    [InlineData(-20, 0)]
+    [InlineData(40, 40)]
+    [InlineData(120, 80)]
+    public void ClampHorizontalLeftKeepsWindowInsideTaskbar(
+        double requestedLeft,
+        double expectedLeft)
+    {
+        Assert.Equal(
+            expectedLeft,
+            EmbeddedTaskbarLayoutCalculator.ClampHorizontalLeft(requestedLeft, 500, 420));
+    }
+
+    [Theory]
+    [InlineData(-20, 0)]
+    [InlineData(2, 2)]
+    [InlineData(40, 4)]
+    public void ClampVerticalTopKeepsWindowInsideTaskbar(
+        double requestedTop,
+        double expectedTop)
+    {
+        Assert.Equal(
+            expectedTop,
+            EmbeddedTaskbarLayoutCalculator.ClampVerticalTop(requestedTop, 48, 44));
+    }
+
     [Fact]
     public void CalculateIntersectionAreaIdentifiesTaskbarOnTargetDisplay()
     {
@@ -143,19 +169,4 @@ public sealed class EmbeddedTaskbarLayoutCalculatorTests
                 parentIsValid));
     }
 
-    [Fact]
-    public void ClampEmbeddedTaskbarWidthConstrainsToWindowRange()
-    {
-        Assert.Equal(320, AppSettings.ClampEmbeddedTaskbarWidth(100));
-        Assert.Equal(1400, AppSettings.ClampEmbeddedTaskbarWidth(5000));
-        Assert.Equal(500, AppSettings.ClampEmbeddedTaskbarWidth(500));
-    }
-
-    [Fact]
-    public void ClampEmbeddedTaskbarOffsetConstrainsToOffsetRange()
-    {
-        Assert.Equal(-2000, AppSettings.ClampEmbeddedTaskbarOffset(-9999));
-        Assert.Equal(2000, AppSettings.ClampEmbeddedTaskbarOffset(9999));
-        Assert.Equal(0, AppSettings.ClampEmbeddedTaskbarOffset(0));
-    }
 }

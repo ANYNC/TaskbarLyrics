@@ -96,14 +96,12 @@ internal readonly record struct AppSettingsChangeSet(
             current.XOffset != next.XOffset ||
             current.YOffset != next.YOffset ||
             current.ForceAlwaysOnTop != next.ForceAlwaysOnTop ||
+            current.UseFloatingWindow != next.UseFloatingWindow ||
             current.LyricsDisplayMode != next.LyricsDisplayMode ||
             !AreSameStrings(current.SelectedDisplayIds, next.SelectedDisplayIds);
 
         var taskbarEmbeddingChanged = isInitialApplication ||
-            current.TaskbarEmbeddingEnabled != next.TaskbarEmbeddingEnabled ||
-            current.EmbeddedTaskbarWidth != next.EmbeddedTaskbarWidth ||
-            current.EmbeddedTaskbarHorizontalOffset != next.EmbeddedTaskbarHorizontalOffset ||
-            current.EmbeddedTaskbarVerticalOffset != next.EmbeddedTaskbarVerticalOffset;
+            current.UseFloatingWindow != next.UseFloatingWindow;
 
         var globalMediaHotkeysChanged = isInitialApplication ||
             !AreSameGlobalMediaHotkeys(current.GlobalMediaHotkeys, next.GlobalMediaHotkeys);

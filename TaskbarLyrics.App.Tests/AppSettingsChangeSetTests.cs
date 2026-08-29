@@ -234,32 +234,33 @@ public sealed class AppSettingsChangeSetTests
     }
 
     [Fact]
-    public void CreateWhenEmbeddingSwitchChangesReappliesLyricsWindowWithoutRebuildingOtherServices()
+    public void CreateWhenFloatingWindowSwitchChangesReappliesLyricsWindowWithoutRebuildingOtherServices()
     {
         var current = new AppSettings();
         var next = current.Clone();
-        next.TaskbarEmbeddingEnabled = true;
+        next.UseFloatingWindow = true;
 
         var changes = AppSettingsChangeSet.Create(current, next);
 
         Assert.True(changes.TaskbarEmbeddingChanged);
         Assert.True(changes.RequiresLyricsWindowApply);
-        Assert.False(changes.WindowLayoutChanged);
+        Assert.True(changes.WindowLayoutChanged);
         Assert.False(changes.LyricSyncServiceChanged);
     }
 
     [Fact]
-    public void CreateWhenEmbeddingLayoutChangesReappliesLyricsWindow()
+    public void CreateWhenSharedWindowLayoutChangesReappliesLyricsWindow()
     {
         var current = new AppSettings();
         var next = current.Clone();
-        next.EmbeddedTaskbarWidth = 500;
-        next.EmbeddedTaskbarHorizontalOffset = 10;
-        next.EmbeddedTaskbarVerticalOffset = -2;
+        next.WindowWidth = 500;
+        next.XOffset = 10;
+        next.YOffset = -2;
 
         var changes = AppSettingsChangeSet.Create(current, next);
 
-        Assert.True(changes.TaskbarEmbeddingChanged);
+        Assert.False(changes.TaskbarEmbeddingChanged);
+        Assert.True(changes.WindowLayoutChanged);
         Assert.True(changes.RequiresLyricsWindowApply);
     }
 

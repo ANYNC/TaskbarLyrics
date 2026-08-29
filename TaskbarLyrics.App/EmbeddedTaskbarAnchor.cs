@@ -58,6 +58,24 @@ internal static class EmbeddedTaskbarLayoutCalculator
         return (taskbarHeight - windowHeight) / 2.0 + offset;
     }
 
+    public static double ClampHorizontalLeft(
+        double left,
+        double taskbarWidth,
+        double windowWidth)
+    {
+        var maximumLeft = Math.Max(0, taskbarWidth - windowWidth);
+        return Math.Clamp(left, 0, maximumLeft);
+    }
+
+    public static double ClampVerticalTop(
+        double top,
+        double taskbarHeight,
+        double windowHeight)
+    {
+        var maximumTop = Math.Max(0, taskbarHeight - windowHeight);
+        return Math.Clamp(top, 0, maximumTop);
+    }
+
     public static EmbeddedTaskbarNativeBounds ToTaskbarClientBounds(
         double clientLeft,
         double clientTop,
@@ -121,6 +139,10 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
         {
             return EmbeddedTaskbarAttachResult.Unavailable;
         }
+
+        // ForceAlwaysOnTop is a floating-window preference. A taskbar child must
+        // never retain a stale topmost state after switching from floating mode.
+        window.Topmost = false;
 
         if (HasAttachmentForDifferentTarget(hwnd, targetDisplay))
         {
@@ -224,8 +246,12 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
         var pixelsPerDip = targetDisplay?.PixelsPerDip ?? TaskbarPlacementService.GetPixelsPerDip(window);
         var taskbarWidth = (parentRect.Right - parentRect.Left) / pixelsPerDip;
         var taskbarHeight = (parentRect.Bottom - parentRect.Top) / pixelsPerDip;
-        var width = AppSettings.ClampEmbeddedTaskbarWidth(settings.EmbeddedTaskbarWidth);
+        var width = AppSettings.ClampEffectiveWindowWidth(
+            settings.WindowWidth,
+            settings.LyricsLayoutScalePercent,
+            taskbarWidth);
         var height = LyricsLayoutMetrics.Create(settings, pixelsPerDip).DesiredWindowHeight;
+        height = Math.Min(height, taskbarHeight);
 
         if (window.Width != width)
         {
@@ -241,11 +267,20 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
             taskbarWidth,
             width,
             settings.HorizontalAnchor,
-            AppSettings.ClampEmbeddedTaskbarOffset(settings.EmbeddedTaskbarHorizontalOffset));
+            settings.XOffset);
         var clientTop = EmbeddedTaskbarLayoutCalculator.CalculateVerticalTop(
             taskbarHeight,
             height,
-            AppSettings.ClampEmbeddedTaskbarOffset(settings.EmbeddedTaskbarVerticalOffset));
+            settings.YOffset);
+
+        clientLeft = EmbeddedTaskbarLayoutCalculator.ClampHorizontalLeft(
+            clientLeft,
+            taskbarWidth,
+            width);
+        clientTop = EmbeddedTaskbarLayoutCalculator.ClampVerticalTop(
+            clientTop,
+            taskbarHeight,
+            height);
 
         // WPF keeps committing Window.Left/Top to the HWND on layout passes; as a child
         // window those DIP values are parent-client coordinates. Keep them aligned with
@@ -321,8 +356,11 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
 
         var pixelsPerDip = GetPixelsPerDipForHandle(parent);
         var reservedWidth = (int)Math.Round(
-            (AppSettings.ClampEmbeddedTaskbarWidth(settings.EmbeddedTaskbarWidth) +
-                AppSettings.ClampEmbeddedTaskbarOffset(settings.EmbeddedTaskbarHorizontalOffset)) * pixelsPerDip,
+            (AppSettings.ClampEffectiveWindowWidth(
+                settings.WindowWidth,
+                settings.LyricsLayoutScalePercent,
+                (parentRect.Right - parentRect.Left) / pixelsPerDip) +
+                Math.Max(0, settings.XOffset)) * pixelsPerDip,
             MidpointRounding.AwayFromZero);
         var targetWidth = Math.Clamp(
             _originalTaskListBounds.Width - reservedWidth,

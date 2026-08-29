@@ -65,7 +65,10 @@ public sealed class AppSettings
     public const double MinimumWindowWidth = 320;
     public const double MaximumWindowWidth = 1400;
 
-    public const double DefaultEmbeddedTaskbarWidth = 320;
+    // The default presentation is embedded in the taskbar. Users can opt into
+    // the unconstrained, top-level window through the settings page.
+    public bool UseFloatingWindow { get; set; }
+
     public const double MinimumWindowOffset = -2000;
     public const double MaximumWindowOffset = 2000;
 
@@ -177,14 +180,6 @@ public sealed class AppSettings
 
     public List<string> SelectedDisplayIds { get; set; } = new();
 
-    public bool TaskbarEmbeddingEnabled { get; set; }
-
-    public double EmbeddedTaskbarWidth { get; set; } = DefaultEmbeddedTaskbarWidth;
-
-    public double EmbeddedTaskbarHorizontalOffset { get; set; }
-
-    public double EmbeddedTaskbarVerticalOffset { get; set; }
-
     public GlobalMediaHotkeySettings GlobalMediaHotkeys { get; set; } = new();
 
     public static string NormalizeFontFamily(string? fontFamily)
@@ -275,11 +270,17 @@ public sealed class AppSettings
             .ToList();
     }
 
-    public void NormalizeTaskbarEmbedding()
+    public void NormalizeWindowLayout()
     {
-        EmbeddedTaskbarWidth = ClampEmbeddedTaskbarWidth(EmbeddedTaskbarWidth);
-        EmbeddedTaskbarHorizontalOffset = ClampEmbeddedTaskbarOffset(EmbeddedTaskbarHorizontalOffset);
-        EmbeddedTaskbarVerticalOffset = ClampEmbeddedTaskbarOffset(EmbeddedTaskbarVerticalOffset);
+        WindowWidth = double.IsFinite(WindowWidth)
+            ? Math.Clamp(WindowWidth, MinimumWindowWidth, MaximumWindowWidth)
+            : DefaultWindowWidth;
+        XOffset = double.IsFinite(XOffset)
+            ? Math.Clamp(XOffset, MinimumWindowOffset, MaximumWindowOffset)
+            : 0;
+        YOffset = double.IsFinite(YOffset)
+            ? Math.Clamp(YOffset, MinimumWindowOffset, MaximumWindowOffset)
+            : 0;
     }
 
     public int GetPlayerLyricOffsetMilliseconds(string? sourceApp)
@@ -380,20 +381,36 @@ public sealed class AppSettings
 
     public static double ClampEffectiveWindowWidth(double baseWindowWidth, double scalePercent, double maxWidth)
     {
-        var scale = ClampLyricsLayoutScalePercent(scalePercent) / 100.0;
-        var baseWidth = Math.Clamp(baseWindowWidth, MinimumWindowWidth, MaximumWindowWidth);
+        var scale = double.IsFinite(scalePercent)
+            ? ClampLyricsLayoutScalePercent(scalePercent) / 100.0
+            : DefaultLyricsLayoutScalePercent / 100.0;
+        var baseWidth = double.IsFinite(baseWindowWidth)
+            ? Math.Clamp(baseWindowWidth, MinimumWindowWidth, MaximumWindowWidth)
+            : DefaultWindowWidth;
+        if (!double.IsFinite(maxWidth) || maxWidth <= 0)
+        {
+            maxWidth = MaximumWindowWidth;
+        }
+
+        if (maxWidth < MinimumWindowWidth)
+        {
+            return maxWidth;
+        }
+
         return Math.Clamp(baseWidth * scale, MinimumWindowWidth, maxWidth);
     }
 
-    public static double ClampEmbeddedTaskbarWidth(double value)
+    public static double CalculateEffectiveWindowWidth(double baseWindowWidth, double scalePercent)
     {
-        return Math.Clamp(value, MinimumWindowWidth, MaximumWindowWidth);
+        var scale = double.IsFinite(scalePercent)
+            ? ClampLyricsLayoutScalePercent(scalePercent) / 100.0
+            : DefaultLyricsLayoutScalePercent / 100.0;
+        var baseWidth = double.IsFinite(baseWindowWidth)
+            ? Math.Clamp(baseWindowWidth, MinimumWindowWidth, MaximumWindowWidth)
+            : DefaultWindowWidth;
+        return Math.Max(MinimumWindowWidth, baseWidth * scale);
     }
 
-    public static double ClampEmbeddedTaskbarOffset(double value)
-    {
-        return Math.Clamp(value, MinimumWindowOffset, MaximumWindowOffset);
-    }
 }
 
 public sealed class PlayerSourceSettings

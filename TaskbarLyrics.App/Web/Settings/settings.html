@@ -35,7 +35,6 @@
         <button class="nav-item" data-nav="trackOffsets" data-tooltip="单曲偏移" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M4 12h16M4 17h9"/><path d="M18 15v6M15 18h6"/></svg><span>单曲偏移</span></button>
         <button class="nav-item" data-nav="advanced" data-tooltip="高级" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 4-4 16M5 8l-3 4 3 4M19 8l3 4-3 4"/></svg><span>高级</span></button>
         <button class="nav-item" data-nav="lyricDiagnostics" data-tooltip="歌词匹配" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4z"/><path d="M8 9h8M8 13h5"/><circle cx="17" cy="16" r="3"/><path d="m19.2 18.2 1.8 1.8"/></svg><span>歌词匹配</span></button>
-        <button class="nav-item" data-nav="taskbarEmbedding" data-tooltip="任务栏嵌入" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M9 10v9"/></svg><span>任务栏嵌入</span></button>
         <button class="nav-item" data-nav="about" data-tooltip="关于" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg><span>关于</span></button>
       </nav>
 
@@ -140,8 +139,26 @@
           <div class="page-inner">
             <div class="live-note"><div class="live-note-copy"><strong>设置即时生效</strong><small>请直接查看歌词窗口，真实效果会随参数同步更新。</small></div><button id="showLyricsWindowButton" class="btn ghost" type="button" data-show-lyrics-window>显示歌词窗口</button></div>
             <section class="panel">
-              <div class="panel-head"><div><h2 id="displayAreaHeading" tabindex="-1">布局与封面</h2><p>控制封面显示，并统一调整歌词区域比例与基础尺寸（含窗口宽度）。</p></div></div>
+              <div class="panel-head"><div><h2 id="displayAreaHeading" tabindex="-1">显示方式与布局</h2><p>选择任务栏嵌入或悬浮显示，并调整封面、歌词区域比例与基础尺寸。</p></div></div>
               <div class="settings">
+                <fieldset class="window-mode-picker">
+                  <legend class="sr-only">歌词窗口显示方式</legend>
+                  <div class="window-mode-options">
+                    <label class="window-mode-card">
+                      <input class="sr-only" type="radio" name="windowPresentationMode" value="embedded" data-window-mode="embedded">
+                      <span class="window-mode-radio" aria-hidden="true"></span>
+                      <span class="window-mode-copy"><span class="window-mode-title"><strong>任务栏嵌入</strong><span class="window-mode-badge">推荐</span></span><small>歌词保持在任务栏范围内，尺寸与位置会自动限制。</small></span>
+                      <span class="window-mode-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 15h18M8 15v4"/></svg></span>
+                    </label>
+                    <label class="window-mode-card">
+                      <input class="sr-only" type="radio" name="windowPresentationMode" value="floating" data-window-mode="floating">
+                      <span class="window-mode-radio" aria-hidden="true"></span>
+                      <span class="window-mode-copy"><span class="window-mode-title"><strong>悬浮窗口</strong></span><small>可自由调整尺寸与位置，并支持强制置顶。</small></span>
+                      <span class="window-mode-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12" rx="2"/><path d="M4 10h16M16.5 8h.01"/></svg></span>
+                    </label>
+                  </div>
+                  <div class="window-mode-support"><small>切回任务栏嵌入时，超出任务栏的布局会恢复默认尺寸与位置。</small><small id="taskbarEmbeddingStatus" class="mode-status" role="status" hidden></small></div>
+                </fieldset>
                 <div class="setting-row compact"><div class="setting-label"><strong>显示封面</strong><small>关闭后歌词会占满可用宽度，封面尺寸设置仍会保留。</small></div><label class="switch"><input type="checkbox" data-setting="showCover" aria-label="显示封面"><span class="switch-track"></span></label></div>
                 <div class="setting-row layout-scale-row"><div class="setting-label"><strong>歌词区域缩放</strong><small>窗口宽度随缩放等比变化；X/Y 偏移保持不变，范围 25%～300%。</small></div><div class="layout-scale-control"><div class="slider-number-control"><input type="range" min="25" max="300" step="5" data-setting="lyricsLayoutScalePercent" aria-label="歌词区域缩放"><label class="unit-input compact-number-input percentage-input"><input type="number" min="25" max="300" step="1" data-setting="lyricsLayoutScalePercent" aria-label="歌词区域缩放百分比"><span>%</span></label></div><div class="layout-scale-footer"><output id="layoutScalePreview" class="layout-scale-preview"><span>字号 <strong data-effective-font-size>14 px</strong></span><span>封面 <strong data-effective-cover-size>34 px</strong></span><span data-effective-cover-gap-item>间距 <strong data-effective-cover-gap>8 px</strong></span><span>宽度 <strong data-effective-window-width>420 px</strong></span></output><button class="btn ghost small" type="button" data-reset-layout-scale aria-label="恢复歌词区域缩放到 100%" title="恢复到 100%">恢复 100%</button></div><span id="layoutScaleAnnouncement" class="sr-only" aria-live="polite"></span></div></div>
                 <details class="advanced-size-panel">
@@ -158,7 +175,7 @@
               </div>
             </section>
             <div class="panel">
-              <div class="panel-head"><div><h2>文字样式</h2><p>调整字体、字重、颜色和复杂背景下的可读性。字号属于基础尺寸，见上方「布局与封面 → 高级尺寸微调」。</p></div></div>
+              <div class="panel-head"><div><h2>文字样式</h2><p>调整字体、字重、颜色和复杂背景下的可读性。字号属于基础尺寸，见上方「显示方式与布局 → 高级尺寸微调」。</p></div></div>
               <div class="settings">
                 <div class="setting-row"><div class="setting-label"><strong>字体</strong></div><button id="fontFamilySelect" class="control select-trigger" type="button" data-setting="fontFamily" aria-label="字体" aria-haspopup="listbox" aria-expanded="false"><span class="select-trigger-value"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
                 <div class="setting-row"><div class="setting-label"><strong>字重</strong></div><button class="control select-trigger" type="button" data-setting="fontWeight" aria-label="字重" aria-haspopup="listbox" aria-expanded="false"><span class="select-trigger-value"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
@@ -182,7 +199,7 @@
                 <div class="setting-row"><div class="setting-label"><strong>水平锚点</strong><small>决定歌词依附在任务栏的区域。</small></div><button class="control select-trigger" type="button" data-setting="horizontalAnchor" aria-label="水平锚点" aria-haspopup="listbox" aria-expanded="false"><span class="select-trigger-value"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
                 <div class="setting-row"><div class="setting-label"><strong>X 偏移</strong><small>相对水平锚点微调窗口位置，范围 -2000～2000 px。</small></div><div class="slider-number-control"><input type="range" min="-2000" max="2000" step="1" data-setting="xOffset" aria-label="X 偏移滑块"><label class="unit-input compact-number-input pixel-input"><input type="number" min="-2000" max="2000" step="1" inputmode="numeric" data-setting="xOffset" aria-label="X 偏移数值"><span>px</span></label></div></div>
                 <div class="setting-row"><div class="setting-label"><strong>Y 偏移</strong><small>相对任务栏垂直微调窗口位置，范围 -2000～2000 px。</small></div><div class="slider-number-control"><input type="range" min="-2000" max="2000" step="1" data-setting="yOffset" aria-label="Y 偏移滑块"><label class="unit-input compact-number-input pixel-input"><input type="number" min="-2000" max="2000" step="1" inputmode="numeric" data-setting="yOffset" aria-label="Y 偏移数值"><span>px</span></label></div></div>
-                <div class="setting-row compact"><div class="setting-label"><strong>强制歌词置顶</strong><small>关闭时不会遮挡全屏应用。</small></div><label class="switch"><input type="checkbox" data-setting="forceAlwaysOnTop" aria-label="强制歌词置顶"><span class="switch-track"></span></label></div>
+                <div class="setting-row compact" data-depends="useFloatingWindow"><div class="setting-label"><strong>强制歌词置顶</strong><small>仅悬浮窗口可用；关闭时不会遮挡全屏应用。</small></div><label class="switch"><input type="checkbox" data-setting="forceAlwaysOnTop" aria-label="强制歌词置顶"><span class="switch-track"></span></label></div>
               </div>
             </div>
           </div>
@@ -241,20 +258,6 @@
             <section id="lyricDiagnosticsSelectionPanel" class="panel" hidden>
               <div class="panel-head"><div><h2>最终结果</h2><p>以下是本次匹配最终采用的歌词内容；空结果表示没有通过完整校验的候选。</p></div></div>
               <div id="lyricDiagnosticsSelection" class="diagnostics-selection"></div>
-            </section>
-          </div>
-        </section>
-
-        <section class="page" data-page="taskbarEmbedding" aria-labelledby="taskbarEmbeddingHeading">
-          <div class="page-inner">
-            <section class="panel">
-              <div class="panel-head"><div><h2 id="taskbarEmbeddingHeading" tabindex="-1">任务栏嵌入（测试版）</h2><p>将歌词窗口直接嵌入所选显示器的任务栏；默认关闭，可随时切回现有透明窗口方案。</p></div></div>
-              <div class="settings">
-                <div class="setting-row compact"><div class="setting-label"><strong>启用任务栏嵌入</strong><small>启用后，每个歌词窗口会嵌入对应显示器的任务栏，现有窗口定位设置暂不生效。</small></div><label class="switch"><input type="checkbox" data-setting="taskbarEmbeddingEnabled" aria-label="启用任务栏嵌入"><span class="switch-track"></span></label></div>
-                <div class="setting-row" data-depends="taskbarEmbeddingEnabled"><div class="setting-label"><strong>嵌入窗口宽度</strong><small>嵌入模式下歌词窗口的宽度，范围 320～1400 px。</small></div><div class="slider-number-control"><input type="range" min="320" max="1400" step="1" data-setting="embeddedTaskbarWidth" aria-label="嵌入窗口宽度滑块"><label class="unit-input compact-number-input pixel-input"><input type="number" min="320" max="1400" step="1" data-setting="embeddedTaskbarWidth" aria-label="嵌入窗口宽度数值"><span>px</span></label></div></div>
-                <div class="setting-row" data-depends="taskbarEmbeddingEnabled"><div class="setting-label"><strong>水平偏移</strong><small>相对水平锚点微调，范围 -2000～2000 px。</small></div><div class="slider-number-control"><input type="range" min="-2000" max="2000" step="1" data-setting="embeddedTaskbarHorizontalOffset" aria-label="嵌入水平偏移滑块"><label class="unit-input compact-number-input pixel-input"><input type="number" min="-2000" max="2000" step="1" inputmode="numeric" data-setting="embeddedTaskbarHorizontalOffset" aria-label="嵌入水平偏移数值"><span>px</span></label></div></div>
-                <div class="setting-row" data-depends="taskbarEmbeddingEnabled"><div class="setting-label"><strong>垂直偏移</strong><small>相对任务栏垂直居中微调，范围 -2000～2000 px。</small></div><div class="slider-number-control"><input type="range" min="-2000" max="2000" step="1" data-setting="embeddedTaskbarVerticalOffset" aria-label="嵌入垂直偏移滑块"><label class="unit-input compact-number-input pixel-input"><input type="number" min="-2000" max="2000" step="1" inputmode="numeric" data-setting="embeddedTaskbarVerticalOffset" aria-label="嵌入垂直偏移数值"><span>px</span></label></div></div>
-              </div>
             </section>
           </div>
         </section>

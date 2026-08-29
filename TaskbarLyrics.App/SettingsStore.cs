@@ -33,10 +33,11 @@ public sealed class SettingsStore
             using var document = JsonDocument.Parse(json);
             MigrateLegacySpectrumSettings(document.RootElement, settings);
             MigrateSpectrumAudioAccess(document.RootElement, settings);
+            MigrateTaskbarPresentation(document.RootElement, settings);
             settings.NormalizePlayerSources();
             settings.NormalizeLyricsLayout();
             settings.NormalizeDisplaySelection();
-            settings.NormalizeTaskbarEmbedding();
+            settings.NormalizeWindowLayout();
             return settings;
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException)
@@ -54,7 +55,7 @@ public sealed class SettingsStore
             settings.NormalizePlayerSources();
             settings.NormalizeLyricsLayout();
             settings.NormalizeDisplaySelection();
-            settings.NormalizeTaskbarEmbedding();
+            settings.NormalizeWindowLayout();
             var directory = Path.GetDirectoryName(_filePath);
             if (!string.IsNullOrWhiteSpace(directory))
             {
@@ -128,5 +129,98 @@ public sealed class SettingsStore
 
         settings.SpectrumAudioAccessGranted = false;
         settings.SpectrumDisplayMode = SpectrumDisplayMode.Disabled;
+    }
+
+    private static void MigrateTaskbarPresentation(JsonElement root, AppSettings settings)
+    {
+        if (TryReadBoolean(root, nameof(AppSettings.UseFloatingWindow), out _))
+        {
+            return;
+        }
+
+        if (!TryReadBoolean(root, "TaskbarEmbeddingEnabled", out var legacyEmbeddingEnabled))
+        {
+            // New installations intentionally keep AppSettings' embedded default.
+            return;
+        }
+
+        settings.UseFloatingWindow = !legacyEmbeddingEnabled;
+        if (!legacyEmbeddingEnabled)
+        {
+            return;
+        }
+
+        if (TryReadDouble(root, "EmbeddedTaskbarWidth", out var embeddedWidth))
+        {
+            settings.WindowWidth = ConvertLegacyEmbeddedWidthToBaseWidth(
+                embeddedWidth,
+                settings.LyricsLayoutScalePercent);
+        }
+
+        if (TryReadDouble(root, "EmbeddedTaskbarHorizontalOffset", out var horizontalOffset))
+        {
+            settings.XOffset = horizontalOffset;
+        }
+
+        if (TryReadDouble(root, "EmbeddedTaskbarVerticalOffset", out var verticalOffset))
+        {
+            settings.YOffset = verticalOffset;
+        }
+    }
+
+    private static double ConvertLegacyEmbeddedWidthToBaseWidth(
+        double legacyEffectiveWidth,
+        double scalePercent)
+    {
+        var scale = AppSettings.ClampLyricsLayoutScalePercent(scalePercent) / 100.0;
+        var effectiveWidth = double.IsFinite(legacyEffectiveWidth)
+            ? legacyEffectiveWidth
+            : AppSettings.DefaultWindowWidth;
+        return Math.Clamp(
+            effectiveWidth / scale,
+            AppSettings.MinimumWindowWidth,
+            AppSettings.MaximumWindowWidth);
+    }
+
+    private static bool TryReadBoolean(JsonElement root, string propertyName, out bool value)
+    {
+        value = false;
+        if (!root.TryGetProperty(propertyName, out var element))
+        {
+            return false;
+        }
+
+        if (element.ValueKind is JsonValueKind.True or JsonValueKind.False)
+        {
+            value = element.GetBoolean();
+            return true;
+        }
+
+        return element.ValueKind == JsonValueKind.String &&
+            bool.TryParse(element.GetString(), out value);
+    }
+
+    private static bool TryReadDouble(JsonElement root, string propertyName, out double value)
+    {
+        value = 0;
+        if (!root.TryGetProperty(propertyName, out var element))
+        {
+            return false;
+        }
+
+        if (element.ValueKind == JsonValueKind.Number &&
+            element.TryGetDouble(out value) &&
+            double.IsFinite(value))
+        {
+            return true;
+        }
+
+        return element.ValueKind == JsonValueKind.String &&
+            double.TryParse(
+                element.GetString(),
+                System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out value) &&
+            double.IsFinite(value);
     }
 }

@@ -982,7 +982,7 @@ describe("settings WebView bridge", () => {
     const document = dom.window.document;
     const sliders = Array.from(document.querySelectorAll('input[type="range"][data-setting]'));
 
-    expect(sliders).toHaveLength(10);
+    expect(sliders).toHaveLength(7);
     sliders.forEach(slider => {
       const control = slider.closest(".slider-number-control");
       expect(control).not.toBeNull();
@@ -992,7 +992,7 @@ describe("settings WebView bridge", () => {
     expect(document.querySelector("#hueSlider").closest(".slider-number-control").querySelector("#hueNumberInput")).not.toBeNull();
   });
 
-  it("enables and clamps taskbar embedding controls", async () => {
+  it("selects a window presentation card and mirrors embedded taskbar bounds", async () => {
     const { dom, sent, script } = await createSettingsDom();
     const document = dom.window.document;
     dom.window.eval(script);
@@ -1008,39 +1008,66 @@ describe("settings WebView bridge", () => {
           mediaHotkeyStatuses: {},
           foregroundColorMode: "Light",
           foregroundColor: "#FFFFFFFF",
-          taskbarEmbeddingEnabled: false,
-          embeddedTaskbarWidth: 320,
-          embeddedTaskbarHorizontalAnchor: "Right",
-          embeddedTaskbarHorizontalOffset: 0,
-          embeddedTaskbarVerticalOffset: 0
+          useFloatingWindow: false,
+          taskbarEmbeddingAvailable: true,
+          taskbarMaxWidth: 420,
+          taskbarMaxHeight: 48,
+          taskbarMaxScalePercent: 100,
+          taskbarMaxFontSize: 14,
+          taskbarMaxCoverSize: 34,
+          taskbarMaxCoverGap: 8,
+          taskbarMaxWindowWidth: 420,
+          taskbarMinXOffset: 0,
+          taskbarMaxXOffset: 0,
+          taskbarMinYOffset: 0,
+          taskbarMaxYOffset: 0
         },
         fonts: []
       }
     });
 
-    const switchControl = document.querySelector('[data-setting="taskbarEmbeddingEnabled"]');
-    const dependentControls = [...document.querySelectorAll('[data-depends="taskbarEmbeddingEnabled"] input, [data-depends="taskbarEmbeddingEnabled"] button')];
+    const embeddedMode = document.querySelector('[data-window-mode="embedded"]');
+    const floatingMode = document.querySelector('[data-window-mode="floating"]');
+    const dependentControls = [...document.querySelectorAll('[data-depends="useFloatingWindow"] input, [data-depends="useFloatingWindow"] button')];
+    expect(embeddedMode.checked).toBe(true);
+    expect(embeddedMode.tabIndex).toBe(0);
+    expect(floatingMode.checked).toBe(false);
+    expect(floatingMode.tabIndex).toBe(-1);
     expect(dependentControls.every(control => control.disabled)).toBe(true);
 
-    switchControl.checked = true;
-    switchControl.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+    floatingMode.checked = true;
+    floatingMode.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
 
+    expect(floatingMode.checked).toBe(true);
+    expect(floatingMode.tabIndex).toBe(0);
     expect(dependentControls.every(control => !control.disabled)).toBe(true);
     expect(sent.at(-1)).toEqual({
       version: 1,
       type: "update",
-      payload: { key: "taskbarEmbeddingEnabled", value: true }
+      payload: { key: "useFloatingWindow", value: true }
     });
 
-    const widthInput = document.querySelector('input[type="number"][data-setting="embeddedTaskbarWidth"]');
-    widthInput.value = "5000";
-    widthInput.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+    floatingMode.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Home", bubbles: true }));
 
-    expect(widthInput.value).toBe("1400");
+    expect(document.activeElement).toBe(embeddedMode);
+    expect(embeddedMode.checked).toBe(true);
+    expect(embeddedMode.tabIndex).toBe(0);
+    expect(dependentControls.every(control => control.disabled)).toBe(true);
     expect(sent.at(-1)).toEqual({
       version: 1,
       type: "update",
-      payload: { key: "embeddedTaskbarWidth", value: 1400 }
+      payload: { key: "useFloatingWindow", value: false }
+    });
+
+    const widthInput = document.querySelector('input[type="number"][data-setting="windowWidth"]');
+    widthInput.value = "5000";
+    widthInput.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+
+    expect(widthInput.value).toBe("420");
+    expect(sent.at(-1)).toEqual({
+      version: 1,
+      type: "update",
+      payload: { key: "windowWidth", value: 420 }
     });
   });
 

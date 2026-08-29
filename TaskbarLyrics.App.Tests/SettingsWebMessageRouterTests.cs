@@ -27,6 +27,17 @@ public sealed class SettingsWebMessageRouterTests
     }
 
     [Fact]
+    public void ParseDeserializesTheFloatingWindowSettingThroughTheV1Envelope()
+    {
+        var message = SettingsWebMessageRouter.Parse(
+            "{\"version\":1,\"type\":\"update\",\"payload\":{\"key\":\"useFloatingWindow\",\"value\":true}}");
+
+        Assert.NotNull(message);
+        Assert.Equal("useFloatingWindow", message.Key);
+        Assert.True(message.Value!.Value.GetBoolean());
+    }
+
+    [Fact]
     public void ParsePreservesTheLyricDiagnosticCandidateModeWithoutFetchMetadata()
     {
         var message = SettingsWebMessageRouter.Parse(

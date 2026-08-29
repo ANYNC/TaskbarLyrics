@@ -456,4 +456,129 @@ public sealed class SettingsStoreTests
             }
         }
     }
+
+    [Fact]
+    public void LoadMigratesLegacyEmbeddedPresentationToSharedWindowLayout()
+    {
+        var directory = Path.Combine(AppContext.BaseDirectory, $"settings-store-{Guid.NewGuid():N}");
+        var filePath = Path.Combine(directory, "settings.json");
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            File.WriteAllText(
+                filePath,
+                "{\"TaskbarEmbeddingEnabled\":true,\"EmbeddedTaskbarWidth\":500,\"EmbeddedTaskbarHorizontalOffset\":12,\"EmbeddedTaskbarVerticalOffset\":-4,\"LyricsLayoutScalePercent\":125}");
+
+            var store = new SettingsStore(filePath);
+            var loaded = store.Load();
+
+            Assert.False(loaded.UseFloatingWindow);
+            Assert.Equal(400, loaded.WindowWidth);
+            Assert.Equal(12, loaded.XOffset);
+            Assert.Equal(-4, loaded.YOffset);
+
+            Assert.True(store.Save(loaded));
+            var saved = File.ReadAllText(filePath);
+            Assert.Contains("\"UseFloatingWindow\": false", saved, StringComparison.Ordinal);
+            Assert.Contains("\"WindowWidth\": 400", saved, StringComparison.Ordinal);
+            Assert.DoesNotContain("TaskbarEmbeddingEnabled", saved, StringComparison.Ordinal);
+            Assert.DoesNotContain("EmbeddedTaskbarWidth", saved, StringComparison.Ordinal);
+            Assert.DoesNotContain("EmbeddedTaskbarHorizontalOffset", saved, StringComparison.Ordinal);
+            Assert.DoesNotContain("EmbeddedTaskbarVerticalOffset", saved, StringComparison.Ordinal);
+
+            var roundTripped = store.Load();
+            Assert.False(roundTripped.UseFloatingWindow);
+            Assert.Equal(loaded.WindowWidth, roundTripped.WindowWidth);
+            Assert.Equal(loaded.XOffset, roundTripped.XOffset);
+            Assert.Equal(loaded.YOffset, roundTripped.YOffset);
+        }
+        finally
+        {
+            if (Directory.Exists(directory))
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void LoadMigratesLegacyFloatingPresentationAndPreservesSharedLayout()
+    {
+        var directory = Path.Combine(AppContext.BaseDirectory, $"settings-store-{Guid.NewGuid():N}");
+        var filePath = Path.Combine(directory, "settings.json");
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            File.WriteAllText(
+                filePath,
+                "{\"TaskbarEmbeddingEnabled\":false,\"WindowWidth\":760,\"XOffset\":-36,\"YOffset\":18}");
+
+            var loaded = new SettingsStore(filePath).Load();
+
+            Assert.True(loaded.UseFloatingWindow);
+            Assert.Equal(760, loaded.WindowWidth);
+            Assert.Equal(-36, loaded.XOffset);
+            Assert.Equal(18, loaded.YOffset);
+        }
+        finally
+        {
+            if (Directory.Exists(directory))
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void LoadDefaultsToEmbeddedWhenNoPresentationFieldExists()
+    {
+        var directory = Path.Combine(AppContext.BaseDirectory, $"settings-store-{Guid.NewGuid():N}");
+        var filePath = Path.Combine(directory, "settings.json");
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            File.WriteAllText(filePath, "{}");
+
+            var loaded = new SettingsStore(filePath).Load();
+
+            Assert.False(loaded.UseFloatingWindow);
+        }
+        finally
+        {
+            if (Directory.Exists(directory))
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void NewPresentationFieldTakesPrecedenceOverLegacyPresentationFields()
+    {
+        var directory = Path.Combine(AppContext.BaseDirectory, $"settings-store-{Guid.NewGuid():N}");
+        var filePath = Path.Combine(directory, "settings.json");
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            File.WriteAllText(
+                filePath,
+                "{\"UseFloatingWindow\":true,\"TaskbarEmbeddingEnabled\":true,\"EmbeddedTaskbarWidth\":600}");
+
+            var loaded = new SettingsStore(filePath).Load();
+
+            Assert.True(loaded.UseFloatingWindow);
+            Assert.Equal(AppSettings.DefaultWindowWidth, loaded.WindowWidth);
+        }
+        finally
+        {
+            if (Directory.Exists(directory))
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+    }
 }

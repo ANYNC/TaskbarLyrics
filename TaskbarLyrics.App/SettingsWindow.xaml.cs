@@ -34,6 +34,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
     private string? _pendingPage;
     private bool _pendingFocusCurrentTrack;
     private bool _hasPendingPreviewChanges;
+    private string? _taskbarEmbeddingStatus;
     private SpectrumDisplayMode? _pendingSpectrumDisplayMode;
     private string _lastSpectrumCaptureStateJson = string.Empty;
     private CancellationTokenSource? _lyricDiagnosticsCancellation;
@@ -1070,9 +1071,20 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
     {
         _settings.NormalizePlayerSources();
         _settings.NormalizeLyricsTextAlignment();
+        _settings.NormalizeWindowLayout();
         var mediaHotkeys = _settings.GlobalMediaHotkeys ??= new GlobalMediaHotkeySettings();
         var layoutMetrics = CreateLyricsLayoutMetrics();
-        return new WebSettingsPayload
+        var availableDisplays = DisplayMonitorService.GetDisplays();
+        var targetDisplays = LyricsDisplayTargetSelector.Select(
+            availableDisplays,
+            _settings.LyricsDisplayMode,
+            _settings.SelectedDisplayIds);
+        var taskbarConstraints = TaskbarEmbeddingLayoutPolicy.FromDisplays(targetDisplays);
+        var inputBounds = TaskbarEmbeddingLayoutPolicy.GetInputBounds(
+            _settings,
+            taskbarConstraints,
+            SystemParameters.WorkArea.Width);
+        var payload = new WebSettingsPayload
         {
             SourceRecognitionOrder = NormalizeSourceOrder(_settings.SourceRecognitionOrder),
             EnableNetease = _settings.EnableNetease,
@@ -1131,7 +1143,9 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             EffectiveWindowWidth = AppSettings.ClampEffectiveWindowWidth(
                 _settings.WindowWidth,
                 _settings.LyricsLayoutScalePercent,
-                SystemParameters.WorkArea.Width),
+                _settings.UseFloatingWindow
+                    ? SystemParameters.WorkArea.Width
+                    : taskbarConstraints.MaxWidth),
             FontFamily = FontCatalogService.ResolveInstalledFamily(AppSettings.NormalizeFontFamily(_settings.FontFamily)) ?? AppSettings.BundledFontFamily,
             FontWeight = NormalizeFontWeight(_settings.FontWeight),
             ForegroundColorMode = _settings.ForegroundColorMode,
@@ -1146,13 +1160,23 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             XOffset = _settings.XOffset,
             YOffset = _settings.YOffset,
             ForceAlwaysOnTop = _settings.ForceAlwaysOnTop,
-            TaskbarEmbeddingEnabled = _settings.TaskbarEmbeddingEnabled,
-            EmbeddedTaskbarWidth = _settings.EmbeddedTaskbarWidth,
-            EmbeddedTaskbarHorizontalOffset = _settings.EmbeddedTaskbarHorizontalOffset,
-            EmbeddedTaskbarVerticalOffset = _settings.EmbeddedTaskbarVerticalOffset,
+            UseFloatingWindow = _settings.UseFloatingWindow,
+            TaskbarEmbeddingAvailable = inputBounds.IsSupported,
+            TaskbarMaxWidth = inputBounds.MaxTaskbarWidth,
+            TaskbarMaxHeight = inputBounds.MaxTaskbarHeight,
+            TaskbarMaxScalePercent = inputBounds.MaxScalePercent,
+            TaskbarMaxFontSize = inputBounds.MaxFontSize,
+            TaskbarMaxCoverSize = inputBounds.MaxCoverSize,
+            TaskbarMaxCoverGap = inputBounds.MaxCoverGap,
+            TaskbarMaxWindowWidth = inputBounds.MaxWindowWidth,
+            TaskbarMinXOffset = inputBounds.MinXOffset,
+            TaskbarMaxXOffset = inputBounds.MaxXOffset,
+            TaskbarMinYOffset = inputBounds.MinYOffset,
+            TaskbarMaxYOffset = inputBounds.MaxYOffset,
+            TaskbarEmbeddingStatus = _taskbarEmbeddingStatus,
             LyricsDisplayMode = _settings.LyricsDisplayMode,
             SelectedDisplayIds = _settings.SelectedDisplayIds.ToList(),
-            AvailableDisplays = DisplayMonitorService.GetDisplays()
+            AvailableDisplays = availableDisplays
                 .Select(display => new WebDisplayMonitor
                 {
                     Id = display.Id,
@@ -1165,11 +1189,23 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             AppVersion = UpdateChecker.GetCurrentVersion(),
             RepositoryUrl = UpdateChecker.RepositoryUrl
         };
+        _taskbarEmbeddingStatus = null;
+        return payload;
     }
 
     private object CreateLyricsLayoutPreview()
     {
         var metrics = CreateLyricsLayoutMetrics();
+        var availableDisplays = DisplayMonitorService.GetDisplays();
+        var targetDisplays = LyricsDisplayTargetSelector.Select(
+            availableDisplays,
+            _settings.LyricsDisplayMode,
+            _settings.SelectedDisplayIds);
+        var taskbarConstraints = TaskbarEmbeddingLayoutPolicy.FromDisplays(targetDisplays);
+        var inputBounds = TaskbarEmbeddingLayoutPolicy.GetInputBounds(
+            _settings,
+            taskbarConstraints,
+            SystemParameters.WorkArea.Width);
         return new
         {
             scalePercent = metrics.ScalePercent,
@@ -1186,7 +1222,21 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             effectiveWindowWidth = AppSettings.ClampEffectiveWindowWidth(
                 _settings.WindowWidth,
                 _settings.LyricsLayoutScalePercent,
-                SystemParameters.WorkArea.Width)
+                _settings.UseFloatingWindow || !taskbarConstraints.IsSupported
+                    ? SystemParameters.WorkArea.Width
+                    : taskbarConstraints.MaxWidth),
+            taskbarEmbeddingAvailable = inputBounds.IsSupported,
+            taskbarMaxWidth = inputBounds.MaxTaskbarWidth,
+            taskbarMaxHeight = inputBounds.MaxTaskbarHeight,
+            taskbarMaxScalePercent = inputBounds.MaxScalePercent,
+            taskbarMaxFontSize = inputBounds.MaxFontSize,
+            taskbarMaxCoverSize = inputBounds.MaxCoverSize,
+            taskbarMaxCoverGap = inputBounds.MaxCoverGap,
+            taskbarMaxWindowWidth = inputBounds.MaxWindowWidth,
+            taskbarMinXOffset = inputBounds.MinXOffset,
+            taskbarMaxXOffset = inputBounds.MaxXOffset,
+            taskbarMinYOffset = inputBounds.MinYOffset,
+            taskbarMaxYOffset = inputBounds.MaxYOffset
         };
     }
 
@@ -1332,20 +1382,8 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             case "forceAlwaysOnTop":
                 _settings.ForceAlwaysOnTop = ReadBool(element, _settings.ForceAlwaysOnTop);
                 break;
-            case "taskbarEmbeddingEnabled":
-                _settings.TaskbarEmbeddingEnabled = ReadBool(element, _settings.TaskbarEmbeddingEnabled);
-                break;
-            case "embeddedTaskbarWidth":
-                _settings.EmbeddedTaskbarWidth = AppSettings.ClampEmbeddedTaskbarWidth(
-                    ReadDouble(element, _settings.EmbeddedTaskbarWidth));
-                break;
-            case "embeddedTaskbarHorizontalOffset":
-                _settings.EmbeddedTaskbarHorizontalOffset = AppSettings.ClampEmbeddedTaskbarOffset(
-                    ReadDouble(element, _settings.EmbeddedTaskbarHorizontalOffset));
-                break;
-            case "embeddedTaskbarVerticalOffset":
-                _settings.EmbeddedTaskbarVerticalOffset = AppSettings.ClampEmbeddedTaskbarOffset(
-                    ReadDouble(element, _settings.EmbeddedTaskbarVerticalOffset));
+            case "useFloatingWindow":
+                ApplyFloatingWindowSetting(ReadBool(element, _settings.UseFloatingWindow));
                 break;
             case "lyricsDisplayMode":
                 _settings.LyricsDisplayMode = ReadEnum(element, _settings.LyricsDisplayMode);
@@ -1416,9 +1454,74 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 _settings.XOffset = Math.Clamp(ReadDouble(element, _settings.XOffset), -2000, 2000);
                 break;
             case "yOffset":
-                _settings.YOffset = Math.Clamp(ReadDouble(element, _settings.YOffset), -2000, 2000);
+                _settings.YOffset = Math.Clamp(
+                    ReadDouble(element, _settings.YOffset),
+                    AppSettings.MinimumWindowOffset,
+                    AppSettings.MaximumWindowOffset);
                 break;
         }
+
+        if (!_settings.UseFloatingWindow && IsTaskbarBoundedLayoutSetting(key))
+        {
+            ClampEmbeddedLayoutToCurrentDisplays();
+        }
+    }
+
+    private void ApplyFloatingWindowSetting(bool useFloatingWindow)
+    {
+        if (useFloatingWindow || !_settings.UseFloatingWindow)
+        {
+            _settings.UseFloatingWindow = useFloatingWindow;
+            return;
+        }
+
+        var constraints = GetCurrentTaskbarConstraints();
+        var result = TaskbarEmbeddingLayoutPolicy.NormalizeForEmbedding(_settings, constraints);
+        if (!result.CanEmbed)
+        {
+            _taskbarEmbeddingStatus = result.Message;
+            _settings.UseFloatingWindow = true;
+            return;
+        }
+
+        _settings.UseFloatingWindow = false;
+        if (result.Changed)
+        {
+            _taskbarEmbeddingStatus = result.Message;
+        }
+    }
+
+    private void ClampEmbeddedLayoutToCurrentDisplays()
+    {
+        TaskbarEmbeddingLayoutPolicy.ClampToConstraints(
+            _settings,
+            GetCurrentTaskbarConstraints());
+    }
+
+    private TaskbarEmbeddingConstraints GetCurrentTaskbarConstraints()
+    {
+        var displays = DisplayMonitorService.GetDisplays();
+        var targetDisplays = LyricsDisplayTargetSelector.Select(
+            displays,
+            _settings.LyricsDisplayMode,
+            _settings.SelectedDisplayIds);
+        return TaskbarEmbeddingLayoutPolicy.FromDisplays(targetDisplays);
+    }
+
+    private static bool IsTaskbarBoundedLayoutSetting(string? key)
+    {
+        return key is "fontSize" or
+            "showCover" or
+            "coverSize" or
+            "coverGap" or
+            "coverCornerRadius" or
+            "lyricsLayoutScalePercent" or
+            "windowWidth" or
+            "horizontalAnchor" or
+            "xOffset" or
+            "yOffset" or
+            "lyricsDisplayMode" or
+            "selectedDisplayIds";
     }
 
     private void ResetMediaHotkey(JsonElement? value)
@@ -1446,17 +1549,23 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
 
     private static bool RequiresSettingsStateRefresh(string? key)
     {
-        return key is "foregroundColorMode" or "spectrumDisplayMode" || IsMediaHotkeySetting(key);
+        return key is "foregroundColorMode" or "spectrumDisplayMode" or "useFloatingWindow" || IsMediaHotkeySetting(key);
     }
 
     private static bool IsLyricsLayoutSetting(string? key)
     {
-        return key is "fontSize" or
+        return key is "showCover" or
+            "fontSize" or
             "coverSize" or
             "coverGap" or
             "coverCornerRadius" or
             "lyricsLayoutScalePercent" or
-            "windowWidth";
+            "windowWidth" or
+            "horizontalAnchor" or
+            "xOffset" or
+            "yOffset" or
+            "lyricsDisplayMode" or
+            "selectedDisplayIds";
     }
 
     private static bool IsPreviewableSetting(string? key)
@@ -1468,10 +1577,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             "lyricsLayoutScalePercent" or
             "windowWidth" or
             "xOffset" or
-            "yOffset" or
-            "embeddedTaskbarWidth" or
-            "embeddedTaskbarHorizontalOffset" or
-            "embeddedTaskbarVerticalOffset";
+            "yOffset";
     }
 
     private static string ReadHotkeyBinding(JsonElement element, string fallback)
@@ -1667,8 +1773,8 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
     {
         return element.ValueKind switch
         {
-            JsonValueKind.Number when element.TryGetDouble(out var value) => value,
-            JsonValueKind.String when double.TryParse(element.GetString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var value) => value,
+            JsonValueKind.Number when element.TryGetDouble(out var value) && double.IsFinite(value) => value,
+            JsonValueKind.String when double.TryParse(element.GetString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var value) && double.IsFinite(value) => value,
             _ => fallback
         };
     }
@@ -1823,10 +1929,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         target.XOffset = source.XOffset;
         target.YOffset = source.YOffset;
         target.ForceAlwaysOnTop = source.ForceAlwaysOnTop;
-        target.TaskbarEmbeddingEnabled = source.TaskbarEmbeddingEnabled;
-        target.EmbeddedTaskbarWidth = source.EmbeddedTaskbarWidth;
-        target.EmbeddedTaskbarHorizontalOffset = source.EmbeddedTaskbarHorizontalOffset;
-        target.EmbeddedTaskbarVerticalOffset = source.EmbeddedTaskbarVerticalOffset;
+        target.UseFloatingWindow = source.UseFloatingWindow;
         target.LyricsDisplayMode = source.LyricsDisplayMode;
         target.SelectedDisplayIds = source.SelectedDisplayIds.ToList();
     }
@@ -1962,14 +2065,20 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         public double XOffset { get; set; }
         public double YOffset { get; set; }
         public bool ForceAlwaysOnTop { get; set; }
-
-        public bool TaskbarEmbeddingEnabled { get; set; }
-
-        public double EmbeddedTaskbarWidth { get; set; }
-
-        public double EmbeddedTaskbarHorizontalOffset { get; set; }
-
-        public double EmbeddedTaskbarVerticalOffset { get; set; }
+        public bool UseFloatingWindow { get; set; }
+        public bool TaskbarEmbeddingAvailable { get; set; }
+        public double TaskbarMaxWidth { get; set; }
+        public double TaskbarMaxHeight { get; set; }
+        public double TaskbarMaxScalePercent { get; set; }
+        public double TaskbarMaxFontSize { get; set; }
+        public double TaskbarMaxCoverSize { get; set; }
+        public double TaskbarMaxCoverGap { get; set; }
+        public double TaskbarMaxWindowWidth { get; set; }
+        public double TaskbarMinXOffset { get; set; }
+        public double TaskbarMaxXOffset { get; set; }
+        public double TaskbarMinYOffset { get; set; }
+        public double TaskbarMaxYOffset { get; set; }
+        public string? TaskbarEmbeddingStatus { get; set; }
 
         public LyricsDisplayMode LyricsDisplayMode { get; set; }
 

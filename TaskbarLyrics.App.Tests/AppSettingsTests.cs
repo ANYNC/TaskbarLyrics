@@ -38,6 +38,12 @@ public sealed class AppSettingsTests
     }
 
     [Fact]
+    public void NewSettingsUseTaskbarEmbeddingByDefault()
+    {
+        Assert.False(new AppSettings().UseFloatingWindow);
+    }
+
+    [Fact]
     public void NewSettingsUseLeftLyricsTextAlignmentByDefault()
     {
         Assert.Equal(LyricsTextAlignment.Left, new AppSettings().LyricsTextAlignment);
@@ -86,23 +92,6 @@ public sealed class AppSettingsTests
         settings.NormalizeDisplaySelection();
 
         Assert.Equal(LyricsDisplayMode.All, settings.LyricsDisplayMode);
-    }
-
-    [Fact]
-    public void NormalizeTaskbarEmbeddingClampsValues()
-    {
-        var settings = new AppSettings
-        {
-            EmbeddedTaskbarWidth = 5000,
-            EmbeddedTaskbarHorizontalOffset = -5000,
-            EmbeddedTaskbarVerticalOffset = 5000
-        };
-
-        settings.NormalizeTaskbarEmbedding();
-
-        Assert.Equal(AppSettings.MaximumWindowWidth, settings.EmbeddedTaskbarWidth);
-        Assert.Equal(AppSettings.MinimumWindowOffset, settings.EmbeddedTaskbarHorizontalOffset);
-        Assert.Equal(AppSettings.MaximumWindowOffset, settings.EmbeddedTaskbarVerticalOffset);
     }
 
     [Fact]
@@ -155,5 +144,28 @@ public sealed class AppSettingsTests
     public void ClampEffectiveWindowWidthClampsScalePercentToBounds()
     {
         Assert.Equal(1260, AppSettings.ClampEffectiveWindowWidth(420, 500, 1920));
+    }
+
+    [Fact]
+    public void CalculateEffectiveWindowWidthUsesSharedBaseWidthAndScale()
+    {
+        Assert.Equal(630, AppSettings.CalculateEffectiveWindowWidth(420, 150));
+    }
+
+    [Fact]
+    public void NormalizeWindowLayoutClampsSharedLayoutValues()
+    {
+        var settings = new AppSettings
+        {
+            WindowWidth = 5000,
+            XOffset = -5000,
+            YOffset = 5000
+        };
+
+        settings.NormalizeWindowLayout();
+
+        Assert.Equal(AppSettings.MaximumWindowWidth, settings.WindowWidth);
+        Assert.Equal(AppSettings.MinimumWindowOffset, settings.XOffset);
+        Assert.Equal(AppSettings.MaximumWindowOffset, settings.YOffset);
     }
 }
