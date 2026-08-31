@@ -135,7 +135,6 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
     private IntPtr _parentHandle;
     private IntPtr _taskListHandle;
     private EmbeddedTaskbarNativeBounds _originalTaskListBounds;
-    private EmbeddedTaskbarNativeBounds? _lastWindowBounds;
     private EmbeddedTaskbarNativeBounds? _lastTaskListBounds;
     private EmbeddedTaskbarDisplayTarget? _attachedDisplayTarget;
     private long _originalStyle;
@@ -215,7 +214,6 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
             }
 
             _parentHandle = parent;
-            _lastWindowBounds = null;
         }
 
         _attachedDisplayTarget = EmbeddedTaskbarDisplayTarget.Create(targetDisplay);
@@ -246,7 +244,6 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
         _parentHandle = IntPtr.Zero;
         _taskListHandle = IntPtr.Zero;
         _originalTaskListBounds = default;
-        _lastWindowBounds = null;
         _lastTaskListBounds = null;
         _attachedDisplayTarget = null;
         _hasOriginalStyles = false;
@@ -264,7 +261,7 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
         _disposed = true;
     }
 
-    private bool Position(
+    private static bool Position(
         IntPtr hwnd,
         IntPtr parent,
         Window window,
@@ -315,20 +312,6 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
             taskbarHeight,
             height);
 
-        // WPF keeps committing Window.Left/Top to the HWND on layout passes; as a child
-        // window those DIP values are parent-client coordinates. Keep them aligned with
-        // the embedded target so WPF cannot push stale floating-mode screen coordinates
-        // back into the taskbar client space.
-        if (window.Left != clientLeft)
-        {
-            window.Left = clientLeft;
-        }
-
-        if (window.Top != clientTop)
-        {
-            window.Top = clientTop;
-        }
-
         var bounds = EmbeddedTaskbarLayoutCalculator.ToTaskbarClientBounds(
             clientLeft,
             clientTop,
@@ -336,12 +319,21 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
             height,
             pixelsPerDip);
 
-        if (!EmbeddedTaskbarLayoutCalculator.NeedsNativeBoundsUpdate(_lastWindowBounds, bounds))
+        // WPF Window.Left/Top enforce top-level screen semantics: after any native
+        // move WPF re-syncs them from the child's screen rectangle, and writing them
+        // back applies the mixed-in screen coordinates as parent-client coordinates.
+        // That feedback breaks every taskbar whose screen origin is not (0, 0), so
+        // the embedded position is owned exclusively by the native SetWindowPos below
+        // and is verified against the live window rectangle: external moves (WPF
+        // size applies, DPI changes) are corrected on the next anchor pass.
+        if (!EmbeddedTaskbarLayoutCalculator.NeedsNativeBoundsUpdate(
+                GetCurrentWindowBounds(hwnd, parentRect),
+                bounds))
         {
             return true;
         }
 
-        var positioned = TaskbarNativeMethods.SetWindowPos(
+        return TaskbarNativeMethods.SetWindowPos(
             hwnd,
             IntPtr.Zero,
             bounds.Left,
@@ -349,12 +341,22 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
             bounds.Width,
             bounds.Height,
             TaskbarNativeMethods.SWP_NOZORDER | TaskbarNativeMethods.SWP_NOACTIVATE);
-        if (positioned)
+    }
+
+    private static EmbeddedTaskbarNativeBounds? GetCurrentWindowBounds(
+        IntPtr hwnd,
+        TaskbarNativeMethods.NativeRect parentRect)
+    {
+        if (!GetWindowRect(hwnd, out var windowRect))
         {
-            _lastWindowBounds = bounds;
+            return null;
         }
 
-        return positioned;
+        return new EmbeddedTaskbarNativeBounds(
+            windowRect.Left - parentRect.Left,
+            windowRect.Top - parentRect.Top,
+            windowRect.Right - windowRect.Left,
+            windowRect.Bottom - windowRect.Top);
     }
 
     private void SqueezeTaskList(IntPtr parent, AppSettings settings)

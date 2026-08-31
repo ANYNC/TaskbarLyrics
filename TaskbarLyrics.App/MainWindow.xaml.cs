@@ -1758,6 +1758,13 @@ public partial class MainWindow : Window, IDisposable
         {
             Dispatcher.BeginInvoke(new Action(() =>
             {
+                // Taskbar messages can arrive while the window is closing; the deferred
+                // callback must not show or re-anchor an already closed window.
+                if (Volatile.Read(ref _isDisposed) != 0)
+                {
+                    return;
+                }
+
                 if (TaskbarPlacementService.IsShowWindowMessage(msg))
                 {
                     EnsureVisibleIfExpected();
