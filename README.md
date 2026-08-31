@@ -69,6 +69,15 @@ TaskbarLyrics 是一款 Windows 任务栏歌词工具。播放音乐时，它会
 - 下载独立版压缩包时，无需额外安装 .NET 8 Runtime
 - 如果设置页或歌词窗口为空白，请安装 Microsoft Edge WebView2 Runtime
 
+## 开发启动
+
+从源码启动项目需要 Windows x64、.NET 8 SDK 和 Windows 11 SDK 10.0.22621。
+
+```powershell
+dotnet restore
+dotnet run --project TaskbarLyrics.App
+```
+
 ## 快速使用
 
 1. 启动 TaskbarLyrics。
@@ -172,22 +181,9 @@ TaskbarLyrics 会同时从 QQ 音乐、酷狗、网易云和 LRCLIB 查找歌词
 - [频谱调节参数说明](docs/频谱调节参数说明.md)
 
 <details>
-<summary><strong>从源码运行、验证与自行发布</strong></summary>
+<summary><strong>构建、验证与自行发布</strong></summary>
 
-从源码运行需要 Windows x64、.NET 8 SDK 和 Windows 11 SDK 10.0.22621。
-
-```powershell
-dotnet restore
-dotnet run --project TaskbarLyrics.App
-```
-
-常用开发重启脚本：
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts/restart-app.ps1
-```
-
-该命令保持前台运行，适合交互式调试。自动化交付可先停止本地实例以释放构建文件锁，再在验证完成后后台启动：
+自动化交付可先停止本地实例以释放构建文件锁，再在验证完成后后台启动：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/restart-app.ps1 -StopOnly

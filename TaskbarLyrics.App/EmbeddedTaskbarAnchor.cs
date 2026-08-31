@@ -1,10 +1,21 @@
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
+using TaskbarLyrics.Core.Utilities;
 
 namespace TaskbarLyrics.App;
 
 internal readonly record struct EmbeddedTaskbarNativeBounds(int Left, int Top, int Width, int Height);
+
+internal readonly record struct EmbeddedTaskbarDisplayTarget(bool UsesPrimaryTaskbar, string? Id)
+{
+    public static EmbeddedTaskbarDisplayTarget Create(DisplayMonitor? targetDisplay) =>
+        new(targetDisplay is null, targetDisplay?.Id);
+
+    public bool Matches(DisplayMonitor? targetDisplay) =>
+        UsesPrimaryTaskbar == (targetDisplay is null) &&
+        string.Equals(Id, targetDisplay?.Id, StringComparison.OrdinalIgnoreCase);
+}
 
 internal enum EmbeddedTaskbarAttachResult
 {
@@ -28,6 +39,14 @@ internal static class EmbeddedTaskbarEmbeddingPolicy
         bool sameTargetDisplay,
         bool parentIsValid) =>
         sameWindow && sameTargetDisplay && parentIsValid;
+
+    // A re-parent of an established embedding to another taskbar cannot revive the
+    // invalidated DWM composition surface of the same HWND (verified with native
+    // probes), so the host must replace the window instead of re-parenting in place.
+    public static bool RequiresWindowReplacement(
+        EmbeddedTaskbarDisplayTarget? attachedTarget,
+        DisplayMonitor? targetDisplay) =>
+        attachedTarget is { } attached && !attached.Matches(targetDisplay);
 }
 
 internal static class EmbeddedTaskbarLayoutCalculator
@@ -124,8 +143,12 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
     private bool _hasOriginalStyles;
     private bool _taskListSqueezed;
     private bool _disposed;
+    private string? _lastAttachDiagnostic;
 
     public bool IsAttached => _windowHandle != IntPtr.Zero && _parentHandle != IntPtr.Zero;
+
+    public bool IsAttachedToDifferentTarget(DisplayMonitor? targetDisplay) =>
+        EmbeddedTaskbarEmbeddingPolicy.RequiresWindowReplacement(_attachedDisplayTarget, targetDisplay);
 
     public EmbeddedTaskbarAttachResult Attach(Window window, AppSettings settings, DisplayMonitor? targetDisplay)
     {
@@ -137,6 +160,9 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
         var hwnd = new WindowInteropHelper(window).Handle;
         if (hwnd == IntPtr.Zero)
         {
+            ReportAttachOutcome(
+                EmbeddedTaskbarAttachResult.Unavailable,
+                $"NoWindowHandle Target={DescribeTarget(targetDisplay)}");
             return EmbeddedTaskbarAttachResult.Unavailable;
         }
 
@@ -149,10 +175,12 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
             Detach();
         }
 
-        var taskbar = FindTaskbar(targetDisplay);
+        var taskbar = FindTaskbar(targetDisplay, out var taskbarDiagnostic);
         if (taskbar == IntPtr.Zero)
         {
-            return KeepExistingAttachmentIfValid(window, hwnd, settings, targetDisplay);
+            var keptAttachment = KeepExistingAttachmentIfValid(window, hwnd, settings, targetDisplay);
+            ReportAttachOutcome(keptAttachment, $"NoTaskbarForTarget {taskbarDiagnostic}");
+            return keptAttachment;
         }
 
         if (_windowHandle != hwnd || _taskbarHandle != taskbar)
@@ -167,7 +195,9 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
         var parent = isWindows11 ? taskbar : FindTaskbarContainer(taskbar);
         if (parent == IntPtr.Zero)
         {
-            return KeepExistingAttachmentIfValid(window, hwnd, settings, targetDisplay);
+            var keptAttachment = KeepExistingAttachmentIfValid(window, hwnd, settings, targetDisplay);
+            ReportAttachOutcome(keptAttachment, "NoTaskbarContainer");
+            return keptAttachment;
         }
 
         if (_parentHandle != parent || GetAncestor(hwnd, GetAncestorParent) != parent)
@@ -180,6 +210,7 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
             ApplyChildWindowStyle(hwnd);
             if (GetAncestor(hwnd, GetAncestorParent) != parent)
             {
+                ReportAttachOutcome(EmbeddedTaskbarAttachResult.Unavailable, "ReparentRejected");
                 return EmbeddedTaskbarAttachResult.Unavailable;
             }
 
@@ -194,8 +225,10 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
             SqueezeTaskList(parent, settings);
         }
 
-        return EmbeddedTaskbarEmbeddingPolicy.FromPositionResult(
+        var attachResult = EmbeddedTaskbarEmbeddingPolicy.FromPositionResult(
             Position(hwnd, parent, window, settings, targetDisplay));
+        ReportAttachOutcome(attachResult, $"Positioned Target={DescribeTarget(targetDisplay)}");
+        return attachResult;
     }
 
     public void Detach()
@@ -447,8 +480,7 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
     private bool HasAttachmentForDifferentTarget(IntPtr hwnd, DisplayMonitor? targetDisplay) =>
         _windowHandle == hwnd &&
         _parentHandle != IntPtr.Zero &&
-        _attachedDisplayTarget is { } attachedTarget &&
-        !attachedTarget.Matches(targetDisplay);
+        EmbeddedTaskbarEmbeddingPolicy.RequiresWindowReplacement(_attachedDisplayTarget, targetDisplay);
 
     private bool IsSameTargetDisplay(DisplayMonitor? targetDisplay) =>
         _attachedDisplayTarget is { } attachedTarget && attachedTarget.Matches(targetDisplay);
@@ -457,15 +489,20 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
         Environment.OSVersion.Version.Major == 10 &&
         Environment.OSVersion.Version.Build >= 22000;
 
-    private readonly record struct EmbeddedTaskbarDisplayTarget(bool UsesPrimaryTaskbar, string? Id)
+    private void ReportAttachOutcome(EmbeddedTaskbarAttachResult result, string reason)
     {
-        public static EmbeddedTaskbarDisplayTarget Create(DisplayMonitor? targetDisplay) =>
-            new(targetDisplay is null, targetDisplay?.Id);
+        var summary = $"{result} Reason={reason}";
+        if (string.Equals(summary, _lastAttachDiagnostic, StringComparison.Ordinal))
+        {
+            return;
+        }
 
-        public bool Matches(DisplayMonitor? targetDisplay) =>
-            UsesPrimaryTaskbar == (targetDisplay is null) &&
-            string.Equals(Id, targetDisplay?.Id, StringComparison.OrdinalIgnoreCase);
+        _lastAttachDiagnostic = summary;
+        Log.Diagnostic("EMBED", $"AttachResult={summary}");
     }
+
+    private static string DescribeTarget(DisplayMonitor? targetDisplay) =>
+        targetDisplay?.Id ?? "primary";
 
     private static void ApplyChildWindowStyle(IntPtr hwnd)
     {
@@ -497,11 +534,12 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
         _ = TaskbarNativeMethods.SetWindowLongPtr(hwnd, GwlExStyle, new IntPtr(extendedStyle & ~WsExNoActivate));
     }
 
-    private static IntPtr FindTaskbar(DisplayMonitor? targetDisplay)
+    private static IntPtr FindTaskbar(DisplayMonitor? targetDisplay, out string diagnostic)
     {
         var primaryTaskbar = FindWindow("Shell_TrayWnd", null);
         if (targetDisplay is null)
         {
+            diagnostic = $"Target=primary Primary={(primaryTaskbar != IntPtr.Zero)}";
             return primaryTaskbar;
         }
 
@@ -511,6 +549,7 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
             taskbars.Add(primaryTaskbar);
         }
 
+        var secondaryCount = 0;
         var secondaryTaskbar = IntPtr.Zero;
         while (true)
         {
@@ -524,6 +563,7 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
                 break;
             }
 
+            secondaryCount++;
             taskbars.Add(secondaryTaskbar);
         }
 
@@ -532,6 +572,11 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
             .OrderByDescending(candidate => candidate.Score.IntersectionArea)
             .ThenBy(candidate => candidate.Score.CenterDistanceSquared)
             .FirstOrDefault();
+        var bounds = targetDisplay.Bounds;
+        diagnostic =
+            $"Target={bounds.Left},{bounds.Top},{bounds.Right},{bounds.Bottom} " +
+            $"Primary={(primaryTaskbar != IntPtr.Zero)} Secondary={secondaryCount} " +
+            $"BestIntersection={match?.Score.IntersectionArea ?? 0}";
         return match is not null && match.Score.IntersectionArea > 0
             ? match.Handle
             : IntPtr.Zero;

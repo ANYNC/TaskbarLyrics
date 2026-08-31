@@ -1649,6 +1649,15 @@ public partial class MainWindow : Window, IDisposable
         var wasEmbedded = _embeddedTaskbarAnchor.IsAttached;
         if (!_currentSettings.UseFloatingWindow)
         {
+            if (_embeddedTaskbarAnchor.IsAttachedToDifferentTarget(_displayMonitor))
+            {
+                // Re-parenting the same HWND to another display's taskbar cannot
+                // revive the invalidated composition surface; see the research note
+                // in DetachAndRequestRecreation.
+                DetachAndRequestRecreation();
+                return;
+            }
+
             var attachResult = _embeddedTaskbarAnchor.Attach(this, _currentSettings, _displayMonitor);
             if (EmbeddedTaskbarEmbeddingPolicy.ShouldKeepEmbedded(attachResult))
             {
@@ -1658,17 +1667,23 @@ public partial class MainWindow : Window, IDisposable
 
         if (wasEmbedded)
         {
-            // Leaving an established cross-process embedding permanently invalidates
-            // this HWND's layered composition surface: the window keeps its content
-            // but DWM never composites it as a top-level window again (verified with
-            // native probes; no style, visibility, or reparent sequence revives it).
-            // Delegate to the host to replace this window with a fresh one.
-            _embeddedTaskbarAnchor.Detach();
-            RecreateWindowRequested?.Invoke(this, EventArgs.Empty);
+            DetachAndRequestRecreation();
             return;
         }
 
         TaskbarPlacementService.Anchor(this, _currentSettings, _displayMonitor);
+    }
+
+    private void DetachAndRequestRecreation()
+    {
+        // Leaving an established cross-process embedding permanently invalidates
+        // this HWND's layered composition surface: the window keeps its content
+        // but DWM never composites it as a top-level window again (verified with
+        // native probes; no style, visibility, or reparent sequence revives it).
+        // Delegate to the host to replace this window with a fresh one.
+        _embeddedTaskbarAnchor.Detach();
+        Log.Diagnostic("EMBED", "Established embedding left; requesting lyrics window recreation.");
+        RecreateWindowRequested?.Invoke(this, EventArgs.Empty);
     }
 
     protected override void OnDpiChanged(DpiScale oldDpi, DpiScale newDpi)
