@@ -60,7 +60,8 @@
     .segmented button + button { border-left: 1px solid var(--input); }
     .segmented button:hover { color: var(--foreground); }
     .segmented button.active { background: var(--secondary); color: var(--foreground); }
-    .toolbar-note { flex: 1 1 220px; min-width: 0; color: var(--subtle); font-size: 11px; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .toolbar-note { flex: 1 1 220px; min-width: 0; display: flex; justify-content: flex-end; color: var(--subtle); font-size: 11px; }
+    .toolbar-note-text { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .toolbar .right { margin-left: auto; display: flex; gap: 8px; }
 
     .preview-wrap { padding: 12px 14px 4px; }
@@ -86,13 +87,11 @@
     .row { display: grid; grid-template-columns: 14px 124px 1fr 68px 22px; align-items: center; gap: 8px; padding: 6px 0; }
     .row .mod { width: 6px; height: 6px; border-radius: 50%; background: var(--warning); opacity: 0; transition: opacity var(--duration-fast) ease; }
     .row.modded .mod { opacity: 1; }
-    .row .lbl { min-width: 0; display: inline-flex; align-items: center; gap: 3px; font-size: 13px; color: var(--foreground); white-space: nowrap; }
+    .row .lbl { min-width: 0; display: inline-flex; align-items: center; font-size: 13px; color: var(--foreground); white-space: nowrap; }
     .row .label-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-    .info-tip { flex: 0 0 12px; display: inline-grid; width: 12px; height: 12px; place-items: center; color: var(--subtle); cursor: help; opacity: .72; transition: color var(--duration-fast) ease, opacity var(--duration-fast) ease; }
-    .info-tip:hover, .info-tip:focus-visible { color: var(--foreground); opacity: 1; }
-    .info-tip:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 2px; }
-    .info-tip svg { width: 11px; height: 11px; fill: none; stroke: currentColor; stroke-width: 1.6; }
-    .parameter-tooltip { position: fixed; z-index: 1100; width: max-content; max-width: min(360px, calc(100vw - 24px)); padding: 9px 11px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--popover); color: var(--popover-foreground); font-size: 11px; font-weight: 400; line-height: 1.7; white-space: pre-line; overflow-wrap: anywhere; box-shadow: var(--shadow); pointer-events: none; opacity: 0; transform: translateY(-4px); visibility: hidden; transition: opacity var(--duration-fast) ease, transform var(--duration-fast) ease, visibility 0s linear var(--duration-fast); }
+    .tooltip-trigger { cursor: help; }
+    .tooltip-trigger:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 2px; }
+    .parameter-tooltip { position: fixed; z-index: 1100; width: max-content; max-width: min(360px, calc(100vw - 24px)); padding: 9px 11px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--popover); color: var(--popover-foreground); font-size: 11px; font-weight: 400; line-height: 1.7; white-space: pre-line; overflow-wrap: anywhere; box-shadow: var(--shadow); pointer-events: none; opacity: 0; transform: translateY(-4px); visibility: hidden; transition: opacity var(--duration-fast) ease, transform var(--duration-fast) ease, visibility 0s linear var(--duration-fast); }
     .parameter-tooltip[data-state="open"] { opacity: 1; transform: translateY(0); visibility: visible; transition: opacity var(--duration-fast) ease, transform var(--duration-fast) ease, visibility 0s; }
     @media (prefers-reduced-motion: reduce) { .parameter-tooltip { transition: none; } }
     .slider-cell { position: relative; height: 18px; display: flex; align-items: center; }
@@ -173,7 +172,7 @@
         <button type="button" data-preset="dynamic">动感</button>
         <button type="button" data-preset="minimal">极简</button>
       </div>
-      <span class="toolbar-note" title="频谱效果持续优化中，欢迎向作者反馈更合适的参数方案。">频谱效果持续优化中，欢迎向作者反馈更合适的参数方案。</span>
+      <span class="toolbar-note"><span class="toolbar-note-text tooltip-trigger" tabindex="0" data-tip="频谱效果持续优化中，欢迎向作者反馈更合适的参数方案。">频谱效果持续优化中，欢迎向作者反馈更合适的参数方案。</span></span>
       <div class="right">
         <button class="btn ghost" type="button" id="previewPauseBtn" aria-pressed="false"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3v10M11 3v10"/></svg><span>暂停预览</span></button>
         <button class="btn ghost" type="button" id="compareBtn" title="仅对比前端升降速度和柱子外观">按住对比默认外观</button>
@@ -294,12 +293,10 @@
         const row = document.createElement("div"); row.className = `row${modded ? " modded" : ""}`;
         row.innerHTML = `<span class="mod" title="已修改"></span>`;
         const label = document.createElement("span"); label.className = "lbl";
-        const labelText = document.createElement("span"); labelText.className = "label-text"; labelText.textContent = d.label;
-        const tip = document.createElement("span"); tip.className = "info-tip"; tip.tabIndex = 0;
-        tip.dataset.tip = `${d.desc}\n范围 ${d.min}–${d.max} · 默认 ${defaultsMap[d.key]}`;
-        tip.setAttribute("aria-label", `${d.label}说明`);
-        tip.innerHTML = `<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.5"/><path d="M8 7.5v3"/><circle cx="8" cy="5.4" r=".7" fill="currentColor" stroke="none"/></svg>`;
-        label.append(labelText, tip); row.appendChild(label);
+        const labelText = document.createElement("span"); labelText.className = "label-text tooltip-trigger"; labelText.textContent = d.label;
+        labelText.tabIndex = 0;
+        labelText.dataset.tip = `${d.desc}\n范围 ${d.min}–${d.max} · 默认 ${defaultsMap[d.key]}`;
+        label.appendChild(labelText); row.appendChild(label);
         const sc = document.createElement("div"); sc.className = "slider-cell";
         const dp = d.scale === "frequency" ? frequencyRatio(defaultsMap[d.key]) * 100 : (defaultsMap[d.key] - d.min) / (d.max - d.min) * 100;
         sc.innerHTML = `<span class="default-tick" style="left:${dp}%" title="默认值"></span>`;
@@ -310,7 +307,7 @@
         const refresh = () => { input.value = sliderPosition(d); val.textContent = fmtValue(d); syncProgress(input); const m = Math.abs(d.value - defaultsMap[d.key]) > 1e-9; row.classList.toggle("modded", m); recount(); };
         input.addEventListener("input", () => { const v = constrainParameterValue(d, valueFromSlider(d, input.value)); d.value = v; refresh(); commitTuningChange({ type: "update", key: d.key, value: v }); });
         val.addEventListener("click", () => startEdit(val, input, d, refresh));
-        reset.addEventListener("click", () => { d.value = constrainParameterValue(d, defaultsMap[d.key]); refresh(); commitTuningChange({ type: "update", key: d.key, value: d.value }); showToast(`${d.label} 已恢复默认`); });
+        reset.addEventListener("click", () => restoreParameterDefault(d));
         row.appendChild(val); row.appendChild(reset);
         wrap.appendChild(row); syncProgress(input);
         refs[d.key] = { input, val, row, refresh, def: d };
@@ -321,6 +318,25 @@
       const groups = {};
       state.forEach(d => { if (Math.abs(d.value - defaultsMap[d.key]) > 1e-9) groups[d.group] = (groups[d.group] || 0) + 1; });
       document.querySelectorAll(".group-head").forEach(gh => { const name = gh.querySelector(".group-title").textContent; const c = gh.querySelector(".group-count"); const n = groups[name] || 0; c.textContent = `已改 ${n} 项`; c.classList.toggle("show", n > 0); });
+    }
+    function restoreParameterDefault(d) {
+      const otherKey = d.key === "MinFrequency" ? "MaxFrequency" : d.key === "MaxFrequency" ? "MinFrequency" : null;
+      const other = otherKey ? state.find(item => item.key === otherKey) : null;
+      d.value = defaultsMap[d.key];
+      const conflicts = other && (d.key === "MinFrequency"
+        ? other.value < d.value + FREQUENCY_MIN_SPAN
+        : other.value > d.value - FREQUENCY_MIN_SPAN);
+      if (conflicts) {
+        other.value = defaultsMap[otherKey];
+        refs[otherKey].refresh();
+      }
+      refs[d.key].refresh();
+      commitTuningChange(conflicts
+        ? { type: "updateAll", values: { [d.key]: d.value, [otherKey]: other.value } }
+        : { type: "update", key: d.key, value: d.value });
+      showToast(conflicts
+        ? `${d.label}与${other.label}已恢复默认，以保持频段有效`
+        : `${d.label} 已恢复默认`);
     }
     const parameterTooltip = $("#parameterTooltip");
     let tooltipTarget = null;
@@ -347,11 +363,11 @@
       parameterTooltip.style.left = `${left}px`;
       parameterTooltip.style.top = `${top}px`;
     }
-    document.addEventListener("pointerover", event => showParameterTooltip(event.target.closest?.(".info-tip")));
+    document.addEventListener("pointerover", event => showParameterTooltip(event.target.closest?.(".tooltip-trigger")));
     document.addEventListener("pointerout", event => {
-      if (tooltipTarget && event.relatedTarget?.closest?.(".info-tip") !== tooltipTarget) hideParameterTooltip();
+      if (tooltipTarget && event.relatedTarget?.closest?.(".tooltip-trigger") !== tooltipTarget) hideParameterTooltip();
     });
-    document.addEventListener("focusin", event => showParameterTooltip(event.target.closest?.(".info-tip")));
+    document.addEventListener("focusin", event => showParameterTooltip(event.target.closest?.(".tooltip-trigger")));
     document.addEventListener("focusout", hideParameterTooltip);
     document.addEventListener("keydown", event => { if (event.key === "Escape") hideParameterTooltip(); });
     window.addEventListener("resize", hideParameterTooltip);
