@@ -7,5 +7,6 @@ internal interface IMediaPlaybackController
 
 internal interface IPlayerRecognitionController
 {
-    void SetRecognitionOrder(IReadOnlyList<string>? order, IReadOnlyCollection<string>? enabledSources = null);
+    void SetRecognitionOrder(IReadOnlyList<string>? order, IReadOnlyCollection<string>? enabledSources = null,
+        IReadOnlyCollection<string>? customSources = null);
 }

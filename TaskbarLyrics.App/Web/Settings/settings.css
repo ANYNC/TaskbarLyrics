@@ -255,10 +255,12 @@
 
     .source-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr));
       gap: 10px;
-      max-height: 250px;
-      overflow: auto;
+      height: 250px;
+      align-content: start;
+      overflow-y: auto;
+      overflow-x: hidden;
       padding-right: 2px;
     }
     .source-card {
@@ -277,13 +279,17 @@
     .source-logo { width: 36px; height: 36px; display: grid; place-items: center; border: 1px solid var(--input); border-radius: 10px; background: var(--secondary); color: var(--foreground); font-size: 13px; font-weight: 700; }
     .source-logo img { width: 24px; height: 24px; display: block; object-fit: contain; border-radius: 5px; }
     .source-info { min-width: 0; display: grid; gap: 3px; }
-    .source-info strong { overflow: hidden; color: var(--foreground); font-size: 12px; font-weight: 600; white-space: nowrap; text-overflow: ellipsis; }
-    .source-info small { overflow: hidden; color: var(--subtle); font-size: 11px; white-space: nowrap; text-overflow: ellipsis; }
+    .source-info strong { color: var(--foreground); font-size: 12px; font-weight: 600; overflow-wrap: anywhere; }
+    .source-info small { color: var(--subtle); font-size: 11px; overflow-wrap: anywhere; }
     .source-settings-button, .icon-button { width: 32px; height: 32px; display: grid; place-items: center; border: 0; border-radius: 7px; background: transparent; color: var(--muted-foreground); cursor: pointer; transition: color .14s ease, background .14s ease; }
     .source-settings-button:hover, .icon-button:hover { color: var(--foreground); background: var(--surface-hover); }
     .source-settings-button:focus-visible, .icon-button:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
     .source-settings-button svg, .icon-button svg { width: 17px; height: 17px; }
     .source-count { color: var(--subtle); font-size: 11px; white-space: nowrap; }
+    .source-panel-actions { display: flex; align-items: center; gap: 10px; }
+    .source-panel-actions .btn { white-space: nowrap; }
+    .source-logo.custom-player-icon { font-size: 22px; }
+    .source-logo svg { width: 22px; height: 22px; }
 
     .priority-item { min-height: 42px; display: grid; grid-template-columns: 28px 24px 1fr; align-items: center; gap: 8px; padding: 5px 9px; border: 1px solid var(--border); border-radius: 8px; background: var(--background); transition: opacity .12s ease, border-color .12s ease, transform .12s ease; }
     .priority-item.dragging { opacity: .36; }
@@ -659,6 +665,26 @@
     .dialog-body h2 { margin: 0 0 7px; font-size: 16px; }
     .dialog-body p { margin: 0; color: var(--muted-foreground); font-size: 11px; line-height: 1.65; }
     .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--border); }
+    .add-player-dialog { width: min(460px, calc(100vw - 24px)); max-height: calc(100vh - 24px); }
+    .add-player-dialog[open] { display: flex; flex-direction: column; }
+    .add-player-dialog .dialog-body { min-height: 0; overflow-y: auto; }
+    .add-player-dialog .dialog-actions { flex: none; }
+    .player-discovery-head { display: flex; justify-content: space-between; align-items: center; margin: 18px 0 8px; font-size: 12px; }
+    .available-player-sessions { display: grid; gap: 7px; max-height: 220px; overflow: auto; }
+    .available-player-session { width: 100%; display: grid; gap: 3px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--background); color: var(--foreground); text-align: left; cursor: pointer; }
+    .available-player-session:hover, .available-player-session[aria-pressed="true"] { border-color: var(--ring); background: var(--accent); }
+    .available-player-session:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+    .available-player-session strong { font-size: 12px; }
+    .available-player-session small, .selected-player-session small { overflow-wrap: anywhere; color: var(--muted-foreground); font-size: 11px; }
+    .player-discovery-status { min-height: 18px; margin-top: 9px !important; }
+    .selected-player-session { display: grid; gap: 6px; margin-top: 12px; font-size: 12px; }
+    .selected-player-session[hidden] { display: none; }
+    .custom-player-icon-picker { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
+    .custom-player-icon-preview { width: 40px; height: 40px; flex: none; display: grid; place-items: center; border: 1px solid var(--input); border-radius: 10px; background: var(--secondary); font-size: 22px; }
+    .custom-player-icon-preview img { width: 30px; height: 30px; object-fit: contain; border-radius: 5px; }
+    #customPlayerIcon { min-width: 0; max-width: 100%; font-size: 11px; }
+    #customPlayerIconStatus { overflow-wrap: anywhere; }
+    #removePlayerSourceButton[hidden] { display: none; }
     @keyframes player-drawer-in { from { opacity: 0; transform: translateX(28px); } to { opacity: 1; transform: none; } }
     @keyframes player-drawer-out { to { opacity: 0; transform: translateX(20px); } }
     .player-settings-dialog { width: min(420px, calc(100vw - 24px)); height: calc(100vh - 24px); max-height: none; margin: 12px 12px 12px auto; overflow: hidden; animation: player-drawer-in 220ms cubic-bezier(.16,1,.3,1); }
@@ -666,7 +692,7 @@
     .player-drawer-header { min-height: 72px; display: grid; grid-template-columns: 36px minmax(0, 1fr) 32px; align-items: center; gap: 11px; padding: 14px 16px; border-bottom: 1px solid var(--border); }
     .player-drawer-heading { min-width: 0; display: grid; gap: 3px; }
     .player-drawer-heading h2 { margin: 0; overflow: hidden; font-size: 15px; white-space: nowrap; text-overflow: ellipsis; }
-    .player-drawer-heading p { margin: 0; color: var(--muted-foreground); font-size: 11px; }
+    .player-drawer-heading p { margin: 0; overflow: hidden; color: var(--muted-foreground); font-size: 11px; white-space: nowrap; text-overflow: ellipsis; }
     .player-drawer-body { height: calc(100% - 72px); overflow-y: auto; padding: 16px; }
     .player-setting-section { overflow: hidden; margin-bottom: 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--background); }
     .player-setting-section .setting-row { padding-inline: 14px; }

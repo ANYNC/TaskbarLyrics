@@ -17,6 +17,7 @@ namespace TaskbarLyrics.App;
 
 public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
 {
+    private static readonly string[] BuiltInPlayerSources = ["QQMusic", "Netease", "Kugou", "Spotify", "Browser"];
     private readonly AppSettings _settings;
     private readonly TrackLyricOffsetStore _trackLyricOffsetStore;
     private readonly Func<Task<CurrentTrackLyricsContext?>> _getCurrentTrackLyricsContext;
@@ -40,6 +41,9 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
     private CancellationTokenSource? _lyricDiagnosticsCancellation;
     private CancellationTokenSource? _lyricDiagnosticsApplyCancellation;
     private LyricDiagnosticRunner? _lyricDiagnosticRunner;
+    private CancellationTokenSource? _playerSessionDiscoveryCancellation;
+    private Dictionary<string, AvailablePlayerSession> _discoveredPlayerSessions =
+        new Dictionary<string, AvailablePlayerSession>(StringComparer.OrdinalIgnoreCase);
 
     internal SettingsWindow(
         AppSettings settings,
@@ -114,6 +118,9 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
     private void SettingsWindow_Closed(object? sender, EventArgs e)
     {
         _isWebReady = false;
+        var playerDiscoveryCancellation = Interlocked.Exchange(ref _playerSessionDiscoveryCancellation, null);
+        playerDiscoveryCancellation?.Cancel();
+        playerDiscoveryCancellation?.Dispose();
         if (_hasPendingPreviewChanges)
         {
             SaveSettings();
@@ -245,6 +252,32 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             case "reorderSources":
                 ApplySourceOrder(message.Value);
                 await SaveSettingsAndNotifyWebAsync();
+                break;
+            case "discoverPlayerSessions":
+                await DiscoverPlayerSessionsAsync();
+                break;
+            case "addPlayerSource":
+                if (SettingsWebMessageRouter.TryParseCustomPlayerSourceAddRequest(message.Value, out var addRequest) &&
+                    _discoveredPlayerSessions.TryGetValue(addRequest.SourceAppUserModelId, out var discovered) &&
+                    !discovered.IsBuiltIn &&
+                    _settings.AddCustomPlayerSource(addRequest.SourceAppUserModelId, addRequest.DisplayName, addRequest.IconDataUrl))
+                {
+                    await SaveSettingsAndNotifyWebAsync();
+                    await PushSettingsToWebAsync();
+                }
+                else if (_isWebReady && SettingsWebView.CoreWebView2 is not null)
+                {
+                    await SettingsWebView.ExecuteScriptAsync(WebViewMessageScriptFactory.Dispatch(
+                        "settingsApp", "playerSourceActionResult", new { message = "无法添加播放器，请刷新媒体会话后重试。" }));
+                }
+                break;
+            case "removePlayerSource":
+                if (message.Value is { ValueKind: JsonValueKind.String } removePayload &&
+                    _settings.RemoveCustomPlayerSource(removePayload.GetString()))
+                {
+                    await SaveSettingsAndNotifyWebAsync();
+                    await PushSettingsToWebAsync();
+                }
                 break;
             case "resetDefaults":
                 var defaultSettings = new AppSettings();
@@ -385,6 +418,36 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 settings = payload,
                 fonts = FontCatalogService.GetOptions()
             }));
+    }
+
+    private async Task DiscoverPlayerSessionsAsync()
+    {
+        var cancellationToken = (_playerSessionDiscoveryCancellation ??= new CancellationTokenSource()).Token;
+        try
+        {
+            var sessions = await PlayerMediaSessionDiscovery.DiscoverAsync(
+                cancellationToken);
+            _discoveredPlayerSessions = sessions.ToDictionary(
+                session => session.SourceAppUserModelId,
+                StringComparer.OrdinalIgnoreCase);
+            if (_isWebReady && SettingsWebView.CoreWebView2 is not null)
+            {
+                await SettingsWebView.ExecuteScriptAsync(WebViewMessageScriptFactory.Dispatch(
+                    "settingsApp", "playerSessions", new { status = "ready", sessions }));
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception)
+        {
+            Log.Diagnostic("SMTC", $"PlayerSessionDiscoveryFailed Exception='{exception.GetType().Name}'");
+            if (_isWebReady && SettingsWebView.CoreWebView2 is not null)
+            {
+                await SettingsWebView.ExecuteScriptAsync(WebViewMessageScriptFactory.Dispatch(
+                    "settingsApp", "playerSessions", new { status = "error", sessions = Array.Empty<AvailablePlayerSession>() }));
+            }
+        }
     }
 
     private async Task PushLyricsLayoutPreviewAsync()
@@ -1087,10 +1150,12 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         var payload = new WebSettingsPayload
         {
             SourceRecognitionOrder = NormalizeSourceOrder(_settings.SourceRecognitionOrder),
+            CustomPlayerSources = _settings.CustomPlayerSources.ToList(),
             EnableNetease = _settings.EnableNetease,
             EnableQQMusic = _settings.EnableQQMusic,
             EnableKugou = _settings.EnableKugou,
             EnableSpotify = _settings.EnableSpotify,
+            EnableBrowser = _settings.EnableBrowser,
             PlayerLyricOffsets = _settings.PlayerSources.ToDictionary(
                 pair => pair.Key,
                 pair => pair.Value.LyricOffsetMilliseconds,
@@ -1249,22 +1314,25 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         return LyricsLayoutMetrics.Create(_settings, VisualTreeHelper.GetDpi(this).DpiScaleX);
     }
 
-    private static List<string> NormalizeSourceOrder(IEnumerable<string>? order)
+    private List<string> NormalizeSourceOrder(IEnumerable<string>? order)
     {
-        var known = new[] { "QQMusic", "Netease", "Kugou", "Spotify" };
+        var known = BuiltInPlayerSources
+            .Concat(_settings.CustomPlayerSources.Select(source => source.SourceAppUserModelId))
+            .ToArray();
         var result = new List<string>();
 
         foreach (var source in order ?? Enumerable.Empty<string>())
         {
-            if (known.Contains(source) && !result.Contains(source))
+            var match = known.FirstOrDefault(item => string.Equals(item, source, StringComparison.OrdinalIgnoreCase));
+            if (match is not null && !result.Contains(match, StringComparer.OrdinalIgnoreCase))
             {
-                result.Add(source);
+                result.Add(match);
             }
         }
 
         foreach (var source in known)
         {
-            if (!result.Contains(source))
+            if (!result.Contains(source, StringComparer.OrdinalIgnoreCase))
             {
                 result.Add(source);
             }
@@ -1296,6 +1364,15 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         var element = value.Value;
         const string playerLyricOffsetPrefix = "playerLyricOffset:";
         const string playerLyricProvidersPrefix = "playerLyricProviders:";
+        const string customPlayerEnabledPrefix = "customPlayerEnabled:";
+        if (key.StartsWith(customPlayerEnabledPrefix, StringComparison.Ordinal))
+        {
+            if (element.ValueKind is JsonValueKind.True or JsonValueKind.False)
+            {
+                _settings.SetCustomPlayerSourceEnabled(key[customPlayerEnabledPrefix.Length..], element.GetBoolean());
+            }
+            return;
+        }
         if (key.StartsWith(playerLyricProvidersPrefix, StringComparison.Ordinal))
         {
             if (SettingsWebMessageRouter.TryParseLyricProviderPreferences(element, out var providers))
@@ -1338,6 +1415,9 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 break;
             case "enableSpotify":
                 _settings.EnableSpotify = ReadBool(element, _settings.EnableSpotify);
+                break;
+            case "enableBrowser":
+                _settings.EnableBrowser = ReadBool(element, _settings.EnableBrowser);
                 break;
             case "enableLocalLyrics":
                 _settings.EnableLocalLyrics = ReadBool(element, _settings.EnableLocalLyrics);
@@ -1897,10 +1977,12 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
     private static void CopySettings(AppSettings source, AppSettings target)
     {
         target.SourceRecognitionOrder = source.SourceRecognitionOrder.ToList();
+        target.CustomPlayerSources = source.CustomPlayerSources.ToList();
         target.EnableNetease = source.EnableNetease;
         target.EnableQQMusic = source.EnableQQMusic;
         target.EnableKugou = source.EnableKugou;
         target.EnableSpotify = source.EnableSpotify;
+        target.EnableBrowser = source.EnableBrowser;
         source.NormalizePlayerSources();
         target.PlayerSources = source.PlayerSources.ToDictionary(
             pair => pair.Key,
@@ -2025,10 +2107,12 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
     private sealed class WebSettingsPayload
     {
         public List<string> SourceRecognitionOrder { get; set; } = new();
+        public List<CustomPlayerSource> CustomPlayerSources { get; set; } = [];
         public bool EnableNetease { get; set; }
         public bool EnableQQMusic { get; set; }
         public bool EnableKugou { get; set; }
         public bool EnableSpotify { get; set; }
+        public bool EnableBrowser { get; set; }
         public Dictionary<string, int> PlayerLyricOffsets { get; set; } = new(StringComparer.OrdinalIgnoreCase);
         public Dictionary<string, List<LyricProviderPreference>> PlayerLyricProviders { get; set; } = new(StringComparer.OrdinalIgnoreCase);
         public Dictionary<string, int> DefaultPlayerLyricOffsets { get; set; } = new(StringComparer.OrdinalIgnoreCase);

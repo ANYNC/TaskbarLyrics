@@ -34,12 +34,60 @@ public sealed class AppSettingsLyricProviderTests
     }
 
     [Fact]
+    public void CustomPlayerRetainsItsTrustOrderAndIdentityAcrossSettingsRoundTrip()
+    {
+        var directory = Path.Combine(AppContext.BaseDirectory, $"custom-player-settings-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        try
+        {
+            const string sourceId = "Example.Player_123!Music";
+            var settings = new AppSettings();
+            const string iconDataUrl = "data:image/png;base64,iVBORw0KGgo=";
+            Assert.True(settings.AddCustomPlayerSource(sourceId, "示例播放器", iconDataUrl));
+            Assert.False(settings.AddCustomPlayerSource(sourceId.ToUpperInvariant(), "重复"));
+            var providers = settings.GetPlayerLyricProviders(sourceId).Reverse().ToList();
+            providers[0] = providers[0] with { Enabled = false };
+            Assert.True(settings.SetPlayerLyricProviders(sourceId, providers));
+            settings.SetPlayerLyricOffsetMilliseconds(sourceId, 230);
+            Assert.True(settings.SetCustomPlayerSourceEnabled(sourceId, false));
+            var store = new SettingsStore(Path.Combine(directory, "settings.json"));
+            Assert.True(store.Save(settings));
+
+            var loaded = store.Load();
+            Assert.Single(loaded.CustomPlayerSources);
+            Assert.Equal("示例播放器", loaded.CustomPlayerSources[0].DisplayName);
+            Assert.False(loaded.CustomPlayerSources[0].Enabled);
+            Assert.Equal(iconDataUrl, loaded.CustomPlayerSources[0].IconDataUrl);
+            Assert.Equal(providers, loaded.GetPlayerLyricProviders(sourceId));
+            Assert.Equal(230, loaded.GetPlayerLyricOffsetMilliseconds(sourceId));
+            Assert.Equal(sourceId, loaded.SourceRecognitionOrder[^1]);
+            Assert.NotNull(loaded.GetLyricSourceSelection(sourceId).CacheContext);
+            Assert.Null(loaded.GetLyricSourceSelection("Other.Player").CacheContext);
+
+            var clone = loaded.Clone();
+            Assert.True(clone.RemoveCustomPlayerSource(sourceId));
+            Assert.Empty(clone.CustomPlayerSources);
+            Assert.DoesNotContain(sourceId, clone.PlayerSources.Keys);
+            Assert.DoesNotContain(sourceId, clone.SourceRecognitionOrder);
+            Assert.Single(loaded.CustomPlayerSources);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
     public void OldSettingsKeepDefaultTrustOrderAndIndependentPlayerPreferences()
     {
         var settings = JsonSerializer.Deserialize<AppSettings>("""
             {"PlayerSources":{"QQMusic":{"LyricOffsetMilliseconds":120}}}
             """)!;
         settings.NormalizePlayerSources();
+
+        Assert.False(settings.EnableBrowser);
+        Assert.Contains("Browser", settings.PlayerSources.Keys);
+        Assert.Contains("Browser", settings.SourceRecognitionOrder);
 
         Assert.Equal(KnownLyricProviders.OnlineTrustOrder,
             settings.GetLyricSourceSelection("QQMusic").Order);
@@ -110,5 +158,33 @@ public sealed class AppSettingsLyricProviderTests
             """);
         Assert.False(SettingsWebMessageRouter.TryParseLyricProviderPreferences(
             wrongType.RootElement, out _));
+    }
+
+    [Fact]
+    public void CustomPlayerAddMessageRequiresAValidMediaSessionIdentity()
+    {
+        using var valid = JsonDocument.Parse("""
+            {"sourceAppUserModelId":"Example.Player!Music","displayName":"示例播放器"}
+            """);
+        Assert.True(SettingsWebMessageRouter.TryParseCustomPlayerSourceAddRequest(
+            valid.RootElement, out var request));
+        Assert.Equal("Example.Player!Music", request.SourceAppUserModelId);
+        Assert.Equal(string.Empty, request.IconDataUrl);
+
+        using var icon = JsonDocument.Parse("""
+            {"sourceAppUserModelId":"Example.Player!Music","displayName":"示例播放器","iconDataUrl":"data:image/png;base64,iVBORw0KGgo="}
+            """);
+        Assert.True(SettingsWebMessageRouter.TryParseCustomPlayerSourceAddRequest(icon.RootElement, out var iconRequest));
+        Assert.Equal("data:image/png;base64,iVBORw0KGgo=", iconRequest.IconDataUrl);
+        using var unsafeIcon = JsonDocument.Parse("""
+            {"sourceAppUserModelId":"Example.Player!Music","displayName":"示例播放器","iconDataUrl":"data:image/svg+xml;base64,PHN2Zz4="}
+            """);
+        Assert.False(SettingsWebMessageRouter.TryParseCustomPlayerSourceAddRequest(unsafeIcon.RootElement, out _));
+
+        using var invalid = JsonDocument.Parse("""
+            {"sourceAppUserModelId":"\n","displayName":"示例播放器"}
+            """);
+        Assert.False(SettingsWebMessageRouter.TryParseCustomPlayerSourceAddRequest(
+            invalid.RootElement, out _));
     }
 }

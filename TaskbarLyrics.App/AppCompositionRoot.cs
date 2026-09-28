@@ -157,6 +157,9 @@ internal sealed class AppCompositionRoot : IAppCompositionRoot
         if (settings.EnableNetease) sources.Add("Netease");
         if (settings.EnableKugou) sources.Add("Kugou");
         if (settings.EnableSpotify) sources.Add("Spotify");
+        if (settings.EnableBrowser) sources.Add("Browser");
+        sources.AddRange(settings.CustomPlayerSources.Where(source => source.Enabled)
+            .Select(source => source.SourceAppUserModelId));
         return sources;
     }
 }

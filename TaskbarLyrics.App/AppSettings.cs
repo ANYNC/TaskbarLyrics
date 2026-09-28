@@ -91,7 +91,8 @@ public sealed class AppSettings
         "QQMusic",
         "Netease",
         "Kugou",
-        "Spotify"
+        "Spotify",
+        "Browser"
     };
 
     public bool EnableNetease { get; set; } = true;
@@ -101,8 +102,10 @@ public sealed class AppSettings
     public bool EnableKugou { get; set; } = true;
 
     public bool EnableSpotify { get; set; } = true;
+    public bool EnableBrowser { get; set; }
 
     public Dictionary<string, PlayerSourceSettings> PlayerSources { get; set; } = CreateDefaultPlayerSources();
+    public List<CustomPlayerSource> CustomPlayerSources { get; set; } = [];
 
     public bool EnableLocalLyrics { get; set; } = true;
 
@@ -211,6 +214,7 @@ public sealed class AppSettings
         NormalizeLyricsTextAlignment();
         var cloned = (AppSettings)MemberwiseClone();
         cloned.SourceRecognitionOrder = SourceRecognitionOrder.ToList();
+        cloned.CustomPlayerSources = CustomPlayerSources.ToList();
         cloned.PlayerSources = PlayerSources.ToDictionary(
             pair => pair.Key,
             pair => pair.Value.Clone(),
@@ -224,8 +228,23 @@ public sealed class AppSettings
 
     public void NormalizePlayerSources()
     {
+        CustomPlayerSources = (CustomPlayerSources ?? [])
+            .Where(source => source is not null && IsValidCustomSourceId(source.SourceAppUserModelId))
+            .Select(source => new CustomPlayerSource(
+                source.SourceAppUserModelId.Trim(),
+                NormalizeCustomDisplayName(source.DisplayName, source.SourceAppUserModelId),
+                source.Enabled)
+            {
+                IconDataUrl = CustomPlayerIcon.Normalize(source.IconDataUrl)
+            })
+            .DistinctBy(source => source.SourceAppUserModelId, StringComparer.OrdinalIgnoreCase)
+            .ToList();
         var current = PlayerSources ?? new Dictionary<string, PlayerSourceSettings>();
         var normalized = CreateDefaultPlayerSources();
+        foreach (var custom in CustomPlayerSources)
+        {
+            normalized[custom.SourceAppUserModelId] = new PlayerSourceSettings();
+        }
         foreach (var source in normalized.Keys.ToList())
         {
             if (current.TryGetValue(source, out var sourceSettings) && sourceSettings is not null)
@@ -239,6 +258,50 @@ public sealed class AppSettings
         }
 
         PlayerSources = normalized;
+    }
+
+    public bool AddCustomPlayerSource(string? sourceId, string? displayName, string? iconDataUrl = null)
+    {
+        if (!IsValidCustomSourceId(sourceId)) return false;
+        NormalizePlayerSources();
+        var id = sourceId!.Trim();
+        if (CustomPlayerSources.Any(source => string.Equals(source.SourceAppUserModelId, id, StringComparison.OrdinalIgnoreCase))) return false;
+        CustomPlayerSources.Add(new CustomPlayerSource(id, NormalizeCustomDisplayName(displayName, id), true)
+        {
+            IconDataUrl = CustomPlayerIcon.Normalize(iconDataUrl)
+        });
+        PlayerSources[id] = new PlayerSourceSettings();
+        SourceRecognitionOrder.Add(id);
+        return true;
+    }
+
+    public bool RemoveCustomPlayerSource(string? sourceId)
+    {
+        var removed = CustomPlayerSources.RemoveAll(source => string.Equals(source.SourceAppUserModelId, sourceId, StringComparison.OrdinalIgnoreCase)) > 0;
+        if (!removed) return false;
+        PlayerSources.Remove(sourceId!);
+        SourceRecognitionOrder.RemoveAll(source => string.Equals(source, sourceId, StringComparison.OrdinalIgnoreCase));
+        return true;
+    }
+
+    public bool SetCustomPlayerSourceEnabled(string? sourceId, bool enabled)
+    {
+        var index = CustomPlayerSources.FindIndex(source => string.Equals(source.SourceAppUserModelId, sourceId, StringComparison.OrdinalIgnoreCase));
+        if (index < 0) return false;
+        CustomPlayerSources[index] = CustomPlayerSources[index] with { Enabled = enabled };
+        return true;
+    }
+
+    private static bool IsValidCustomSourceId(string? sourceId) =>
+        !string.IsNullOrWhiteSpace(sourceId) && sourceId.Length <= 256 &&
+        !sourceId.Any(char.IsControl) && NormalizePlayerSourceName(sourceId.Trim()) is null;
+
+    private static string NormalizeCustomDisplayName(string? name, string sourceId)
+    {
+        var value = name?.Trim();
+        return !string.IsNullOrWhiteSpace(value) && value.Length <= 80 && !value.Any(char.IsControl)
+            ? value
+            : sourceId;
     }
 
     public void NormalizeLyricsLayout()
@@ -288,7 +351,7 @@ public sealed class AppSettings
 
     public int GetPlayerLyricOffsetMilliseconds(string? sourceApp)
     {
-        var source = NormalizePlayerSourceName(sourceApp);
+        var source = ResolvePlayerSourceName(sourceApp);
         if (source is null)
         {
             return 0;
@@ -303,7 +366,7 @@ public sealed class AppSettings
 
     public void SetPlayerLyricOffsetMilliseconds(string? sourceApp, int value)
     {
-        var source = NormalizePlayerSourceName(sourceApp);
+        var source = ResolvePlayerSourceName(sourceApp);
         if (source is null)
         {
             return;
@@ -315,7 +378,7 @@ public sealed class AppSettings
 
     public IReadOnlyList<LyricProviderPreference> GetPlayerLyricProviders(string? sourceApp)
     {
-        var source = NormalizePlayerSourceName(sourceApp);
+        var source = ResolvePlayerSourceName(sourceApp);
         return source is not null && PlayerSources is not null &&
             PlayerSources.TryGetValue(source, out var settings) && settings is not null
                 ? PlayerSourceSettings.NormalizeLyricProviders(settings.LyricProviders)
@@ -324,7 +387,7 @@ public sealed class AppSettings
 
     public bool SetPlayerLyricProviders(string? sourceApp, IReadOnlyList<LyricProviderPreference>? providers)
     {
-        var source = NormalizePlayerSourceName(sourceApp);
+        var source = ResolvePlayerSourceName(sourceApp);
         if (source is null || !PlayerSourceSettings.IsValidLyricProviders(providers))
         {
             return false;
@@ -337,8 +400,8 @@ public sealed class AppSettings
 
     public LyricSourceSelection GetLyricSourceSelection(string? sourceApp)
     {
-        var source = NormalizePlayerSourceName(sourceApp);
-        var providers = GetPlayerLyricProviders(source);
+        var source = ResolvePlayerSourceName(sourceApp);
+        var providers = GetPlayerLyricProviders(sourceApp);
         var enabledOrder = providers.Where(item => item.Enabled)
             .Select(item => new LyricProviderId(item.ProviderId)).ToArray();
         var defaults = PlayerSourceSettings.CreateDefaultLyricProviders();
@@ -371,7 +434,8 @@ public sealed class AppSettings
             ["QQMusic"] = new() { LyricOffsetMilliseconds = GetDefaultPlayerLyricOffsetMilliseconds("QQMusic") },
             ["Netease"] = new() { LyricOffsetMilliseconds = GetDefaultPlayerLyricOffsetMilliseconds("Netease") },
             ["Kugou"] = new() { LyricOffsetMilliseconds = GetDefaultPlayerLyricOffsetMilliseconds("Kugou") },
-            ["Spotify"] = new() { LyricOffsetMilliseconds = GetDefaultPlayerLyricOffsetMilliseconds("Spotify") }
+            ["Spotify"] = new() { LyricOffsetMilliseconds = GetDefaultPlayerLyricOffsetMilliseconds("Spotify") },
+            ["Browser"] = new() { LyricOffsetMilliseconds = GetDefaultPlayerLyricOffsetMilliseconds("Browser") }
         };
     }
 
@@ -383,9 +447,14 @@ public sealed class AppSettings
             "netease" or "neteasemusic" => "Netease",
             "kugou" => "Kugou",
             "spotify" => "Spotify",
+            "browser" => "Browser",
             _ => null
         };
     }
+
+    private string? ResolvePlayerSourceName(string? sourceApp) =>
+        NormalizePlayerSourceName(sourceApp) ??
+        CustomPlayerSources.FirstOrDefault(source => string.Equals(source.SourceAppUserModelId, sourceApp, StringComparison.OrdinalIgnoreCase))?.SourceAppUserModelId;
 
     public static double ClampFontSize(double value)
     {
@@ -482,3 +551,8 @@ public sealed class PlayerSourceSettings
 }
 
 public sealed record LyricProviderPreference(string ProviderId, bool Enabled);
+
+public sealed record CustomPlayerSource(string SourceAppUserModelId, string DisplayName, bool Enabled)
+{
+    public string IconDataUrl { get; init; } = string.Empty;
+}

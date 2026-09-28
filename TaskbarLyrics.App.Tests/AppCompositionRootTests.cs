@@ -27,11 +27,16 @@ public sealed class AppCompositionRootTests
             EnableKugou = false,
             EnableSpotify = true
         };
+        Assert.True(settings.AddCustomPlayerSource("Example.Player!Music", "示例播放器"));
+        Assert.True(settings.AddCustomPlayerSource("Other.Player!Music", "另一播放器"));
+        Assert.True(settings.SetCustomPlayerSourceEnabled("Other.Player!Music", false));
 
         using var root = CreateRoot();
         var sources = root.GetEnabledPlayerSources(settings);
 
-        Assert.Equal(["Netease", "Spotify"], sources);
+        Assert.Equal(["Netease", "Spotify", "Example.Player!Music"], sources);
+        settings.EnableBrowser = true;
+        Assert.Equal(["Netease", "Spotify", "Browser", "Example.Player!Music"], root.GetEnabledPlayerSources(settings));
     }
 
     [Fact]

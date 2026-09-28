@@ -154,7 +154,8 @@ public partial class MainWindow : Window, IDisposable
         {
             _playerRecognitionController.SetRecognitionOrder(
                 snapshot.SourceRecognitionOrder,
-                _compositionRoot.GetEnabledPlayerSources(snapshot));
+                _compositionRoot.GetEnabledPlayerSources(snapshot),
+                snapshot.CustomPlayerSources.Select(source => source.SourceAppUserModelId).ToArray());
         }
 
         if (changes.WindowLayoutChanged || changes.LyricsLayoutChanged || changes.TaskbarEmbeddingChanged)

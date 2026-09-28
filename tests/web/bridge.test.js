@@ -82,9 +82,17 @@ describe("settings WebView bridge", () => {
     expect(document.querySelector("#priorityList")).toBeNull();
     expect(document.querySelector('[data-page="sources"]').textContent).not.toContain("识别优先级");
     expect([...document.querySelectorAll("[data-player-settings]")].map(item => item.dataset.playerSettings))
-      .toEqual(["spotify", "qqmusic", "netease", "kugou"]);
+      .toEqual(["spotify", "qqmusic", "netease", "kugou", "browser"]);
+
+    document.querySelector('[data-player-settings="browser"]').click();
+    expect(document.querySelector("#playerRecognitionToggle").checked).toBe(false);
+    expect(document.querySelector("#removePlayerSourceButton").hidden).toBe(true);
+    document.querySelector("#playerRecognitionToggle").checked = true;
+    document.querySelector("#playerRecognitionToggle").dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+    expect(sent.at(-1).payload).toEqual({ key: "enableBrowser", value: true });
 
     document.querySelector('[data-player-settings="spotify"]').click();
+    expect(document.querySelector("#removePlayerSourceButton").hidden).toBe(true);
     const toggle = document.querySelector("#playerRecognitionToggle");
     toggle.checked = false;
     toggle.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
@@ -120,27 +128,96 @@ describe("settings WebView bridge", () => {
     const initialMessages = sent.length;
     drag(document.querySelector('[data-player-drag-id="qqmusic"]'), "dragstart");
     drag(document.querySelector('[data-player-card="netease"]'), "dragover");
-    expect(order()).toEqual(["netease", "qqmusic", "kugou", "spotify"]);
+    expect(order()).toEqual(["netease", "qqmusic", "kugou", "spotify", "browser"]);
     expect(sent).toHaveLength(initialMessages);
     drag(grid, "drop");
     expect(sent.at(-1).type).toBe("reorderSources");
-    expect(sent.at(-1).payload).toEqual(["Netease", "QQMusic", "Kugou", "Spotify"]);
+    expect(sent.at(-1).payload).toEqual(["Netease", "QQMusic", "Kugou", "Spotify", "Browser"]);
     expect(document.querySelector("#sourceOrderAnnouncement").textContent).toContain("第 2 位");
 
     const committedMessages = sent.length;
     const spotifyHandle = document.querySelector('[data-player-drag-id="spotify"]');
     drag(spotifyHandle, "dragstart");
     drag(document.querySelector('[data-player-card="netease"]'), "dragover");
-    expect(order()).toEqual(["spotify", "netease", "qqmusic", "kugou"]);
+    expect(order()).toEqual(["spotify", "netease", "qqmusic", "kugou", "browser"]);
     drag(spotifyHandle, "dragend");
-    expect(order()).toEqual(["netease", "qqmusic", "kugou", "spotify"]);
+    expect(order()).toEqual(["netease", "qqmusic", "kugou", "spotify", "browser"]);
     expect(sent).toHaveLength(committedMessages);
 
     document.querySelector('[data-player-drag-id="qqmusic"]')
       .dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "ArrowUp", altKey: true, bubbles: true }));
-    expect(order()).toEqual(["qqmusic", "netease", "kugou", "spotify"]);
-    expect(sent.at(-1).payload).toEqual(["QQMusic", "Netease", "Kugou", "Spotify"]);
+    expect(order()).toEqual(["qqmusic", "netease", "kugou", "spotify", "browser"]);
+    expect(sent.at(-1).payload).toEqual(["QQMusic", "Netease", "Kugou", "Spotify", "Browser"]);
     expect(document.activeElement.dataset.playerDragId).toBe("qqmusic");
+  });
+
+  it("adds a detected media session and configures it as a player", async () => {
+    const { dom, sent, script } = await createSettingsDom();
+    enableDialogDomSupport(dom);
+    const document = dom.window.document;
+    dom.window.eval(script);
+    const settings = {
+      sourceRecognitionOrder: ["QQMusic", "Netease", "Kugou", "Spotify"],
+      playerLyricOffsets: {}, defaultPlayerLyricOffsets: {}, playerLyricProviders: {},
+      mediaHotkeys: [], mediaHotkeyStatuses: {}
+    };
+    dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings, fonts: [] } });
+    document.querySelector("#addPlayerSourceButton").click();
+    expect(sent.at(-1).type).toBe("discoverPlayerSessions");
+    dom.window.settingsApp.receive({ version: 1, type: "playerSessions", payload: { status: "ready", sessions: [
+      { sourceAppUserModelId: "Example.Player!Music", displayName: "Music", trackTitle: "Song", isPlaying: true, isBuiltIn: false },
+      { sourceAppUserModelId: "chrome.exe", displayName: "Chrome", trackTitle: "Browser song", isPlaying: true, isBuiltIn: false },
+      { sourceAppUserModelId: "Spotify.exe", displayName: "Spotify", trackTitle: "", isPlaying: false, isBuiltIn: true }
+    ] } });
+    expect(document.querySelectorAll("[data-player-session-index]")).toHaveLength(2);
+    document.querySelector('[data-player-session-index="0"]').click();
+    document.querySelector("#customPlayerName").value = "我的播放器";
+    const iconInput = document.querySelector("#customPlayerIcon");
+    const iconFile = new dom.window.File([Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10])], "icon.png", { type: "image/png" });
+    Object.defineProperty(iconInput, "files", { configurable: true, value: [iconFile] });
+    iconInput.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+    expect(document.querySelector("#confirmAddPlayerSource").disabled).toBe(true);
+    await new Promise(resolve => dom.window.setTimeout(resolve, 10));
+    expect(document.querySelector("#customPlayerIconPreview img").getAttribute("src"))
+      .toBe("data:image/png;base64,iVBORw0KGgo=");
+    document.querySelector("#confirmAddPlayerSource").click();
+    expect(sent.at(-1).type).toBe("addPlayerSource");
+    expect(sent.at(-1).payload).toEqual({ sourceAppUserModelId: "Example.Player!Music", displayName: "我的播放器", iconDataUrl: "data:image/png;base64,iVBORw0KGgo=" });
+
+    dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings: {
+      ...settings,
+      sourceRecognitionOrder: [...settings.sourceRecognitionOrder, "Example.Player!Music", "Other.Player!Music"],
+      customPlayerSources: [
+        { sourceAppUserModelId: "Example.Player!Music", displayName: "我的播放器", enabled: true, iconDataUrl: "data:image/png;base64,iVBORw0KGgo=" },
+        { sourceAppUserModelId: "Other.Player!Music", displayName: "其他播放器", enabled: true }
+      ],
+      playerLyricOffsets: { "Example.Player!Music": 0, "Other.Player!Music": 0 },
+      playerLyricProviders: { "Example.Player!Music": [
+        { providerId: "QQMusic", enabled: true }, { providerId: "Kugou", enabled: true },
+        { providerId: "Netease", enabled: true }, { providerId: "LRCLIB", enabled: true }
+      ] }
+    }, fonts: [] } });
+    expect(document.querySelector("#addPlayerDialog").open).toBe(false);
+    expect(document.querySelector('[data-player-card="custom-Example.Player!Music"] .source-info strong').textContent).toBe("我的播放器");
+    expect(document.querySelector('[data-player-card="custom-Example.Player!Music"] .source-logo img').getAttribute("src"))
+      .toBe("data:image/png;base64,iVBORw0KGgo=");
+    document.querySelector('[data-player-settings="custom-Example.Player!Music"]').click();
+    expect(document.querySelector("#removePlayerSourceButton").hidden).toBe(false);
+    const toggle = document.querySelector("#playerRecognitionToggle");
+    toggle.checked = false;
+    toggle.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+    expect(sent.at(-1).payload).toEqual({ key: "customPlayerEnabled:Example.Player!Music", value: false });
+    document.querySelector("#removePlayerSourceButton").click();
+    document.querySelector("#confirmRemovePlayerSource").click();
+    expect(sent.at(-1).type).toBe("removePlayerSource");
+    expect(sent.at(-1).payload).toBe("Example.Player!Music");
+    dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings: {
+      ...settings,
+      sourceRecognitionOrder: [...settings.sourceRecognitionOrder, "Other.Player!Music"],
+      customPlayerSources: [{ sourceAppUserModelId: "Other.Player!Music", displayName: "其他播放器", enabled: true }]
+    }, fonts: [] } });
+    expect(document.querySelector("#playerSettingsDialog").open).toBe(false);
+    expect(document.querySelector('[data-player-card="custom-Other.Player!Music"]')).not.toBeNull();
   });
 
   it("edits online lyric trust order and switches per player", async () => {

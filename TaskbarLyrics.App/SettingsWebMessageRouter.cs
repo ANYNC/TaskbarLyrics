@@ -31,6 +31,8 @@ internal sealed record LyricDiagnosticCandidateApplyRequest(
     string CandidateId,
     LyricDiagnosticApplyMode Mode);
 
+internal sealed record CustomPlayerSourceAddRequest(string SourceAppUserModelId, string DisplayName, string IconDataUrl);
+
 internal static class SettingsWebJson
 {
     public static JsonSerializerOptions Options => WebViewMessageRouter.JsonOptions;
@@ -38,6 +40,40 @@ internal static class SettingsWebJson
 
 internal static class SettingsWebMessageRouter
 {
+    public static bool TryParseCustomPlayerSourceAddRequest(
+        JsonElement? value,
+        out CustomPlayerSourceAddRequest request)
+    {
+        request = null!;
+        if (value is not { ValueKind: JsonValueKind.Object } payload ||
+            !payload.TryGetProperty("sourceAppUserModelId", out var idElement) ||
+            idElement.ValueKind != JsonValueKind.String ||
+            !payload.TryGetProperty("displayName", out var nameElement) ||
+            nameElement.ValueKind != JsonValueKind.String)
+        {
+            return false;
+        }
+
+        var id = idElement.GetString();
+        var name = nameElement.GetString();
+        if (string.IsNullOrWhiteSpace(id) || id.Length > 256 || id.Any(char.IsControl) ||
+            name is null || name.Length > 80 || name.Any(char.IsControl))
+        {
+            return false;
+        }
+
+        string? iconDataUrl = null;
+        if (payload.TryGetProperty("iconDataUrl", out var iconElement))
+        {
+            if (iconElement.ValueKind != JsonValueKind.String) return false;
+            iconDataUrl = iconElement.GetString();
+        }
+        if (!CustomPlayerIcon.TryNormalize(iconDataUrl, out var normalizedIcon)) return false;
+
+        request = new CustomPlayerSourceAddRequest(id.Trim(), name.Trim(), normalizedIcon);
+        return true;
+    }
+
     public static bool TryParseLyricProviderPreferences(
         JsonElement? value,
         out List<LyricProviderPreference> providers)

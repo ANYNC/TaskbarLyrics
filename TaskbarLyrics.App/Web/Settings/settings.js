@@ -2,7 +2,8 @@
       { id: "qqmusic", name: "QQ 音乐", adapter: "QQMusic", settingKey: "enableQQMusic", icon: "../../Assets/PlayerIcons/QQ音乐.png" },
       { id: "netease", name: "网易云音乐", adapter: "Netease", settingKey: "enableNetease", icon: "../../Assets/PlayerIcons/网易云音乐.png" },
       { id: "kugou", name: "酷狗音乐", adapter: "Kugou", settingKey: "enableKugou", icon: "../../Assets/PlayerIcons/酷狗音乐.png" },
-      { id: "spotify", name: "Spotify", adapter: "Spotify", settingKey: "enableSpotify", icon: "../../Assets/PlayerIcons/spotify.png" }
+      { id: "spotify", name: "Spotify", adapter: "Spotify", settingKey: "enableSpotify", icon: "../../Assets/PlayerIcons/spotify.png" },
+      { id: "browser", name: "浏览器", adapter: "Browser", settingKey: "enableBrowser", icon: "" }
     ];
     const lyricProviderDefaults = [
       { providerId: "QQMusic", name: "QQ 音乐" },
@@ -40,6 +41,10 @@
     let toastTimer;
     let draggedPlayerSourceId = null;
     let draggedLyricProviderId = null;
+    let availablePlayerSessions = [];
+    let selectedPlayerSessionId = null;
+    let selectedPlayerIconDataUrl = "";
+    let playerIconReadToken = 0;
     let pageAnimations = [];
     let pageTransitionToken = 0;
     let activeSelectTrigger = null;
@@ -76,12 +81,27 @@
 
     bridge.post = window.taskbarLyricsBridge.post.bind(window.taskbarLyricsBridge);
 
+    const playerIcon = source => source.icon
+      ? `<img src="${escapeHtml(source.icon)}" alt="" draggable="false">`
+      : source.id === "browser"
+        ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.4 4 5.6 4 9s-1.5 6.6-4 9c-2.5-2.4-4-5.6-4-9s1.5-6.6 4-9Z"/></svg>`
+      : `<span aria-hidden="true">♫</span>`;
+
+    function resetSelectedPlayerIcon() {
+      playerIconReadToken++;
+      selectedPlayerIconDataUrl = "";
+      $("#customPlayerIcon").value = "";
+      $("#customPlayerIconPreview").innerHTML = "<span aria-hidden=\"true\">♫</span>";
+      $("#customPlayerIconStatus").textContent = "可选，支持 PNG、JPEG、WebP，最大 128 KB。";
+      $("#confirmAddPlayerSource").disabled = !selectedPlayerSessionId;
+    }
+
     function renderSources() {
       const grid = $("#sourceGrid");
       grid.innerHTML = sourceCatalog.map(source => `
         <article class="source-card ${source.enabled ? "enabled" : ""}" data-player-card="${escapeHtml(source.id)}">
           <button class="source-drag-handle" type="button" draggable="true" data-player-drag-id="${escapeHtml(source.id)}" aria-label="拖动 ${escapeHtml(source.name)} 调整同时播放时的选择顺序" aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown Alt+ArrowLeft Alt+ArrowRight" title="拖动调整播放器选择顺序；也可按 Alt + 方向键">
-            <span class="source-logo" aria-hidden="true"><img src="${escapeHtml(source.icon)}" alt="" draggable="false"></span>
+            <span class="source-logo ${source.custom ? "custom-player-icon" : ""}" aria-hidden="true">${playerIcon(source)}</span>
             <span class="source-info"><strong>${escapeHtml(source.name)}</strong><small>${source.enabled ? "已启用" : "已停用"} · ${formatPlayerOffset(getPlayerOffset(source))}</small></span>
           </button>
           <button class="source-settings-button" type="button" data-player-settings="${escapeHtml(source.id)}" aria-label="打开 ${escapeHtml(source.name)} 设置"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.25A3.25 3.25 0 1 0 12 8.75a3.25 3.25 0 0 0 0 6.5Z" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M19.1 13.3a7.5 7.5 0 0 0 0-2.6l2-1.55-2-3.46-2.5 1a7.6 7.6 0 0 0-2.25-1.3L14 2.75h-4l-.35 2.64A7.6 7.6 0 0 0 7.4 6.7l-2.5-1-2 3.46 2 1.55a7.5 7.5 0 0 0 0 2.6l-2 1.55 2 3.46 2.5-1a7.6 7.6 0 0 0 2.25 1.3l.35 2.64h4l.35-2.64a7.6 7.6 0 0 0 2.25-1.3l2.5 1 2-3.46-2-1.55Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></button>
@@ -102,6 +122,40 @@
       const index = sourceCatalog.findIndex(source => source.id === sourceId);
       if (index < 0) return;
       $("#sourceOrderAnnouncement").textContent = `${sourceCatalog[index].name} 已移至第 ${index + 1} 位，共 ${sourceCatalog.length} 位`;
+    }
+
+    function renderAvailablePlayerSessions(payload) {
+      const status = $("#playerDiscoveryStatus");
+      const list = $("#availablePlayerSessions");
+      $("#refreshPlayerSessionsButton").disabled = false;
+      if (payload?.status === "error") {
+        availablePlayerSessions = [];
+        status.textContent = "无法读取媒体会话，请稍后重试。";
+      } else {
+        availablePlayerSessions = (Array.isArray(payload?.sessions) ? payload.sessions : [])
+          .filter(session => !session.isBuiltIn &&
+            !sourceCatalog.some(source => source.adapter.toLowerCase() === String(session.sourceAppUserModelId).toLowerCase()));
+        status.textContent = availablePlayerSessions.length ? "" : "暂未检测到可添加的播放器。请先播放一首歌，再点击刷新。";
+      }
+      if (!availablePlayerSessions.some(session => session.sourceAppUserModelId === selectedPlayerSessionId)) {
+        selectedPlayerSessionId = null;
+        $("#selectedPlayerSession").hidden = true;
+        $("#confirmAddPlayerSource").disabled = true;
+        resetSelectedPlayerIcon();
+      }
+      list.innerHTML = availablePlayerSessions.map((session, index) => `
+        <button class="available-player-session" type="button" data-player-session-index="${index}" aria-pressed="${session.sourceAppUserModelId === selectedPlayerSessionId}">
+          <strong>${escapeHtml(session.displayName)}</strong>
+          <small>${session.isPlaying ? "正在播放" : "已暂停"}${session.trackTitle ? ` · ${escapeHtml(session.trackTitle)}` : ""}</small>
+          <small>${escapeHtml(session.sourceAppUserModelId)}</small>
+        </button>`).join("");
+    }
+
+    function requestPlayerSessions() {
+      $("#playerDiscoveryStatus").textContent = "正在检测媒体会话…";
+      $("#availablePlayerSessions").innerHTML = "";
+      $("#refreshPlayerSessionsButton").disabled = true;
+      bridge.post({ type: "discoverPlayerSessions" });
     }
 
     function getPlayerOffset(source) {
@@ -623,8 +677,10 @@
       if (!source) return;
       $("#playerSettingsTitle").textContent = source.name;
       $("#playerSettingsAdapter").textContent = source.adapter;
-      $("#playerSettingsLogo").innerHTML = `<img src="${escapeHtml(source.icon)}" alt="">`;
+      $("#playerSettingsLogo").innerHTML = playerIcon(source);
+      $("#playerSettingsLogo").classList.toggle("custom-player-icon", Boolean(source.custom));
       $("#playerRecognitionToggle").checked = source.enabled;
+      $("#removePlayerSourceButton").hidden = !source.custom;
       const offset = getPlayerOffset(source);
       $("#playerOffsetInput").value = offset;
       $("#playerOffsetStatus").textContent = formatPlayerOffset(offset);
@@ -1045,24 +1101,46 @@
         const value = Number(incomingDefaults[source.adapter]);
         return Number.isFinite(value) ? Math.max(-5000, Math.min(5000, Math.round(value))) : 0;
       };
-      state.playerLyricOffsets = Object.fromEntries(sourceCatalogDefaults.map(source => {
+      const customSources = Array.isArray(nextState.customPlayerSources) ? nextState.customPlayerSources : [];
+      const allSources = sourceCatalogDefaults.concat(customSources.map(source => ({
+        id: `custom-${encodeURIComponent(source.sourceAppUserModelId)}`,
+        adapter: source.sourceAppUserModelId,
+        name: source.displayName,
+        icon: source.iconDataUrl ?? "",
+        custom: true,
+        enabled: source.enabled === true
+      })));
+      state.playerLyricOffsets = Object.fromEntries(allSources.map(source => {
         const value = Number(incomingOffsets[source.adapter]);
         return [source.adapter, Number.isFinite(value) ? Math.max(-5000, Math.min(5000, Math.round(value))) : defaultOffsetFor(source)];
       }));
-      state.playerLyricProviders = Object.fromEntries(sourceCatalogDefaults.map(source => [
+      state.playerLyricProviders = Object.fromEntries(allSources.map(source => [
         source.adapter, normalizeLyricProviders(nextState.playerLyricProviders?.[source.adapter])
       ]));
       state.customForegroundColor = nextState.foregroundColorMode === "Custom"
         ? foregroundColor
         : previousCustom ?? foregroundColor;
       repositoryUrl = nextState.repositoryUrl ?? "";
-      sourceCatalog = sourceCatalogDefaults.map(source => ({ ...source, defaultOffset: defaultOffsetFor(source), enabled: Boolean(nextState[source.settingKey]) }));
+      sourceCatalog = allSources.map(source => ({
+        ...source,
+        defaultOffset: defaultOffsetFor(source),
+        enabled: source.custom ? source.enabled : Boolean(nextState[source.settingKey])
+      }));
       const order = Array.isArray(nextState.sourceRecognitionOrder) ? nextState.sourceRecognitionOrder : [];
       sourceCatalog.sort((a, b) => {
         const aIndex = order.indexOf(a.adapter);
         const bIndex = order.indexOf(b.adapter);
         return (aIndex < 0 ? 99 : aIndex) - (bIndex < 0 ? 99 : bIndex);
       });
+      if (selectedPlayerSessionId && customSources.some(source => source.sourceAppUserModelId === selectedPlayerSessionId)) {
+        selectedPlayerSessionId = null;
+        if ($("#addPlayerDialog").open) $("#addPlayerDialog").close();
+      }
+      if (activePlayerSourceId && !sourceCatalog.some(source => source.id === activePlayerSourceId)) {
+        $("#removePlayerDialog").close();
+        $("#playerSettingsDialog").close();
+        $("#addPlayerSourceButton").focus({ preventScroll: true });
+      }
       setAvailableFonts(fonts);
       const version = nextState.appVersion || "--";
       $(".version-badge").textContent = `Version ${version}`;
@@ -1846,8 +1924,12 @@
         const source = sourceCatalog.find(item => item.id === activePlayerSourceId);
         if (source) {
           source.enabled = event.target.checked;
-          state[source.settingKey] = source.enabled;
-          bridge.post({ type: "update", key: source.settingKey, value: source.enabled });
+          if (source.custom) {
+            bridge.post({ type: "update", key: `customPlayerEnabled:${source.adapter}`, value: source.enabled });
+          } else {
+            state[source.settingKey] = source.enabled;
+            bridge.post({ type: "update", key: source.settingKey, value: source.enabled });
+          }
         }
         renderSources(); renderPlayerSettings(); markSaved(); return;
       }
@@ -2015,11 +2097,83 @@
     });
 
     $("#colorPresets").innerHTML = presetColors.map(color => `<button class="color-preset" type="button" style="--preset:${color}" data-preset-color-value="${color}" aria-label="选择 ${color}"></button>`).join("");
+    $("#addPlayerSourceButton").addEventListener("click", () => {
+      selectedPlayerSessionId = null;
+      $("#selectedPlayerSession").hidden = true;
+      $("#confirmAddPlayerSource").disabled = true;
+      resetSelectedPlayerIcon();
+      $("#addPlayerDialog").showModal();
+      requestPlayerSessions();
+    });
+    $("#refreshPlayerSessionsButton").addEventListener("click", requestPlayerSessions);
+    $("#availablePlayerSessions").addEventListener("click", event => {
+      const button = event.target.closest("[data-player-session-index]");
+      if (!button) return;
+      const session = availablePlayerSessions[Number(button.dataset.playerSessionIndex)];
+      if (!session) return;
+      selectedPlayerSessionId = session.sourceAppUserModelId;
+      resetSelectedPlayerIcon();
+      $("#customPlayerName").value = session.displayName;
+      $("#selectedPlayerSessionId").textContent = session.sourceAppUserModelId;
+      $("#selectedPlayerSession").hidden = false;
+      $("#confirmAddPlayerSource").disabled = false;
+      $$('[data-player-session-index]').forEach(item => item.setAttribute("aria-pressed", String(item === button)));
+      $("#customPlayerName").focus({ preventScroll: true });
+    });
+    $("#customPlayerIcon").addEventListener("change", event => {
+      const file = event.target.files?.[0];
+      resetSelectedPlayerIcon();
+      if (!file) return;
+      if (!["image/png", "image/jpeg", "image/webp"].includes(file.type) || file.size > 128 * 1024 || file.size === 0) {
+        $("#customPlayerIconStatus").textContent = "请选择不超过 128 KB 的 PNG、JPEG 或 WebP 图片。";
+        return;
+      }
+      const readToken = playerIconReadToken;
+      $("#confirmAddPlayerSource").disabled = true;
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (readToken !== playerIconReadToken || typeof reader.result !== "string") return;
+        selectedPlayerIconDataUrl = reader.result;
+        $("#customPlayerIconPreview").innerHTML = `<img src="${escapeHtml(reader.result)}" alt="所选图标预览">`;
+        $("#customPlayerIconStatus").textContent = file.name;
+        $("#confirmAddPlayerSource").disabled = false;
+      };
+      reader.onerror = () => {
+        if (readToken !== playerIconReadToken) return;
+        $("#customPlayerIconStatus").textContent = "图标读取失败，请重试。";
+        $("#confirmAddPlayerSource").disabled = false;
+      };
+      reader.readAsDataURL(file);
+    });
+    $("#confirmAddPlayerSource").addEventListener("click", () => {
+      if (!selectedPlayerSessionId) return;
+      bridge.post({ type: "addPlayerSource", value: {
+        sourceAppUserModelId: selectedPlayerSessionId,
+        displayName: $("#customPlayerName").value.trim(),
+        iconDataUrl: selectedPlayerIconDataUrl
+      } });
+      $("#confirmAddPlayerSource").disabled = true;
+      $("#playerDiscoveryStatus").textContent = "正在添加播放器…";
+    });
+    $("#removePlayerSourceButton").addEventListener("click", () => $("#removePlayerDialog").showModal());
+    $("#confirmRemovePlayerSource").addEventListener("click", () => {
+      const source = sourceCatalog.find(item => item.id === activePlayerSourceId);
+      if (!source?.custom) return;
+      bridge.post({ type: "removePlayerSource", value: source.adapter });
+      closeDialogWithAnimation($("#removePlayerDialog"));
+    });
     function receive(message) {
       if (message?.version !== 1 || !message.type) return;
       switch (message.type) {
         case "settingsState":
           setState(message.payload?.settings ?? {}, message.payload?.fonts ?? []);
+          break;
+        case "playerSessions":
+          renderAvailablePlayerSessions(message.payload);
+          break;
+        case "playerSourceActionResult":
+          $("#playerDiscoveryStatus").textContent = message.payload?.message ?? "操作未完成，请重试。";
+          $("#confirmAddPlayerSource").disabled = !selectedPlayerSessionId;
           break;
         case "lyricsLayoutPreview":
           updateLayoutPreview(message.payload);

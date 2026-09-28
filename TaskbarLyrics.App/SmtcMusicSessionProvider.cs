@@ -156,7 +156,8 @@ internal sealed class ProcessFallbackDetectionCache
 
 public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlaybackController, IPlayerRecognitionController, IDisposable
 {
-    private static readonly string[] DefaultRecognitionOrder = { "QQMusic", "Netease", "Kugou", "Spotify" };
+    private static readonly string[] DefaultEnabledSources = { "QQMusic", "Netease", "Kugou", "Spotify" };
+    private static readonly string[] DefaultRecognitionOrder = { "QQMusic", "Netease", "Kugou", "Spotify", "Browser" };
     private static readonly TimeSpan MissingCoverRetryInterval = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan CoverReadTimeout = TimeSpan.FromSeconds(5);
     private static readonly Regex TitleArtistRegex = new(
@@ -173,7 +174,8 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
     private int _currentPlayerLyricOffsetMilliseconds;
     private int _currentTrackLyricOffsetMilliseconds;
     private string[] _recognitionOrder = DefaultRecognitionOrder;
-    private HashSet<string> _enabledSources = new(DefaultRecognitionOrder, StringComparer.OrdinalIgnoreCase);
+    private HashSet<string> _enabledSources = new(DefaultEnabledSources, StringComparer.OrdinalIgnoreCase);
+    private HashSet<string> _configuredCustomSources = new(StringComparer.OrdinalIgnoreCase);
     private string _lastCoverMetadataKey = string.Empty;
     private string _lastQqMetadataDiagnosticsKey = string.Empty;
     private byte[]? _lastCoverImageBytes;
@@ -191,11 +193,15 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
 
     public void SetRecognitionOrder(
         IReadOnlyList<string>? order,
-        IReadOnlyCollection<string>? enabledSources = null)
+        IReadOnlyCollection<string>? enabledSources = null,
+        IReadOnlyCollection<string>? customSources = null)
     {
         _enabledSources = enabledSources is null
-            ? new HashSet<string>(DefaultRecognitionOrder, StringComparer.OrdinalIgnoreCase)
+            ? new HashSet<string>(DefaultEnabledSources, StringComparer.OrdinalIgnoreCase)
             : new HashSet<string>(enabledSources, StringComparer.OrdinalIgnoreCase);
+        _configuredCustomSources = customSources is null
+            ? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            : new HashSet<string>(customSources, StringComparer.OrdinalIgnoreCase);
         var normalized = NormalizeRecognitionOrder(order, _enabledSources);
         _recognitionOrder = normalized.ToArray();
         _activeSessionCache.Clear();
@@ -391,7 +397,7 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
         var timeline = session.GetTimelineProperties();
         var nowUtc = DateTimeOffset.UtcNow;
 
-        var rawSource = NormalizeSource(session.SourceAppUserModelId);
+        var rawSource = ResolveSource(session.SourceAppUserModelId);
         var sourceApp = ResolveSourceWithProcessFallback(rawSource);
 
         var isPlaying = playbackInfo?.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
@@ -684,10 +690,10 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
                 .Select(candidate => new
                 {
                     Session = candidate,
-                    Source = NormalizeSource(candidate.SourceAppUserModelId)
+                    Source = ResolveSource(candidate.SourceAppUserModelId)
                 })
                 .Where(x =>
-                    !IsBlockedSource(x.Session.SourceAppUserModelId) &&
+                    CanUseSource(x.Session.SourceAppUserModelId) &&
                     IsSupportedSource(x.Source) &&
                     IsSessionPlaying(x.Session))
                 .OrderBy(x => GetRecognitionPriority(x.Source))
@@ -715,10 +721,10 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
                 .Select(candidate => new
                 {
                     Session = candidate,
-                    Source = NormalizeSource(candidate.SourceAppUserModelId)
+                    Source = ResolveSource(candidate.SourceAppUserModelId)
                 })
                 .Where(x =>
-                    !IsBlockedSource(x.Session.SourceAppUserModelId) &&
+                    CanUseSource(x.Session.SourceAppUserModelId) &&
                     IsSupportedSource(x.Source))
                 .OrderBy(x => GetRecognitionPriority(x.Source))
                 .FirstOrDefault();
@@ -792,7 +798,7 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
         }
     }
 
-    private static string NormalizeSource(string sourceAppUserModelId)
+    internal static string NormalizeSource(string sourceAppUserModelId)
     {
         if (sourceAppUserModelId.Contains("spotify", StringComparison.OrdinalIgnoreCase))
         {
@@ -818,15 +824,22 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
             return "Kugou";
         }
 
+        if (IsBrowserSource(sourceAppUserModelId)) return "Browser";
+
         return sourceAppUserModelId;
     }
+
+    private string ResolveSource(string sourceAppUserModelId) =>
+        _configuredCustomSources.Contains(sourceAppUserModelId)
+            ? sourceAppUserModelId
+            : NormalizeSource(sourceAppUserModelId);
 
     private bool IsSupportedSource(string sourceApp)
     {
         return _enabledSources.Contains(sourceApp);
     }
 
-    private static bool IsBlockedSource(string sourceAppUserModelId)
+    internal static bool IsBlockedSystemSource(string sourceAppUserModelId)
     {
         if (string.IsNullOrWhiteSpace(sourceAppUserModelId))
         {
@@ -836,8 +849,12 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
         return sourceAppUserModelId.Contains("explorer", StringComparison.OrdinalIgnoreCase) ||
                sourceAppUserModelId.Contains("shellexperiencehost", StringComparison.OrdinalIgnoreCase) ||
                sourceAppUserModelId.Contains("searchhost", StringComparison.OrdinalIgnoreCase) ||
-               sourceAppUserModelId.Contains("startmenuexperiencehost", StringComparison.OrdinalIgnoreCase) ||
-               sourceAppUserModelId.Contains("msedge", StringComparison.OrdinalIgnoreCase) ||
+               sourceAppUserModelId.Contains("startmenuexperiencehost", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsBrowserSource(string sourceAppUserModelId)
+    {
+        return sourceAppUserModelId.Contains("msedge", StringComparison.OrdinalIgnoreCase) ||
                sourceAppUserModelId.Contains("microsoftedge", StringComparison.OrdinalIgnoreCase) ||
                sourceAppUserModelId.Contains("chrome", StringComparison.OrdinalIgnoreCase) ||
                sourceAppUserModelId.Contains("firefox", StringComparison.OrdinalIgnoreCase) ||
@@ -845,6 +862,15 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
                sourceAppUserModelId.Contains("brave", StringComparison.OrdinalIgnoreCase) ||
                sourceAppUserModelId.Contains("arc", StringComparison.OrdinalIgnoreCase) ||
                sourceAppUserModelId.Contains("vivaldi", StringComparison.OrdinalIgnoreCase);
+    }
+
+    internal bool CanUseSource(string sourceAppUserModelId)
+    {
+        if (IsBlockedSystemSource(sourceAppUserModelId)) return false;
+        if (!IsBrowserSource(sourceAppUserModelId)) return true;
+        return _configuredCustomSources.Contains(sourceAppUserModelId)
+            ? _enabledSources.Contains(sourceAppUserModelId)
+            : _enabledSources.Contains("Browser");
     }
 
     private static bool IsAnyProcessRunning(params string[] names)
@@ -901,7 +927,7 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
     private string ResolveSourceWithProcessFallback(string sourceApp)
     {
         if (!string.IsNullOrWhiteSpace(sourceApp) &&
-            !IsBlockedSource(sourceApp) &&
+            CanUseSource(sourceApp) &&
             !IsDisabledKnownSource(sourceApp))
         {
             return sourceApp;
@@ -913,14 +939,15 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
 
     private bool CanUseGenericSession(string sourceAppUserModelId)
     {
-        return !IsBlockedSource(sourceAppUserModelId) &&
+        return CanUseSource(sourceAppUserModelId) &&
                !IsDisabledKnownSource(sourceAppUserModelId);
     }
 
     private bool IsDisabledKnownSource(string sourceAppUserModelId)
     {
-        var normalized = NormalizeSource(sourceAppUserModelId);
-        return IsKnownSource(normalized) && !_enabledSources.Contains(normalized);
+        var normalized = ResolveSource(sourceAppUserModelId);
+        return (IsKnownSource(normalized) || _configuredCustomSources.Contains(normalized)) &&
+               !_enabledSources.Contains(normalized);
     }
 
     private static bool IsKnownSource(string sourceApp)
@@ -1013,6 +1040,11 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
             }
         }
 
+        foreach (var source in enabledSources)
+        {
+            if (seen.Add(source)) result.Add(source);
+        }
+
         return result;
     }
 
@@ -1044,7 +1076,7 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
             return "Kugou";
         }
 
-        return string.Empty;
+        return source.Trim();
     }
 
     private static bool TryInferTrackFromNeteaseProcess(out string title, out string artist)

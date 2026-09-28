@@ -42,6 +42,8 @@ internal readonly record struct AppSettingsChangeSet(
             current.EnableQQMusic != next.EnableQQMusic ||
             current.EnableKugou != next.EnableKugou ||
             current.EnableSpotify != next.EnableSpotify ||
+            current.EnableBrowser != next.EnableBrowser ||
+            !current.CustomPlayerSources.SequenceEqual(next.CustomPlayerSources) ||
             !AreSameStrings(current.SourceRecognitionOrder, next.SourceRecognitionOrder);
 
         var localMediaLibraryChanged = isInitialApplication ||
