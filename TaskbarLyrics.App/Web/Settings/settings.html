@@ -46,7 +46,7 @@
 
     <main class="workspace">
       <header class="topbar" data-caption-drag>
-        <div class="title-block"><h1 id="pageTitle">播放源</h1><div class="title-sub"><p id="pageSubtitle">选择需要监听的音乐软件，并调整识别优先级。</p><span id="saveState" class="save-state" data-state="success" aria-live="polite">更改已实时应用</span></div></div>
+        <div class="title-block"><h1 id="pageTitle">播放源</h1><div class="title-sub"><p id="pageSubtitle">选择需要监听的音乐软件，并配置各播放器的歌词设置。</p><span id="saveState" class="save-state" data-state="success" aria-live="polite">更改已实时应用</span></div></div>
         <div class="caption-controls" role="group" aria-label="窗口控制">
           <button class="caption-button" type="button" data-window-action="minimize" aria-label="最小化"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6h8"/></svg></button>
           <button class="caption-button" type="button" data-window-action="maximize" aria-label="最大化"><svg class="caption-glyph-max" viewBox="0 0 12 12" aria-hidden="true"><rect x="3" y="3" width="6" height="6" rx="1"/></svg><svg class="caption-glyph-restore" viewBox="0 0 12 12" aria-hidden="true" hidden><path d="M4.5 2.5h5v5"/><rect x="2.5" y="4.5" width="5" height="5" rx="1"/></svg></button>
@@ -58,12 +58,8 @@
         <section class="page active" data-page="sources" aria-labelledby="sourcesHeading">
           <div class="page-inner">
             <section class="panel">
-              <div class="panel-head"><div><h2 id="sourcesHeading" tabindex="-1">播放器</h2><p>通过齿轮管理播放器识别与歌词同步偏移；所有歌词源始终参与歌词检索。</p></div><span id="sourceCount" class="source-count"></span></div>
-              <div class="panel-body"><div id="sourceGrid" class="source-grid"></div></div>
-            </section>
-            <section class="panel">
-              <div class="panel-head"><div><h2>识别优先级</h2><p>拖动手柄调整顺序；多个播放器同时运行时，优先使用靠前的来源。</p></div></div>
-              <div class="panel-body"><div id="priorityList" class="priority-list"></div></div>
+              <div class="panel-head"><div><h2 id="sourcesHeading" tabindex="-1">播放器</h2><p>拖动卡片调整同时播放时的选择顺序；点击齿轮配置歌词源与同步偏移。</p></div><span id="sourceCount" class="source-count"></span></div>
+              <div class="panel-body"><div id="sourceGrid" class="source-grid"></div><span id="sourceOrderAnnouncement" class="sr-only" aria-live="polite"></span></div>
             </section>
             <section class="panel">
               <div class="panel-head"><div><h2>本地歌词</h2><p>优先从音乐所在目录匹配同名歌词文件。</p></div></div>
@@ -290,7 +286,7 @@
     </main>
   </div>
 
-  <dialog id="restoreDialog" aria-labelledby="restoreDialogTitle" aria-describedby="restoreDialogDescription"><div class="dialog-body"><h2 id="restoreDialogTitle">恢复默认设置？</h2><p id="restoreDialogDescription">所有设置和播放源顺序都会恢复为默认值，并立即应用到歌词窗口。</p></div><div class="dialog-actions"><button class="btn ghost" type="button" data-dialog-cancel="restoreDialog">取消</button><button id="confirmRestore" class="btn" type="button">恢复默认</button></div></dialog>
+  <dialog id="restoreDialog" aria-labelledby="restoreDialogTitle" aria-describedby="restoreDialogDescription"><div class="dialog-body"><h2 id="restoreDialogTitle">恢复默认设置？</h2><p id="restoreDialogDescription">所有设置都会恢复为默认值，并立即应用到歌词窗口。</p></div><div class="dialog-actions"><button class="btn ghost" type="button" data-dialog-cancel="restoreDialog">取消</button><button id="confirmRestore" class="btn" type="button">恢复默认</button></div></dialog>
   <dialog id="clearDialog" aria-labelledby="clearDialogTitle" aria-describedby="clearDialogDescription"><div class="dialog-body"><h2 id="clearDialogTitle">清除歌词与封面缓存？</h2><p id="clearDialogDescription">将删除歌词、封面缓存，以及歌词匹配中“使用并记住”的指定记录；应用设置不会受到影响。</p></div><div class="dialog-actions"><button class="btn ghost" type="button" data-dialog-cancel="clearDialog">取消</button><button id="confirmClear" class="btn destructive" type="button">清除缓存</button></div></dialog>
   <dialog id="deleteTrackOffsetDialog" aria-labelledby="deleteTrackOffsetDialogTitle" aria-describedby="deleteTrackOffsetDialogDescription"><div class="dialog-body"><h2 id="deleteTrackOffsetDialogTitle">删除这条单曲偏移？</h2><p id="deleteTrackOffsetDialogDescription">删除后，这首歌曲在对应歌词源下将恢复为仅使用播放器偏移。</p></div><div class="dialog-actions"><button class="btn ghost" type="button" data-dialog-cancel="deleteTrackOffsetDialog">取消</button><button id="confirmDeleteTrackOffset" class="btn destructive" type="button">删除偏移</button></div></dialog>
   <dialog id="clearTrackOffsetsDialog" aria-labelledby="clearTrackOffsetsDialogTitle" aria-describedby="clearTrackOffsetsDialogDescription"><div class="dialog-body"><h2 id="clearTrackOffsetsDialogTitle">清除全部单曲偏移？</h2><p id="clearTrackOffsetsDialogDescription">所有歌曲和歌词源的单独修正都会被删除，此操作不会影响播放器偏移。</p></div><div class="dialog-actions"><button class="btn ghost" type="button" data-dialog-cancel="clearTrackOffsetsDialog">取消</button><button id="confirmClearTrackOffsets" class="btn destructive" type="button">全部清除</button></div></dialog>
@@ -318,7 +314,11 @@
         </div>
         <div class="player-setting-actions"><button id="resetPlayerOffsetButton" class="btn ghost small" type="button">恢复推荐偏移</button></div>
       </section>
-      <p class="player-settings-note">此入口后续还会承载该播放器的其他专属设置。</p>
+      <section class="player-setting-section">
+        <div class="player-offset-copy"><div><strong>在线歌词源信任顺序</strong><small>拖动左侧手柄排序；优先采用更可信且匹配达标的歌词。右侧可关闭自动查询。</small></div></div>
+        <div id="lyricProviderList" class="lyric-provider-list" aria-label="在线歌词源信任顺序"></div>
+        <p id="lyricProviderEmptyHint" class="player-settings-note" hidden>全部在线歌词源已关闭，仅尝试本地歌词。</p>
+      </section>
     </div>
   </dialog>
   <div id="selectPopover" class="select-popover"><div id="selectListbox" class="select-listbox" role="listbox" tabindex="-1" aria-label="选项"></div></div>

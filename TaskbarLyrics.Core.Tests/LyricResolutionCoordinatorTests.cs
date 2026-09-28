@@ -8,6 +8,37 @@ namespace TaskbarLyrics.Core.Tests;
 public sealed class LyricResolutionCoordinatorTests
 {
     [Fact]
+    public async Task PlayerSelectionChangesPrimaryTrustAndSkipsDisabledSources()
+    {
+        var sources = CreateValidSources();
+        using var coordinator = CreateCoordinator(
+            sources,
+            sourceSelectionResolver: track => track.SourceApp == "Player A"
+                ? new LyricSourceSelection([KnownLyricProviders.Netease, KnownLyricProviders.Kugou], "player-a")
+                : new LyricSourceSelection([KnownLyricProviders.QQMusic], "player-b"));
+
+        var first = await coordinator.ResolveAsync(CreateTrack("Player Song", "Player A"));
+        var second = await coordinator.ResolveAsync(CreateTrack("Player Song", "Player B"));
+
+        Assert.Equal(KnownLyricProviders.Netease, first!.ProviderId);
+        Assert.Equal(KnownLyricProviders.QQMusic, second!.ProviderId);
+        Assert.Equal(1, sources[0].SearchCalls);
+        Assert.Equal(0, sources[3].SearchCalls);
+    }
+
+    [Fact]
+    public async Task AllOnlineSourcesDisabledDoesNotStartOnlineSearch()
+    {
+        var sources = CreateValidSources();
+        using var coordinator = CreateCoordinator(
+            sources,
+            sourceSelectionResolver: _ => new LyricSourceSelection([], "none"));
+
+        Assert.Null(await coordinator.ResolveAsync(CreateTrack("No Online Song")));
+        Assert.All(sources, source => Assert.Equal(0, source.SearchCalls));
+    }
+
+    [Fact]
     public async Task OnlineSelectionPicksHighestTrustSourceWhenPrimaryIsRejected()
     {
         var track = CreateTrack("Trust Song");
@@ -482,7 +513,8 @@ public sealed class LyricResolutionCoordinatorTests
         TestMappingResolver? mappingResolver = null,
         ILyricProvider? localProvider = null,
         LyricProviderTrustPolicy? trustPolicy = null,
-        TimeSpan? sourceTimeout = null)
+        TimeSpan? sourceTimeout = null,
+        Func<TrackInfo, LyricSourceSelection>? sourceSelectionResolver = null)
     {
         return new LyricResolutionCoordinator(
             sources,
@@ -492,7 +524,8 @@ public sealed class LyricResolutionCoordinatorTests
             mappingResolver ?? new TestMappingResolver(),
             localProvider,
             trustPolicy,
-            sourceTimeout ?? TimeSpan.FromSeconds(1));
+            sourceTimeout ?? TimeSpan.FromSeconds(1),
+            sourceSelectionResolver: sourceSelectionResolver);
     }
 
     private static TestSource[] CreateValidSources() =>

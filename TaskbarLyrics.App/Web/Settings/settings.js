@@ -4,6 +4,12 @@
       { id: "kugou", name: "酷狗音乐", adapter: "Kugou", settingKey: "enableKugou", icon: "../../Assets/PlayerIcons/酷狗音乐.png" },
       { id: "spotify", name: "Spotify", adapter: "Spotify", settingKey: "enableSpotify", icon: "../../Assets/PlayerIcons/spotify.png" }
     ];
+    const lyricProviderDefaults = [
+      { providerId: "QQMusic", name: "QQ 音乐" },
+      { providerId: "Kugou", name: "酷狗音乐" },
+      { providerId: "Netease", name: "网易云音乐" },
+      { providerId: "LRCLIB", name: "LRCLIB" }
+    ];
 
     const selectOptions = {
       spectrumDisplayMode: [{ value: "Disabled", label: "关闭" }, { value: "PureMusicOnly", label: "仅纯音乐时" }, { value: "PureMusicOrNoLyrics", label: "纯音乐或无歌词时" }, { value: "Always", label: "始终显示" }],
@@ -18,7 +24,7 @@
     const presetColors = ["#FFFFFF", "#A1A1AA", "#18181B", "#EF4444", "#F97316", "#EAB308", "#22C55E", "#06B6D4", "#3B82F6", "#A855F7"];
 
     const pageMeta = {
-      sources: ["播放源", "选择需要监听的音乐软件，并调整识别优先级。"],
+      sources: ["播放源", "选择需要监听的音乐软件，并配置各播放器的歌词设置。"],
       shortcuts: ["快捷键", "设置在其他应用前台时控制播放器的全局组合键。"],
       lyrics: ["歌词", "控制歌词显示、翻译和频谱策略。"],
       trackOffsets: ["单曲偏移", "调整当前歌曲同步，并管理按歌词源保存的偏移。"],
@@ -32,7 +38,8 @@
     let state = null;
     let sourceCatalog = sourceCatalogDefaults.map(item => ({ ...item, enabled: false }));
     let toastTimer;
-    let draggedSourceId = null;
+    let draggedPlayerSourceId = null;
+    let draggedLyricProviderId = null;
     let pageAnimations = [];
     let pageTransitionToken = 0;
     let activeSelectTrigger = null;
@@ -72,13 +79,29 @@
     function renderSources() {
       const grid = $("#sourceGrid");
       grid.innerHTML = sourceCatalog.map(source => `
-        <article class="source-card ${source.enabled ? "enabled" : ""}">
-          <span class="source-logo" aria-hidden="true"><img src="${escapeHtml(source.icon)}" alt=""></span>
-          <span class="source-info"><strong>${escapeHtml(source.name)}</strong><small>${source.enabled ? "已启用" : "已停用"} · ${formatPlayerOffset(getPlayerOffset(source))}</small></span>
+        <article class="source-card ${source.enabled ? "enabled" : ""}" data-player-card="${escapeHtml(source.id)}">
+          <button class="source-drag-handle" type="button" draggable="true" data-player-drag-id="${escapeHtml(source.id)}" aria-label="拖动 ${escapeHtml(source.name)} 调整同时播放时的选择顺序" aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown Alt+ArrowLeft Alt+ArrowRight" title="拖动调整播放器选择顺序；也可按 Alt + 方向键">
+            <span class="source-logo" aria-hidden="true"><img src="${escapeHtml(source.icon)}" alt="" draggable="false"></span>
+            <span class="source-info"><strong>${escapeHtml(source.name)}</strong><small>${source.enabled ? "已启用" : "已停用"} · ${formatPlayerOffset(getPlayerOffset(source))}</small></span>
+          </button>
           <button class="source-settings-button" type="button" data-player-settings="${escapeHtml(source.id)}" aria-label="打开 ${escapeHtml(source.name)} 设置"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.25A3.25 3.25 0 1 0 12 8.75a3.25 3.25 0 0 0 0 6.5Z" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M19.1 13.3a7.5 7.5 0 0 0 0-2.6l2-1.55-2-3.46-2.5 1a7.6 7.6 0 0 0-2.25-1.3L14 2.75h-4l-.35 2.64A7.6 7.6 0 0 0 7.4 6.7l-2.5-1-2 3.46 2 1.55a7.5 7.5 0 0 0 0 2.6l-2 1.55 2 3.46 2.5-1a7.6 7.6 0 0 0 2.25 1.3l.35 2.64h4l.35-2.64a7.6 7.6 0 0 0 2.25-1.3l2.5 1 2-3.46-2-1.55Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></button>
         </article>`).join("");
       const enabled = sourceCatalog.filter(source => source.enabled).length;
       $("#sourceCount").textContent = `${enabled} / ${sourceCatalog.length} 个已启用`;
+    }
+
+    function commitPlayerSourceOrder(order) {
+      sourceCatalog = order.map(id => sourceCatalog.find(source => source.id === id));
+      state.sourceRecognitionOrder = sourceCatalog.map(source => source.adapter);
+      bridge.post({ type: "reorderSources", value: state.sourceRecognitionOrder });
+      renderSources();
+      markSaved();
+    }
+
+    function announcePlayerSourcePosition(sourceId) {
+      const index = sourceCatalog.findIndex(source => source.id === sourceId);
+      if (index < 0) return;
+      $("#sourceOrderAnnouncement").textContent = `${sourceCatalog[index].name} 已移至第 ${index + 1} 位，共 ${sourceCatalog.length} 位`;
     }
 
     function getPlayerOffset(source) {
@@ -606,6 +629,37 @@
       $("#playerOffsetInput").value = offset;
       $("#playerOffsetStatus").textContent = formatPlayerOffset(offset);
       $("#resetPlayerOffsetButton").disabled = offset === source.defaultOffset;
+      renderLyricProviders(source.adapter);
+    }
+
+    function normalizeLyricProviders(items) {
+      if (!Array.isArray(items) || items.length !== lyricProviderDefaults.length ||
+          new Set(items.map(item => item?.providerId)).size !== lyricProviderDefaults.length ||
+          items.some(item => !lyricProviderDefaults.some(known => known.providerId === item?.providerId))) {
+        return lyricProviderDefaults.map(item => ({ providerId: item.providerId, enabled: true }));
+      }
+      return items.map(item => ({ providerId: item.providerId, enabled: item.enabled === true }));
+    }
+
+    function renderLyricProviders(adapter) {
+      const providers = state?.playerLyricProviders?.[adapter] ?? normalizeLyricProviders();
+      $("#lyricProviderList").innerHTML = providers.map((item, index) => {
+        const name = lyricProviderDefaults.find(known => known.providerId === item.providerId).name;
+        return `<div class="priority-item lyric-provider-item ${item.enabled ? "" : "disabled"}" data-lyric-provider-item="${item.providerId}">
+          <button class="drag-handle" type="button" draggable="true" data-lyric-provider-drag="${item.providerId}" aria-label="拖动 ${name} 调整信任顺序" aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="5" cy="4" r="1.2"/><circle cx="11" cy="4" r="1.2"/><circle cx="5" cy="8" r="1.2"/><circle cx="11" cy="8" r="1.2"/><circle cx="5" cy="12" r="1.2"/><circle cx="11" cy="12" r="1.2"/></svg></button>
+          <span class="priority-number">${index + 1}</span><span class="priority-name">${name}</span>
+          <label class="switch"><input type="checkbox" data-lyric-provider-toggle="${item.providerId}" aria-label="启用 ${name} 在线歌词源" ${item.enabled ? "checked" : ""}><span class="switch-track"></span></label>
+        </div>`;
+      }).join("");
+      $("#lyricProviderEmptyHint").hidden = providers.some(item => item.enabled);
+    }
+
+    function commitLyricProviders() {
+      const source = sourceCatalog.find(item => item.id === activePlayerSourceId);
+      if (!source || !state) return;
+      bridge.post({ type: "update", key: `playerLyricProviders:${source.adapter}`, value: state.playerLyricProviders[source.adapter] });
+      renderLyricProviders(source.adapter);
+      markSaved();
     }
 
     function openPlayerSettings(sourceId) {
@@ -628,38 +682,6 @@
       renderSources();
       renderPlayerSettings();
       markSaved();
-    }
-
-    function renderPriority() {
-      const enabled = sourceCatalog.filter(source => source.enabled);
-      $("#priorityList").innerHTML = enabled.length ? enabled.map((source, index) => `
-        <div class="priority-item" data-priority-item="${escapeHtml(source.id)}">
-          <button class="drag-handle" type="button" draggable="true" data-drag-id="${escapeHtml(source.id)}" aria-label="拖动 ${escapeHtml(source.name)} 调整识别优先级" aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="5" cy="4" r="1.2"/><circle cx="11" cy="4" r="1.2"/><circle cx="5" cy="8" r="1.2"/><circle cx="11" cy="8" r="1.2"/><circle cx="5" cy="12" r="1.2"/><circle cx="11" cy="12" r="1.2"/></svg></button>
-          <span class="priority-number">${index + 1}</span>
-          <span class="priority-name">${escapeHtml(source.name)}</span>
-        </div>`).join("") : `<div class="setting-label"><strong>尚未启用播放源</strong><small>请至少启用一个播放器，以便识别当前播放内容。</small></div>`;
-    }
-
-    function applyEnabledOrder(orderedEnabled) {
-      const queue = [...orderedEnabled];
-      sourceCatalog = sourceCatalog.map(source => source.enabled ? queue.shift() : source);
-    }
-
-    function postSourceOrder() {
-      bridge.post({ type: "reorderSources", value: sourceCatalog.map(source => source.adapter) });
-    }
-
-    function moveEnabledSource(sourceId, targetId, placeAfter = false) {
-      const enabled = sourceCatalog.filter(source => source.enabled);
-      const moving = enabled.find(source => source.id === sourceId);
-      if (!moving || sourceId === targetId) return false;
-      const reordered = enabled.filter(source => source.id !== sourceId);
-      let targetIndex = reordered.findIndex(source => source.id === targetId);
-      if (targetIndex < 0) return false;
-      if (placeAfter) targetIndex += 1;
-      reordered.splice(targetIndex, 0, moving);
-      applyEnabledOrder(reordered);
-      return true;
     }
 
     function activatePage(pageId, moveFocus = true) {
@@ -1027,6 +1049,9 @@
         const value = Number(incomingOffsets[source.adapter]);
         return [source.adapter, Number.isFinite(value) ? Math.max(-5000, Math.min(5000, Math.round(value))) : defaultOffsetFor(source)];
       }));
+      state.playerLyricProviders = Object.fromEntries(sourceCatalogDefaults.map(source => [
+        source.adapter, normalizeLyricProviders(nextState.playerLyricProviders?.[source.adapter])
+      ]));
       state.customForegroundColor = nextState.foregroundColorMode === "Custom"
         ? foregroundColor
         : previousCustom ?? foregroundColor;
@@ -1412,7 +1437,6 @@
 
     function refresh() {
       renderSources();
-      renderPriority();
       renderTrackOffsets();
       if ($("#playerSettingsDialog").open) renderPlayerSettings();
       syncLayoutBounds();
@@ -1526,43 +1550,94 @@
     });
 
     document.addEventListener("dragstart", event => {
-      const handle = event.target.closest("[data-drag-id]");
-      if (!handle) return;
-      draggedSourceId = handle.dataset.dragId;
-      event.dataTransfer.effectAllowed = "move";
-      event.dataTransfer.setData("text/plain", draggedSourceId);
-      handle.closest("[data-priority-item]").classList.add("dragging");
+      const playerHandle = event.target.closest("[data-player-drag-id]");
+      if (playerHandle && state) {
+        draggedPlayerSourceId = playerHandle.dataset.playerDragId;
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setData("text/plain", draggedPlayerSourceId);
+        playerHandle.closest("[data-player-card]").classList.add("dragging");
+        return;
+      }
+      const lyricHandle = event.target.closest("[data-lyric-provider-drag]");
+      if (lyricHandle && activePlayerSourceId) {
+        draggedLyricProviderId = lyricHandle.dataset.lyricProviderDrag;
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setData("text/plain", draggedLyricProviderId);
+        lyricHandle.closest("[data-lyric-provider-item]").classList.add("dragging");
+        return;
+      }
     });
 
     document.addEventListener("dragover", event => {
-      const item = event.target.closest("[data-priority-item]");
-      if (!item || !draggedSourceId || item.dataset.priorityItem === draggedSourceId) return;
-      event.preventDefault();
-      event.dataTransfer.dropEffect = "move";
-      $$('[data-priority-item]').forEach(node => node.classList.toggle("drag-over", node === item));
+      const playerGrid = event.target.closest("#sourceGrid");
+      if (playerGrid && draggedPlayerSourceId) {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "move";
+        const playerCard = event.target.closest("[data-player-card]");
+        const draggedCard = playerGrid.querySelector(`[data-player-card="${draggedPlayerSourceId}"]`);
+        if (playerCard && draggedCard && playerCard !== draggedCard) {
+          const cards = [...playerGrid.children];
+          playerGrid.insertBefore(draggedCard, cards.indexOf(draggedCard) < cards.indexOf(playerCard) ? playerCard.nextSibling : playerCard);
+        }
+        return;
+      }
+      const lyricList = event.target.closest("#lyricProviderList");
+      if (lyricList && draggedLyricProviderId) {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "move";
+        const lyricItem = event.target.closest("[data-lyric-provider-item]");
+        const draggedItem = lyricList.querySelector(`[data-lyric-provider-item="${draggedLyricProviderId}"]`);
+        if (lyricItem && draggedItem && lyricItem !== draggedItem) {
+          const rect = lyricItem.getBoundingClientRect();
+          lyricList.insertBefore(draggedItem, event.clientY > rect.top + rect.height / 2 ? lyricItem.nextSibling : lyricItem);
+          [...lyricList.children].forEach((item, index) => { item.querySelector(".priority-number").textContent = index + 1; });
+        }
+        return;
+      }
     });
 
     document.addEventListener("drop", event => {
-      const item = event.target.closest("[data-priority-item]");
-      if (!item || !draggedSourceId) return;
-      event.preventDefault();
-      const rect = item.getBoundingClientRect();
-      const placeAfter = event.clientY > rect.top + rect.height / 2;
-      const moved = moveEnabledSource(draggedSourceId, item.dataset.priorityItem, placeAfter);
-      const movedSource = sourceCatalog.find(source => source.id === draggedSourceId);
-      draggedSourceId = null;
-      renderPriority();
-      if (moved) {
-        postSourceOrder();
-        markSaved();
-        const position = sourceCatalog.filter(source => source.enabled).findIndex(source => source.id === movedSource.id) + 1;
-        showToast(`${movedSource.name} 已移动到第 ${position} 位`);
+      const playerGrid = event.target.closest("#sourceGrid");
+      if (playerGrid && draggedPlayerSourceId) {
+        event.preventDefault();
+        const movedId = draggedPlayerSourceId;
+        const previewOrder = [...playerGrid.children].map(card => card.dataset.playerCard);
+        draggedPlayerSourceId = null;
+        if (previewOrder.some((id, index) => id !== sourceCatalog[index].id)) {
+          commitPlayerSourceOrder(previewOrder);
+          announcePlayerSourcePosition(movedId);
+        } else {
+          renderSources();
+        }
+        return;
+      }
+      const lyricList = event.target.closest("#lyricProviderList");
+      if (lyricList && draggedLyricProviderId) {
+        event.preventDefault();
+        const source = sourceCatalog.find(item => item.id === activePlayerSourceId);
+        const providers = state?.playerLyricProviders?.[source?.adapter];
+        const previewOrder = [...lyricList.children].map(item => item.dataset.lyricProviderItem);
+        if (providers && previewOrder.some((id, index) => id !== providers[index].providerId)) {
+          const reordered = previewOrder.map(id => providers.find(item => item.providerId === id));
+          state.playerLyricProviders[source.adapter] = reordered;
+          commitLyricProviders();
+        } else if (source) {
+          renderLyricProviders(source.adapter);
+        }
+        draggedLyricProviderId = null;
+        return;
       }
     });
 
     document.addEventListener("dragend", () => {
-      draggedSourceId = null;
-      $$('[data-priority-item]').forEach(node => node.classList.remove("dragging", "drag-over"));
+      if (draggedPlayerSourceId) renderSources();
+      draggedPlayerSourceId = null;
+      if (draggedLyricProviderId) {
+        const source = sourceCatalog.find(item => item.id === activePlayerSourceId);
+        if (source) renderLyricProviders(source.adapter);
+      }
+      draggedLyricProviderId = null;
+      $$('[data-lyric-provider-item]').forEach(node => node.classList.remove("dragging", "drag-over"));
     });
 
     document.addEventListener("keydown", event => {
@@ -1582,22 +1657,34 @@
         return;
       }
 
-      const handle = event.target.closest("[data-drag-id]");
-      if (!handle || !event.altKey || !["ArrowUp", "ArrowDown"].includes(event.key)) return;
-      event.preventDefault();
-      const enabled = sourceCatalog.filter(source => source.enabled);
-      const current = enabled.findIndex(source => source.id === handle.dataset.dragId);
-      const target = current + (event.key === "ArrowUp" ? -1 : 1);
-      if (target < 0 || target >= enabled.length) return;
-      [enabled[current], enabled[target]] = [enabled[target], enabled[current]];
-      applyEnabledOrder(enabled);
-      postSourceOrder();
-      const sourceId = handle.dataset.dragId;
-      const sourceName = enabled[target].name;
-      renderPriority();
-      markSaved();
-      showToast(`${sourceName} 已移动到第 ${target + 1} 位`);
-      requestAnimationFrame(() => document.querySelector(`[data-drag-id="${sourceId}"]`)?.focus());
+      const playerHandle = event.target.closest("[data-player-drag-id]");
+      if (playerHandle && event.altKey && ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)) {
+        event.preventDefault();
+        const sourceId = playerHandle.dataset.playerDragId;
+        const current = sourceCatalog.findIndex(source => source.id === sourceId);
+        const target = current + (["ArrowUp", "ArrowLeft"].includes(event.key) ? -1 : 1);
+        if (current < 0 || target < 0 || target >= sourceCatalog.length) return;
+        const order = sourceCatalog.map(source => source.id);
+        [order[current], order[target]] = [order[target], order[current]];
+        commitPlayerSourceOrder(order);
+        announcePlayerSourcePosition(sourceId);
+        requestAnimationFrame(() => document.querySelector(`[data-player-drag-id="${sourceId}"]`)?.focus());
+        return;
+      }
+
+      const lyricHandle = event.target.closest("[data-lyric-provider-drag]");
+      if (lyricHandle && event.altKey && ["ArrowUp", "ArrowDown"].includes(event.key)) {
+        event.preventDefault();
+        const source = sourceCatalog.find(item => item.id === activePlayerSourceId);
+        const providers = state?.playerLyricProviders?.[source?.adapter];
+        const current = providers?.findIndex(item => item.providerId === lyricHandle.dataset.lyricProviderDrag) ?? -1;
+        const target = current + (event.key === "ArrowUp" ? -1 : 1);
+        if (!providers || target < 0 || target >= providers.length) return;
+        [providers[current], providers[target]] = [providers[target], providers[current]];
+        commitLyricProviders();
+        requestAnimationFrame(() => document.querySelector(`[data-lyric-provider-drag="${lyricHandle.dataset.lyricProviderDrag}"]`)?.focus());
+        return;
+      }
     });
 
     document.addEventListener("click", event => {
@@ -1715,6 +1802,17 @@
     });
 
     document.addEventListener("change", event => {
+      const lyricToggle = event.target.closest("[data-lyric-provider-toggle]");
+      if (lyricToggle) {
+        const source = sourceCatalog.find(item => item.id === activePlayerSourceId);
+        const provider = state?.playerLyricProviders?.[source?.adapter]
+          ?.find(item => item.providerId === lyricToggle.dataset.lyricProviderToggle);
+        if (provider) {
+          provider.enabled = lyricToggle.checked;
+          commitLyricProviders();
+        }
+        return;
+      }
       const displayMode = event.target.closest("[data-display-mode]");
       if (displayMode) {
         commitSetting("lyricsDisplayMode", displayMode.value);
@@ -1751,7 +1849,7 @@
           state[source.settingKey] = source.enabled;
           bridge.post({ type: "update", key: source.settingKey, value: source.enabled });
         }
-        renderSources(); renderPriority(); renderPlayerSettings(); markSaved(); return;
+        renderSources(); renderPlayerSettings(); markSaved(); return;
       }
 
       if (event.target === $("#playerOffsetInput")) { commitPlayerOffset(event.target.value); return; }

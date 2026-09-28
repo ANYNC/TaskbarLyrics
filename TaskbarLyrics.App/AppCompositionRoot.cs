@@ -18,6 +18,7 @@ internal interface IAppCompositionRoot : IDisposable
         TrackLyricOffsetStore trackLyricOffsetStore);
 
     LyricDiagnosticRunner CreateLyricDiagnosticRunner();
+    LyricDiagnosticRunner CreateLyricDiagnosticRunner(AppSettings settings);
 
     ValueTask<bool> RememberResolvedLyricsAsync(
         TrackInfo track,
@@ -89,7 +90,8 @@ internal sealed class AppCompositionRoot : IAppCompositionRoot
             [new LyricifyPayloadParser()],
             cache,
             localProvider: localProvider,
-            resolvedLyricCache: resolvedLyricCache);
+            resolvedLyricCache: resolvedLyricCache,
+            sourceSelectionResolver: track => settings.GetLyricSourceSelection(track.SourceApp));
     }
 
     public LyricDiagnosticRunner CreateLyricDiagnosticRunner() =>
@@ -103,13 +105,28 @@ internal sealed class AppCompositionRoot : IAppCompositionRoot
             [new LyricifyPayloadDecoder()],
             [new LyricifyPayloadParser()]);
 
+    public LyricDiagnosticRunner CreateLyricDiagnosticRunner(AppSettings settings) =>
+        new(
+            [
+                new QqMusicLyricSource(),
+                new KugouLyricSource(),
+                new NeteaseLyricSource(),
+                new LrcLibLyricSource()
+            ],
+            [new LyricifyPayloadDecoder()],
+            [new LyricifyPayloadParser()],
+            sourceSelectionResolver: track => settings.GetLyricSourceSelection(track.SourceApp));
+
     public ValueTask<bool> RememberResolvedLyricsAsync(
         TrackInfo track,
         ResolvedLyrics resolvedLyrics,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return ValueTask.FromResult(_resolvedLyricCache.Store(track, resolvedLyrics));
+        var stored = _resolvedLyricCache is IContextualResolvedLyricCache contextual
+            ? contextual.Store(track, resolvedLyrics, LyricSourceSelection.ManualCacheContext)
+            : _resolvedLyricCache.Store(track, resolvedLyrics);
+        return ValueTask.FromResult(stored);
     }
 
     public void ClearLyricCache()

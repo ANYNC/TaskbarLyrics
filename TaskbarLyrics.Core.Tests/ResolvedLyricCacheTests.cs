@@ -8,6 +8,45 @@ namespace TaskbarLyrics.Core.Tests;
 public sealed class ResolvedLyricCacheTests
 {
     [Fact]
+    public void SelectionContextsDoNotReuseDefaultOrOtherPlayerResults()
+    {
+        using var fixture = CacheFile.Create();
+        var track = CreateTrack("Song", "Artist", "Album", "QQMusic", "id", null, TimeSpan.FromMinutes(3));
+        using (var cache = new JsonResolvedLyricCache(fixture.Path))
+        {
+            Assert.True(cache.Store(track, CreateResolved("default")));
+            Assert.True(cache.Store(track, CreateResolved("qq custom"), "QQMusic:Kugou:1"));
+            Assert.False(cache.TryGet(track, "Spotify:Kugou:1", out _));
+            Assert.True(cache.TryGet(track, out var defaultLyrics));
+            Assert.Equal("default", defaultLyrics!.Content.Lines[0].Text);
+        }
+
+        using var reloaded = new JsonResolvedLyricCache(fixture.Path);
+        Assert.True(reloaded.TryGet(track, "QQMusic:Kugou:1", out var customLyrics));
+        Assert.Equal("qq custom", customLyrics!.Content.Lines[0].Text);
+    }
+
+    [Fact]
+    public void VersionOneCacheRemainsReadableAndIsUpgradedOnWrite()
+    {
+        using var fixture = CacheFile.Create();
+        var track = CreateTrack("Song", "Artist", "Album", "Player", "id", null, TimeSpan.FromMinutes(3));
+        using (var cache = new JsonResolvedLyricCache(fixture.Path))
+        {
+            Assert.True(cache.Store(track, CreateResolved("existing")));
+        }
+        var versionTwo = File.ReadAllText(fixture.Path);
+        File.WriteAllText(fixture.Path, versionTwo.Replace("\"version\": 2", "\"version\": 1", StringComparison.Ordinal));
+
+        using var reloaded = new JsonResolvedLyricCache(fixture.Path);
+        Assert.True(reloaded.TryGet(track, out var existing));
+        Assert.Equal("existing", existing!.Content.Lines[0].Text);
+        Assert.True(reloaded.Store(track, CreateResolved("new"), "Player:custom"));
+        using var document = JsonDocument.Parse(File.ReadAllText(fixture.Path));
+        Assert.Equal(2, document.RootElement.GetProperty("version").GetInt32());
+    }
+
+    [Fact]
     public void CacheKeyIgnoresPlayerAlbumDurationAndIdentifiers()
     {
         using var fixture = CacheFile.Create();

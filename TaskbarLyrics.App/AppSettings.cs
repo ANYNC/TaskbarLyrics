@@ -1,3 +1,5 @@
+using TaskbarLyrics.Core.Models;
+
 namespace TaskbarLyrics.App;
 
 public enum LyricsHorizontalAnchor
@@ -230,7 +232,8 @@ public sealed class AppSettings
             {
                 normalized[source] = new PlayerSourceSettings
                 {
-                    LyricOffsetMilliseconds = ClampPlayerLyricOffset(sourceSettings.LyricOffsetMilliseconds)
+                    LyricOffsetMilliseconds = ClampPlayerLyricOffset(sourceSettings.LyricOffsetMilliseconds),
+                    LyricProviders = PlayerSourceSettings.NormalizeLyricProviders(sourceSettings.LyricProviders)
                 };
             }
         }
@@ -308,6 +311,40 @@ public sealed class AppSettings
 
         NormalizePlayerSources();
         PlayerSources[source].LyricOffsetMilliseconds = ClampPlayerLyricOffset(value);
+    }
+
+    public IReadOnlyList<LyricProviderPreference> GetPlayerLyricProviders(string? sourceApp)
+    {
+        var source = NormalizePlayerSourceName(sourceApp);
+        return source is not null && PlayerSources is not null &&
+            PlayerSources.TryGetValue(source, out var settings) && settings is not null
+                ? PlayerSourceSettings.NormalizeLyricProviders(settings.LyricProviders)
+                : PlayerSourceSettings.CreateDefaultLyricProviders();
+    }
+
+    public bool SetPlayerLyricProviders(string? sourceApp, IReadOnlyList<LyricProviderPreference>? providers)
+    {
+        var source = NormalizePlayerSourceName(sourceApp);
+        if (source is null || !PlayerSourceSettings.IsValidLyricProviders(providers))
+        {
+            return false;
+        }
+
+        NormalizePlayerSources();
+        PlayerSources[source].LyricProviders = providers!.Select(item => item with { }).ToList();
+        return true;
+    }
+
+    public LyricSourceSelection GetLyricSourceSelection(string? sourceApp)
+    {
+        var source = NormalizePlayerSourceName(sourceApp);
+        var providers = GetPlayerLyricProviders(source);
+        var enabledOrder = providers.Where(item => item.Enabled)
+            .Select(item => new LyricProviderId(item.ProviderId)).ToArray();
+        var defaults = PlayerSourceSettings.CreateDefaultLyricProviders();
+        var isDefault = source is null || providers.SequenceEqual(defaults);
+        var context = isDefault ? null : $"{source}:{string.Join(',', providers.Select(item => $"{item.ProviderId}:{(item.Enabled ? 1 : 0)}"))}";
+        return new LyricSourceSelection(enabledOrder, context);
     }
 
     public static int GetDefaultPlayerLyricOffsetMilliseconds(string? sourceApp)
@@ -417,8 +454,31 @@ public sealed class PlayerSourceSettings
 {
     public int LyricOffsetMilliseconds { get; set; }
 
+    public List<LyricProviderPreference> LyricProviders { get; set; } = CreateDefaultLyricProviders();
+
+    public static List<LyricProviderPreference> CreateDefaultLyricProviders() =>
+        KnownLyricProviders.OnlineTrustOrder
+            .Select(provider => new LyricProviderPreference(provider.Value, true)).ToList();
+
+    public static bool IsValidLyricProviders(IReadOnlyList<LyricProviderPreference>? providers) =>
+        providers is not null && providers.Count == KnownLyricProviders.OnlineTrustOrder.Count &&
+        providers.All(item => item is not null && KnownLyricProviders.OnlineTrustOrder.Any(
+            known => string.Equals(known.Value, item.ProviderId, StringComparison.Ordinal))) &&
+        providers.Select(item => item.ProviderId).Distinct(StringComparer.Ordinal).Count() == providers.Count;
+
+    public static List<LyricProviderPreference> NormalizeLyricProviders(IReadOnlyList<LyricProviderPreference>? providers) =>
+        IsValidLyricProviders(providers)
+            ? providers!.Select(item => item with { }).ToList()
+            : CreateDefaultLyricProviders();
+
     public PlayerSourceSettings Clone()
     {
-        return (PlayerSourceSettings)MemberwiseClone();
+        return new PlayerSourceSettings
+        {
+            LyricOffsetMilliseconds = LyricOffsetMilliseconds,
+            LyricProviders = NormalizeLyricProviders(LyricProviders)
+        };
     }
 }
+
+public sealed record LyricProviderPreference(string ProviderId, bool Enabled);

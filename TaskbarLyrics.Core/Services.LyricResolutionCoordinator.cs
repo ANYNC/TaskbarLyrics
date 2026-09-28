@@ -16,6 +16,7 @@ public sealed class LyricResolutionCoordinator : ILyricResolutionCoordinator
     private readonly ILyricMappingResolver _mappingResolver;
     private readonly ILyricPipelineCache _cache;
     private readonly LyricProviderTrustPolicy _trustPolicy;
+    private readonly Func<TrackInfo, LyricSourceSelection>? _sourceSelectionResolver;
     private readonly ILyricProvider? _localProvider;
     private readonly IResolvedLyricCache? _resolvedLyricCache;
     private readonly ILyricResolutionTraceSink? _traceSink;
@@ -41,7 +42,8 @@ public sealed class LyricResolutionCoordinator : ILyricResolutionCoordinator
         TimeSpan? sourceTimeout = null,
         ILyricResolutionTraceSink? traceSink = null,
         bool completeAllSourcesForTrace = false,
-        IResolvedLyricCache? resolvedLyricCache = null)
+        IResolvedLyricCache? resolvedLyricCache = null,
+        Func<TrackInfo, LyricSourceSelection>? sourceSelectionResolver = null)
     {
         ArgumentNullException.ThrowIfNull(sources);
         ArgumentNullException.ThrowIfNull(decoders);
@@ -77,6 +79,7 @@ public sealed class LyricResolutionCoordinator : ILyricResolutionCoordinator
         _traceSink = traceSink;
         _completeAllSourcesForTrace = completeAllSourcesForTrace;
         _trustPolicy = trustPolicy ?? LyricProviderTrustPolicy.CreateDefault(sourceArray.Select(source => source.ProviderId));
+        _sourceSelectionResolver = sourceSelectionResolver;
         _sourceTimeout = sourceTimeout ?? LyricMatchingPolicy.OnlineSourceTimeout;
         if (_sourceTimeout <= TimeSpan.Zero)
         {
@@ -104,6 +107,7 @@ public sealed class LyricResolutionCoordinator : ILyricResolutionCoordinator
         try
         {
             var token = linkedCancellation.Token;
+            var selection = _sourceSelectionResolver?.Invoke(track) ?? new LyricSourceSelection(_trustPolicy.Order, null);
             token.ThrowIfCancellationRequested();
             if (string.IsNullOrWhiteSpace(track.Title) ||
                 string.Equals(track.Title, "Unknown Title", StringComparison.OrdinalIgnoreCase))
@@ -112,7 +116,7 @@ public sealed class LyricResolutionCoordinator : ILyricResolutionCoordinator
                 return null;
             }
 
-            if (TryGetCachedLyrics(track, out var cachedLyrics))
+            if (TryGetCachedLyrics(track, selection, out var cachedLyrics))
             {
                 LogSelection(requestId, cachedLyrics);
                 return cachedLyrics;
@@ -140,7 +144,8 @@ public sealed class LyricResolutionCoordinator : ILyricResolutionCoordinator
                 return pureMusic;
             }
 
-            if (!string.IsNullOrWhiteSpace(mapping.PreferredProvider))
+            if (!string.IsNullOrWhiteSpace(mapping.PreferredProvider) &&
+                selection.Order.Any(provider => string.Equals(provider.Value, mapping.PreferredProvider, StringComparison.OrdinalIgnoreCase)))
             {
                 var preferred = await ResolvePreferredAsync(
                     mappedTrack,
@@ -148,7 +153,7 @@ public sealed class LyricResolutionCoordinator : ILyricResolutionCoordinator
                     mapping.PreferredProvider,
                     requestId,
                     token);
-                TryStoreAutomaticResolution(track, preferred);
+                TryStoreAutomaticResolution(track, preferred, selection);
                 LogSelection(requestId, preferred);
                 return preferred;
             }
@@ -160,8 +165,8 @@ public sealed class LyricResolutionCoordinator : ILyricResolutionCoordinator
                 return local;
             }
 
-            var online = await ResolveOnlineAsync(mappedTrack, searchPlan, requestId, token);
-            TryStoreAutomaticResolution(track, online);
+            var online = await ResolveOnlineAsync(mappedTrack, searchPlan, requestId, selection.Order, token);
+            TryStoreAutomaticResolution(track, online, selection);
             LogSelection(requestId, online);
             return online;
         }
@@ -183,6 +188,7 @@ public sealed class LyricResolutionCoordinator : ILyricResolutionCoordinator
 
     private bool TryGetCachedLyrics(
         TrackInfo track,
+        LyricSourceSelection selection,
         out ResolvedLyrics? resolvedLyrics)
     {
         resolvedLyrics = null;
@@ -193,7 +199,23 @@ public sealed class LyricResolutionCoordinator : ILyricResolutionCoordinator
 
         try
         {
-            return _resolvedLyricCache.TryGet(track, out resolvedLyrics) && resolvedLyrics is not null;
+            if (_resolvedLyricCache is IContextualResolvedLyricCache manualCache &&
+                manualCache.TryGet(track, LyricSourceSelection.ManualCacheContext, out resolvedLyrics) &&
+                resolvedLyrics is not null)
+            {
+                return true;
+            }
+
+            var found = selection.CacheContext is null
+                ? _resolvedLyricCache.TryGet(track, out resolvedLyrics)
+                : _resolvedLyricCache is IContextualResolvedLyricCache contextual &&
+                    contextual.TryGet(track, selection.CacheContext, out resolvedLyrics);
+            if (!found || resolvedLyrics is null)
+            {
+                return false;
+            }
+            var cachedProvider = resolvedLyrics.ProviderId;
+            return selection.Order.Any(provider => provider == cachedProvider);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -202,7 +224,10 @@ public sealed class LyricResolutionCoordinator : ILyricResolutionCoordinator
         }
     }
 
-    private void TryStoreAutomaticResolution(TrackInfo track, ResolvedLyrics? resolvedLyrics)
+    private void TryStoreAutomaticResolution(
+        TrackInfo track,
+        ResolvedLyrics? resolvedLyrics,
+        LyricSourceSelection selection)
     {
         if (_resolvedLyricCache is null ||
             resolvedLyrics is null ||
@@ -214,7 +239,11 @@ public sealed class LyricResolutionCoordinator : ILyricResolutionCoordinator
 
         try
         {
-            if (!_resolvedLyricCache.Store(track, resolvedLyrics))
+            var stored = selection.CacheContext is null
+                ? _resolvedLyricCache.Store(track, resolvedLyrics)
+                : _resolvedLyricCache is IContextualResolvedLyricCache contextual &&
+                    contextual.Store(track, resolvedLyrics, selection.CacheContext);
+            if (!stored)
             {
                 Log.Warn("Resolved lyric cache rejected an automatic lyric selection.");
             }
@@ -354,10 +383,16 @@ public sealed class LyricResolutionCoordinator : ILyricResolutionCoordinator
         TrackInfo track,
         LyricSearchPlan searchPlan,
         string requestId,
+        IReadOnlyList<LyricProviderId> trustOrder,
         CancellationToken cancellationToken)
     {
+        if (trustOrder.Count == 0)
+        {
+            return null;
+        }
+
         using var batchCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        var tasks = _trustPolicy.Order.ToDictionary(
+        var tasks = trustOrder.ToDictionary(
             providerId => providerId.Value,
             providerId => ResolveSourceWithTraceAsync(
                 _sources[providerId.Value],
@@ -368,7 +403,7 @@ public sealed class LyricResolutionCoordinator : ILyricResolutionCoordinator
             StringComparer.OrdinalIgnoreCase);
         TrackSourceBatch(tasks.Values);
 
-        var primaryProviderId = _trustPolicy.Order[0];
+        var primaryProviderId = trustOrder[0];
 
         if (!_completeAllSourcesForTrace)
         {
@@ -384,7 +419,7 @@ public sealed class LyricResolutionCoordinator : ILyricResolutionCoordinator
         }
 
         var outcomes = new List<(LyricProviderId ProviderId, SourceOutcome Outcome)>();
-        foreach (var providerId in _trustPolicy.Order)
+        foreach (var providerId in trustOrder)
         {
             cancellationToken.ThrowIfCancellationRequested();
             var outcome = tasks[providerId.Value];
@@ -403,13 +438,14 @@ public sealed class LyricResolutionCoordinator : ILyricResolutionCoordinator
             return null;
         }
 
-        return SelectBestOutcome(outcomes);
+        return SelectBestOutcome(outcomes, trustOrder);
     }
 
-    private ResolvedLyrics SelectBestOutcome(
-        IReadOnlyList<(LyricProviderId ProviderId, SourceOutcome Outcome)> outcomes)
+    private static ResolvedLyrics SelectBestOutcome(
+        IReadOnlyList<(LyricProviderId ProviderId, SourceOutcome Outcome)> outcomes,
+        IReadOnlyList<LyricProviderId> trustOrder)
     {
-        var trustOrder = _trustPolicy.Order.ToArray();
+        var trustOrderArray = trustOrder.ToArray();
 
         var highConfidence = outcomes
             .Where(entry => TryGetIdentityScore(entry.Outcome.Lyrics!, out var score) &&
@@ -419,7 +455,7 @@ public sealed class LyricResolutionCoordinator : ILyricResolutionCoordinator
         var pool = highConfidence.Length > 0 ? highConfidence : outcomes;
 
         return pool
-            .OrderBy(entry => Array.IndexOf(trustOrder, entry.ProviderId))
+            .OrderBy(entry => Array.IndexOf(trustOrderArray, entry.ProviderId))
             .ThenByDescending(entry => TryGetIdentityScore(entry.Outcome.Lyrics!, out var score) ? score : 0)
             .First()
             .Outcome.Lyrics!;

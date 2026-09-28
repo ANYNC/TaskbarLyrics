@@ -1095,6 +1095,10 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 pair => pair.Key,
                 pair => pair.Value.LyricOffsetMilliseconds,
                 StringComparer.OrdinalIgnoreCase),
+            PlayerLyricProviders = _settings.PlayerSources.ToDictionary(
+                pair => pair.Key,
+                pair => pair.Value.LyricProviders,
+                StringComparer.OrdinalIgnoreCase),
             DefaultPlayerLyricOffsets = _settings.PlayerSources.Keys.ToDictionary(
                 source => source,
                 AppSettings.GetDefaultPlayerLyricOffsetMilliseconds,
@@ -1291,6 +1295,15 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
 
         var element = value.Value;
         const string playerLyricOffsetPrefix = "playerLyricOffset:";
+        const string playerLyricProvidersPrefix = "playerLyricProviders:";
+        if (key.StartsWith(playerLyricProvidersPrefix, StringComparison.Ordinal))
+        {
+            if (SettingsWebMessageRouter.TryParseLyricProviderPreferences(element, out var providers))
+            {
+                _settings.SetPlayerLyricProviders(key[playerLyricProvidersPrefix.Length..], providers);
+            }
+            return;
+        }
         if (key.StartsWith(playerLyricOffsetPrefix, StringComparison.Ordinal))
         {
             var sourceApp = key[playerLyricOffsetPrefix.Length..];
@@ -2017,6 +2030,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         public bool EnableKugou { get; set; }
         public bool EnableSpotify { get; set; }
         public Dictionary<string, int> PlayerLyricOffsets { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+        public Dictionary<string, List<LyricProviderPreference>> PlayerLyricProviders { get; set; } = new(StringComparer.OrdinalIgnoreCase);
         public Dictionary<string, int> DefaultPlayerLyricOffsets { get; set; } = new(StringComparer.OrdinalIgnoreCase);
         public bool EnableLocalLyrics { get; set; }
         public List<string> LocalMusicFolders { get; set; } = new();

@@ -470,7 +470,7 @@ public partial class App : System.Windows.Application, IDisposable
             _trackLyricOffsetStore,
             () => _lyricsWindowHost?.GetCurrentTrackLyricsContextAsync()
                 ?? Task.FromResult<CurrentTrackLyricsContext?>(null),
-            _compositionRoot.CreateLyricDiagnosticRunner,
+            () => _compositionRoot.CreateLyricDiagnosticRunner(Settings),
             (track, resolved, cancellationToken) => _lyricsWindowHost?.TryApplyResolvedLyricsAsync(
                 track,
                 resolved,

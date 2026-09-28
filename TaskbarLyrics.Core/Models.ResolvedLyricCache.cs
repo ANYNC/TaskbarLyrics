@@ -22,4 +22,5 @@ public sealed record ResolvedLyricCacheEntry(
     string? CandidateId,
     LyricAcquisitionKind Acquisition,
     IReadOnlyDictionary<string, string>? Diagnostics,
-    ParsedLyrics? Content);
+    ParsedLyrics? Content,
+    string? SelectionContext = null);

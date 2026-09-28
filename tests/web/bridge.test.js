@@ -59,6 +59,182 @@ function enableDialogDomSupport(dom) {
 }
 
 describe("settings WebView bridge", () => {
+  it("keeps saved player card order and gear settings separate", async () => {
+    const { dom, sent, script } = await createSettingsDom();
+    enableDialogDomSupport(dom);
+    const document = dom.window.document;
+    dom.window.eval(script);
+    dom.window.settingsApp.receive({
+      version: 1,
+      type: "settingsState",
+      payload: { settings: {
+        sourceRecognitionOrder: ["Spotify", "QQMusic", "Netease", "Kugou"],
+        enableSpotify: true,
+        enableQQMusic: true,
+        playerLyricOffsets: {},
+        defaultPlayerLyricOffsets: {},
+        playerLyricProviders: {},
+        mediaHotkeys: [],
+        mediaHotkeyStatuses: {}
+      }, fonts: [] }
+    });
+
+    expect(document.querySelector("#priorityList")).toBeNull();
+    expect(document.querySelector('[data-page="sources"]').textContent).not.toContain("识别优先级");
+    expect([...document.querySelectorAll("[data-player-settings]")].map(item => item.dataset.playerSettings))
+      .toEqual(["spotify", "qqmusic", "netease", "kugou"]);
+
+    document.querySelector('[data-player-settings="spotify"]').click();
+    const toggle = document.querySelector("#playerRecognitionToggle");
+    toggle.checked = false;
+    toggle.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+    expect(sent.at(-1).payload).toEqual({ key: "enableSpotify", value: false });
+    expect(sent.some(message => message.type === "reorderSources")).toBe(false);
+  });
+
+  it("previews player card order, saves on drop, and restores canceled drags", async () => {
+    const { dom, sent, script } = await createSettingsDom();
+    enableDialogDomSupport(dom);
+    const document = dom.window.document;
+    dom.window.eval(script);
+    dom.window.settingsApp.receive({
+      version: 1,
+      type: "settingsState",
+      payload: { settings: {
+        sourceRecognitionOrder: ["QQMusic", "Netease", "Kugou", "Spotify"],
+        playerLyricOffsets: {},
+        defaultPlayerLyricOffsets: {},
+        playerLyricProviders: {},
+        mediaHotkeys: [],
+        mediaHotkeyStatuses: {}
+      }, fonts: [] }
+    });
+    const grid = document.querySelector("#sourceGrid");
+    const order = () => [...grid.children].map(card => card.dataset.playerCard);
+    const drag = (target, type) => {
+      const event = new dom.window.Event(type, { bubbles: true, cancelable: true });
+      Object.defineProperty(event, "dataTransfer", { value: { effectAllowed: "", dropEffect: "", setData() {} } });
+      target.dispatchEvent(event);
+    };
+
+    const initialMessages = sent.length;
+    drag(document.querySelector('[data-player-drag-id="qqmusic"]'), "dragstart");
+    drag(document.querySelector('[data-player-card="netease"]'), "dragover");
+    expect(order()).toEqual(["netease", "qqmusic", "kugou", "spotify"]);
+    expect(sent).toHaveLength(initialMessages);
+    drag(grid, "drop");
+    expect(sent.at(-1).type).toBe("reorderSources");
+    expect(sent.at(-1).payload).toEqual(["Netease", "QQMusic", "Kugou", "Spotify"]);
+    expect(document.querySelector("#sourceOrderAnnouncement").textContent).toContain("第 2 位");
+
+    const committedMessages = sent.length;
+    const spotifyHandle = document.querySelector('[data-player-drag-id="spotify"]');
+    drag(spotifyHandle, "dragstart");
+    drag(document.querySelector('[data-player-card="netease"]'), "dragover");
+    expect(order()).toEqual(["spotify", "netease", "qqmusic", "kugou"]);
+    drag(spotifyHandle, "dragend");
+    expect(order()).toEqual(["netease", "qqmusic", "kugou", "spotify"]);
+    expect(sent).toHaveLength(committedMessages);
+
+    document.querySelector('[data-player-drag-id="qqmusic"]')
+      .dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "ArrowUp", altKey: true, bubbles: true }));
+    expect(order()).toEqual(["qqmusic", "netease", "kugou", "spotify"]);
+    expect(sent.at(-1).payload).toEqual(["QQMusic", "Netease", "Kugou", "Spotify"]);
+    expect(document.activeElement.dataset.playerDragId).toBe("qqmusic");
+  });
+
+  it("edits online lyric trust order and switches per player", async () => {
+    const { dom, sent, script } = await createSettingsDom();
+    enableDialogDomSupport(dom);
+    const document = dom.window.document;
+    dom.window.eval(script);
+    dom.window.settingsApp.receive({
+      version: 1,
+      type: "settingsState",
+      payload: { settings: {
+        sourceRecognitionOrder: ["QQMusic", "Spotify"],
+        playerLyricOffsets: {},
+        defaultPlayerLyricOffsets: {},
+        playerLyricProviders: {},
+        mediaHotkeys: [],
+        mediaHotkeyStatuses: {}
+      }, fonts: [] }
+    });
+
+    document.querySelector('[data-player-settings="qqmusic"]').click();
+    expect([...document.querySelectorAll('[data-lyric-provider-item]')].map(item => item.dataset.lyricProviderItem))
+      .toEqual(["QQMusic", "Kugou", "Netease", "LRCLIB"]);
+    const handle = document.querySelector('[data-lyric-provider-drag="Kugou"]');
+    handle.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "ArrowUp", altKey: true, bubbles: true }));
+    expect(sent.at(-1).payload).toEqual({
+      key: "playerLyricProviders:QQMusic",
+      value: [
+        { providerId: "Kugou", enabled: true },
+        { providerId: "QQMusic", enabled: true },
+        { providerId: "Netease", enabled: true },
+        { providerId: "LRCLIB", enabled: true }
+      ]
+    });
+
+    const toggle = document.querySelector('[data-lyric-provider-toggle="QQMusic"]');
+    toggle.checked = false;
+    toggle.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+    expect(sent.at(-1).payload.value[1].enabled).toBe(false);
+
+    document.querySelector('[data-player-settings="spotify"]').click();
+    expect([...document.querySelectorAll('[data-lyric-provider-item]')].map(item => item.dataset.lyricProviderItem))
+      .toEqual(["QQMusic", "Kugou", "Netease", "LRCLIB"]);
+    expect(document.querySelector('[data-lyric-provider-toggle="QQMusic"]').checked).toBe(true);
+  });
+
+  it("previews lyric source positions while dragging and restores canceled drags", async () => {
+    const { dom, sent, script } = await createSettingsDom();
+    enableDialogDomSupport(dom);
+    const document = dom.window.document;
+    dom.window.eval(script);
+    dom.window.settingsApp.receive({
+      version: 1,
+      type: "settingsState",
+      payload: { settings: {
+        sourceRecognitionOrder: ["QQMusic"],
+        playerLyricOffsets: {},
+        defaultPlayerLyricOffsets: {},
+        playerLyricProviders: {},
+        mediaHotkeys: [],
+        mediaHotkeyStatuses: {}
+      }, fonts: [] }
+    });
+    document.querySelector('[data-player-settings="qqmusic"]').click();
+    const list = document.querySelector("#lyricProviderList");
+    const order = () => [...list.children].map(item => item.dataset.lyricProviderItem);
+    const drag = (target, type, clientY = 0) => {
+      const event = new dom.window.Event(type, { bubbles: true, cancelable: true });
+      Object.defineProperties(event, {
+        clientY: { value: clientY },
+        dataTransfer: { value: { effectAllowed: "", dropEffect: "", setData() {} } }
+      });
+      target.dispatchEvent(event);
+    };
+
+    const initialMessages = sent.length;
+    drag(document.querySelector('[data-lyric-provider-drag="Kugou"]'), "dragstart");
+    drag(document.querySelector('[data-lyric-provider-item="Netease"]'), "dragover", 1);
+    expect(order()).toEqual(["QQMusic", "Netease", "Kugou", "LRCLIB"]);
+    expect([...list.querySelectorAll(".priority-number")].map(item => item.textContent)).toEqual(["1", "2", "3", "4"]);
+    expect(sent).toHaveLength(initialMessages);
+    drag(list, "drop");
+    expect(sent.at(-1).payload.value.map(item => item.providerId)).toEqual(order());
+
+    const committedMessages = sent.length;
+    const qqHandle = document.querySelector('[data-lyric-provider-drag="QQMusic"]');
+    drag(qqHandle, "dragstart");
+    drag(document.querySelector('[data-lyric-provider-item="LRCLIB"]'), "dragover", 1);
+    expect(order()).toEqual(["Netease", "Kugou", "LRCLIB", "QQMusic"]);
+    drag(qqHandle, "dragend");
+    expect(order()).toEqual(["QQMusic", "Netease", "Kugou", "LRCLIB"]);
+    expect(sent).toHaveLength(committedMessages);
+  });
+
   it("keeps the public pages and setting fields in the document", async () => {
     const html = await read("TaskbarLyrics.App/Web/Settings/settings.html");
     const document = new JSDOM(html).window.document;

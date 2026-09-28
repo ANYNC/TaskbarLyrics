@@ -10,13 +10,14 @@ namespace TaskbarLyrics.Core.Services;
 /// <summary>
 /// Persists final lyric resolutions by normalized title and artist.
 /// </summary>
-public sealed class JsonResolvedLyricCache : IResolvedLyricCache, IDisposable
+public sealed class JsonResolvedLyricCache : IContextualResolvedLyricCache, IDisposable
 {
-    public const int CurrentVersion = 1;
+    public const int CurrentVersion = 2;
     public const string DefaultFileName = "resolved-lyrics-v1.json";
     public const string LegacyFileName = "user-lyric-bindings-v1.json";
 
     private const string CacheKeyVersion = "resolved-lyrics-key-v1";
+    private const string ScopedCacheKeyVersion = "resolved-lyrics-key-v2";
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -52,9 +53,15 @@ public sealed class JsonResolvedLyricCache : IResolvedLyricCache, IDisposable
         new(GetDefaultFilePath());
 
     public bool TryGet(TrackInfo track, out ResolvedLyrics? resolvedLyrics)
+        => TryGetCore(track, null, out resolvedLyrics);
+
+    public bool TryGet(TrackInfo track, string context, out ResolvedLyrics? resolvedLyrics)
+        => TryGetCore(track, context, out resolvedLyrics);
+
+    private bool TryGetCore(TrackInfo track, string? context, out ResolvedLyrics? resolvedLyrics)
     {
         resolvedLyrics = null;
-        if (track is null || !TryCreateCacheKey(track.Title, track.Artist, out var key))
+        if (track is null || !TryCreateCacheKey(track.Title, track.Artist, context, out var key))
         {
             return false;
         }
@@ -81,10 +88,16 @@ public sealed class JsonResolvedLyricCache : IResolvedLyricCache, IDisposable
     }
 
     public bool Store(TrackInfo track, ResolvedLyrics resolvedLyrics)
+        => StoreCore(track, resolvedLyrics, null);
+
+    public bool Store(TrackInfo track, ResolvedLyrics resolvedLyrics, string context)
+        => StoreCore(track, resolvedLyrics, context);
+
+    private bool StoreCore(TrackInfo track, ResolvedLyrics resolvedLyrics, string? context)
     {
         if (track is null || resolvedLyrics is null ||
-            !TryCreateCacheKey(track.Title, track.Artist, out var key) ||
-            !TryCreateEntry(track, resolvedLyrics, out var entry))
+            !TryCreateCacheKey(track.Title, track.Artist, context, out var key) ||
+            !TryCreateEntry(track, resolvedLyrics, context, out var entry))
         {
             return false;
         }
@@ -186,7 +199,7 @@ public sealed class JsonResolvedLyricCache : IResolvedLyricCache, IDisposable
             }
 
             if (envelope is null ||
-                envelope.Version != CurrentVersion ||
+                (envelope.Version != CurrentVersion && envelope.Version != 1) ||
                 envelope.Entries is null)
             {
                 return MarkLoadFailure("version or structure is invalid");
@@ -271,7 +284,7 @@ public sealed class JsonResolvedLyricCache : IResolvedLyricCache, IDisposable
                 FileOptions.SequentialScan);
             var envelope = JsonSerializer.Deserialize<LegacyStoreEnvelope>(stream, SerializerOptions);
             if (envelope is null ||
-                envelope.Version != CurrentVersion ||
+                envelope.Version != 1 ||
                 envelope.Bindings is null)
             {
                 return false;
@@ -360,6 +373,7 @@ public sealed class JsonResolvedLyricCache : IResolvedLyricCache, IDisposable
     private static bool TryCreateEntry(
         TrackInfo track,
         ResolvedLyrics resolvedLyrics,
+        string? context,
         out ResolvedLyricCacheEntry entry)
     {
         entry = new ResolvedLyricCacheEntry(
@@ -376,7 +390,8 @@ public sealed class JsonResolvedLyricCache : IResolvedLyricCache, IDisposable
             resolvedLyrics.Diagnostics is null
                 ? null
                 : new Dictionary<string, string>(resolvedLyrics.Diagnostics, StringComparer.Ordinal),
-            resolvedLyrics.Content);
+            resolvedLyrics.Content,
+            context);
         return IsValidEntryForTrack(track, entry);
     }
 
@@ -419,7 +434,7 @@ public sealed class JsonResolvedLyricCache : IResolvedLyricCache, IDisposable
     private static bool IsValidEntry(string key, ResolvedLyricCacheEntry? entry)
     {
         return entry is not null &&
-            TryCreateCacheKey(entry.Title, entry.Artist, out var expectedKey) &&
+            TryCreateCacheKey(entry.Title, entry.Artist, entry.SelectionContext, out var expectedKey) &&
             string.Equals(key, expectedKey, StringComparison.Ordinal) &&
             !string.IsNullOrWhiteSpace(entry.ProviderId) &&
             !string.IsNullOrWhiteSpace(entry.CandidateId) &&
@@ -431,7 +446,7 @@ public sealed class JsonResolvedLyricCache : IResolvedLyricCache, IDisposable
     }
 
     private static bool IsValidEntryForTrack(TrackInfo track, ResolvedLyricCacheEntry entry) =>
-        TryCreateCacheKey(track.Title, track.Artist, out var key) &&
+        TryCreateCacheKey(track.Title, track.Artist, entry.SelectionContext, out var key) &&
         IsValidEntry(key, entry);
 
     private static bool TryCreateResolvedLyrics(
@@ -512,6 +527,13 @@ public sealed class JsonResolvedLyricCache : IResolvedLyricCache, IDisposable
         string? title,
         string? artist,
         out string key)
+        => TryCreateCacheKey(title, artist, null, out key);
+
+    private static bool TryCreateCacheKey(
+        string? title,
+        string? artist,
+        string? context,
+        out string key)
     {
         key = string.Empty;
         var normalizedTitle = NormalizeRequired(title);
@@ -522,11 +544,12 @@ public sealed class JsonResolvedLyricCache : IResolvedLyricCache, IDisposable
         }
 
         var canonical = string.Concat(
-            CacheKeyVersion,
+            context is null ? CacheKeyVersion : ScopedCacheKeyVersion,
             ":title:", normalizedTitle.Length.ToString(System.Globalization.CultureInfo.InvariantCulture),
             ":", normalizedTitle,
             ":artist:", normalizedArtist.Length.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            ":", normalizedArtist);
+            ":", normalizedArtist,
+            context is null ? "" : $":context:{context.Length}:{context}");
         key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical)));
         return true;
     }

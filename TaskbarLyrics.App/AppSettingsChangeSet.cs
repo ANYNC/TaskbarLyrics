@@ -162,7 +162,9 @@ internal readonly record struct AppSettingsChangeSet(
         foreach (var (source, currentSettings) in current)
         {
             if (!next.TryGetValue(source, out var nextSettings) ||
-                currentSettings?.LyricOffsetMilliseconds != nextSettings?.LyricOffsetMilliseconds)
+                currentSettings?.LyricOffsetMilliseconds != nextSettings?.LyricOffsetMilliseconds ||
+                !PlayerSourceSettings.NormalizeLyricProviders(currentSettings?.LyricProviders)
+                    .SequenceEqual(PlayerSourceSettings.NormalizeLyricProviders(nextSettings?.LyricProviders)))
             {
                 return false;
             }

@@ -38,6 +38,34 @@ internal static class SettingsWebJson
 
 internal static class SettingsWebMessageRouter
 {
+    public static bool TryParseLyricProviderPreferences(
+        JsonElement? value,
+        out List<LyricProviderPreference> providers)
+    {
+        providers = [];
+        if (value is not { ValueKind: JsonValueKind.Array } payload)
+        {
+            return false;
+        }
+
+        try
+        {
+            var parsed = JsonSerializer.Deserialize<List<LyricProviderPreference>>(
+                payload.GetRawText(), SettingsWebJson.Options);
+            if (!PlayerSourceSettings.IsValidLyricProviders(parsed))
+            {
+                return false;
+            }
+
+            providers = parsed!;
+            return true;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
     public static SettingsWebMessage? Parse(string? messageJson)
     {
         var message = WebViewMessageRouter.Parse(messageJson);

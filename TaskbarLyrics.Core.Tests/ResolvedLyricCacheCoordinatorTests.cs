@@ -8,6 +8,27 @@ namespace TaskbarLyrics.Core.Tests;
 public sealed class ResolvedLyricCacheCoordinatorTests
 {
     [Fact]
+    public async Task ManualSelectionSurvivesDisabledAutomaticProviders()
+    {
+        using var fixture = CacheFile.Create();
+        var track = CreateTrack();
+        using var cache = new JsonResolvedLyricCache(fixture.Path);
+        Assert.True(cache.Store(track, CreateResolved("chosen", LyricAcquisitionKind.UserBinding),
+            LyricSourceSelection.ManualCacheContext));
+        var source = new RecordingSource(KnownLyricProviders.QQMusic);
+        using var coordinator = new LyricResolutionCoordinator(
+            [source], [], [new PlainTextParser()], new EmptyPipelineCache(),
+            trustPolicy: new LyricProviderTrustPolicy([source.ProviderId], [source.ProviderId]),
+            resolvedLyricCache: cache,
+            sourceSelectionResolver: _ => new LyricSourceSelection([], "all-disabled"));
+
+        var resolved = await coordinator.ResolveAsync(track);
+
+        Assert.Equal("chosen", resolved!.Content.Lines[0].Text);
+        Assert.Equal(0, source.SearchCalls);
+    }
+
+    [Fact]
     public async Task CacheHitSkipsMappingLocalAndOnlineResolution()
     {
         var source = new RecordingSource(KnownLyricProviders.QQMusic);

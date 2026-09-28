@@ -11,6 +11,7 @@ public sealed class LyricDiagnosticRunner : IDisposable
     private readonly ILyricPayloadParser[] _parsers;
     private readonly ILyricMappingResolver? _mappingResolver;
     private readonly LyricProviderTrustPolicy _trustPolicy;
+    private readonly Func<TrackInfo, LyricSourceSelection>? _sourceSelectionResolver;
     private readonly TimeSpan? _sourceTimeout;
     private readonly object _stateGate = new();
     private LyricResolutionCoordinator? _coordinator;
@@ -29,7 +30,8 @@ public sealed class LyricDiagnosticRunner : IDisposable
         IEnumerable<ILyricPayloadParser> parsers,
         ILyricMappingResolver? mappingResolver = null,
         LyricProviderTrustPolicy? trustPolicy = null,
-        TimeSpan? sourceTimeout = null)
+        TimeSpan? sourceTimeout = null,
+        Func<TrackInfo, LyricSourceSelection>? sourceSelectionResolver = null)
     {
         ArgumentNullException.ThrowIfNull(sources);
         ArgumentNullException.ThrowIfNull(decoders);
@@ -42,6 +44,7 @@ public sealed class LyricDiagnosticRunner : IDisposable
         _trustPolicy = trustPolicy ?? LyricProviderTrustPolicy.CreateDefault(
             _sources.Select(source => source.ProviderId));
         _sourceTimeout = sourceTimeout;
+        _sourceSelectionResolver = sourceSelectionResolver;
     }
 
     public async Task<LyricDiagnosticReport> RunAsync(
@@ -66,7 +69,8 @@ public sealed class LyricDiagnosticRunner : IDisposable
             trustPolicy: _trustPolicy,
             sourceTimeout: _sourceTimeout,
             traceSink: trace,
-            completeAllSourcesForTrace: true);
+            completeAllSourcesForTrace: true,
+            sourceSelectionResolver: _sourceSelectionResolver);
         lock (_stateGate)
         {
             _coordinator = coordinator;
@@ -81,7 +85,8 @@ public sealed class LyricDiagnosticRunner : IDisposable
                 throw new OperationCanceledException();
             }
 
-            var report = trace.CreateReport(track, _trustPolicy.Order, resolved, mapping.PreferredProvider);
+            var trustOrder = _sourceSelectionResolver?.Invoke(track).Order ?? _trustPolicy.Order;
+            var report = trace.CreateReport(track, trustOrder, resolved, mapping.PreferredProvider);
             lock (_stateGate)
             {
                 if (_isDisposed || !ReferenceEquals(_coordinator, coordinator))
