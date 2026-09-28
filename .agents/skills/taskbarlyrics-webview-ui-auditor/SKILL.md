@@ -1,22 +1,21 @@
 ---
 name: taskbarlyrics-webview-ui-auditor
-description: Performs read-only audits of TaskbarLyrics WebView2 interfaces implemented with native HTML, CSS, and JavaScript, covering visual consistency, accessibility, keyboard and focus behavior, component states, interaction logic, animation, DPI, overflow, performance, and optional end-to-end WebView V1/C# host flows. Use when reviewing, auditing, checking, or evaluating TaskbarLyrics Web UI or UX, including Settings, Lyrics, SmtcMonitor, and SpectrumTuning. Supports a default frontend mode and an explicit end-to-end mode. Never edits files.
+description: Optional focused audit guide for TaskbarLyrics WebView2 interfaces. Use for a dedicated UI or UX audit, with frontend or end-to-end scope. An audit-only request is read-only; a request that also asks for fixes may proceed to implementation under repository rules.
 ---
 
 # TaskbarLyrics WebView UI Auditor
 
-Audit the current on-disk interface and report evidence-backed findings. Remain read-only even if the user asks for suggested fixes; describe changes without applying them.
+Audit the current on-disk interface and report evidence-backed findings. Keep audit-only requests read-only. When the user asks to fix findings, implement the requested fixes after the audit under the repository's change and verification rules.
 
-## Load authority in order
+## Consult applicable guidance
 
 Before inspecting implementation:
 
-1. Read the repository-root `AGENTS.md`.
-2. Read `../taskbarlyrics-clean-code-guardian/SKILL.md` and every reference it requires.
-3. Read `../../../docs/WebView界面视觉与交互规范.md` completely. Treat it as the final project authority.
-4. When the `web-design-guidelines` skill is available, read and apply it, including its current upstream guideline retrieval. Treat online guidance as supplementary when it conflicts with the local standard.
+1. Follow the repository-root `AGENTS.md`.
+2. Consult relevant sections of `../../../docs/WebView界面视觉与交互规范.md` and repository contracts.
+3. Use external Web guidelines when they help resolve a concrete issue; they do not override local compatibility contracts.
 
-If an online guideline cannot be retrieved, continue with the local authority and disclose the missing external evidence. Do not weaken or invent project rules.
+Do not invent requirements from unavailable guidelines.
 
 ## Select the audit mode
 
@@ -78,7 +77,7 @@ Do not expand into unrelated domain internals merely because they are reachable.
 4. Distinguish confirmed defects, verification gaps, and subjective preferences.
 5. Report only issues with a concrete user, accessibility, correctness, consistency, or performance consequence.
 6. Do not treat generic browser guidance as mandatory when the local standard documents a WebView2/Windows adaptation.
-7. Do not run the app, write snapshots, format files, or update documentation unless the user separately authorizes a non-audit task.
+7. For audit-only requests, avoid writes or app state changes. For audit-and-fix requests, verify changes according to their impact.
 
 ## Grade findings
 
@@ -100,15 +99,4 @@ Lead with findings, ordered by severity and then file. For every actionable find
 - the smallest compatible recommendation;
 - rule origin: `本地项目规范`, `通用 Web Guidelines`, or `WebView2/Windows 适配`.
 
-Then include:
-
-1. **Interaction coverage** — state whether the audit was frontend or end-to-end and list the traced flows.
-2. **Patterns worth preserving** — identify existing tokens, components, and interaction patterns that should not be lost.
-3. **Rule classification** — group applied rules into:
-   - 可直接纳入项目规范
-   - 需要针对 WebView2/Windows 适配
-   - 不适用于本项目
-4. **Manual verification** — list only checks that require a real Windows/WebView2 session, such as DPI, high contrast, UI Automation, taskbar edge, or multi-monitor behavior.
-5. **Scope and evidence gaps** — disclose files, runtime states, or external guidelines that were unavailable.
-
-If no actionable findings exist, say so explicitly and still report coverage and remaining manual checks. Never modify files during the audit.
+Then state the audited scope and traced flows, relevant patterns worth preserving, and any material evidence gaps or Windows/WebView2 checks still needed. Classify rules by project fit only when the user asks for a standards review. If no actionable findings exist, say so explicitly.

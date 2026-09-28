@@ -4,6 +4,14 @@ import { describe, expect, it } from "vitest";
 
 const root = new URL("../..", import.meta.url);
 const read = relativePath => readFile(new URL(relativePath, root), "utf8");
+const settingsPages = ["sources", "shortcuts", "lyrics", "trackOffsets", "displayArea", "general", "advanced", "lyricDiagnostics", "about"];
+const persistedSettings = [
+  "enableLocalLyrics", "localMusicFolders", "enableGlobalMediaHotkeys", "showLyricsOnStartup", "autoHideWhenNoPlayback",
+  "showLyricTranslation", "enableWordScanning", "spectrumDisplayMode", "lyricsLayoutScalePercent", "fontSize", "showCover",
+  "coverSize", "coverGap", "coverCornerRadius", "fontFamily", "fontWeight", "lyricsTextAlignment", "foregroundColorMode",
+  "showTextShadow", "toolWindowTheme", "showBackground", "backgroundOpacity", "showBorder", "windowWidth", "horizontalAnchor",
+  "xOffset", "yOffset", "forceAlwaysOnTop", "startWithWindows", "autoCheckUpdates"
+];
 
 async function createSettingsDom({ deferAnimationFrames = false, reducedMotion = false } = {}) {
   const [html, bridge, hotkeys, state, script] = await Promise.all([
@@ -51,6 +59,25 @@ function enableDialogDomSupport(dom) {
 }
 
 describe("settings WebView bridge", () => {
+  it("keeps the public pages and setting fields in the document", async () => {
+    const html = await read("TaskbarLyrics.App/Web/Settings/settings.html");
+    const document = new JSDOM(html).window.document;
+    const navigationPages = [...document.querySelectorAll("[data-nav]")].map(item => item.dataset.nav);
+    const contentPages = [...document.querySelectorAll("[data-page]")].map(item => item.dataset.page);
+
+    expect([...navigationPages].sort()).toEqual([...settingsPages].sort());
+    expect([...contentPages].sort()).toEqual([...settingsPages].sort());
+    for (const page of settingsPages) {
+      expect(document.querySelector(`[data-nav="${page}"]`)).not.toBeNull();
+      expect(document.querySelector(`[data-page="${page}"]`)).not.toBeNull();
+    }
+
+    const settingKeys = new Set([...document.querySelectorAll("[data-setting]")].map(control => control.dataset.setting));
+    for (const key of persistedSettings) {
+      expect(settingKeys.has(key), `missing persisted setting control: ${key}`).toBe(true);
+    }
+  });
+
   it("sends every command in the V1 envelope", async () => {
     const { dom, sent } = await createSettingsDom();
 
@@ -75,11 +102,13 @@ describe("settings WebView bridge", () => {
     const { dom, script } = await createSettingsDom();
 
     dom.window.eval(script);
-    dom.window.settingsApp.receive({ version: 1, type: "navigate", payload: { page: "lyrics", focusCurrentTrack: false } });
+    for (const page of settingsPages) {
+      dom.window.settingsApp.receive({ version: 1, type: "navigate", payload: { page, focusCurrentTrack: false } });
 
-    expect(dom.window.document.querySelector('[data-nav="lyrics"]').classList.contains("active")).toBe(true);
-    expect(dom.window.document.querySelector('[data-nav="lyrics"]').getAttribute("aria-current")).toBe("page");
-    expect(dom.window.document.querySelector('[data-nav="sources"]').getAttribute("aria-current")).toBeNull();
+      expect(dom.window.document.querySelector(`[data-nav="${page}"]`).classList.contains("active")).toBe(true);
+      expect(dom.window.document.querySelector(`[data-nav="${page}"]`).getAttribute("aria-current")).toBe("page");
+      expect(dom.window.document.querySelector(`[data-page="${page}"]`).classList.contains("active")).toBe(true);
+    }
   });
 
   it("echoes the word-scanning setting and posts V1 updates", async () => {
@@ -1081,6 +1110,18 @@ describe("settings WebView bridge", () => {
       version: 1,
       type: "update",
       payload: { key: "windowWidth", value: 420 }
+    });
+
+    const widthSlider = document.querySelector('input[type="range"][data-setting="windowWidth"]');
+    expect(widthInput.min).toBe("100");
+    expect(widthSlider.min).toBe("100");
+    widthInput.value = "100";
+    widthInput.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+    expect(widthSlider.value).toBe("100");
+    expect(sent.at(-1)).toEqual({
+      version: 1,
+      type: "update",
+      payload: { key: "windowWidth", value: 100 }
     });
   });
 

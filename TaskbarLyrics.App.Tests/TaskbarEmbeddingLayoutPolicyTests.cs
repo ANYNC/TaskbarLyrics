@@ -80,7 +80,7 @@ public sealed class TaskbarEmbeddingLayoutPolicyTests
 
         var result = TaskbarEmbeddingLayoutPolicy.NormalizeForEmbedding(
             settings,
-            new TaskbarEmbeddingConstraints(300, 48));
+            new TaskbarEmbeddingConstraints(AppSettings.MinimumWindowWidth - 1, 48));
 
         Assert.False(result.CanEmbed);
         Assert.False(result.Changed);
@@ -96,7 +96,7 @@ public sealed class TaskbarEmbeddingLayoutPolicyTests
 
         var changed = App.NormalizeStartupWindowPresentation(
             settings,
-            new TaskbarEmbeddingConstraints(300, 48),
+            new TaskbarEmbeddingConstraints(AppSettings.MinimumWindowWidth - 1, 48),
             out var message);
 
         Assert.True(changed);

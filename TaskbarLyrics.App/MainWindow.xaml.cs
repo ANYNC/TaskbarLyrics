@@ -1064,8 +1064,8 @@ public partial class MainWindow : Window, IDisposable
                 browserExecutableFolder: null,
                 userDataFolder: webViewUserDataFolder);
 
-            await EnsureCoreWebView2Async(webViewControl, webViewEnvironment);
             TrySetDefaultBackgroundColor(webViewControl, System.Drawing.Color.Transparent);
+            await EnsureCoreWebView2Async(webViewControl, webViewEnvironment);
             var coreWebView2 = TryGetCoreWebView2(webViewControl);
             if (coreWebView2 is not null)
             {
@@ -1269,19 +1269,28 @@ public partial class MainWindow : Window, IDisposable
             return;
         }
         _isWebDocumentReady = true;
+        if (_lyricsWebViewElement is not null)
+        {
+            _lyricsWebViewElement.Visibility = Visibility.Visible;
+        }
+
         if (_isShowingWebErrorPage)
         {
             return;
         }
 
-        if (System.Windows.Application.Current is App app)
+        // The WebView starts hidden to avoid a white native surface. Wait for its
+        // first visible WPF layout before sending content that measures the viewport.
+        Dispatcher.BeginInvoke(new Action(() =>
         {
-            PushStyleToWebView(_currentSettings);
-        }
+            if (Volatile.Read(ref _isDisposed) != 0 || !_isWebDocumentReady || _isShowingWebErrorPage)
+            {
+                return;
+            }
 
-        PushCurrentLyricsToWebView();
-        PushCoverToWebView();
-        PushSpectrumTuningToWebView(_spectrumTuningSettings);
+            RefreshLyricsWebViewLayout();
+            ReplayPresentationState();
+        }), DispatcherPriority.Loaded);
     }
 
     private void AttachWebViewMessageHandler(CoreWebView2 coreWebView2)
@@ -1459,6 +1468,9 @@ public partial class MainWindow : Window, IDisposable
         element.VerticalAlignment = System.Windows.VerticalAlignment.Stretch;
         element.Focusable = false;
         element.IsHitTestVisible = false;
+        // A taskbar child may become visible before its first WebView document is ready.
+        // Keep the uninitialized native surface out of the taskbar until it has painted.
+        element.Visibility = Visibility.Hidden;
 
         LyricsWebHost.Children.Clear();
         LyricsWebHost.Children.Add(uiElement);

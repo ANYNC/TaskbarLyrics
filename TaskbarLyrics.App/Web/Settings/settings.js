@@ -1299,7 +1299,7 @@
     function syncWindowBounds() {
       state.xOffset = Math.min(2000, Math.max(-2000, Number(state.xOffset) || 0));
       state.yOffset = Math.min(2000, Math.max(-2000, Number(state.yOffset) || 0));
-      state.windowWidth = Math.min(1400, Math.max(320, Number(state.windowWidth) || 420));
+      state.windowWidth = Math.min(1400, Math.max(100, Number(state.windowWidth) || 420));
       const embedded = state.useFloatingWindow === false;
       const limitOr = (value, fallback) => Number.isFinite(Number(value)) ? Number(value) : fallback;
       const bound = (key, min, max) => {
@@ -1329,7 +1329,7 @@
         embedded ? limitOr(state.taskbarMaxCoverGap, 240) : 240);
       bound(
         "windowWidth",
-        320,
+        100,
         embedded ? limitOr(state.taskbarMaxWindowWidth, 1400) : 1400);
       state.coverCornerRadius = Math.min(
         Math.max(0, Number(state.coverCornerRadius) || 0),

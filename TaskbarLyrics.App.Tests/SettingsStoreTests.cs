@@ -513,14 +513,17 @@ public sealed class SettingsStoreTests
         {
             File.WriteAllText(
                 filePath,
-                "{\"TaskbarEmbeddingEnabled\":false,\"WindowWidth\":760,\"XOffset\":-36,\"YOffset\":18}");
+                "{\"TaskbarEmbeddingEnabled\":false,\"WindowWidth\":100,\"XOffset\":-36,\"YOffset\":18}");
 
-            var loaded = new SettingsStore(filePath).Load();
+            var store = new SettingsStore(filePath);
+            var loaded = store.Load();
 
             Assert.True(loaded.UseFloatingWindow);
-            Assert.Equal(760, loaded.WindowWidth);
+            Assert.Equal(100, loaded.WindowWidth);
             Assert.Equal(-36, loaded.XOffset);
             Assert.Equal(18, loaded.YOffset);
+            Assert.True(store.Save(loaded));
+            Assert.Equal(100, store.Load().WindowWidth);
         }
         finally
         {

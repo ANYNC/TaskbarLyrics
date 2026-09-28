@@ -29,6 +29,15 @@ public sealed class AppSettingsTests
     }
 
     [Fact]
+    public void NewSettingsUseTheDefaultSpectrumFrequencyRange()
+    {
+        var tuning = new AppSettings().SpectrumTuning;
+
+        Assert.Equal(28, tuning.MinFrequency);
+        Assert.Equal(4000, tuning.MaxFrequency);
+    }
+
+    [Fact]
     public void NewSettingsShowLyricsOnAllDisplaysByDefault()
     {
         var settings = new AppSettings();
@@ -125,7 +134,7 @@ public sealed class AppSettingsTests
     [Fact]
     public void ClampEffectiveWindowWidthClampsToMinimumWhenScaledBelowIt()
     {
-        Assert.Equal(AppSettings.MinimumWindowWidth, AppSettings.ClampEffectiveWindowWidth(420, 25, 1920));
+        Assert.Equal(100, AppSettings.ClampEffectiveWindowWidth(100, 25, 1920));
     }
 
     [Fact]
@@ -167,5 +176,17 @@ public sealed class AppSettingsTests
         Assert.Equal(AppSettings.MaximumWindowWidth, settings.WindowWidth);
         Assert.Equal(AppSettings.MinimumWindowOffset, settings.XOffset);
         Assert.Equal(AppSettings.MaximumWindowOffset, settings.YOffset);
+    }
+
+    [Theory]
+    [InlineData(100, 100)]
+    [InlineData(99, 100)]
+    public void NormalizeWindowLayoutAllowsOneHundredPixelWidth(double input, double expected)
+    {
+        var settings = new AppSettings { WindowWidth = input };
+
+        settings.NormalizeWindowLayout();
+
+        Assert.Equal(expected, settings.WindowWidth);
     }
 }

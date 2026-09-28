@@ -33,6 +33,8 @@ let viewportDescenderBufferPx = 2;
 let layoutScaleFactor = 1;
 let requestedSpectrumBarWidthPx = 3;
 let requestedSpectrumGapPx = 3;
+let requestedSpectrumBarCount = spectrumBarEls.length;
+let spectrumSourceValues = [];
 let rowHeightPx = 14;
 let rowGapPx = 1;
 let linePitchPx = 15;
@@ -922,7 +924,7 @@ function startSpectrumEntryRollTransition(targetFrame, plan) {
 }
 
 function ensureSpectrumBarCount(value) {
-  const count = Math.max(8, Math.min(32, Math.round(Number(value) || spectrumBarEls.length || 21)));
+  const count = Math.max(1, Math.min(32, Math.round(value)));
   if (!spectrumEl || spectrumBarEls.length === count) {
     return;
   }
@@ -940,7 +942,7 @@ function ensureSpectrumBarCount(value) {
   spectrumTargets = spectrumBarEls.map(() => 0);
   spectrumVisuals = spectrumBarEls.map(() => 0);
   spectrumSilence = spectrumBarEls.map(() => 0);
-  updateSpectrumGeometry();
+  setSpectrumTargetValues(spectrumSourceValues);
   if (isSpectrumMode) {
     startSpectrumRenderer();
   }
@@ -952,11 +954,16 @@ function alignDownToPhysicalPixel(value) {
 }
 
 function updateSpectrumGeometry() {
-  if (!spectrumEl || spectrumBarEls.length === 0) {
+  if (!spectrumEl) {
     return;
   }
 
   const availableWidth = spectrumEl.clientWidth;
+  const maxVisibleBars = Number.isFinite(availableWidth) && availableWidth > 0
+    ? Math.max(1, Math.floor((availableWidth + requestedSpectrumGapPx)
+      / (requestedSpectrumBarWidthPx + requestedSpectrumGapPx)))
+    : requestedSpectrumBarCount;
+  ensureSpectrumBarCount(Math.min(requestedSpectrumBarCount, maxVisibleBars));
   if (!Number.isFinite(availableWidth) || availableWidth <= 0) {
     return;
   }
@@ -986,7 +993,19 @@ function updateSpectrumGeometry() {
 function setSpectrumTargetValues(values) {
   const hasValues = Array.isArray(values) && values.length > 0;
   for (let i = 0; i < spectrumTargets.length; i++) {
-    spectrumTargets[i] = hasValues ? clamp01(values[i] ?? 0) : 0;
+    if (!hasValues) {
+      spectrumTargets[i] = 0;
+      continue;
+    }
+
+    const start = Math.floor(i * values.length / spectrumTargets.length);
+    const end = Math.min(values.length, Math.max(start + 1,
+      Math.floor((i + 1) * values.length / spectrumTargets.length)));
+    let peak = 0;
+    for (let sourceIndex = start; sourceIndex < end; sourceIndex++) {
+      peak = Math.max(peak, clamp01(values[sourceIndex] ?? 0));
+    }
+    spectrumTargets[i] = peak;
   }
 }
 
@@ -1048,6 +1067,7 @@ function renderSpectrumFrame(now) {
 
 function setAudioDrivenSpectrum(values) {
   if (!Array.isArray(values) || values.length === 0) {
+    spectrumSourceValues = [];
     hasAudioDrivenSpectrum = false;
     layoutEl.classList.remove("spectrum-audio-driven");
     setSpectrumTargetValues([]);
@@ -1056,6 +1076,7 @@ function setAudioDrivenSpectrum(values) {
   }
 
   hasAudioDrivenSpectrum = true;
+  spectrumSourceValues = values.slice();
   layoutEl.classList.add("spectrum-audio-driven");
   setSpectrumTargetValues(values);
   startSpectrumRenderer();
@@ -1063,6 +1084,7 @@ function setAudioDrivenSpectrum(values) {
 
 function clearSpectrumBars() {
   hasAudioDrivenSpectrum = false;
+  spectrumSourceValues = [];
   setSpectrumTargetValues([]);
   stopSpectrumRenderer();
   layoutEl.classList.remove("spectrum-audio-driven");
@@ -2149,9 +2171,10 @@ const lyricsApi = {
     }
 
     if (Array.isArray(values) && values.length > 0) {
-      ensureSpectrumBarCount(values.length);
+      requestedSpectrumBarCount = Math.max(8, Math.min(32, values.length));
     }
     setAudioDrivenSpectrum(values);
+    updateSpectrumGeometry();
   },
 
   setSpectrumTuning(payload) {
@@ -2159,7 +2182,9 @@ const lyricsApi = {
       return;
     }
 
-    ensureSpectrumBarCount(payload.barCount);
+    requestedSpectrumBarCount = Math.max(8, Math.min(32,
+      Math.round(Number(payload.barCount) || requestedSpectrumBarCount)));
+    updateSpectrumGeometry();
     spectrumTuning.rise = Math.max(0.02, Math.min(1, Number(payload.rise) || spectrumTuning.rise));
     spectrumTuning.fall = Math.max(0.02, Math.min(1, Number(payload.fall) || spectrumTuning.fall));
     spectrumTuning.minHeight = Math.max(1, Math.min(18, Number(payload.minHeight) || spectrumTuning.minHeight));

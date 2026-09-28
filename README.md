@@ -199,10 +199,10 @@ powershell -ExecutionPolicy Bypass -File scripts/restart-app.ps1 -NoWait
 dotnet build TaskbarLyrics.sln
 ```
 
-修改设置页后运行设置契约测试：
+验证生产 Web 资源未混入测试或 PowerShell 文件：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File tests/contracts/settings-contract.tests.ps1
+powershell -ExecutionPolicy Bypass -File tests/contracts/production-web-assets.tests.ps1
 ```
 
 ### 自行发布

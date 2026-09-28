@@ -2,12 +2,14 @@ using System.IO;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Threading;
 using Microsoft.Web.WebView2.Core;
 
 namespace TaskbarLyrics.App;
 
 internal partial class LyricsMirrorWindow : Window, IDisposable
 {
+    private static readonly string[] InitialScriptSlots = ["style", "lyrics", "cover", "spectrumTuning", "spectrum"];
     private readonly Dictionary<string, string> _pendingScripts = new(StringComparer.Ordinal);
     private readonly EmbeddedTaskbarAnchor _embeddedTaskbarAnchor = new();
     private readonly SmartTopmostController _smartTopmostController;
@@ -22,6 +24,9 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
     public LyricsMirrorWindow(DisplayMonitor displayMonitor)
     {
         InitializeComponent();
+        // A taskbar child may become visible before its first WebView document is ready.
+        // Keep the uninitialized native surface out of the taskbar until it has painted.
+        LyricsWebView.Visibility = Visibility.Hidden;
         _smartTopmostController = new SmartTopmostController(this);
         _displayMonitor = displayMonitor;
         Loaded += OnLoaded;
@@ -163,8 +168,8 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
                 "WebView2");
             Directory.CreateDirectory(userDataFolder);
             var environment = await CoreWebView2Environment.CreateAsync(null, userDataFolder);
-            await LyricsWebView.EnsureCoreWebView2Async(environment);
             LyricsWebView.DefaultBackgroundColor = System.Drawing.Color.Transparent;
+            await LyricsWebView.EnsureCoreWebView2Async(environment);
             var core = LyricsWebView.CoreWebView2;
             core.Settings.IsStatusBarEnabled = false;
             core.Settings.AreDefaultContextMenusEnabled = false;
@@ -189,10 +194,21 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
         }
 
         _isWebReady = true;
-        foreach (var slot in new[] { "style", "lyrics", "cover", "spectrumTuning", "spectrum" })
+        LyricsWebView.Visibility = Visibility.Visible;
+        Dispatcher.BeginInvoke(new Action(() =>
         {
-            ExecutePendingScript(slot);
-        }
+            if (_isDisposed || !_isWebReady)
+            {
+                return;
+            }
+
+            LyricsWebView.InvalidateArrange();
+            UpdateLayout();
+            foreach (var slot in InitialScriptSlots)
+            {
+                ExecutePendingScript(slot);
+            }
+        }), DispatcherPriority.Loaded);
     }
 
     private void ExecutePendingScript(string slot)

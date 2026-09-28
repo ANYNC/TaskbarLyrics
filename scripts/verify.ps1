@@ -30,7 +30,7 @@ $repositoryRoot = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot 'verify-output.ps1')
 $appTests = Join-Path $repositoryRoot 'TaskbarLyrics.App.Tests\TaskbarLyrics.App.Tests.csproj'
 $coreTests = Join-Path $repositoryRoot 'TaskbarLyrics.Core.Tests\TaskbarLyrics.Core.Tests.csproj'
-$settingsContract = Join-Path $repositoryRoot 'tests\contracts\settings-contract.tests.ps1'
+$productionWebAssetsContract = Join-Path $repositoryRoot 'tests\contracts\production-web-assets.tests.ps1'
 $restartAppTests = Join-Path $repositoryRoot 'scripts\restart-app.tests.ps1'
 $verificationOutputTests = Join-Path $repositoryRoot 'scripts\verify-output.tests.ps1'
 $webDependencies = Join-Path $repositoryRoot 'node_modules'
@@ -146,9 +146,9 @@ function Invoke-DotNetTests {
     }
 }
 
-function Invoke-SettingsContractTest {
-    Invoke-VerificationStep 'Settings contract test' {
-        powershell -ExecutionPolicy Bypass -File $settingsContract
+function Invoke-ProductionWebAssetsContract {
+    Invoke-VerificationStep 'Production Web assets boundary check' {
+        powershell -ExecutionPolicy Bypass -File $productionWebAssetsContract
     }
 }
 
@@ -157,13 +157,21 @@ function Invoke-TargetedVerification {
         'Core' { Invoke-DotNetTests 'Core unit tests' $coreTests $Filter }
         'App' { Invoke-DotNetTests 'App unit tests' $appTests $Filter }
         'Web' { Invoke-WebBehaviorTests $Filter }
-        'Settings' { Invoke-SettingsContractTest }
+        'Settings' {
+            Invoke-ProductionWebAssetsContract
+            Invoke-WebBehaviorTests 'tests/web/bridge.test.js'
+            Invoke-DotNetTests 'Settings unit tests' $appTests 'FullyQualifiedName~Settings'
+        }
     }
 }
 
 function Invoke-ProjectVerification {
     $selectedAreas = @($requestedAreas | Select-Object -Unique)
     $verifySettings = $selectedAreas -contains 'Settings'
+
+    if ($verifySettings) {
+        Invoke-ProductionWebAssetsContract
+    }
 
     if ($selectedAreas -contains 'Web' -or $verifySettings) {
         Invoke-WebBehaviorTests
@@ -177,16 +185,13 @@ function Invoke-ProjectVerification {
         Invoke-DotNetTests 'Core unit tests' $coreTests
     }
 
-    if ($verifySettings) {
-        Invoke-SettingsContractTest
-    }
 }
 
 function Invoke-FullVerification {
     Invoke-WebBehaviorTests
+    Invoke-ProductionWebAssetsContract
     Invoke-DotNetTests 'App unit tests' $appTests
     Invoke-DotNetTests 'Core unit tests' $coreTests
-    Invoke-SettingsContractTest
 
     Invoke-VerificationStep 'Code format verification' {
         dotnet format TaskbarLyrics.sln --verify-no-changes --no-restore

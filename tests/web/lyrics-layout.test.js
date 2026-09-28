@@ -848,7 +848,7 @@ describe("lyrics responsive layout", () => {
     expect(pendingAnimationFrames).toHaveLength(0);
   });
 
-  it("keeps every spectrum bar visible when scaled geometry exceeds the viewport", async () => {
+  it("caps visible spectrum bars to the available width and restores them on resize", async () => {
     const [html, bridge, state, presentation, script] = await Promise.all([
       read("TaskbarLyrics.App/Web/Lyrics/index.html"),
       read("TaskbarLyrics.App/Web/Lyrics/bridge.js"),
@@ -860,9 +860,14 @@ describe("lyrics responsive layout", () => {
       runScripts: "outside-only"
     });
     const spectrum = dom.window.document.querySelector(".spectrum");
-    Object.defineProperty(spectrum, "clientWidth", { configurable: true, value: 120 });
+    let availableWidth = 120;
+    Object.defineProperty(spectrum, "clientWidth", { configurable: true, get: () => availableWidth });
+    const animationFrames = [];
     dom.window.CSS = { supports: () => true };
-    dom.window.requestAnimationFrame = () => 1;
+    dom.window.requestAnimationFrame = callback => {
+      animationFrames.push(callback);
+      return animationFrames.length;
+    };
     dom.window.cancelAnimationFrame = () => {};
     dom.window.eval(bridge);
     dom.window.eval(state);
@@ -890,12 +895,46 @@ describe("lyrics responsive layout", () => {
 
     const fittedBarWidth = Number.parseFloat(spectrum.style.getPropertyValue("--spectrum-fitted-bar-width"));
     const fittedGap = Number.parseFloat(spectrum.style.getPropertyValue("--spectrum-fitted-gap"));
-    const fittedTotalWidth = (fittedBarWidth * 32) + (fittedGap * 31);
+    const fittedTotalWidth = (fittedBarWidth * 7) + (fittedGap * 6);
 
-    expect(spectrum.children).toHaveLength(32);
+    expect(spectrum.children).toHaveLength(7);
     expect(fittedBarWidth).toBeGreaterThanOrEqual(1);
     expect(fittedGap).toBeGreaterThanOrEqual(0);
     expect(fittedTotalWidth).toBeLessThanOrEqual(120);
+
+    dom.window.taskbarLyrics.receive({
+      version: 1,
+      type: "lyrics",
+      payload: {
+        current: "",
+        next: "",
+        progress: 0,
+        currentLineIndex: -1,
+        trackId: "test-track",
+        isPureMusic: true,
+        isPlaying: true,
+        animateTransition: false,
+        scene: "spectrum"
+      }
+    });
+    dom.window.taskbarLyrics.receive({
+      version: 1,
+      type: "spectrum",
+      payload: [...Array(31).fill(0), 1]
+    });
+    for (const callback of animationFrames.splice(0)) {
+      callback(16.67);
+    }
+    expect(Number.parseFloat(spectrum.lastElementChild.style.height))
+      .toBeGreaterThan(Number.parseFloat(spectrum.firstElementChild.style.height));
+
+    availableWidth = 630;
+    dom.window.dispatchEvent(new dom.window.Event("resize"));
+    expect(spectrum.children).toHaveLength(32);
+
+    availableWidth = 18;
+    dom.window.dispatchEvent(new dom.window.Event("resize"));
+    expect(spectrum.children).toHaveLength(1);
     expect(dom.window.document.documentElement.style.getPropertyValue("--primary"))
       .toBe("rgba(255, 255, 255, 0.9)");
     expect(dom.window.document.documentElement.style.getPropertyValue("--secondary"))

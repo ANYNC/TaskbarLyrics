@@ -86,7 +86,15 @@
     .row { display: grid; grid-template-columns: 14px 124px 1fr 68px 22px; align-items: center; gap: 8px; padding: 6px 0; }
     .row .mod { width: 6px; height: 6px; border-radius: 50%; background: var(--warning); opacity: 0; transition: opacity var(--duration-fast) ease; }
     .row.modded .mod { opacity: 1; }
-    .row .lbl { font-size: 13px; color: var(--foreground); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: help; }
+    .row .lbl { min-width: 0; display: inline-flex; align-items: center; gap: 3px; font-size: 13px; color: var(--foreground); white-space: nowrap; }
+    .row .label-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+    .info-tip { flex: 0 0 12px; display: inline-grid; width: 12px; height: 12px; place-items: center; color: var(--subtle); cursor: help; opacity: .72; transition: color var(--duration-fast) ease, opacity var(--duration-fast) ease; }
+    .info-tip:hover, .info-tip:focus-visible { color: var(--foreground); opacity: 1; }
+    .info-tip:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 2px; }
+    .info-tip svg { width: 11px; height: 11px; fill: none; stroke: currentColor; stroke-width: 1.6; }
+    .parameter-tooltip { position: fixed; z-index: 1100; width: max-content; max-width: min(360px, calc(100vw - 24px)); padding: 9px 11px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--popover); color: var(--popover-foreground); font-size: 11px; font-weight: 400; line-height: 1.7; white-space: pre-line; overflow-wrap: anywhere; box-shadow: var(--shadow); pointer-events: none; opacity: 0; transform: translateY(-4px); visibility: hidden; transition: opacity var(--duration-fast) ease, transform var(--duration-fast) ease, visibility 0s linear var(--duration-fast); }
+    .parameter-tooltip[data-state="open"] { opacity: 1; transform: translateY(0); visibility: visible; transition: opacity var(--duration-fast) ease, transform var(--duration-fast) ease, visibility 0s; }
+    @media (prefers-reduced-motion: reduce) { .parameter-tooltip { transition: none; } }
     .slider-cell { position: relative; height: 18px; display: flex; align-items: center; }
     .default-tick { position: absolute; top: 50%; width: 2px; height: 10px; background: var(--subtle); opacity: .5; transform: translate(-1px, -50%); pointer-events: none; }
     .row .value { font-family: Consolas, monospace; font-size: 12px; color: var(--muted-foreground); text-align: right; cursor: text; padding: 2px 4px; border-radius: 4px; border: 1px solid transparent; }
@@ -192,6 +200,7 @@
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <div class="parameter-tooltip" id="parameterTooltip" role="tooltip" data-state="closed"></div>
 
   <script>
     const $ = s => document.querySelector(s);
@@ -215,9 +224,9 @@
     const defs = [
       { key: "SampleWindow", label: "FFT 窗口", suffix: "", min: 512, max: 2048, step: 512, value: 2048, group: "采集", desc: "FFT 采样窗口大小，越大频率分辨率越高、响应越慢", snap: "fft" },
       { key: "UpdateIntervalMs", label: "更新间隔", suffix: "ms", min: 16, max: 100, step: 1, value: 16, group: "采集", desc: "频谱采集与刷新间隔，越小越流畅、越耗 CPU" },
-      { key: "BarCount", label: "柱数", suffix: "柱", min: 8, max: 32, step: 1, value: 32, group: "频段", desc: "频谱显示柱数；越多频段越细，越少整体越简洁" },
-      { key: "MinFrequency", label: "最低频率", suffix: "Hz", min: 20, max: 20000, step: 1, value: 35, group: "频段", desc: "频谱显示范围的最低频率，仅需低于最高频率", scale: "frequency" },
-      { key: "MaxFrequency", label: "最高频率", suffix: "Hz", min: 20, max: 20000, step: 1, value: 5000, group: "频段", desc: "频谱显示范围的最高频率，仅需高于最低频率", scale: "frequency" },
+      { key: "BarCount", label: "柱数", suffix: "柱", min: 8, max: 32, step: 1, value: 32, group: "频段", desc: "频谱柱数上限；显示区域宽度不足时会动态合并相邻频段，实际显示柱数可能减少" },
+      { key: "MinFrequency", label: "最低频率", suffix: "Hz", min: 20, max: 20000, step: 1, value: 28, group: "频段", desc: "频谱显示范围的最低频率，仅需低于最高频率", scale: "frequency" },
+      { key: "MaxFrequency", label: "最高频率", suffix: "Hz", min: 20, max: 20000, step: 1, value: 4000, group: "频段", desc: "频谱显示范围的最高频率，仅需高于最低频率", scale: "frequency" },
       { key: "FrequencyDistributionBias", label: "频段分布偏移", suffix: "", min: -1, max: 1, step: 0.05, value: 0, group: "频段", desc: "改变柱子在频率范围内的分配；负值偏向高频，0 保持当前分布，正值给低频分配更多柱子" },
       { key: "PeakInitial", label: "峰值初始值", suffix: "", min: 0.004, max: 0.16, step: 0.001, value: 0.06, group: "峰值", desc: "峰值跟踪的起始参考值" },
       { key: "PeakDecay", label: "峰值衰减", suffix: "", min: 0.85, max: 0.995, step: 0.001, value: 0.85, group: "峰值", desc: "峰值随时间衰减的速率，越大衰减越慢" },
@@ -283,7 +292,14 @@
         const modded = Math.abs(d.value - defaultsMap[d.key]) > 1e-9;
         if (modded) groupCount++;
         const row = document.createElement("div"); row.className = `row${modded ? " modded" : ""}`;
-        row.innerHTML = `<span class="mod" title="已修改"></span><span class="lbl" title="${d.desc}\n范围 ${d.min}–${d.max} · 默认 ${defaultsMap[d.key]}">${d.label}</span>`;
+        row.innerHTML = `<span class="mod" title="已修改"></span>`;
+        const label = document.createElement("span"); label.className = "lbl";
+        const labelText = document.createElement("span"); labelText.className = "label-text"; labelText.textContent = d.label;
+        const tip = document.createElement("span"); tip.className = "info-tip"; tip.tabIndex = 0;
+        tip.dataset.tip = `${d.desc}\n范围 ${d.min}–${d.max} · 默认 ${defaultsMap[d.key]}`;
+        tip.setAttribute("aria-label", `${d.label}说明`);
+        tip.innerHTML = `<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.5"/><path d="M8 7.5v3"/><circle cx="8" cy="5.4" r=".7" fill="currentColor" stroke="none"/></svg>`;
+        label.append(labelText, tip); row.appendChild(label);
         const sc = document.createElement("div"); sc.className = "slider-cell";
         const dp = d.scale === "frequency" ? frequencyRatio(defaultsMap[d.key]) * 100 : (defaultsMap[d.key] - d.min) / (d.max - d.min) * 100;
         sc.innerHTML = `<span class="default-tick" style="left:${dp}%" title="默认值"></span>`;
@@ -306,6 +322,41 @@
       state.forEach(d => { if (Math.abs(d.value - defaultsMap[d.key]) > 1e-9) groups[d.group] = (groups[d.group] || 0) + 1; });
       document.querySelectorAll(".group-head").forEach(gh => { const name = gh.querySelector(".group-title").textContent; const c = gh.querySelector(".group-count"); const n = groups[name] || 0; c.textContent = `已改 ${n} 项`; c.classList.toggle("show", n > 0); });
     }
+    const parameterTooltip = $("#parameterTooltip");
+    let tooltipTarget = null;
+    function hideParameterTooltip() {
+      tooltipTarget?.removeAttribute("aria-describedby");
+      tooltipTarget = null;
+      parameterTooltip.dataset.state = "closed";
+    }
+    function showParameterTooltip(target) {
+      if (!target?.dataset.tip) return;
+      if (tooltipTarget !== target) hideParameterTooltip();
+      tooltipTarget = target;
+      parameterTooltip.textContent = target.dataset.tip;
+      parameterTooltip.dataset.state = "open";
+      target.setAttribute("aria-describedby", parameterTooltip.id);
+
+      const margin = 12, gap = 8;
+      const targetRect = target.getBoundingClientRect();
+      const tooltipRect = parameterTooltip.getBoundingClientRect();
+      const left = Math.min(window.innerWidth - tooltipRect.width - margin, Math.max(margin, targetRect.left));
+      const below = targetRect.bottom + gap;
+      const top = below + tooltipRect.height <= window.innerHeight - margin
+        ? below : Math.max(margin, targetRect.top - tooltipRect.height - gap);
+      parameterTooltip.style.left = `${left}px`;
+      parameterTooltip.style.top = `${top}px`;
+    }
+    document.addEventListener("pointerover", event => showParameterTooltip(event.target.closest?.(".info-tip")));
+    document.addEventListener("pointerout", event => {
+      if (tooltipTarget && event.relatedTarget?.closest?.(".info-tip") !== tooltipTarget) hideParameterTooltip();
+    });
+    document.addEventListener("focusin", event => showParameterTooltip(event.target.closest?.(".info-tip")));
+    document.addEventListener("focusout", hideParameterTooltip);
+    document.addEventListener("keydown", event => { if (event.key === "Escape") hideParameterTooltip(); });
+    window.addEventListener("resize", hideParameterTooltip);
+    document.addEventListener("scroll", hideParameterTooltip, true);
+    window.addEventListener("blur", hideParameterTooltip);
     function startEdit(val, input, d, refresh) {
       const ed = document.createElement("input"); ed.type = "text"; ed.value = fmt(d.value); ed.className = "value editing"; ed.style.width = "64px";
       val.replaceWith(ed); ed.focus(); ed.select();

@@ -1,40 +1,39 @@
 ---
 name: taskbarlyrics-clean-code-guardian
-description: Enforces the TaskbarLyrics-specific Clean Code workflow and behavior-safety gates across C#, WPF, WebView2 HTML/CSS/JavaScript, settings, caches, SMTC, hotkeys, native windows, tests, scripts, and build configuration. Use whenever Codex plans, implements, fixes, refactors, reviews, formats, or verifies code or configuration in this repository, including apparently small changes. Do not use for copy-only documentation edits unless they alter architecture, behavior contracts, or engineering policy.
+description: Optional TaskbarLyrics review aid for complex refactors and changes involving compatibility, persistence, concurrency, native windows, or multiple modules. Consult relevant project contracts and review dimensions; routine edits do not require this skill.
 ---
 
 # TaskbarLyrics Clean Code Guardian
 
 Apply Clean Code as a behavior-preserving engineering discipline. Optimize for correctness, clarity, cohesion, explicit boundaries, testability, and safe evolution—not arbitrary class or method counts.
 
-## Load the project rules
+## Consult the relevant project rules
 
-Before acting, read both files completely:
+Use these references when they apply to the change; do not require a full read for every task:
 
 - `references/repository-contracts.md` for TaskbarLyrics architecture and compatibility boundaries.
-- `references/clean-code-rubric.md` for the required review dimensions.
+- `references/clean-code-rubric.md` for review dimensions relevant to the change.
 
-Treat root `AGENTS.md` as the entry-point policy and these references as its detailed standard.
+Root `AGENTS.md` is the entry-point policy. The references provide detailed context, not additional gates for unrelated work.
 
 ## Load the WebView UI standard when applicable
 
-When a task involves WebView interface design, CSS or visual changes, component implementation, interaction behavior, accessibility, or user-experience review, read `../../../docs/WebView界面视觉与交互规范.md` completely before planning or acting. Treat that local document as the final project authority; online Web guidelines and shadcn/ui examples are supplementary references only.
+For WebView interface work, consult the relevant sections of `../../../docs/WebView界面视觉与交互规范.md`. Existing tokens and patterns are a baseline that can be improved with a documented reason. External guidelines are supplementary.
 
 ## Classify the request
 
-- For review or explanation, inspect and report evidence; do not edit.
-- For diagnosis, reproduce or trace the failure and identify the cause; do not implement unless requested.
-- For implementation or refactoring, preserve the current behavior contract, implement the smallest complete change, test it, and perform a final rubric review.
-- Stop and ask before breaking stored settings, WebView messages, public behavior, release packaging, or user data.
+- For a review or diagnosis only, inspect and report evidence. If the user also requests a fix, implement it.
+- For implementation or refactoring, preserve the current behavior contract, make the smallest complete change, and verify its effects.
+- Treat changes to stored settings, WebView messages, public behavior, release packaging, or user data as explicit scope requiring compatibility analysis and appropriate tests.
 
 ## Establish the change contract
 
 Before editing:
 
 1. Inspect `git status` and separate pre-existing changes from task changes.
-2. Locate the owning component, callers, tests, persistence formats, and UI/protocol consumers.
+2. Locate the owning component and the callers, tests, persistence formats, or UI/protocol consumers relevant to the change.
 3. State the behavior that must remain unchanged and the failure being corrected or capability being added.
-4. Identify thread, lifetime, cache, compatibility, native-coordinate, and packaging risks.
+4. Identify relevant thread, lifetime, cache, compatibility, native-coordinate, or packaging risks.
 5. Prefer an existing seam. Add an abstraction only when it removes a real dependency, duplication, or testing barrier.
 
 ## Implement cleanly
@@ -53,20 +52,19 @@ Before editing:
 
 Run verification proportional to impact:
 
-1. Add or update a regression test for changed logic and relevant failure paths.
-2. Run targeted tests while iterating.
-3. For settings UI changes, run `tests/contracts/settings-contract.tests.ps1`.
-4. Before handing off non-trivial code changes, run `scripts/verify.ps1`, `dotnet build TaskbarLyrics.sln`, and `git diff --check`.
-5. Require zero build warnings. Fix the cause unless an unavoidable platform boundary is documented.
-6. Record manual checks for SMTC, tray, hotkeys, taskbar attachment, audio capture, WebView2, DPI, or multi-monitor behavior when automated coverage is insufficient.
-7. When the root rules require an engineering change record, insert it at the top of the record list in `docs/工程变更记录.md`; preserve descending date order, newest-completed-first order within a date, and the template at the end.
-8. After automated verification succeeds for a change that affects the runnable app, run `powershell -ExecutionPolicy Bypass -File scripts/restart-app.ps1` and leave the app running for immediate user validation. Skip restart for documentation-only, test-only, instruction-only, or build-only changes, or when the user opts out.
+1. Add or update a regression test for observable behavior and relevant failure paths when practical.
+2. Run targeted or affected-area tests while iterating. Run full verification for broad cross-module, release, or compatibility-sensitive changes.
+3. For settings changes, run relevant `tests/web/bridge.test.js` and App tests covering persistence or message parsing.
+4. Run a zero-warning solution build for production C# integration or release work, and `git diff --check` before handoff.
+5. Record only manual checks relevant to behavior that automated tests cannot cover reliably.
+6. Update the engineering change record when the root rules require it.
+7. Restart the app only when a real-app check is needed or the user asks for it ready to validate.
 
 Do not claim completion when required verification was skipped or failed. Report the exact missing evidence.
 
 ## Self-review before handoff
 
-Review the final diff against every dimension in `references/clean-code-rubric.md`. Check specifically for:
+Review the final diff against relevant dimensions in `references/clean-code-rubric.md`. Check especially for:
 
 - accidental behavior or persistence changes;
 - new duplication or competing sources of truth;

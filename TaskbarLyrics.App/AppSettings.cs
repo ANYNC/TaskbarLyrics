@@ -62,7 +62,7 @@ public sealed class AppSettings
     public const double MaximumLyricsLayoutScalePercent = 300;
 
     public const double DefaultWindowWidth = 420;
-    public const double MinimumWindowWidth = 320;
+    public const double MinimumWindowWidth = 100;
     public const double MaximumWindowWidth = 1400;
 
     // The default presentation is embedded in the taskbar. Users can opt into

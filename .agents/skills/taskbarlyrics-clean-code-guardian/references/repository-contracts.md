@@ -1,6 +1,6 @@
 # TaskbarLyrics repository contracts
 
-Read this file for every code/configuration task governed by the skill.
+Consult the sections relevant to the boundary being changed. This is a reference, not a mandatory full-read checklist.
 
 ## Architecture and dependency direction
 
@@ -22,7 +22,7 @@ Read this file for every code/configuration task governed by the skill.
 - Keep message names and payload ownership centralized; do not reintroduce parallel switch tables across HTML, JavaScript, and C#.
 - Preserve `window.settingsApp` and the lyric injection markers `{{STYLE_CSS}}` and `{{APP_JS}}`.
 - Load lyric scripts in deterministic order. Update Vitest and .NET protocol tests when messages change.
-- Any settings-page marker, navigation, setting, or message change must keep the settings contract test synchronized.
+- Cover settings-page navigation, setting updates, and WebView messages with observable Vitest and App tests. Style-only changes need only relevant visual or interaction checks.
 
 ## Settings and persistence
 
@@ -59,10 +59,10 @@ Read this file for every code/configuration task governed by the skill.
 
 ## Verification and packaging
 
-- `scripts/verify.ps1` runs web tests, App/Core tests, settings contract checks, and format verification.
-- `dotnet build TaskbarLyrics.sln` must finish with zero warnings and errors.
+- `scripts/verify.ps1` provides targeted, affected-area, and full verification. Choose the tier based on impact; use full verification for release work, broad cross-module changes, and compatibility-sensitive changes.
+- For production C# integration or release work, `dotnet build TaskbarLyrics.sln` must finish with zero warnings and errors.
 - Use `git diff --check` before handoff.
 - Required entries in `docs/工程变更记录.md` go immediately below its record rules, ordered by descending date and newest completion first within the same date; the reusable template remains the final section.
-- After successful verification of a runnable-app change, run `scripts/restart-app.ps1` and leave the app ready for immediate user validation. Do not restart for documentation-only, test-only, instruction-only, or build-only changes unless requested.
+- Restart the app after verification when a real-app check is needed or the user requests an app ready for validation.
 - Test projects, Vitest, jsdom, and `node_modules` are development-only and must not enter release ZIPs.
 - Build outputs, logs, `publish/`, `tmp/`, `bin/`, `obj/`, and `build_verify*/` are not source.

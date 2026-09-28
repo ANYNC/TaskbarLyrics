@@ -1,6 +1,6 @@
 # Clean Code review rubric
 
-Read this file for every code/configuration task governed by the skill. Review all dimensions; report only findings that materially improve correctness, clarity, safety, testability, or maintainability.
+Use the dimensions relevant to the change. Report only findings that materially improve correctness, clarity, safety, testability, or maintainability.
 
 ## 1. Behavior and correctness
 

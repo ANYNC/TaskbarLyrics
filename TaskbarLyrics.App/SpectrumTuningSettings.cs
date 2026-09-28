@@ -12,8 +12,8 @@ public sealed class SpectrumTuningSettings
     public int SampleWindow { get; set; } = 2048;
     public int UpdateIntervalMs { get; set; } = 16;
     public int BarCount { get; set; } = DefaultBarCount;
-    public double MinFrequency { get; set; } = 35;
-    public double MaxFrequency { get; set; } = 5000;
+    public double MinFrequency { get; set; } = 28;
+    public double MaxFrequency { get; set; } = 4000;
     public double FrequencyDistributionBias { get; set; }
     public double PeakInitial { get; set; } = 0.06;
     public double PeakDecay { get; set; } = 0.85;
