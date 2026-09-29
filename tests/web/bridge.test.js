@@ -224,11 +224,16 @@ describe("settings WebView bridge", () => {
     const recognition = document.querySelector("#playerRecognitionToggle");
     recognition.checked = false;
     recognition.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
-    document.querySelector('[data-lyric-provider-drag="Kugou"]')
-      .dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "ArrowUp", altKey: true, bubbles: true }));
+    const addHandle = document.querySelector('[data-lyric-provider-drag="Kugou"]');
+    addHandle.focus();
+    addHandle.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "ArrowUp", altKey: true, bubbles: true }));
+    expect(document.activeElement.dataset.lyricProviderDrag).toBe("Kugou");
+    expect(document.querySelector("#lyricProviderOrderAnnouncement").textContent).toBe("酷狗音乐 已移至第 1 位，共 4 位");
     const neteaseToggle = document.querySelector('[data-lyric-provider-toggle="Netease"]');
+    neteaseToggle.focus();
     neteaseToggle.checked = false;
     neteaseToggle.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+    expect(document.activeElement.dataset.lyricProviderToggle).toBe("Netease");
     expect(sent.at(-1).type).toBe("discoverPlayerSessions");
     dom.window.settingsApp.receive({ version: 1, type: "playerSessions", payload: { status: "ready", sessions: [] } });
     expect(document.querySelector("#playerDiscoveryStatus").classList.contains("empty")).toBe(true);
@@ -426,7 +431,10 @@ describe("settings WebView bridge", () => {
     expect([...document.querySelectorAll('[data-lyric-provider-item]')].map(item => item.dataset.lyricProviderItem))
       .toEqual(["QQMusic", "Kugou", "Netease", "LRCLIB"]);
     const handle = document.querySelector('[data-lyric-provider-drag="Kugou"]');
+    handle.focus();
     handle.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "ArrowUp", altKey: true, bubbles: true }));
+    expect(document.activeElement.dataset.lyricProviderDrag).toBe("Kugou");
+    expect(document.querySelector("#lyricProviderOrderAnnouncement").textContent).toBe("酷狗音乐 已移至第 1 位，共 4 位");
     expect(sent.at(-1).payload).toEqual({
       key: "playerLyricProviders:QQMusic",
       value: [
@@ -438,8 +446,10 @@ describe("settings WebView bridge", () => {
     });
 
     const toggle = document.querySelector('[data-lyric-provider-toggle="QQMusic"]');
+    toggle.focus();
     toggle.checked = false;
     toggle.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+    expect(document.activeElement.dataset.lyricProviderToggle).toBe("QQMusic");
     expect(sent.at(-1).payload.value[1].enabled).toBe(false);
 
     document.querySelector('[data-player-settings="spotify"]').click();
@@ -485,6 +495,7 @@ describe("settings WebView bridge", () => {
     expect(sent).toHaveLength(initialMessages);
     drag(list, "drop");
     expect(sent.at(-1).payload.value.map(item => item.providerId)).toEqual(order());
+    expect(document.querySelector("#lyricProviderOrderAnnouncement").textContent).toBe("酷狗音乐 已移至第 3 位，共 4 位");
 
     const committedMessages = sent.length;
     const qqHandle = document.querySelector('[data-lyric-provider-drag="QQMusic"]');

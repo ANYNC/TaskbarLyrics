@@ -821,7 +821,11 @@
 
     function renderLyricProviders() {
       const providers = currentLyricProviders();
-      $("#lyricProviderList").innerHTML = providers.map((item, index) => {
+      const list = $("#lyricProviderList");
+      const focusedControl = list.contains(document.activeElement) ? document.activeElement : null;
+      const focusedProviderId = focusedControl?.dataset.lyricProviderToggle ?? focusedControl?.dataset.lyricProviderDrag;
+      const focusedAttribute = focusedControl?.dataset.lyricProviderToggle ? "data-lyric-provider-toggle" : "data-lyric-provider-drag";
+      list.innerHTML = providers.map((item, index) => {
         const name = lyricProviderDefaults.find(known => known.providerId === item.providerId).name;
         return `<div class="priority-item lyric-provider-item ${item.enabled ? "" : "disabled"}" data-lyric-provider-item="${item.providerId}">
           <button class="drag-handle" type="button" draggable="true" data-lyric-provider-drag="${item.providerId}" aria-label="拖动 ${name} 调整信任顺序" aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="5" cy="4" r="1.2"/><circle cx="11" cy="4" r="1.2"/><circle cx="5" cy="8" r="1.2"/><circle cx="11" cy="8" r="1.2"/><circle cx="5" cy="12" r="1.2"/><circle cx="11" cy="12" r="1.2"/></svg></button>
@@ -830,6 +834,17 @@
         </div>`;
       }).join("");
       $("#lyricProviderEmptyHint").hidden = providers.some(item => item.enabled);
+      if (focusedProviderId) {
+        list.querySelector(`[${focusedAttribute}="${focusedProviderId}"]`)?.focus({ preventScroll: true });
+      }
+    }
+
+    function announceLyricProviderPosition(providerId) {
+      const providers = currentLyricProviders();
+      const index = providers.findIndex(item => item.providerId === providerId);
+      if (index < 0) return;
+      const name = lyricProviderDefaults.find(item => item.providerId === providerId).name;
+      $("#lyricProviderOrderAnnouncement").textContent = `${name} 已移至第 ${index + 1} 位，共 ${providers.length} 位`;
     }
 
     function commitLyricProviders() {
@@ -1861,6 +1876,7 @@
           if (playerDrawerMode === "add") newPlayerLyricProviders = reordered;
           else state.playerLyricProviders[source.adapter] = reordered;
           commitLyricProviders();
+          announceLyricProviderPosition(draggedLyricProviderId);
         } else {
           renderLyricProviders();
         }
@@ -1922,7 +1938,7 @@
         [providers[current], providers[target]] = [providers[target], providers[current]];
         if (playerDrawerMode !== "add") state.playerLyricProviders[source.adapter] = providers;
         commitLyricProviders();
-        requestAnimationFrame(() => document.querySelector(`[data-lyric-provider-drag="${lyricHandle.dataset.lyricProviderDrag}"]`)?.focus());
+        announceLyricProviderPosition(lyricHandle.dataset.lyricProviderDrag);
         return;
       }
     });
