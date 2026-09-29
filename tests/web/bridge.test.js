@@ -85,6 +85,13 @@ describe("settings WebView bridge", () => {
       .toEqual(["spotify", "qqmusic", "netease", "kugou", "browser"]);
 
     document.querySelector('[data-player-settings="browser"]').click();
+    const drawerBody = document.querySelector("#playerDrawerBody");
+    expect([...drawerBody.children].filter(element => element.classList.contains("player-setting-section")).map(element => element.id))
+      .toEqual(["playerDiscoverySection", "playerRecognitionSection", "playerCardInfoSection", "playerAdvancedSettings", "playerTrustSection"]);
+    expect(document.querySelector("#playerAdvancedSettings").parentElement).toBe(drawerBody);
+    expect(document.querySelector("#playerRemoveActions").parentElement).toBe(drawerBody);
+    expect(document.querySelector("#playerAdvancedSettings").hidden).toBe(false);
+    expect(document.querySelector("#playerRemoveActions").hidden).toBe(true);
     expect(document.querySelector("#playerRecognitionToggle").checked).toBe(false);
     expect(document.querySelector("#removePlayerSourceButton").hidden).toBe(true);
     document.querySelector("#playerRecognitionToggle").checked = true;
@@ -151,6 +158,37 @@ describe("settings WebView bridge", () => {
     expect(document.activeElement.dataset.playerDragId).toBe("qqmusic");
   });
 
+  it("refreshes media sessions without clearing the drawer content while waiting", async () => {
+    const { dom, sent, script } = await createSettingsDom();
+    enableDialogDomSupport(dom);
+    const document = dom.window.document;
+    dom.window.eval(script);
+    dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings: {
+      sourceRecognitionOrder: ["QQMusic", "Netease", "Kugou", "Spotify", "Browser"],
+      playerLyricOffsets: {}, defaultPlayerLyricOffsets: {}, playerLyricProviders: {},
+      mediaHotkeys: [], mediaHotkeyStatuses: {}
+    }, fonts: [] } });
+    document.querySelector("#addPlayerSourceButton").click();
+    expect(document.querySelector("#playerDiscoveryStatus").textContent).toBe("正在检测媒体会话…");
+    dom.window.settingsApp.receive({ version: 1, type: "playerSessions", payload: { status: "ready", sessions: [
+      { sourceAppUserModelId: "Example.Player!Music", displayName: "Example Player", isPlaying: true, isBuiltIn: false }
+    ] } });
+    const list = document.querySelector("#availablePlayerSessions");
+    const originalItem = list.firstElementChild;
+    document.querySelector("#refreshPlayerSessionsButton").click();
+    expect(sent.at(-1).type).toBe("discoverPlayerSessions");
+    expect(document.querySelector("#playerSettingsDialog").open).toBe(true);
+    expect(list.firstElementChild).toBe(originalItem);
+    expect(list.getAttribute("aria-busy")).toBe("true");
+    expect(document.querySelector("#playerDiscoveryStatus").textContent).toBe("");
+    dom.window.settingsApp.receive({ version: 1, type: "playerSessions", payload: { status: "ready", sessions: [] } });
+    const emptyState = document.querySelector("#playerDiscoveryStatus").firstElementChild;
+    expect(list.hasAttribute("aria-busy")).toBe(false);
+    document.querySelector("#refreshPlayerSessionsButton").click();
+    expect(document.querySelector("#playerDiscoveryStatus").firstElementChild).toBe(emptyState);
+    expect(document.querySelector("#playerSettingsDialog").open).toBe(true);
+  });
+
   it("adds a detected media session and configures it as a player", async () => {
     const { dom, sent, script } = await createSettingsDom();
     enableDialogDomSupport(dom);
@@ -163,16 +201,59 @@ describe("settings WebView bridge", () => {
     };
     dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings, fonts: [] } });
     document.querySelector("#addPlayerSourceButton").click();
+    expect(document.querySelector("#playerSettingsDialog").open).toBe(true);
+    expect(document.querySelector("#playerDiscoverySection").hidden).toBe(false);
+    expect(document.querySelector("#playerRecognitionSection").hidden).toBe(false);
+    expect(document.querySelector("#playerRecognitionSection .setting-label small").textContent)
+      .toBe("关闭后不再监听此播放器，已有偏移设置会保留。");
+    expect(document.querySelector("#playerTrustSection").hidden).toBe(false);
+    expect(document.querySelector("#playerAdvancedSettings").hidden).toBe(true);
+    expect(document.querySelector("#playerRemoveActions").hidden).toBe(true);
+    expect(document.querySelector("#confirmAddPlayerSource").hidden).toBe(false);
+    expect(document.querySelector("#savePlayerInfoButton").hidden).toBe(true);
+    const style = document.createElement("style");
+    style.textContent = await read("TaskbarLyrics.App/Web/Settings/settings.css");
+    document.head.appendChild(style);
+    expect(dom.window.getComputedStyle(document.querySelector("#savePlayerInfoButton")).display).toBe("none");
+    expect(dom.window.getComputedStyle(document.querySelector("#playerRemoveActions")).display).toBe("none");
+    expect(document.querySelector("#chooseCustomPlayerIconButton").disabled).toBe(true);
+    expect(document.querySelector("#customPlayerName").disabled).toBe(true);
+    expect(document.querySelector("#customPlayerIconPreview .default-player-icon").getAttribute("src"))
+      .toBe("../../Assets/PlayerIcons/Presets/music-player.svg");
     expect(sent.at(-1).type).toBe("discoverPlayerSessions");
+    const recognition = document.querySelector("#playerRecognitionToggle");
+    recognition.checked = false;
+    recognition.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+    document.querySelector('[data-lyric-provider-drag="Kugou"]')
+      .dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "ArrowUp", altKey: true, bubbles: true }));
+    const neteaseToggle = document.querySelector('[data-lyric-provider-toggle="Netease"]');
+    neteaseToggle.checked = false;
+    neteaseToggle.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+    expect(sent.at(-1).type).toBe("discoverPlayerSessions");
+    dom.window.settingsApp.receive({ version: 1, type: "playerSessions", payload: { status: "ready", sessions: [] } });
+    expect(document.querySelector("#playerDiscoveryStatus").classList.contains("empty")).toBe(true);
+    expect(document.querySelector("#playerDiscoveryStatus strong").textContent).toBe("暂未检测到可添加的播放器");
+    expect(document.querySelector("#playerDiscoveryStatus .default-player-icon")).not.toBeNull();
     dom.window.settingsApp.receive({ version: 1, type: "playerSessions", payload: { status: "ready", sessions: [
-      { sourceAppUserModelId: "Example.Player!Music", displayName: "Music", trackTitle: "Song", isPlaying: true, isBuiltIn: false },
+      { sourceAppUserModelId: "Example.Player!Music", displayName: "Example.Player!Music", trackTitle: "Song", isPlaying: true, isBuiltIn: false },
       { sourceAppUserModelId: "chrome.exe", displayName: "Chrome", trackTitle: "Browser song", isPlaying: true, isBuiltIn: false },
       { sourceAppUserModelId: "Spotify.exe", displayName: "Spotify", trackTitle: "", isPlaying: false, isBuiltIn: true }
     ] } });
     expect(document.querySelectorAll("[data-player-session-index]")).toHaveLength(2);
+    expect(document.querySelectorAll('[data-player-session-index="0"] small')).toHaveLength(1);
     document.querySelector('[data-player-session-index="0"]').click();
+    expect(document.querySelector("#chooseCustomPlayerIconButton").disabled).toBe(false);
+    expect(document.querySelector("#customPlayerName").disabled).toBe(false);
     document.querySelector("#customPlayerName").value = "我的播放器";
+    expect(document.querySelector("#confirmAddPlayerSource").disabled).toBe(false);
     const iconInput = document.querySelector("#customPlayerIcon");
+    let pickerClicks = 0;
+    iconInput.addEventListener("click", () => { pickerClicks++; });
+    document.querySelector("#chooseCustomPlayerIconButton").click();
+    expect(pickerClicks).toBe(1);
+    iconInput.dispatchEvent(new dom.window.Event("cancel", { bubbles: true }));
+    expect(document.querySelector("#playerSettingsDialog").open).toBe(true);
+    expect(document.querySelector("#playerSettingsDialog").classList.contains("closing")).toBe(false);
     const iconFile = new dom.window.File([Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10])], "icon.png", { type: "image/png" });
     Object.defineProperty(iconInput, "files", { configurable: true, value: [iconFile] });
     iconInput.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
@@ -180,29 +261,64 @@ describe("settings WebView bridge", () => {
     await new Promise(resolve => dom.window.setTimeout(resolve, 10));
     expect(document.querySelector("#customPlayerIconPreview img").getAttribute("src"))
       .toBe("data:image/png;base64,iVBORw0KGgo=");
+    expect(document.querySelector("#clearCustomPlayerIconButton").hidden).toBe(false);
+    document.querySelector("#clearCustomPlayerIconButton").click();
+    expect(document.querySelector("#customPlayerIconPreview .default-player-icon")).not.toBeNull();
+    expect(document.querySelector("#clearCustomPlayerIconButton").hidden).toBe(true);
+    iconInput.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+    await new Promise(resolve => dom.window.setTimeout(resolve, 10));
     document.querySelector("#confirmAddPlayerSource").click();
     expect(sent.at(-1).type).toBe("addPlayerSource");
-    expect(sent.at(-1).payload).toEqual({ sourceAppUserModelId: "Example.Player!Music", displayName: "我的播放器", iconDataUrl: "data:image/png;base64,iVBORw0KGgo=" });
+    expect(sent.at(-1).payload).toEqual({ sourceAppUserModelId: "Example.Player!Music", displayName: "我的播放器", iconDataUrl: "data:image/png;base64,iVBORw0KGgo=", presetIconId: "", presetIconColor: "", enabled: false,
+      lyricProviders: [
+        { providerId: "Kugou", enabled: true }, { providerId: "QQMusic", enabled: true },
+        { providerId: "Netease", enabled: false }, { providerId: "LRCLIB", enabled: true }
+      ] });
 
     dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings: {
       ...settings,
       sourceRecognitionOrder: [...settings.sourceRecognitionOrder, "Example.Player!Music", "Other.Player!Music"],
       customPlayerSources: [
-        { sourceAppUserModelId: "Example.Player!Music", displayName: "我的播放器", enabled: true, iconDataUrl: "data:image/png;base64,iVBORw0KGgo=" },
+        { sourceAppUserModelId: "Example.Player!Music", displayName: "我的播放器", enabled: false, iconDataUrl: "data:image/png;base64,iVBORw0KGgo=" },
         { sourceAppUserModelId: "Other.Player!Music", displayName: "其他播放器", enabled: true }
       ],
       playerLyricOffsets: { "Example.Player!Music": 0, "Other.Player!Music": 0 },
       playerLyricProviders: { "Example.Player!Music": [
-        { providerId: "QQMusic", enabled: true }, { providerId: "Kugou", enabled: true },
-        { providerId: "Netease", enabled: true }, { providerId: "LRCLIB", enabled: true }
+        { providerId: "Kugou", enabled: true }, { providerId: "QQMusic", enabled: true },
+        { providerId: "Netease", enabled: false }, { providerId: "LRCLIB", enabled: true }
       ] }
     }, fonts: [] } });
-    expect(document.querySelector("#addPlayerDialog").open).toBe(false);
+    expect(document.querySelector("#playerSettingsDialog").classList.contains("closing")).toBe(true);
+    document.querySelector("#playerSettingsDialog").dispatchEvent(new dom.window.Event("animationend"));
+    expect(document.querySelector("#playerSettingsDialog").open).toBe(false);
     expect(document.querySelector('[data-player-card="custom-Example.Player!Music"] .source-info strong').textContent).toBe("我的播放器");
     expect(document.querySelector('[data-player-card="custom-Example.Player!Music"] .source-logo img').getAttribute("src"))
       .toBe("data:image/png;base64,iVBORw0KGgo=");
     document.querySelector('[data-player-settings="custom-Example.Player!Music"]').click();
+    expect(document.querySelector("#playerAdvancedSettings").hidden).toBe(false);
+    expect(document.querySelector("#playerRemoveActions").hidden).toBe(false);
+    expect(document.querySelector("#savePlayerInfoButton").hidden).toBe(false);
+    expect(document.querySelector("#savePlayerInfoButton").textContent).toBe("保存播放器信息");
+    expect(document.querySelector("#playerRecognitionToggle").checked).toBe(false);
+    expect([...document.querySelectorAll("[data-lyric-provider-item]")].map(item => item.dataset.lyricProviderItem))
+      .toEqual(["Kugou", "QQMusic", "Netease", "LRCLIB"]);
+    expect(document.querySelector("#customPlayerName").value).toBe("我的播放器");
+    expect(document.querySelector("#customPlayerIconPreview img")).not.toBeNull();
     expect(document.querySelector("#removePlayerSourceButton").hidden).toBe(false);
+    document.querySelector("#customPlayerName").value = "改名后的播放器";
+    document.querySelector("#customPlayerName").dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+    document.querySelector("#clearCustomPlayerIconButton").click();
+    document.querySelector("#savePlayerInfoButton").click();
+    expect(sent.at(-1)).toMatchObject({ type: "updatePlayerSource", payload: {
+      sourceAppUserModelId: "Example.Player!Music", displayName: "改名后的播放器",
+      iconDataUrl: "", presetIconId: "", presetIconColor: ""
+    } });
+    dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings: {
+      ...settings,
+      customPlayerSources: [{ sourceAppUserModelId: "Example.Player!Music", displayName: "改名后的播放器", enabled: true }]
+    }, fonts: [] } });
+    expect(document.querySelector("#playerSettingsTitle").textContent).toBe("改名后的播放器");
+    expect(document.querySelector('[data-player-card="custom-Example.Player!Music"] .source-info strong').textContent).toBe("改名后的播放器");
     const toggle = document.querySelector("#playerRecognitionToggle");
     toggle.checked = false;
     toggle.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
@@ -218,6 +334,74 @@ describe("settings WebView bridge", () => {
     }, fonts: [] } });
     expect(document.querySelector("#playerSettingsDialog").open).toBe(false);
     expect(document.querySelector('[data-player-card="custom-Other.Player!Music"]')).not.toBeNull();
+  });
+
+  it("uses the default icon for new players and preserves an existing preset icon", async () => {
+    const { dom, sent, script } = await createSettingsDom();
+    enableDialogDomSupport(dom);
+    const document = dom.window.document;
+    dom.window.eval(script);
+    dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings: {
+      sourceRecognitionOrder: ["QQMusic", "Netease", "Kugou", "Spotify", "Browser"],
+      playerLyricOffsets: {}, defaultPlayerLyricOffsets: {}, playerLyricProviders: {},
+      mediaHotkeys: [], mediaHotkeyStatuses: {}
+    }, fonts: [] } });
+    document.querySelector("#addPlayerSourceButton").click();
+    dom.window.settingsApp.receive({ version: 1, type: "playerSessions", payload: { status: "ready", sessions: [
+      { sourceAppUserModelId: "Example.Player!Music", displayName: "Example Player", isPlaying: true, isBuiltIn: false }
+    ] } });
+    document.querySelector('[data-player-session-index="0"]').click();
+    expect(document.querySelector("#customPlayerIconPreview .default-player-icon")).not.toBeNull();
+    document.querySelector("#confirmAddPlayerSource").click();
+    expect(sent.at(-1).payload).toEqual({
+      sourceAppUserModelId: "Example.Player!Music", displayName: "Example Player", iconDataUrl: "",
+      presetIconId: "", presetIconColor: "", enabled: true,
+      lyricProviders: [
+        { providerId: "QQMusic", enabled: true }, { providerId: "Kugou", enabled: true },
+        { providerId: "Netease", enabled: true }, { providerId: "LRCLIB", enabled: true }
+      ]
+    });
+    dom.window.settingsApp.receive({ version: 1, type: "playerSourceActionResult", payload: { message: "添加失败" } });
+    expect(document.querySelector("#confirmAddPlayerSource").disabled).toBe(false);
+    expect(document.querySelector("#playerDiscoveryStatus").textContent).toBe("添加失败");
+    document.querySelector("#playerSettingsDialog").close();
+    dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings: {
+      sourceRecognitionOrder: ["QQMusic", "Netease", "Kugou", "Spotify", "Browser", "Example.Player!Music"],
+      customPlayerSources: [{ sourceAppUserModelId: "Example.Player!Music", displayName: "Example Player", enabled: true,
+        presetIconId: "disc", presetIconColor: "#123ABC" }],
+      playerLyricOffsets: {}, defaultPlayerLyricOffsets: {}, playerLyricProviders: {},
+      mediaHotkeys: [], mediaHotkeyStatuses: {}
+    }, fonts: [] } });
+    document.querySelector('[data-player-settings="custom-Example.Player!Music"]').click();
+    expect(document.querySelector("#customPlayerIconPreview .preset-icon-disc").style.color).toBe("rgb(18, 58, 188)");
+    document.querySelector("#customPlayerName").value = "改名";
+    document.querySelector("#customPlayerName").dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+    document.querySelector("#savePlayerInfoButton").click();
+    expect(sent.at(-1).payload).toMatchObject({ displayName: "改名", iconDataUrl: "", presetIconId: "disc", presetIconColor: "#123ABC" });
+  });
+
+  it("uses a discovered Windows app icon until the user uploads a replacement", async () => {
+    const { dom, sent, script } = await createSettingsDom();
+    enableDialogDomSupport(dom);
+    const document = dom.window.document;
+    dom.window.eval(script);
+    dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings: {
+      sourceRecognitionOrder: ["QQMusic", "Netease", "Kugou", "Spotify", "Browser"],
+      playerLyricOffsets: {}, defaultPlayerLyricOffsets: {}, playerLyricProviders: {},
+      mediaHotkeys: [], mediaHotkeyStatuses: {}
+    }, fonts: [] } });
+    document.querySelector("#addPlayerSourceButton").click();
+    const iconDataUrl = "data:image/png;base64,iVBORw0KGgo=";
+    dom.window.settingsApp.receive({ version: 1, type: "playerSessions", payload: { status: "ready", sessions: [
+      { sourceAppUserModelId: "Example.Player!Music", displayName: "Example Player", isPlaying: true,
+        isBuiltIn: false, iconDataUrl }
+    ] } });
+    expect(document.querySelector(".available-player-session-icon img").getAttribute("src")).toBe(iconDataUrl);
+    document.querySelector('[data-player-session-index="0"]').click();
+    expect(document.querySelector("#customPlayerIconPreview img").getAttribute("src")).toBe(iconDataUrl);
+    expect(document.querySelector("#clearCustomPlayerIconButton").hidden).toBe(true);
+    document.querySelector("#confirmAddPlayerSource").click();
+    expect(sent.at(-1).payload).toMatchObject({ iconDataUrl, presetIconId: "", presetIconColor: "" });
   });
 
   it("edits online lyric trust order and switches per player", async () => {

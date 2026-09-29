@@ -230,12 +230,22 @@ public sealed class AppSettings
     {
         CustomPlayerSources = (CustomPlayerSources ?? [])
             .Where(source => source is not null && IsValidCustomSourceId(source.SourceAppUserModelId))
-            .Select(source => new CustomPlayerSource(
-                source.SourceAppUserModelId.Trim(),
-                NormalizeCustomDisplayName(source.DisplayName, source.SourceAppUserModelId),
-                source.Enabled)
+            .Select(source =>
             {
-                IconDataUrl = CustomPlayerIcon.Normalize(source.IconDataUrl)
+                var icon = CustomPlayerIcon.Normalize(source.IconDataUrl);
+                var presetId = string.Empty;
+                var presetColor = string.Empty;
+                var hasPreset = icon.Length == 0 && PresetPlayerIcon.TryNormalize(
+                    source.PresetIconId, source.PresetIconColor, out presetId, out presetColor);
+                return new CustomPlayerSource(
+                    source.SourceAppUserModelId.Trim(),
+                    NormalizeCustomDisplayName(source.DisplayName, source.SourceAppUserModelId),
+                    source.Enabled)
+                {
+                    IconDataUrl = icon,
+                    PresetIconId = hasPreset ? presetId : string.Empty,
+                    PresetIconColor = hasPreset ? presetColor : string.Empty
+                };
             })
             .DistinctBy(source => source.SourceAppUserModelId, StringComparer.OrdinalIgnoreCase)
             .ToList();
@@ -260,17 +270,28 @@ public sealed class AppSettings
         PlayerSources = normalized;
     }
 
-    public bool AddCustomPlayerSource(string? sourceId, string? displayName, string? iconDataUrl = null)
+    public bool AddCustomPlayerSource(string? sourceId, string? displayName, string? iconDataUrl = null,
+        string? presetIconId = null, string? presetIconColor = null, bool enabled = true,
+        IReadOnlyList<LyricProviderPreference>? lyricProviders = null)
     {
         if (!IsValidCustomSourceId(sourceId)) return false;
+        if (!CustomPlayerIcon.TryNormalize(iconDataUrl, out var normalizedIcon) ||
+            !PresetPlayerIcon.TryNormalize(presetIconId, presetIconColor, out var normalizedPresetId, out var normalizedPresetColor) ||
+            (normalizedIcon.Length > 0 && normalizedPresetId.Length > 0) ||
+            (lyricProviders is not null && !PlayerSourceSettings.IsValidLyricProviders(lyricProviders))) return false;
         NormalizePlayerSources();
         var id = sourceId!.Trim();
         if (CustomPlayerSources.Any(source => string.Equals(source.SourceAppUserModelId, id, StringComparison.OrdinalIgnoreCase))) return false;
-        CustomPlayerSources.Add(new CustomPlayerSource(id, NormalizeCustomDisplayName(displayName, id), true)
+        CustomPlayerSources.Add(new CustomPlayerSource(id, NormalizeCustomDisplayName(displayName, id), enabled)
         {
-            IconDataUrl = CustomPlayerIcon.Normalize(iconDataUrl)
+            IconDataUrl = normalizedIcon,
+            PresetIconId = normalizedPresetId,
+            PresetIconColor = normalizedPresetColor
         });
-        PlayerSources[id] = new PlayerSourceSettings();
+        PlayerSources[id] = new PlayerSourceSettings
+        {
+            LyricProviders = PlayerSourceSettings.NormalizeLyricProviders(lyricProviders)
+        };
         SourceRecognitionOrder.Add(id);
         return true;
     }
@@ -281,6 +302,30 @@ public sealed class AppSettings
         if (!removed) return false;
         PlayerSources.Remove(sourceId!);
         SourceRecognitionOrder.RemoveAll(source => string.Equals(source, sourceId, StringComparison.OrdinalIgnoreCase));
+        return true;
+    }
+
+    public bool UpdateCustomPlayerSource(string? sourceId, string? displayName, string? iconDataUrl,
+        string? presetIconId, string? presetIconColor)
+    {
+        if (string.IsNullOrWhiteSpace(sourceId) || string.IsNullOrWhiteSpace(displayName) ||
+            displayName.Length > 80 || displayName.Any(char.IsControl) ||
+            !CustomPlayerIcon.TryNormalize(iconDataUrl, out var normalizedIcon) ||
+            !PresetPlayerIcon.TryNormalize(presetIconId, presetIconColor, out var normalizedPresetId, out var normalizedPresetColor) ||
+            (normalizedIcon.Length > 0 && normalizedPresetId.Length > 0)) return false;
+
+        NormalizePlayerSources();
+        var index = CustomPlayerSources.FindIndex(source =>
+            string.Equals(source.SourceAppUserModelId, sourceId, StringComparison.OrdinalIgnoreCase));
+        if (index < 0) return false;
+
+        CustomPlayerSources[index] = CustomPlayerSources[index] with
+        {
+            DisplayName = displayName.Trim(),
+            IconDataUrl = normalizedIcon,
+            PresetIconId = normalizedPresetId,
+            PresetIconColor = normalizedPresetColor
+        };
         return true;
     }
 
@@ -555,4 +600,6 @@ public sealed record LyricProviderPreference(string ProviderId, bool Enabled);
 public sealed record CustomPlayerSource(string SourceAppUserModelId, string DisplayName, bool Enabled)
 {
     public string IconDataUrl { get; init; } = string.Empty;
+    public string PresetIconId { get; init; } = string.Empty;
+    public string PresetIconColor { get; init; } = string.Empty;
 }

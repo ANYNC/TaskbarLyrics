@@ -31,7 +31,9 @@ internal sealed record LyricDiagnosticCandidateApplyRequest(
     string CandidateId,
     LyricDiagnosticApplyMode Mode);
 
-internal sealed record CustomPlayerSourceAddRequest(string SourceAppUserModelId, string DisplayName, string IconDataUrl);
+internal sealed record CustomPlayerSourceAddRequest(
+    string SourceAppUserModelId, string DisplayName, string IconDataUrl, string PresetIconId, string PresetIconColor,
+    bool Enabled, List<LyricProviderPreference> LyricProviders);
 
 internal static class SettingsWebJson
 {
@@ -70,7 +72,35 @@ internal static class SettingsWebMessageRouter
         }
         if (!CustomPlayerIcon.TryNormalize(iconDataUrl, out var normalizedIcon)) return false;
 
-        request = new CustomPlayerSourceAddRequest(id.Trim(), name.Trim(), normalizedIcon);
+        string? presetIconId = null;
+        string? presetIconColor = null;
+        if (payload.TryGetProperty("presetIconId", out var presetIdElement))
+        {
+            if (presetIdElement.ValueKind != JsonValueKind.String) return false;
+            presetIconId = presetIdElement.GetString();
+        }
+        if (payload.TryGetProperty("presetIconColor", out var presetColorElement))
+        {
+            if (presetColorElement.ValueKind != JsonValueKind.String) return false;
+            presetIconColor = presetColorElement.GetString();
+        }
+        if (!PresetPlayerIcon.TryNormalize(presetIconId, presetIconColor, out var normalizedPresetId,
+                out var normalizedPresetColor) ||
+            (normalizedIcon.Length > 0 && normalizedPresetId.Length > 0)) return false;
+
+        var enabled = true;
+        if (payload.TryGetProperty("enabled", out var enabledElement))
+        {
+            if (enabledElement.ValueKind is not (JsonValueKind.True or JsonValueKind.False)) return false;
+            enabled = enabledElement.GetBoolean();
+        }
+
+        var lyricProviders = PlayerSourceSettings.CreateDefaultLyricProviders();
+        if (payload.TryGetProperty("lyricProviders", out var providersElement) &&
+            !TryParseLyricProviderPreferences(providersElement, out lyricProviders)) return false;
+
+        request = new CustomPlayerSourceAddRequest(id.Trim(), name.Trim(), normalizedIcon,
+            normalizedPresetId, normalizedPresetColor, enabled, lyricProviders);
         return true;
     }
 

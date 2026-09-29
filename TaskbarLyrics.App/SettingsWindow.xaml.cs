@@ -260,7 +260,9 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 if (SettingsWebMessageRouter.TryParseCustomPlayerSourceAddRequest(message.Value, out var addRequest) &&
                     _discoveredPlayerSessions.TryGetValue(addRequest.SourceAppUserModelId, out var discovered) &&
                     !discovered.IsBuiltIn &&
-                    _settings.AddCustomPlayerSource(addRequest.SourceAppUserModelId, addRequest.DisplayName, addRequest.IconDataUrl))
+                    _settings.AddCustomPlayerSource(addRequest.SourceAppUserModelId, addRequest.DisplayName,
+                        addRequest.IconDataUrl, addRequest.PresetIconId, addRequest.PresetIconColor,
+                        addRequest.Enabled, addRequest.LyricProviders))
                 {
                     await SaveSettingsAndNotifyWebAsync();
                     await PushSettingsToWebAsync();
@@ -277,6 +279,20 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 {
                     await SaveSettingsAndNotifyWebAsync();
                     await PushSettingsToWebAsync();
+                }
+                break;
+            case "updatePlayerSource":
+                if (SettingsWebMessageRouter.TryParseCustomPlayerSourceAddRequest(message.Value, out var updateRequest) &&
+                    _settings.UpdateCustomPlayerSource(updateRequest.SourceAppUserModelId, updateRequest.DisplayName,
+                        updateRequest.IconDataUrl, updateRequest.PresetIconId, updateRequest.PresetIconColor))
+                {
+                    await SaveSettingsAndNotifyWebAsync();
+                    await PushSettingsToWebAsync();
+                }
+                else if (_isWebReady && SettingsWebView.CoreWebView2 is not null)
+                {
+                    await SettingsWebView.ExecuteScriptAsync(WebViewMessageScriptFactory.Dispatch(
+                        "settingsApp", "playerSourceActionResult", new { message = "无法保存播放器信息，请重试。" }));
                 }
                 break;
             case "resetDefaults":

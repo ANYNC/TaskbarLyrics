@@ -3,7 +3,7 @@
       { id: "netease", name: "网易云音乐", adapter: "Netease", settingKey: "enableNetease", icon: "../../Assets/PlayerIcons/网易云音乐.png" },
       { id: "kugou", name: "酷狗音乐", adapter: "Kugou", settingKey: "enableKugou", icon: "../../Assets/PlayerIcons/酷狗音乐.png" },
       { id: "spotify", name: "Spotify", adapter: "Spotify", settingKey: "enableSpotify", icon: "../../Assets/PlayerIcons/spotify.png" },
-      { id: "browser", name: "浏览器", adapter: "Browser", settingKey: "enableBrowser", icon: "" }
+      { id: "browser", name: "浏览器", adapter: "Browser", settingKey: "enableBrowser", icon: "../../Assets/PlayerIcons/Browser.png" }
     ];
     const lyricProviderDefaults = [
       { providerId: "QQMusic", name: "QQ 音乐" },
@@ -43,7 +43,17 @@
     let draggedLyricProviderId = null;
     let availablePlayerSessions = [];
     let selectedPlayerSessionId = null;
+    let playerDrawerMode = "edit";
+    let pendingPlayerSourceAction = null;
+    let playerInfoBusy = false;
     let selectedPlayerIconDataUrl = "";
+    let selectedSessionAutoIconDataUrl = "";
+    let selectedPlayerIconMode = "preset";
+    let selectedPlayerPresetIconId = "note";
+    let selectedPlayerPresetColor = "#EAB308";
+    let newPlayerEnabled = true;
+    let newPlayerLyricProviders = lyricProviderDefaults.map(item => ({ providerId: item.providerId, enabled: true }));
+    let playerIconReading = false;
     let playerIconReadToken = 0;
     let pageAnimations = [];
     let pageTransitionToken = 0;
@@ -81,19 +91,92 @@
 
     bridge.post = window.taskbarLyricsBridge.post.bind(window.taskbarLyricsBridge);
 
+    const presetPlayerIconIds = ["note", "disc"];
+    const validPresetPlayerColor = color => /^#[0-9a-f]{6}$/i.test(color);
+    const presetPlayerPaths = {
+      note: "M16 3.3 8 5v10.1a4.7 4.7 0 0 0-2-.4c-2.5 0-4.5 1.5-4.5 3.4s2 3.4 4.5 3.4 4.5-1.5 4.5-3.4V8.2l9-1.9v6.8a4.7 4.7 0 0 0-2-.4c-2.5 0-4.5 1.5-4.5 3.4s2 3.4 4.5 3.4 4.5-1.5 4.5-3.4V2.1L16 3.3Z",
+      disc: "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 7a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z"
+    };
+    const presetPlayerIcon = (id, color) => `<svg class="preset-player-icon preset-icon-${id}" viewBox="0 0 24 24" style="color:${color}" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="${presetPlayerPaths[id]}"></path></svg>`;
+    const defaultPlayerIcon = () => '<img class="default-player-icon" src="../../Assets/PlayerIcons/Presets/music-player.svg" alt="" draggable="false">';
+    const safeSessionIcon = value => typeof value === "string" && value.length <= 180000 &&
+      /^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(value) ? value : "";
     const playerIcon = source => source.icon
       ? `<img src="${escapeHtml(source.icon)}" alt="" draggable="false">`
-      : source.id === "browser"
-        ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.4 4 5.6 4 9s-1.5 6.6-4 9c-2.5-2.4-4-5.6-4-9s1.5-6.6 4-9Z"/></svg>`
-      : `<span aria-hidden="true">♫</span>`;
+      : presetPlayerIconIds.includes(source.presetIconId) && validPresetPlayerColor(source.presetIconColor)
+        ? presetPlayerIcon(source.presetIconId, source.presetIconColor)
+        : defaultPlayerIcon();
+
+    function updateAddPlayerButton() {
+      const invalid = !selectedPlayerSessionId || !$("#customPlayerName").value.trim() || playerInfoBusy ||
+        playerIconReading ||
+        (selectedPlayerIconMode === "custom" && !selectedPlayerIconDataUrl) ||
+        (selectedPlayerIconMode === "preset" && selectedPlayerPresetIconId && !validPresetPlayerColor(selectedPlayerPresetColor));
+      $("#confirmAddPlayerSource").disabled = Boolean(invalid);
+      $("#savePlayerInfoButton").disabled = Boolean(invalid);
+    }
+
+    function renderSelectedPlayerIcon() {
+      $("#customPlayerIconPreview").innerHTML = selectedPlayerIconMode === "custom" && selectedPlayerIconDataUrl
+        ? `<img src="${escapeHtml(selectedPlayerIconDataUrl)}" alt="">`
+        : selectedPlayerPresetIconId
+          ? presetPlayerIcon(selectedPlayerPresetIconId, selectedPlayerPresetColor)
+          : defaultPlayerIcon();
+      $("#clearCustomPlayerIconButton").hidden =
+        (selectedPlayerIconMode !== "custom" && !selectedPlayerPresetIconId) ||
+        (playerDrawerMode === "add" && selectedPlayerIconDataUrl === selectedSessionAutoIconDataUrl);
+      const awaitingSession = playerDrawerMode === "add" && !selectedPlayerSessionId;
+      $("#chooseCustomPlayerIconButton").disabled = awaitingSession;
+      $("#customPlayerName").disabled = awaitingSession;
+      $("#customPlayerName").placeholder = awaitingSession ? "先选择媒体会话" : "输入显示名称";
+      updateAddPlayerButton();
+    }
+
+    function clearCustomPlayerIcon() {
+      playerIconReadToken++;
+      playerIconReading = false;
+      selectedPlayerIconDataUrl = playerDrawerMode === "add" ? selectedSessionAutoIconDataUrl : "";
+      selectedPlayerIconMode = selectedPlayerIconDataUrl ? "custom" : "preset";
+      selectedPlayerPresetIconId = "";
+      selectedPlayerPresetColor = "";
+      $("#customPlayerIcon").value = "";
+      $("#customPlayerIconStatus").textContent = selectedPlayerIconDataUrl
+        ? "已使用系统检测到的图标。点击可上传其他图片。"
+        : "点击图标上传 PNG、JPEG 或 WebP 图片，最大 128 KB。";
+      renderSelectedPlayerIcon();
+    }
 
     function resetSelectedPlayerIcon() {
-      playerIconReadToken++;
-      selectedPlayerIconDataUrl = "";
-      $("#customPlayerIcon").value = "";
-      $("#customPlayerIconPreview").innerHTML = "<span aria-hidden=\"true\">♫</span>";
-      $("#customPlayerIconStatus").textContent = "可选，支持 PNG、JPEG、WebP，最大 128 KB。";
-      $("#confirmAddPlayerSource").disabled = !selectedPlayerSessionId;
+      clearCustomPlayerIcon();
+    }
+
+    function loadPlayerInfoForm(source) {
+      selectedPlayerSessionId = source.adapter;
+      resetSelectedPlayerIcon();
+      $("#customPlayerName").value = source.name;
+      if (source.icon) {
+        selectedPlayerIconMode = "custom";
+        selectedPlayerIconDataUrl = source.icon;
+        $("#customPlayerIconStatus").textContent = "当前自定义图片";
+      } else if (presetPlayerIconIds.includes(source.presetIconId) && validPresetPlayerColor(source.presetIconColor)) {
+        selectedPlayerPresetIconId = source.presetIconId;
+        selectedPlayerPresetColor = source.presetIconColor.toUpperCase();
+      } else {
+        selectedPlayerPresetIconId = "";
+      }
+      renderSelectedPlayerIcon();
+    }
+
+    function playerInfoPayload() {
+      const preset = selectedPlayerIconMode === "preset" && Boolean(selectedPlayerPresetIconId);
+      return {
+        sourceAppUserModelId: selectedPlayerSessionId,
+        displayName: $("#customPlayerName").value.trim(),
+        iconDataUrl: selectedPlayerIconMode === "custom" ? selectedPlayerIconDataUrl : "",
+        presetIconId: preset ? selectedPlayerPresetIconId : "",
+        presetIconColor: preset ? selectedPlayerPresetColor : "",
+        ...(playerDrawerMode === "add" ? { enabled: newPlayerEnabled, lyricProviders: newPlayerLyricProviders } : {})
+      };
     }
 
     function renderSources() {
@@ -128,32 +211,48 @@
       const status = $("#playerDiscoveryStatus");
       const list = $("#availablePlayerSessions");
       $("#refreshPlayerSessionsButton").disabled = false;
+      list.removeAttribute("aria-busy");
       if (payload?.status === "error") {
-        availablePlayerSessions = [];
+        status.className = "player-discovery-status error";
         status.textContent = "无法读取媒体会话，请稍后重试。";
+        return;
       } else {
         availablePlayerSessions = (Array.isArray(payload?.sessions) ? payload.sessions : [])
           .filter(session => !session.isBuiltIn &&
             !sourceCatalog.some(source => source.adapter.toLowerCase() === String(session.sourceAppUserModelId).toLowerCase()));
-        status.textContent = availablePlayerSessions.length ? "" : "暂未检测到可添加的播放器。请先播放一首歌，再点击刷新。";
+        status.className = availablePlayerSessions.length ? "player-discovery-status" : "player-discovery-status empty";
+        status.innerHTML = availablePlayerSessions.length ? "" :
+          `<span class="player-discovery-empty-icon" aria-hidden="true">${defaultPlayerIcon()}</span><strong>暂未检测到可添加的播放器</strong><small>打开播放器并播放一首歌，然后点击刷新。</small>`;
       }
-      if (!availablePlayerSessions.some(session => session.sourceAppUserModelId === selectedPlayerSessionId)) {
+      if (playerDrawerMode === "add" && !availablePlayerSessions.some(session => session.sourceAppUserModelId === selectedPlayerSessionId)) {
         selectedPlayerSessionId = null;
-        $("#selectedPlayerSession").hidden = true;
-        $("#confirmAddPlayerSource").disabled = true;
+        selectedSessionAutoIconDataUrl = "";
+        $("#customPlayerName").value = "";
         resetSelectedPlayerIcon();
       }
       list.innerHTML = availablePlayerSessions.map((session, index) => `
         <button class="available-player-session" type="button" data-player-session-index="${index}" aria-pressed="${session.sourceAppUserModelId === selectedPlayerSessionId}">
-          <strong>${escapeHtml(session.displayName)}</strong>
-          <small>${session.isPlaying ? "正在播放" : "已暂停"}${session.trackTitle ? ` · ${escapeHtml(session.trackTitle)}` : ""}</small>
-          <small>${escapeHtml(session.sourceAppUserModelId)}</small>
+          <span class="available-player-session-icon" aria-hidden="true">${safeSessionIcon(session.iconDataUrl) ? `<img src="${escapeHtml(session.iconDataUrl)}" alt="">` : defaultPlayerIcon()}</span>
+          <span class="available-player-session-info"><strong>${escapeHtml(session.displayName)}</strong>
+            <small>${session.isPlaying ? "正在播放" : "已暂停"}${session.trackTitle ? ` · ${escapeHtml(session.trackTitle)}` : ""}</small>
+            ${session.displayName === session.sourceAppUserModelId ? "" : `<small>${escapeHtml(session.sourceAppUserModelId)}</small>`}
+          </span>
         </button>`).join("");
     }
 
-    function requestPlayerSessions() {
-      $("#playerDiscoveryStatus").textContent = "正在检测媒体会话…";
-      $("#availablePlayerSessions").innerHTML = "";
+    function requestPlayerSessions(preserveResults = true) {
+      const list = $("#availablePlayerSessions");
+      const status = $("#playerDiscoveryStatus");
+      if (!preserveResults) {
+        availablePlayerSessions = [];
+        list.innerHTML = "";
+        status.textContent = "";
+      }
+      if (!list.childElementCount && !status.textContent.trim()) {
+        status.className = "player-discovery-status loading";
+        status.textContent = "正在检测媒体会话…";
+      }
+      list.setAttribute("aria-busy", "true");
       $("#refreshPlayerSessionsButton").disabled = true;
       bridge.post({ type: "discoverPlayerSessions" });
     }
@@ -673,6 +772,23 @@
     }
 
     function renderPlayerSettings() {
+      const adding = playerDrawerMode === "add";
+      $("#playerDiscoverySection").hidden = !adding;
+      $("#playerRecognitionSection").hidden = false;
+      $("#playerCardInfoSection").hidden = !adding && !sourceCatalog.find(item => item.id === activePlayerSourceId)?.custom;
+      $("#playerAdvancedSettings").hidden = adding;
+      $("#playerRemoveActions").hidden = adding || !sourceCatalog.find(item => item.id === activePlayerSourceId)?.custom;
+      $("#confirmAddPlayerSource").hidden = !adding;
+      $("#savePlayerInfoButton").hidden = adding;
+      if (adding) {
+        $("#playerSettingsTitle").textContent = "添加播放器";
+        $("#playerSettingsAdapter").textContent = "从媒体会话中选择播放器";
+        $("#playerSettingsLogo").innerHTML = defaultPlayerIcon();
+        $("#playerSettingsLogo").classList.remove("custom-player-icon");
+        $("#playerRecognitionToggle").checked = newPlayerEnabled;
+        renderLyricProviders();
+        return;
+      }
       const source = sourceCatalog.find(item => item.id === activePlayerSourceId);
       if (!source) return;
       $("#playerSettingsTitle").textContent = source.name;
@@ -697,8 +813,14 @@
       return items.map(item => ({ providerId: item.providerId, enabled: item.enabled === true }));
     }
 
-    function renderLyricProviders(adapter) {
-      const providers = state?.playerLyricProviders?.[adapter] ?? normalizeLyricProviders();
+    function currentLyricProviders() {
+      if (playerDrawerMode === "add") return newPlayerLyricProviders;
+      const source = sourceCatalog.find(item => item.id === activePlayerSourceId);
+      return state?.playerLyricProviders?.[source?.adapter] ?? normalizeLyricProviders();
+    }
+
+    function renderLyricProviders() {
+      const providers = currentLyricProviders();
       $("#lyricProviderList").innerHTML = providers.map((item, index) => {
         const name = lyricProviderDefaults.find(known => known.providerId === item.providerId).name;
         return `<div class="priority-item lyric-provider-item ${item.enabled ? "" : "disabled"}" data-lyric-provider-item="${item.providerId}">
@@ -711,6 +833,10 @@
     }
 
     function commitLyricProviders() {
+      if (playerDrawerMode === "add") {
+        renderLyricProviders();
+        return;
+      }
       const source = sourceCatalog.find(item => item.id === activePlayerSourceId);
       if (!source || !state) return;
       bridge.post({ type: "update", key: `playerLyricProviders:${source.adapter}`, value: state.playerLyricProviders[source.adapter] });
@@ -723,9 +849,31 @@
       if (!source) return;
       closeSelect(false);
       closeColorPopover(false);
+      pendingPlayerSourceAction = null;
+      playerInfoBusy = false;
+      playerDrawerMode = "edit";
       activePlayerSourceId = source.id;
+      if (source.custom) loadPlayerInfoForm(source);
       renderPlayerSettings();
       $("#playerSettingsDialog").showModal();
+    }
+
+    function openAddPlayerDrawer() {
+      closeSelect(false);
+      closeColorPopover(false);
+      pendingPlayerSourceAction = null;
+      playerDrawerMode = "add";
+      activePlayerSourceId = null;
+      selectedPlayerSessionId = null;
+      selectedSessionAutoIconDataUrl = "";
+      playerInfoBusy = false;
+      newPlayerEnabled = true;
+      newPlayerLyricProviders = normalizeLyricProviders();
+      $("#customPlayerName").value = "";
+      resetSelectedPlayerIcon();
+      renderPlayerSettings();
+      $("#playerSettingsDialog").showModal();
+      requestPlayerSessions(false);
     }
 
     function commitPlayerOffset(value) {
@@ -1107,6 +1255,8 @@
         adapter: source.sourceAppUserModelId,
         name: source.displayName,
         icon: source.iconDataUrl ?? "",
+        presetIconId: source.presetIconId ?? "",
+        presetIconColor: source.presetIconColor ?? "",
         custom: true,
         enabled: source.enabled === true
       })));
@@ -1132,9 +1282,20 @@
         const bIndex = order.indexOf(b.adapter);
         return (aIndex < 0 ? 99 : aIndex) - (bIndex < 0 ? 99 : bIndex);
       });
-      if (selectedPlayerSessionId && customSources.some(source => source.sourceAppUserModelId === selectedPlayerSessionId)) {
-        selectedPlayerSessionId = null;
-        if ($("#addPlayerDialog").open) $("#addPlayerDialog").close();
+      if (pendingPlayerSourceAction) {
+        const updated = sourceCatalog.find(source => source.custom &&
+          source.adapter.toLowerCase() === pendingPlayerSourceAction.sourceId.toLowerCase());
+        if (updated) {
+          playerInfoBusy = false;
+          pendingPlayerSourceAction = null;
+          if (playerDrawerMode === "add") {
+            closeDialogWithAnimation($("#playerSettingsDialog"));
+          } else {
+            activePlayerSourceId = updated.id;
+            loadPlayerInfoForm(updated);
+            $("#playerDrawerBody").scrollTop = 0;
+          }
+        }
       }
       if (activePlayerSourceId && !sourceCatalog.some(source => source.id === activePlayerSourceId)) {
         $("#removePlayerDialog").close();
@@ -1637,7 +1798,7 @@
         return;
       }
       const lyricHandle = event.target.closest("[data-lyric-provider-drag]");
-      if (lyricHandle && activePlayerSourceId) {
+      if (lyricHandle && (activePlayerSourceId || playerDrawerMode === "add")) {
         draggedLyricProviderId = lyricHandle.dataset.lyricProviderDrag;
         event.dataTransfer.effectAllowed = "move";
         event.dataTransfer.setData("text/plain", draggedLyricProviderId);
@@ -1693,14 +1854,15 @@
       if (lyricList && draggedLyricProviderId) {
         event.preventDefault();
         const source = sourceCatalog.find(item => item.id === activePlayerSourceId);
-        const providers = state?.playerLyricProviders?.[source?.adapter];
+        const providers = currentLyricProviders();
         const previewOrder = [...lyricList.children].map(item => item.dataset.lyricProviderItem);
-        if (providers && previewOrder.some((id, index) => id !== providers[index].providerId)) {
+        if (previewOrder.some((id, index) => id !== providers[index].providerId)) {
           const reordered = previewOrder.map(id => providers.find(item => item.providerId === id));
-          state.playerLyricProviders[source.adapter] = reordered;
+          if (playerDrawerMode === "add") newPlayerLyricProviders = reordered;
+          else state.playerLyricProviders[source.adapter] = reordered;
           commitLyricProviders();
-        } else if (source) {
-          renderLyricProviders(source.adapter);
+        } else {
+          renderLyricProviders();
         }
         draggedLyricProviderId = null;
         return;
@@ -1711,8 +1873,7 @@
       if (draggedPlayerSourceId) renderSources();
       draggedPlayerSourceId = null;
       if (draggedLyricProviderId) {
-        const source = sourceCatalog.find(item => item.id === activePlayerSourceId);
-        if (source) renderLyricProviders(source.adapter);
+        renderLyricProviders();
       }
       draggedLyricProviderId = null;
       $$('[data-lyric-provider-item]').forEach(node => node.classList.remove("dragging", "drag-over"));
@@ -1754,11 +1915,12 @@
       if (lyricHandle && event.altKey && ["ArrowUp", "ArrowDown"].includes(event.key)) {
         event.preventDefault();
         const source = sourceCatalog.find(item => item.id === activePlayerSourceId);
-        const providers = state?.playerLyricProviders?.[source?.adapter];
+        const providers = currentLyricProviders();
         const current = providers?.findIndex(item => item.providerId === lyricHandle.dataset.lyricProviderDrag) ?? -1;
         const target = current + (event.key === "ArrowUp" ? -1 : 1);
         if (!providers || target < 0 || target >= providers.length) return;
         [providers[current], providers[target]] = [providers[target], providers[current]];
+        if (playerDrawerMode !== "add") state.playerLyricProviders[source.adapter] = providers;
         commitLyricProviders();
         requestAnimationFrame(() => document.querySelector(`[data-lyric-provider-drag="${lyricHandle.dataset.lyricProviderDrag}"]`)?.focus());
         return;
@@ -1882,9 +2044,8 @@
     document.addEventListener("change", event => {
       const lyricToggle = event.target.closest("[data-lyric-provider-toggle]");
       if (lyricToggle) {
-        const source = sourceCatalog.find(item => item.id === activePlayerSourceId);
-        const provider = state?.playerLyricProviders?.[source?.adapter]
-          ?.find(item => item.providerId === lyricToggle.dataset.lyricProviderToggle);
+        const provider = currentLyricProviders()
+          .find(item => item.providerId === lyricToggle.dataset.lyricProviderToggle);
         if (provider) {
           provider.enabled = lyricToggle.checked;
           commitLyricProviders();
@@ -1921,6 +2082,10 @@
       }
 
       if (event.target === $("#playerRecognitionToggle")) {
+        if (playerDrawerMode === "add") {
+          newPlayerEnabled = event.target.checked;
+          return;
+        }
         const source = sourceCatalog.find(item => item.id === activePlayerSourceId);
         if (source) {
           source.enabled = event.target.checked;
@@ -1979,7 +2144,11 @@
       const collapsed = $("#appShell").classList.toggle("sidebar-collapsed");
       $("#sidebarToggle").setAttribute("aria-label", collapsed ? "展开侧栏" : "折叠侧栏");
     });
-    $$("dialog").forEach(d => d.addEventListener("cancel", event => { event.preventDefault(); closeDialogWithAnimation(d); }));
+    $$("dialog").forEach(d => d.addEventListener("cancel", event => {
+      if (event.target !== d) return;
+      event.preventDefault();
+      closeDialogWithAnimation(d);
+    }));
     $("#restoreButton").addEventListener("click", () => $("#restoreDialog").showModal());
     $("#clearCacheButton").addEventListener("click", () => $("#clearDialog").showModal());
     $("#confirmRestore").addEventListener("click", () => { closeDialogWithAnimation($("#restoreDialog")); resetState(); });
@@ -2030,9 +2199,11 @@
       if (event.target === $("#playerSettingsDialog")) closeDialogWithAnimation($("#playerSettingsDialog"));
     });
     $("#playerSettingsDialog").addEventListener("close", () => {
+      pendingPlayerSourceAction = null;
+      playerInfoBusy = false;
       const sourceId = activePlayerSourceId;
       activePlayerSourceId = null;
-      document.querySelector(`[data-player-settings="${sourceId}"]`)?.focus({ preventScroll: true });
+      (sourceId ? document.querySelector(`[data-player-settings="${sourceId}"]`) : $("#addPlayerSourceButton"))?.focus({ preventScroll: true });
     });
     $("#browseButton").addEventListener("click", () => bridge.post({ type: "pickLocalFolder" }));
     $$('[data-show-lyrics-window]').forEach(button => button.addEventListener("click", () => bridge.post({ type: "showLyricsWindow" })));
@@ -2097,63 +2268,68 @@
     });
 
     $("#colorPresets").innerHTML = presetColors.map(color => `<button class="color-preset" type="button" style="--preset:${color}" data-preset-color-value="${color}" aria-label="选择 ${color}"></button>`).join("");
-    $("#addPlayerSourceButton").addEventListener("click", () => {
-      selectedPlayerSessionId = null;
-      $("#selectedPlayerSession").hidden = true;
-      $("#confirmAddPlayerSource").disabled = true;
-      resetSelectedPlayerIcon();
-      $("#addPlayerDialog").showModal();
-      requestPlayerSessions();
-    });
-    $("#refreshPlayerSessionsButton").addEventListener("click", requestPlayerSessions);
+    $("#addPlayerSourceButton").addEventListener("click", openAddPlayerDrawer);
+    $("#refreshPlayerSessionsButton").addEventListener("click", () => requestPlayerSessions());
     $("#availablePlayerSessions").addEventListener("click", event => {
       const button = event.target.closest("[data-player-session-index]");
       if (!button) return;
       const session = availablePlayerSessions[Number(button.dataset.playerSessionIndex)];
       if (!session) return;
       selectedPlayerSessionId = session.sourceAppUserModelId;
+      selectedSessionAutoIconDataUrl = safeSessionIcon(session.iconDataUrl);
       resetSelectedPlayerIcon();
       $("#customPlayerName").value = session.displayName;
-      $("#selectedPlayerSessionId").textContent = session.sourceAppUserModelId;
-      $("#selectedPlayerSession").hidden = false;
-      $("#confirmAddPlayerSource").disabled = false;
+      updateAddPlayerButton();
       $$('[data-player-session-index]').forEach(item => item.setAttribute("aria-pressed", String(item === button)));
       $("#customPlayerName").focus({ preventScroll: true });
     });
+    $("#customPlayerName").addEventListener("input", updateAddPlayerButton);
+    $("#chooseCustomPlayerIconButton").addEventListener("click", () => $("#customPlayerIcon").click());
+    $("#clearCustomPlayerIconButton").addEventListener("click", clearCustomPlayerIcon);
     $("#customPlayerIcon").addEventListener("change", event => {
       const file = event.target.files?.[0];
-      resetSelectedPlayerIcon();
       if (!file) return;
       if (!["image/png", "image/jpeg", "image/webp"].includes(file.type) || file.size > 128 * 1024 || file.size === 0) {
         $("#customPlayerIconStatus").textContent = "请选择不超过 128 KB 的 PNG、JPEG 或 WebP 图片。";
+        event.target.value = "";
         return;
       }
-      const readToken = playerIconReadToken;
-      $("#confirmAddPlayerSource").disabled = true;
+      const readToken = ++playerIconReadToken;
+      playerIconReading = true;
+      updateAddPlayerButton();
       const reader = new FileReader();
       reader.onload = () => {
         if (readToken !== playerIconReadToken || typeof reader.result !== "string") return;
+        playerIconReading = false;
+        selectedPlayerIconMode = "custom";
         selectedPlayerIconDataUrl = reader.result;
-        $("#customPlayerIconPreview").innerHTML = `<img src="${escapeHtml(reader.result)}" alt="所选图标预览">`;
         $("#customPlayerIconStatus").textContent = file.name;
-        $("#confirmAddPlayerSource").disabled = false;
+        event.target.value = "";
+        renderSelectedPlayerIcon();
       };
       reader.onerror = () => {
         if (readToken !== playerIconReadToken) return;
+        playerIconReading = false;
         $("#customPlayerIconStatus").textContent = "图标读取失败，请重试。";
-        $("#confirmAddPlayerSource").disabled = false;
+        event.target.value = "";
+        updateAddPlayerButton();
       };
       reader.readAsDataURL(file);
     });
     $("#confirmAddPlayerSource").addEventListener("click", () => {
-      if (!selectedPlayerSessionId) return;
-      bridge.post({ type: "addPlayerSource", value: {
-        sourceAppUserModelId: selectedPlayerSessionId,
-        displayName: $("#customPlayerName").value.trim(),
-        iconDataUrl: selectedPlayerIconDataUrl
-      } });
-      $("#confirmAddPlayerSource").disabled = true;
+      if ($("#confirmAddPlayerSource").disabled) return;
+      pendingPlayerSourceAction = { sourceId: selectedPlayerSessionId };
+      playerInfoBusy = true;
+      updateAddPlayerButton();
+      bridge.post({ type: "addPlayerSource", value: playerInfoPayload() });
       $("#playerDiscoveryStatus").textContent = "正在添加播放器…";
+    });
+    $("#savePlayerInfoButton").addEventListener("click", () => {
+      if ($("#savePlayerInfoButton").disabled) return;
+      pendingPlayerSourceAction = { sourceId: selectedPlayerSessionId };
+      playerInfoBusy = true;
+      updateAddPlayerButton();
+      bridge.post({ type: "updatePlayerSource", value: playerInfoPayload() });
     });
     $("#removePlayerSourceButton").addEventListener("click", () => $("#removePlayerDialog").showModal());
     $("#confirmRemovePlayerSource").addEventListener("click", () => {
@@ -2172,8 +2348,11 @@
           renderAvailablePlayerSessions(message.payload);
           break;
         case "playerSourceActionResult":
-          $("#playerDiscoveryStatus").textContent = message.payload?.message ?? "操作未完成，请重试。";
-          $("#confirmAddPlayerSource").disabled = !selectedPlayerSessionId;
+          pendingPlayerSourceAction = null;
+          playerInfoBusy = false;
+          if (playerDrawerMode === "add") $("#playerDiscoveryStatus").textContent = message.payload?.message ?? "操作未完成，请重试。";
+          else showToast(message.payload?.message ?? "操作未完成，请重试。");
+          updateAddPlayerButton();
           break;
         case "lyricsLayoutPreview":
           updateLayoutPreview(message.payload);

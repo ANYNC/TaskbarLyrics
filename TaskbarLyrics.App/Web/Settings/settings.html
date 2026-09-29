@@ -292,7 +292,6 @@
   <dialog id="clearTrackOffsetsDialog" aria-labelledby="clearTrackOffsetsDialogTitle" aria-describedby="clearTrackOffsetsDialogDescription"><div class="dialog-body"><h2 id="clearTrackOffsetsDialogTitle">清除全部单曲偏移？</h2><p id="clearTrackOffsetsDialogDescription">所有歌曲和歌词源的单独修正都会被删除，此操作不会影响播放器偏移。</p></div><div class="dialog-actions"><button class="btn ghost" type="button" data-dialog-cancel="clearTrackOffsetsDialog">取消</button><button id="confirmClearTrackOffsets" class="btn destructive" type="button">全部清除</button></div></dialog>
   <dialog id="spectrumAudioConsentDialog" aria-labelledby="spectrumAudioConsentTitle" aria-describedby="spectrumAudioConsentDescription"><div class="dialog-body"><h2 id="spectrumAudioConsentTitle">启用系统音频频谱</h2><p id="spectrumAudioConsentDescription">为了生成频谱，TaskbarLyrics 需要读取扬声器或耳机当前正在播放的声音。不会读取物理麦克风，不会保存或上传音频；部分安全软件可能将系统音频采集显示为“麦克风”或“音频记录器”。</p></div><div class="dialog-actions"><button class="btn ghost" type="button" data-dialog-cancel="spectrumAudioConsentDialog">暂不启用</button><button id="confirmSpectrumAudioAccess" class="btn" type="button">启用频谱</button></div></dialog>
   <dialog id="spectrumCaptureFailureDialog" aria-labelledby="spectrumCaptureFailureTitle" aria-describedby="spectrumCaptureFailureMessage"><div class="dialog-body"><h2 id="spectrumCaptureFailureTitle">无法读取系统播放声音</h2><p id="spectrumCaptureFailureMessage">系统音频采集被系统或安全软件阻止，歌词显示不受影响。</p></div><div class="dialog-actions"><button id="disableSpectrumButton" class="btn ghost" type="button">关闭频谱</button><button id="retrySpectrumCaptureButton" class="btn" type="button" data-retry-spectrum-capture>重试</button></div></dialog>
-  <dialog id="addPlayerDialog" class="add-player-dialog" aria-labelledby="addPlayerDialogTitle"><div class="dialog-body"><h2 id="addPlayerDialogTitle">添加播放器</h2><p>打开目标播放器并播放一首歌，再从检测到的媒体会话中选择。</p><div class="player-discovery-head"><strong>检测到的媒体会话</strong><button id="refreshPlayerSessionsButton" class="btn ghost small" type="button">刷新</button></div><div id="availablePlayerSessions" class="available-player-sessions" role="group" aria-label="检测到的媒体会话"></div><p id="playerDiscoveryStatus" class="player-discovery-status" role="status" aria-live="polite"></p><div id="selectedPlayerSession" class="selected-player-session" hidden><label for="customPlayerName">显示名称</label><input id="customPlayerName" class="control" type="text" maxlength="80" autocomplete="off"><small id="selectedPlayerSessionId"></small><label for="customPlayerIcon">自定义图标</label><div class="custom-player-icon-picker"><span id="customPlayerIconPreview" class="custom-player-icon-preview" aria-hidden="true"><span>♫</span></span><input id="customPlayerIcon" type="file" accept="image/png,image/jpeg,image/webp" aria-describedby="customPlayerIconStatus"></div><small id="customPlayerIconStatus">可选，支持 PNG、JPEG、WebP，最大 128 KB。</small></div></div><div class="dialog-actions"><button class="btn ghost" type="button" data-dialog-cancel="addPlayerDialog">取消</button><button id="confirmAddPlayerSource" class="btn" type="button" disabled>添加</button></div></dialog>
   <dialog id="removePlayerDialog" aria-labelledby="removePlayerDialogTitle" aria-describedby="removePlayerDialogDescription"><div class="dialog-body"><h2 id="removePlayerDialogTitle">移除这个播放器？</h2><p id="removePlayerDialogDescription">将删除此播放器的歌词源顺序和同步偏移设置。</p></div><div class="dialog-actions"><button class="btn ghost" type="button" data-dialog-cancel="removePlayerDialog">取消</button><button id="confirmRemovePlayerSource" class="btn destructive" type="button">移除</button></div></dialog>
   <dialog id="playerSettingsDialog" class="player-settings-dialog" aria-labelledby="playerSettingsTitle">
     <div class="player-drawer-header">
@@ -300,11 +299,36 @@
       <div class="player-drawer-heading"><h2 id="playerSettingsTitle">播放器设置</h2><p id="playerSettingsAdapter"></p></div>
       <button class="icon-button" type="button" data-dialog-cancel="playerSettingsDialog" aria-label="关闭播放器设置"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
     </div>
-    <div class="player-drawer-body">
-      <section class="player-setting-section">
+    <div id="playerDrawerBody" class="player-drawer-body">
+      <section id="playerDiscoverySection" class="player-setting-section player-drawer-discovery" aria-labelledby="playerDiscoveryTitle" hidden>
+        <div class="player-discovery-head"><strong id="playerDiscoveryTitle">检测到的媒体会话</strong><button id="refreshPlayerSessionsButton" class="btn ghost small" type="button">刷新</button></div>
+        <div id="availablePlayerSessions" class="available-player-sessions" role="group" aria-label="检测到的媒体会话"></div>
+        <p id="playerDiscoveryStatus" class="player-discovery-status" role="status" aria-live="polite"></p>
+      </section>
+      <section id="playerRecognitionSection" class="player-setting-section" hidden>
         <div class="setting-row compact"><div class="setting-label"><strong>播放器识别</strong><small>关闭后不再监听此播放器，已有偏移设置会保留。</small></div><label class="switch"><input id="playerRecognitionToggle" type="checkbox" aria-label="启用播放器识别"><span class="switch-track"></span></label></div>
       </section>
-      <section class="player-setting-section">
+      <section id="playerCardInfoSection" class="player-setting-section player-card-info-section" aria-label="播放器卡片信息" hidden>
+        <div id="selectedPlayerSession" class="selected-player-session">
+          <div class="player-card-identity-row">
+            <button id="chooseCustomPlayerIconButton" class="custom-player-icon-tile" type="button" aria-label="上传播放器图标" aria-describedby="customPlayerIconStatus" disabled><span id="customPlayerIconPreview" aria-hidden="true"><img class="default-player-icon" src="../../Assets/PlayerIcons/Presets/music-player.svg" alt=""></span></button>
+            <input id="customPlayerIcon" type="file" accept="image/png,image/jpeg,image/webp" hidden tabindex="-1">
+            <div class="player-name-field">
+              <label for="customPlayerName">显示名称</label>
+              <input id="customPlayerName" class="control" type="text" maxlength="80" autocomplete="off" placeholder="先选择媒体会话" disabled>
+            </div>
+          </div>
+          <div class="player-icon-meta">
+            <small id="customPlayerIconStatus" role="status" aria-live="polite">点击图标上传 PNG、JPEG 或 WebP 图片，最大 128 KB。</small>
+            <button id="clearCustomPlayerIconButton" class="btn ghost small" type="button" hidden>恢复默认图标</button>
+          </div>
+        </div>
+        <div class="player-setting-actions">
+          <button id="confirmAddPlayerSource" class="btn small" type="button" disabled>添加播放器</button>
+          <button id="savePlayerInfoButton" class="btn small" type="button" hidden>保存播放器信息</button>
+        </div>
+      </section>
+      <section id="playerAdvancedSettings" class="player-setting-section">
         <div class="player-offset-copy"><div><strong>歌词同步偏移</strong><small>正值让歌词提前，负值让歌词延后。</small></div><output id="playerOffsetStatus" class="player-offset-status">同步</output></div>
         <div class="player-offset-control">
           <div class="stepper player-offset-stepper">
@@ -316,12 +340,12 @@
         </div>
         <div class="player-setting-actions"><button id="resetPlayerOffsetButton" class="btn ghost small" type="button">恢复推荐偏移</button></div>
       </section>
-      <section class="player-setting-section">
+      <section id="playerTrustSection" class="player-setting-section">
         <div class="player-offset-copy"><div><strong>在线歌词源信任顺序</strong><small>拖动左侧手柄排序；优先采用更可信且匹配达标的歌词。右侧可关闭自动查询。</small></div></div>
         <div id="lyricProviderList" class="lyric-provider-list" aria-label="在线歌词源信任顺序"></div>
         <p id="lyricProviderEmptyHint" class="player-settings-note" hidden>全部在线歌词源已关闭，仅尝试本地歌词。</p>
       </section>
-      <div class="player-setting-actions"><button id="removePlayerSourceButton" class="btn ghost small" type="button" hidden>移除此播放器</button></div>
+      <div id="playerRemoveActions" class="player-setting-actions" hidden><button id="removePlayerSourceButton" class="btn ghost small" type="button" hidden>移除此播放器</button></div>
     </div>
   </dialog>
   <div id="selectPopover" class="select-popover"><div id="selectListbox" class="select-listbox" role="listbox" tabindex="-1" aria-label="选项"></div></div>

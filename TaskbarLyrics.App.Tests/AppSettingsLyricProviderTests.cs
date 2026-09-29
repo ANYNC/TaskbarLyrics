@@ -78,6 +78,97 @@ public sealed class AppSettingsLyricProviderTests
     }
 
     [Fact]
+    public void PresetPlayerIconPersistsAndInvalidStoredPresetFallsBackSafely()
+    {
+        var directory = Path.Combine(AppContext.BaseDirectory, $"preset-player-settings-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var settings = new AppSettings();
+            Assert.True(settings.AddCustomPlayerSource("Example.Player!Music", "示例", presetIconId: "disc", presetIconColor: "#12abEF"));
+            var store = new SettingsStore(Path.Combine(directory, "settings.json"));
+            Assert.True(store.Save(settings));
+
+            var loaded = store.Load();
+            Assert.Equal("disc", loaded.CustomPlayerSources[0].PresetIconId);
+            Assert.Equal("#12ABEF", loaded.CustomPlayerSources[0].PresetIconColor);
+            Assert.Empty(loaded.CustomPlayerSources[0].IconDataUrl);
+
+            loaded.CustomPlayerSources[0] = loaded.CustomPlayerSources[0] with { PresetIconId = "unknown" };
+            loaded.NormalizePlayerSources();
+            Assert.Empty(loaded.CustomPlayerSources[0].PresetIconId);
+            Assert.Empty(loaded.CustomPlayerSources[0].PresetIconColor);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void CustomPlayerCardCanBeEditedWithoutChangingItsPlaybackPreferences()
+    {
+        var directory = Path.Combine(AppContext.BaseDirectory, $"custom-player-edit-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        try
+        {
+            const string sourceId = "Example.Player!Music";
+            var settings = new AppSettings();
+            Assert.True(settings.AddCustomPlayerSource(sourceId, "原名称", presetIconId: "note", presetIconColor: "#EAB308"));
+            Assert.True(settings.SetCustomPlayerSourceEnabled(sourceId, false));
+            settings.SetPlayerLyricOffsetMilliseconds(sourceId, 230);
+            Assert.False(settings.UpdateCustomPlayerSource("QQMusic", "非法更新", "", "disc", "#123ABC"));
+            Assert.False(settings.UpdateCustomPlayerSource(sourceId, "", "", "disc", "#123ABC"));
+            Assert.False(settings.UpdateCustomPlayerSource(sourceId, "新名称", "data:text/html;base64,AAAA", "", ""));
+            Assert.True(settings.UpdateCustomPlayerSource(sourceId.ToUpperInvariant(), "新名称", "", "disc", "#123abc"));
+
+            var store = new SettingsStore(Path.Combine(directory, "settings.json"));
+            Assert.True(store.Save(settings));
+            var loaded = store.Load();
+            var player = Assert.Single(loaded.CustomPlayerSources);
+            Assert.Equal(sourceId, player.SourceAppUserModelId);
+            Assert.Equal("新名称", player.DisplayName);
+            Assert.Equal("disc", player.PresetIconId);
+            Assert.Equal("#123ABC", player.PresetIconColor);
+            Assert.False(player.Enabled);
+            Assert.Equal(230, loaded.GetPlayerLyricOffsetMilliseconds(sourceId));
+            Assert.Equal(sourceId, loaded.SourceRecognitionOrder[^1]);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void CustomPlayerAddPersistsRecognitionAndTrustChoices()
+    {
+        var directory = Path.Combine(AppContext.BaseDirectory, $"custom-player-draft-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        try
+        {
+            const string sourceId = "Example.Player!Music";
+            var providers = PlayerSourceSettings.CreateDefaultLyricProviders();
+            (providers[0], providers[1]) = (providers[1], providers[0]);
+            providers[2] = providers[2] with { Enabled = false };
+            var settings = new AppSettings();
+            Assert.True(settings.AddCustomPlayerSource(sourceId, "示例", presetIconId: "note",
+                presetIconColor: "#EAB308", enabled: false, lyricProviders: providers));
+
+            var store = new SettingsStore(Path.Combine(directory, "settings.json"));
+            Assert.True(store.Save(settings));
+            var loaded = store.Load();
+            Assert.False(Assert.Single(loaded.CustomPlayerSources).Enabled);
+            Assert.Equal(providers, loaded.GetPlayerLyricProviders(sourceId));
+            Assert.False(settings.AddCustomPlayerSource("Other.Player", "其他", lyricProviders: providers.Take(2).ToList()));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
     public void OldSettingsKeepDefaultTrustOrderAndIndependentPlayerPreferences()
     {
         var settings = JsonSerializer.Deserialize<AppSettings>("""
@@ -170,12 +261,46 @@ public sealed class AppSettingsLyricProviderTests
             valid.RootElement, out var request));
         Assert.Equal("Example.Player!Music", request.SourceAppUserModelId);
         Assert.Equal(string.Empty, request.IconDataUrl);
+        Assert.True(request.Enabled);
+        Assert.Equal(4, request.LyricProviders.Count);
+
+        using var configured = JsonDocument.Parse("""
+            {"sourceAppUserModelId":"Example.Player!Music","displayName":"示例播放器","enabled":false,
+             "lyricProviders":[{"providerId":"Kugou","enabled":true},{"providerId":"QQMusic","enabled":true},
+                               {"providerId":"Netease","enabled":false},{"providerId":"LRCLIB","enabled":true}]}
+            """);
+        Assert.True(SettingsWebMessageRouter.TryParseCustomPlayerSourceAddRequest(configured.RootElement, out var configuredRequest));
+        Assert.False(configuredRequest.Enabled);
+        Assert.Equal("Kugou", configuredRequest.LyricProviders[0].ProviderId);
+        Assert.False(configuredRequest.LyricProviders[2].Enabled);
+        using var invalidEnabled = JsonDocument.Parse("""
+            {"sourceAppUserModelId":"Example.Player!Music","displayName":"示例播放器","enabled":"false"}
+            """);
+        Assert.False(SettingsWebMessageRouter.TryParseCustomPlayerSourceAddRequest(invalidEnabled.RootElement, out _));
+        using var invalidProviders = JsonDocument.Parse("""
+            {"sourceAppUserModelId":"Example.Player!Music","displayName":"示例播放器","lyricProviders":[]}
+            """);
+        Assert.False(SettingsWebMessageRouter.TryParseCustomPlayerSourceAddRequest(invalidProviders.RootElement, out _));
 
         using var icon = JsonDocument.Parse("""
             {"sourceAppUserModelId":"Example.Player!Music","displayName":"示例播放器","iconDataUrl":"data:image/png;base64,iVBORw0KGgo="}
             """);
         Assert.True(SettingsWebMessageRouter.TryParseCustomPlayerSourceAddRequest(icon.RootElement, out var iconRequest));
         Assert.Equal("data:image/png;base64,iVBORw0KGgo=", iconRequest.IconDataUrl);
+        using var preset = JsonDocument.Parse("""
+            {"sourceAppUserModelId":"Example.Player!Music","displayName":"示例播放器","presetIconId":"disc","presetIconColor":"#123abc"}
+            """);
+        Assert.True(SettingsWebMessageRouter.TryParseCustomPlayerSourceAddRequest(preset.RootElement, out var presetRequest));
+        Assert.Equal("disc", presetRequest.PresetIconId);
+        Assert.Equal("#123ABC", presetRequest.PresetIconColor);
+        using var unknownPreset = JsonDocument.Parse("""
+            {"sourceAppUserModelId":"Example.Player!Music","displayName":"示例播放器","presetIconId":"unknown","presetIconColor":"#123ABC"}
+            """);
+        Assert.False(SettingsWebMessageRouter.TryParseCustomPlayerSourceAddRequest(unknownPreset.RootElement, out _));
+        using var conflictingIcons = JsonDocument.Parse("""
+            {"sourceAppUserModelId":"Example.Player!Music","displayName":"示例播放器","iconDataUrl":"data:image/png;base64,iVBORw0KGgo=","presetIconId":"note","presetIconColor":"#123ABC"}
+            """);
+        Assert.False(SettingsWebMessageRouter.TryParseCustomPlayerSourceAddRequest(conflictingIcons.RootElement, out _));
         using var unsafeIcon = JsonDocument.Parse("""
             {"sourceAppUserModelId":"Example.Player!Music","displayName":"示例播放器","iconDataUrl":"data:image/svg+xml;base64,PHN2Zz4="}
             """);
