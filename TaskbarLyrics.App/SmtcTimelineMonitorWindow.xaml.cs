@@ -15,6 +15,7 @@ public partial class SmtcTimelineMonitorWindow : Wpf.Ui.Controls.FluentWindow
     private readonly LyricSyncService _lyricSyncService;
     private readonly DispatcherTimer _timer;
     private bool _isWebReady;
+    private bool _isClosed;
 
     public SmtcTimelineMonitorWindow(
         SmtcMusicSessionProvider provider,
@@ -56,11 +57,15 @@ public partial class SmtcTimelineMonitorWindow : Wpf.Ui.Controls.FluentWindow
     private async Task InitializeWebViewAndStartTimerAsync()
     {
         await InitializeWebViewAsync();
-        _timer.Start();
+        if (!_isClosed)
+        {
+            _timer.Start();
+        }
     }
 
     private void OnClosed(object? sender, EventArgs e)
     {
+        _isClosed = true;
         NativeWindowTheme.ThemeChanged -= OnWindowThemeChanged;
         _timer.Stop();
 
@@ -75,7 +80,7 @@ public partial class SmtcTimelineMonitorWindow : Wpf.Ui.Controls.FluentWindow
 
     private async Task InitializeWebViewAsync()
     {
-        if (_isWebReady)
+        if (_isWebReady || _isClosed)
         {
             return;
         }
@@ -86,7 +91,25 @@ public partial class SmtcTimelineMonitorWindow : Wpf.Ui.Controls.FluentWindow
             "WebView2",
             "SmtcMonitor");
         var environment = await CoreWebView2Environment.CreateAsync(null, userDataFolder);
-        await MonitorWebView.EnsureCoreWebView2Async(environment);
+        if (_isClosed)
+        {
+            return;
+        }
+
+        try
+        {
+            await MonitorWebView.EnsureCoreWebView2Async(environment);
+        }
+        catch (Exception) when (_isClosed)
+        {
+            return;
+        }
+
+        if (_isClosed)
+        {
+            return;
+        }
+
         ApplyWindowTheme();
 
         var core = MonitorWebView.CoreWebView2;

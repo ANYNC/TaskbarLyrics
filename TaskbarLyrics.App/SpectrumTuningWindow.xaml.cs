@@ -17,6 +17,7 @@ public partial class SpectrumTuningWindow : Wpf.Ui.Controls.FluentWindow
     private readonly Action<SpectrumTuningSettings> _apply;
     private readonly DispatcherTimer _diagnosticsTimer;
     private bool _isWebReady;
+    private bool _isClosed;
 
     public SpectrumTuningSettings Settings { get; private set; }
 
@@ -55,6 +56,7 @@ public partial class SpectrumTuningWindow : Wpf.Ui.Controls.FluentWindow
 
     private void OnClosed(object? sender, EventArgs e)
     {
+        _isClosed = true;
         NativeWindowTheme.ThemeChanged -= OnWindowThemeChanged;
         _diagnosticsTimer.Stop();
 
@@ -69,7 +71,7 @@ public partial class SpectrumTuningWindow : Wpf.Ui.Controls.FluentWindow
 
     private async Task InitializeWebViewAsync()
     {
-        if (_isWebReady)
+        if (_isWebReady || _isClosed)
         {
             return;
         }
@@ -80,7 +82,25 @@ public partial class SpectrumTuningWindow : Wpf.Ui.Controls.FluentWindow
             "WebView2",
             "SpectrumTuning");
         var environment = await CoreWebView2Environment.CreateAsync(null, userDataFolder);
-        await TuningWebView.EnsureCoreWebView2Async(environment);
+        if (_isClosed)
+        {
+            return;
+        }
+
+        try
+        {
+            await TuningWebView.EnsureCoreWebView2Async(environment);
+        }
+        catch (Exception) when (_isClosed)
+        {
+            return;
+        }
+
+        if (_isClosed)
+        {
+            return;
+        }
+
         ApplyWindowTheme();
 
         var core = TuningWebView.CoreWebView2;

@@ -6,6 +6,29 @@ namespace TaskbarLyrics.Core.Tests;
 public sealed class LocalMediaIndexTests
 {
     [Fact]
+    public void EnumerateEntriesSafelyKeepsPriorEntriesWhenEnumerationFails()
+    {
+        var entries = LocalMediaIndexRegistry.EnumerateEntriesSafely(FailingEntries).ToArray();
+
+        Assert.Equal(["first.lrc"], entries);
+
+        static IEnumerable<string> FailingEntries()
+        {
+            yield return "first.lrc";
+            throw new IOException("Directory disappeared during enumeration.");
+        }
+    }
+
+    [Fact]
+    public void EnumerateEntriesSafelySkipsInaccessibleDirectory()
+    {
+        var entries = LocalMediaIndexRegistry.EnumerateEntriesSafely(
+            () => throw new UnauthorizedAccessException()).ToArray();
+
+        Assert.Empty(entries);
+    }
+
+    [Fact]
     public async Task AcquireForTheSameFoldersSharesOneCancellableFileIndex()
     {
         var directory = Path.Combine(Path.GetTempPath(), $"taskbar-lyrics-index-{Guid.NewGuid():N}");

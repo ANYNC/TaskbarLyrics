@@ -1,4 +1,5 @@
 using System.Threading.Channels;
+using TaskbarLyrics.Core.Utilities;
 
 namespace TaskbarLyrics.App;
 
@@ -61,17 +62,20 @@ internal sealed class SerialCommandQueue<TCommand> : IDisposable
                 }
                 catch (Exception exception)
                 {
-                    _onUnhandledException(exception);
+                    try
+                    {
+                        _onUnhandledException(exception);
+                    }
+                    catch (Exception handlerException)
+                    {
+                        Log.Error($"Serial command error handler failed: {handlerException}");
+                    }
                 }
             }
         }
         catch (OperationCanceledException) when (_cancellation.IsCancellationRequested)
         {
             // The queue has been stopped by its owner.
-        }
-        finally
-        {
-            _cancellation.Dispose();
         }
     }
 
@@ -84,5 +88,18 @@ internal sealed class SerialCommandQueue<TCommand> : IDisposable
 
         _commands.Writer.TryComplete();
         _cancellation.Cancel();
+        _ = _processTask.ContinueWith(
+            task =>
+            {
+                if (task.IsFaulted)
+                {
+                    Log.Error($"Serial command queue failed: {task.Exception}");
+                }
+
+                _cancellation.Dispose();
+            },
+            CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
     }
 }

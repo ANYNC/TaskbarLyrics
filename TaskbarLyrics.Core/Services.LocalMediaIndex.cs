@@ -61,6 +61,46 @@ public static class LocalMediaIndexRegistry
         .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
         .ToArray();
 
+    internal static IEnumerable<string> EnumerateEntriesSafely(Func<IEnumerable<string>> enumerate)
+    {
+        IEnumerator<string>? iterator = null;
+        try
+        {
+            iterator = enumerate().GetEnumerator();
+        }
+        catch (Exception exception) when (exception is UnauthorizedAccessException or IOException)
+        {
+        }
+
+        if (iterator is null)
+        {
+            yield break;
+        }
+
+        using (iterator)
+        {
+            while (true)
+            {
+                string entry;
+                try
+                {
+                    if (!iterator.MoveNext())
+                    {
+                        break;
+                    }
+
+                    entry = iterator.Current;
+                }
+                catch (Exception exception) when (exception is UnauthorizedAccessException or IOException)
+                {
+                    break;
+                }
+
+                yield return entry;
+            }
+        }
+    }
+
     private sealed class LocalMediaIndexLease(string key, SharedLocalMediaIndex index) : ILocalMediaIndex
     {
         private int _isDisposed;
@@ -220,33 +260,13 @@ public static class LocalMediaIndexRegistry
                 cancellationToken.ThrowIfCancellationRequested();
                 var folder = pending.Pop();
 
-                IEnumerable<string> files;
-                try
-                {
-                    files = Directory.EnumerateFiles(folder);
-                }
-                catch (Exception exception) when (exception is UnauthorizedAccessException or IOException)
-                {
-                    continue;
-                }
-
-                foreach (var file in files)
+                foreach (var file in EnumerateEntriesSafely(() => Directory.EnumerateFiles(folder)))
                 {
                     cancellationToken.ThrowIfCancellationRequested();
                     yield return file;
                 }
 
-                IEnumerable<string> directories;
-                try
-                {
-                    directories = Directory.EnumerateDirectories(folder);
-                }
-                catch (Exception exception) when (exception is UnauthorizedAccessException or IOException)
-                {
-                    continue;
-                }
-
-                foreach (var directory in directories)
+                foreach (var directory in EnumerateEntriesSafely(() => Directory.EnumerateDirectories(folder)))
                 {
                     cancellationToken.ThrowIfCancellationRequested();
                     pending.Push(directory);

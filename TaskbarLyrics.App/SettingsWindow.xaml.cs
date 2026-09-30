@@ -27,6 +27,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
     private readonly Action _clearLyricCache;
     private readonly DispatcherTimer _trackOffsetRefreshTimer;
     private bool _isWebReady;
+    private bool _isClosed;
     private bool _isTrackOffsetRefreshRunning;
     private bool _isRuntimeStateRefreshRunning;
     private bool _isTrackOffsetsPageActive;
@@ -102,7 +103,10 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
     private async Task InitializeSettingsWebViewAndStartRefreshAsync()
     {
         await InitializeSettingsWebViewAsync();
-        _trackOffsetRefreshTimer.Start();
+        if (!_isClosed)
+        {
+            _trackOffsetRefreshTimer.Start();
+        }
     }
 
     private void SettingsWindow_Activated(object? sender, EventArgs e)
@@ -117,6 +121,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
 
     private void SettingsWindow_Closed(object? sender, EventArgs e)
     {
+        _isClosed = true;
         _isWebReady = false;
         var playerDiscoveryCancellation = Interlocked.Exchange(ref _playerSessionDiscoveryCancellation, null);
         playerDiscoveryCancellation?.Cancel();
@@ -163,7 +168,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
 
     private async Task InitializeSettingsWebViewAsync()
     {
-        if (_isWebReady)
+        if (_isWebReady || _isClosed)
         {
             return;
         }
@@ -174,7 +179,25 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             "WebView2",
             "Settings");
         var environment = await CoreWebView2Environment.CreateAsync(null, userDataFolder);
-        await SettingsWebView.EnsureCoreWebView2Async(environment);
+        if (_isClosed)
+        {
+            return;
+        }
+
+        try
+        {
+            await SettingsWebView.EnsureCoreWebView2Async(environment);
+        }
+        catch (Exception) when (_isClosed)
+        {
+            return;
+        }
+
+        if (_isClosed)
+        {
+            return;
+        }
+
         ApplyWindowTheme();
 
         var core = SettingsWebView.CoreWebView2;

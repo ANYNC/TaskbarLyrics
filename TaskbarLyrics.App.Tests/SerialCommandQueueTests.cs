@@ -71,4 +71,29 @@ public sealed class SerialCommandQueueTests
         Assert.True(canceled.Task.IsCompletedSuccessfully);
         Assert.False(queue.TryEnqueue(2));
     }
+
+    [Fact]
+    public async Task ErrorHandlerFailureDoesNotStopLaterCommands()
+    {
+        var completed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        using var queue = new SerialCommandQueue<int>(
+            (command, _) =>
+            {
+                if (command == 1)
+                {
+                    throw new InvalidOperationException("Command failed.");
+                }
+
+                completed.TrySetResult();
+                return Task.CompletedTask;
+            },
+            _ => throw new InvalidOperationException("Error handler failed."));
+
+        Assert.True(queue.TryEnqueue(1));
+        Assert.True(queue.TryEnqueue(2));
+
+        await completed.Task.WaitAsync(TimeSpan.FromSeconds(1));
+        await queue.StopAsync(TimeSpan.FromSeconds(1));
+    }
 }
