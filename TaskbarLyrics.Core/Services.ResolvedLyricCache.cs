@@ -88,25 +88,44 @@ public sealed class JsonResolvedLyricCache : IContextualResolvedLyricCache, IDis
     }
 
     public bool Store(TrackInfo track, ResolvedLyrics resolvedLyrics)
-        => StoreCore(track, resolvedLyrics, null);
+        => StoreCore(track, resolvedLyrics, null).IsSaved;
 
     public bool Store(TrackInfo track, ResolvedLyrics resolvedLyrics, string context)
-        => StoreCore(track, resolvedLyrics, context);
+        => StoreCore(track, resolvedLyrics, context).IsSaved;
 
-    private bool StoreCore(TrackInfo track, ResolvedLyrics resolvedLyrics, string? context)
+    public ResolvedLyricCacheStoreResult StoreWithResult(TrackInfo track, ResolvedLyrics resolvedLyrics)
+        => StoreCore(track, resolvedLyrics, null);
+
+    public ResolvedLyricCacheStoreResult StoreWithResult(
+        TrackInfo track,
+        ResolvedLyrics resolvedLyrics,
+        string context) => StoreCore(track, resolvedLyrics, context);
+
+    private ResolvedLyricCacheStoreResult StoreCore(TrackInfo track, ResolvedLyrics resolvedLyrics, string? context)
     {
-        if (track is null || resolvedLyrics is null ||
-            !TryCreateCacheKey(track.Title, track.Artist, context, out var key) ||
-            !TryCreateEntry(track, resolvedLyrics, context, out var entry))
+        if (track is null || resolvedLyrics is null)
         {
-            return false;
+            return new(false, "当前歌曲或歌词内容不可用。");
+        }
+
+        if (!TryCreateCacheKey(track.Title, track.Artist, context, out var key))
+        {
+            Log.Warn($"Resolved lyric cache rejected track '{track.Id}', candidate '{resolvedLyrics.CandidateId}': title or artist is invalid.");
+            return new(false, "当前歌曲缺少有效的标题或歌手。");
+        }
+
+        if (!TryCreateEntry(track, resolvedLyrics, context, out var entry))
+        {
+            var reason = GetContentValidationFailure(resolvedLyrics.Content) ?? "歌词来源或候选信息无效";
+            Log.Warn($"Resolved lyric cache rejected track '{track.Id}', candidate '{resolvedLyrics.CandidateId}': {reason}.");
+            return new(false, $"{reason}。");
         }
 
         lock (_gate)
         {
             if (_disposed || !EnsureLoaded())
             {
-                return false;
+                return new(false, "歌词缓存当前不可用，请重启应用后重试。");
             }
 
             var updatedEntries = new Dictionary<string, ResolvedLyricCacheEntry>(_entries!, StringComparer.Ordinal)
@@ -115,12 +134,12 @@ public sealed class JsonResolvedLyricCache : IContextualResolvedLyricCache, IDis
             };
             if (!PersistEntries(updatedEntries))
             {
-                return false;
+                return new(false, "缓存文件写入失败，请检查用户数据目录和磁盘空间。");
             }
 
             _entries = updatedEntries;
             _diskEntries.Remove(key);
-            return true;
+            return new(true, null);
         }
     }
 
@@ -484,43 +503,51 @@ public sealed class JsonResolvedLyricCache : IContextualResolvedLyricCache, IDis
             acquisition,
             new Dictionary<string, string>(entry.Diagnostics!, StringComparer.Ordinal));
 
-    private static bool IsValidContent(ParsedLyrics? content)
+    private static bool IsValidContent(ParsedLyrics? content) => GetContentValidationFailure(content) is null;
+
+    private static string? GetContentValidationFailure(ParsedLyrics? content)
     {
-        if (content is null ||
-            !Enum.IsDefined(content.TimingKind) ||
+        if (content is null)
+        {
+            return "歌词内容缺失";
+        }
+
+        if (!Enum.IsDefined(content.TimingKind) ||
             !Enum.IsDefined(content.TimingProvenance) ||
             !Enum.IsDefined(content.Format) ||
             content.Lines is null ||
             (!content.IsPureMusic && content.Lines.Count == 0))
         {
-            return false;
+            return "歌词结构无效";
         }
 
-        foreach (var line in content.Lines)
+        for (var lineIndex = 0; lineIndex < content.Lines.Count; lineIndex++)
         {
+            var line = content.Lines[lineIndex];
             if (line is null ||
                 string.IsNullOrWhiteSpace(line.Text) ||
                 line.StartTime < TimeSpan.Zero ||
                 (line.EndTime is { } endTime && endTime < line.StartTime) ||
                 line.Segments is null)
             {
-                return false;
+                return $"第 {lineIndex + 1} 行无效";
             }
 
-            foreach (var segment in line.Segments)
+            for (var segmentIndex = 0; segmentIndex < line.Segments.Count; segmentIndex++)
             {
+                var segment = line.Segments[segmentIndex];
                 if (segment is null ||
                     segment.StartTime < line.StartTime ||
                     segment.EndTime <= segment.StartTime ||
-                    string.IsNullOrWhiteSpace(segment.Text) ||
+                    string.IsNullOrEmpty(segment.Text) ||
                     (line.EndTime is { } lineEnd && segment.EndTime > lineEnd))
                 {
-                    return false;
+                    return $"第 {lineIndex + 1} 行的第 {segmentIndex + 1} 个片段无效";
                 }
             }
         }
 
-        return true;
+        return null;
     }
 
     private static bool TryCreateCacheKey(

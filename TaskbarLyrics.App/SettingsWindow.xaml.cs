@@ -8,6 +8,7 @@ using System.Windows.Threading;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Win32;
 using TaskbarLyrics.Core.Models;
+using TaskbarLyrics.Core.Abstractions;
 using TaskbarLyrics.Core.Services;
 using TaskbarLyrics.Core.Utilities;
 using Drawing = System.Drawing;
@@ -23,7 +24,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
     private readonly Func<Task<CurrentTrackLyricsContext?>> _getCurrentTrackLyricsContext;
     private readonly Func<LyricDiagnosticRunner> _createLyricDiagnosticRunner;
     private readonly Func<TrackInfo, ResolvedLyrics, CancellationToken, Task<bool>> _tryApplyResolvedLyrics;
-    private readonly Func<TrackInfo, ResolvedLyrics, CancellationToken, Task<bool>> _rememberResolvedLyrics;
+    private readonly Func<TrackInfo, ResolvedLyrics, CancellationToken, Task<ResolvedLyricCacheStoreResult>> _rememberResolvedLyrics;
     private readonly Action _clearLyricCache;
     private readonly DispatcherTimer _trackOffsetRefreshTimer;
     private bool _isWebReady;
@@ -52,7 +53,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         Func<Task<CurrentTrackLyricsContext?>> getCurrentTrackLyricsContext,
         Func<LyricDiagnosticRunner> createLyricDiagnosticRunner,
         Func<TrackInfo, ResolvedLyrics, CancellationToken, Task<bool>> tryApplyResolvedLyrics,
-        Func<TrackInfo, ResolvedLyrics, CancellationToken, Task<bool>> rememberResolvedLyrics,
+        Func<TrackInfo, ResolvedLyrics, CancellationToken, Task<ResolvedLyricCacheStoreResult>> rememberResolvedLyrics,
         Action clearLyricCache)
     {
         InitializeComponent();
@@ -699,13 +700,13 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                     cancellation.Token);
                 cancellation.Token.ThrowIfCancellationRequested();
                 await PushLyricDiagnosticsApplyStateAsync(
-                    remembered ? "success" : "error",
+                    remembered.IsSaved ? "success" : "error",
                     providerId,
                     candidateId,
                     mode,
-                    remembered
+                    remembered.IsSaved
                         ? "已应用并写入歌词缓存；再次匹配到相同标题和歌手时会直接使用。"
-                        : "歌词已应用，但未能写入歌词缓存。");
+                        : $"歌词已应用，但未能写入歌词缓存：{remembered.FailureReason ?? "请检查日志。"}");
                 return;
             }
 

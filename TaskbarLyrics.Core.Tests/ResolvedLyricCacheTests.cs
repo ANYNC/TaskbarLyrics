@@ -8,6 +8,55 @@ namespace TaskbarLyrics.Core.Tests;
 public sealed class ResolvedLyricCacheTests
 {
     [Fact]
+    public void WhitespaceSyllableIsPreservedWhenRememberingLyrics()
+    {
+        using var fixture = CacheFile.Create();
+        var track = CreateTrack("Song", "Artist", "Album", "QQMusic", "track-id", null, TimeSpan.FromMinutes(3));
+        var resolved = new ResolvedLyrics(
+            new ParsedLyrics(
+                [new ParsedLyricLine(
+                    TimeSpan.Zero,
+                    TimeSpan.FromSeconds(1),
+                    "Two words",
+                    segments:
+                    [
+                        new ParsedLyricSegment(TimeSpan.Zero, TimeSpan.FromMilliseconds(400), "Two"),
+                        new ParsedLyricSegment(TimeSpan.FromMilliseconds(400), TimeSpan.FromMilliseconds(500), " "),
+                        new ParsedLyricSegment(TimeSpan.FromMilliseconds(500), TimeSpan.FromSeconds(1), "words")
+                    ])],
+                LyricTimingKind.WordTimed,
+                LyricTimingProvenance.ProviderSupplied,
+                LyricPayloadFormat.Qrc),
+            KnownLyricProviders.QQMusic,
+            "candidate-1",
+            LyricAcquisitionKind.Remote,
+            new Dictionary<string, string>());
+
+        using (var cache = new JsonResolvedLyricCache(fixture.Path))
+        {
+            Assert.True(cache.Store(track, resolved, LyricSourceSelection.ManualCacheContext));
+        }
+
+        using var reloaded = new JsonResolvedLyricCache(fixture.Path);
+        Assert.True(reloaded.TryGet(track, LyricSourceSelection.ManualCacheContext, out var remembered));
+        Assert.Equal(" ", remembered!.Content.Lines[0].Segments[1].Text);
+    }
+
+    [Fact]
+    public void InvalidTrackIdentityReturnsAStoreFailureReason()
+    {
+        using var fixture = CacheFile.Create();
+        using var cache = new JsonResolvedLyricCache(fixture.Path);
+        var track = CreateTrack("Song", string.Empty, "Album", "QQMusic", "track-id", null, TimeSpan.Zero);
+
+        var result = cache.StoreWithResult(track, CreateResolved("lyrics"));
+
+        Assert.False(result.IsSaved);
+        Assert.Contains("歌手", result.FailureReason);
+        Assert.False(File.Exists(fixture.Path));
+    }
+
+    [Fact]
     public void SelectionContextsDoNotReuseDefaultOrOtherPlayerResults()
     {
         using var fixture = CacheFile.Create();

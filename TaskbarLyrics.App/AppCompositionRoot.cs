@@ -20,7 +20,7 @@ internal interface IAppCompositionRoot : IDisposable
     LyricDiagnosticRunner CreateLyricDiagnosticRunner();
     LyricDiagnosticRunner CreateLyricDiagnosticRunner(AppSettings settings);
 
-    ValueTask<bool> RememberResolvedLyricsAsync(
+    ValueTask<ResolvedLyricCacheStoreResult> RememberResolvedLyricsAsync(
         TrackInfo track,
         ResolvedLyrics resolvedLyrics,
         CancellationToken cancellationToken);
@@ -117,15 +117,15 @@ internal sealed class AppCompositionRoot : IAppCompositionRoot
             [new LyricifyPayloadParser()],
             sourceSelectionResolver: track => settings.GetLyricSourceSelection(track.SourceApp));
 
-    public ValueTask<bool> RememberResolvedLyricsAsync(
+    public ValueTask<ResolvedLyricCacheStoreResult> RememberResolvedLyricsAsync(
         TrackInfo track,
         ResolvedLyrics resolvedLyrics,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var stored = _resolvedLyricCache is IContextualResolvedLyricCache contextual
-            ? contextual.Store(track, resolvedLyrics, LyricSourceSelection.ManualCacheContext)
-            : _resolvedLyricCache.Store(track, resolvedLyrics);
+            ? contextual.StoreWithResult(track, resolvedLyrics, LyricSourceSelection.ManualCacheContext)
+            : _resolvedLyricCache.StoreWithResult(track, resolvedLyrics);
         return ValueTask.FromResult(stored);
     }
 

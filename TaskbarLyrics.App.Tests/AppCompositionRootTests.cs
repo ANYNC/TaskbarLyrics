@@ -85,9 +85,32 @@ public sealed class AppCompositionRootTests
             lyrics,
             CancellationToken.None);
 
-        Assert.True(remembered);
+        Assert.True(remembered.IsSaved);
         Assert.Same(track, cache.SavedTrack);
         Assert.Same(lyrics, cache.SavedLyrics);
+    }
+
+    [Fact]
+    public async Task RememberResolvedLyricsPreservesCacheFailureReason()
+    {
+        var cache = new RecordingResolvedLyricCache { StoreFailureReason = "缓存文件写入失败" };
+        using var root = new AppCompositionRoot(cache);
+        var track = new TrackInfo("track-1", "Song", "Artist", string.Empty, "QQMusic", TimeSpan.Zero);
+        var lyrics = new ResolvedLyrics(
+            new ParsedLyrics(
+                [new ParsedLyricLine(TimeSpan.Zero, null, "line")],
+                LyricTimingKind.LineTimed,
+                LyricTimingProvenance.ProviderSupplied,
+                LyricPayloadFormat.Lrc),
+            KnownLyricProviders.QQMusic,
+            "candidate-1",
+            LyricAcquisitionKind.Remote,
+            new Dictionary<string, string>());
+
+        var result = await root.RememberResolvedLyricsAsync(track, lyrics, CancellationToken.None);
+
+        Assert.False(result.IsSaved);
+        Assert.Equal("缓存文件写入失败", result.FailureReason);
     }
 
     [Fact]
@@ -114,6 +137,8 @@ public sealed class AppCompositionRootTests
 
         public int ClearCalls { get; private set; }
 
+        public string? StoreFailureReason { get; set; }
+
         public bool TryGet(TrackInfo track, out ResolvedLyrics? resolvedLyrics)
         {
             resolvedLyrics = null;
@@ -124,8 +149,11 @@ public sealed class AppCompositionRootTests
         {
             SavedTrack = track;
             SavedLyrics = resolvedLyrics;
-            return true;
+            return StoreFailureReason is null;
         }
+
+        public ResolvedLyricCacheStoreResult StoreWithResult(TrackInfo track, ResolvedLyrics resolvedLyrics) =>
+            new(Store(track, resolvedLyrics), StoreFailureReason);
 
         public void Clear() => ClearCalls++;
 

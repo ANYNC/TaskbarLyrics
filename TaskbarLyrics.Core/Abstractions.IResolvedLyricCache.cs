@@ -11,5 +11,10 @@ public interface IResolvedLyricCache
 
     bool Store(TrackInfo track, ResolvedLyrics resolvedLyrics);
 
+    ResolvedLyricCacheStoreResult StoreWithResult(TrackInfo track, ResolvedLyrics resolvedLyrics) =>
+        new(Store(track, resolvedLyrics), null);
+
     void Clear();
 }
+
+public readonly record struct ResolvedLyricCacheStoreResult(bool IsSaved, string? FailureReason);
