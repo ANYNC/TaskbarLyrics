@@ -96,7 +96,16 @@ public sealed class LocalLyricProvider : ILyricProvider, IDisposable
             return NotFound();
         }
 
-        var lines = ParseLyricFile(best.Entry.LyricPath);
+        List<LyricLine> lines;
+        try
+        {
+            lines = ParseLyricFile(best.Entry.LyricPath);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            Log.Warn($"Local lyric file became unavailable: {best.Entry.LyricPath}: {exception.Message}");
+            return NotFound();
+        }
         if (lines.Count == 0)
         {
             Log.Info($"Local lyrics matched but parsed no timed lines: {best.Entry.LyricPath}");

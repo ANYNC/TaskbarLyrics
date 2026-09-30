@@ -90,6 +90,30 @@ public sealed class LyricCacheStoreTests
     }
 
     [Fact]
+    public void DiskKeysRemainCaseInsensitiveAfterReload()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"taskbar-lyrics-case-cache-{Guid.NewGuid():N}");
+        var filePath = Path.Combine(directory, "cache.json");
+
+        try
+        {
+            Directory.CreateDirectory(directory);
+            File.WriteAllText(filePath,
+                "{\"Track\":{\"Value\":\"first\"},\"TRACK\":{\"Value\":\"latest\"}}");
+            var store = new JsonLyricCacheStore<CachePayload>(filePath);
+
+            Assert.True(store.TryGet("track", out var payload, out _));
+            Assert.Equal("latest", payload!.Value);
+            store.Remove("tRaCk");
+            Assert.False(new JsonLyricCacheStore<CachePayload>(filePath).TryGet("TRACK", out _, out _));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
     public void JsonStoreDiscardsCacheWhenPayloadContractCannotBeDeserialized()
     {
         var directory = Path.Combine(Path.GetTempPath(), $"taskbar-lyrics-invalid-cache-{Guid.NewGuid():N}");

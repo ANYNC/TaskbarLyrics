@@ -108,10 +108,17 @@ public sealed class JsonLyricCacheStore<TPayload> : ILyricCacheStore<TPayload>
 
         try
         {
-            _disk = !File.Exists(_filePath)
-                ? new Dictionary<string, TPayload>(StringComparer.OrdinalIgnoreCase)
-                : JsonSerializer.Deserialize<Dictionary<string, TPayload>>(File.ReadAllText(_filePath), SerializerOptions)
-                    ?? new Dictionary<string, TPayload>(StringComparer.OrdinalIgnoreCase);
+            var loaded = File.Exists(_filePath)
+                ? JsonSerializer.Deserialize<Dictionary<string, TPayload>>(File.ReadAllText(_filePath), SerializerOptions)
+                : null;
+            _disk = new Dictionary<string, TPayload>(StringComparer.OrdinalIgnoreCase);
+            if (loaded is not null)
+            {
+                foreach (var (key, value) in loaded)
+                {
+                    _disk[key] = value;
+                }
+            }
         }
         catch (Exception exception) when (IsCacheAccessFailure(exception))
         {

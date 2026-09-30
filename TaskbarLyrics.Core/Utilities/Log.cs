@@ -181,7 +181,7 @@ public static class LogFileWriter
         const int dateLength = 10;
         if (stem.Length > dateLength &&
             stem[^dateLength..].Count(c => c == '-') == 2 &&
-            DateTime.TryParseExact(stem[^dateLength..], "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out _))
+            DateTime.TryParseExact(stem[^dateLength..], "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
         {
             return (stem[..^dateLength].TrimEnd('-'), stem[^dateLength..]);
         }
@@ -244,8 +244,8 @@ public static class LogFileWriter
         return DateTime.TryParseExact(
             stem[^dateLength..],
             "yyyy-MM-dd",
-            null,
-            System.Globalization.DateTimeStyles.None,
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.None,
             out logDate);
     }
 

@@ -243,8 +243,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 break;
             case "update":
                 ApplyWebSettingUpdate(message.Key, message.Value);
-                await SaveSettingsAndNotifyWebAsync();
-                _hasPendingPreviewChanges = false;
+                _hasPendingPreviewChanges = !await SaveSettingsAndNotifyWebAsync();
                 if (RequiresSettingsStateRefresh(message.Key))
                 {
                     await PushSettingsToWebAsync();
@@ -1875,12 +1874,12 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         return false;
     }
 
-    private async Task SaveSettingsAndNotifyWebAsync()
+    private async Task<bool> SaveSettingsAndNotifyWebAsync()
     {
         var success = SaveSettings();
         if (!_isWebReady || SettingsWebView.CoreWebView2 is null)
         {
-            return;
+            return success;
         }
 
         await SettingsWebView.ExecuteScriptAsync(
@@ -1888,6 +1887,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 "settingsApp",
                 "settingsSaveResult",
                 new { success }));
+        return success;
     }
 
     private static bool ReadBool(JsonElement element, bool fallback)

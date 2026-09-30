@@ -8,6 +8,30 @@ namespace TaskbarLyrics.Core.Tests;
 public sealed class LocalLyricProviderTests
 {
     [Fact]
+    public async Task IndexedLyricRemovedBeforeReadingReturnsNotFound()
+    {
+        const string fileName = "Artist - Removed Song.lrc";
+        var directory = CreateLyricsDirectory(fileName, "[00:01.00]Line");
+
+        try
+        {
+            using var provider = new LocalLyricProvider([directory]);
+            await GetLyricsAsync(provider, "Removed Song");
+            File.Delete(Path.Combine(directory, fileName));
+
+            var track = new TrackInfo("local-test", "Removed Song", "Artist", string.Empty, "Test", TimeSpan.Zero);
+            var result = await provider.GetLyricsWithDiagnosticsAsync(track);
+
+            Assert.Null(result.Document);
+            Assert.Equal(LyricAcquisitionKind.NotFound, result.Acquisition);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task GetLyricsAsyncParsesEmbeddedEnhancedLrcWordsUsingAbsoluteBoundaries()
     {
         var directory = CreateEmbeddedLyricsFlacDirectory(

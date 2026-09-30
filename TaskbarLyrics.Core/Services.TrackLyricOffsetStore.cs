@@ -14,12 +14,20 @@ public sealed class TrackLyricOffsetStore : IDisposable
     private const int DurationToleranceSeconds = 4;
 
     private readonly object _syncRoot = new();
+    private readonly object _lifetimeGate = new();
+    private readonly Func<UserDataDbContext> _createContext;
     private readonly Dictionary<TrackLyricOffsetKey, TrackLyricOffsetSnapshot> _offsets = new();
     private readonly SemaphoreSlim _writeGate = new(1, 1);
+    private int _activeWrites;
     private bool _disposed;
 
-    public TrackLyricOffsetStore()
+    public TrackLyricOffsetStore() : this(() => new UserDataDbContext())
     {
+    }
+
+    internal TrackLyricOffsetStore(Func<UserDataDbContext> createContext)
+    {
+        _createContext = createContext;
         Load();
     }
 
@@ -81,7 +89,7 @@ public sealed class TrackLyricOffsetStore : IDisposable
         pageSize = Math.Clamp(pageSize, 1, 100);
         page = Math.Max(1, page);
 
-        await using var context = new UserDataDbContext();
+        await using var context = _createContext();
         var allEntries = context.TrackLyricOffsets.AsNoTracking();
         var unfilteredCount = await allEntries.CountAsync(cancellationToken).ConfigureAwait(false);
         var sources = await allEntries
@@ -205,51 +213,81 @@ public sealed class TrackLyricOffsetStore : IDisposable
                 OffsetMilliseconds = NormalizeOffset(offsetMilliseconds),
                 UpdatedAtUtc = DateTimeOffset.UtcNow
             },
-            cancellationToken);
+            cancellationToken,
+            requireExisting: true);
     }
 
     public async Task<TrackLyricOffsetSaveResult> DeleteAsync(
         TrackLyricOffsetRecordKey recordKey,
         CancellationToken cancellationToken = default)
     {
-        ObjectDisposedException.ThrowIf(_disposed, this);
         var key = ToInternalKey(recordKey);
-        lock (_syncRoot)
+        BeginWrite();
+        try
         {
-            _offsets.Remove(key);
-        }
+            await _writeGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                var result = await PersistAsync(null, new[] { key }, cancellationToken).ConfigureAwait(false);
+                if (result.IsSaved)
+                {
+                    lock (_syncRoot)
+                    {
+                        _offsets.Remove(key);
+                    }
+                }
 
-        return await PersistAsync(null, new[] { key }, cancellationToken).ConfigureAwait(false);
+                return result;
+            }
+            finally
+            {
+                _writeGate.Release();
+            }
+        }
+        finally
+        {
+            EndWrite();
+        }
     }
 
     public async Task<TrackLyricOffsetSaveResult> ClearAsync(CancellationToken cancellationToken = default)
     {
-        ObjectDisposedException.ThrowIf(_disposed, this);
-        lock (_syncRoot)
-        {
-            _offsets.Clear();
-        }
-
-        await _writeGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        BeginWrite();
         try
         {
-            await using var context = new UserDataDbContext();
-            await context.Database.EnsureCreatedAsync(cancellationToken).ConfigureAwait(false);
-            await context.TrackLyricOffsets.ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
-            return new TrackLyricOffsetSaveResult(true, null);
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            Log.Error($"清除单曲歌词偏移失败: {ex.Message}");
-            return new TrackLyricOffsetSaveResult(false, ex.Message);
+            await _writeGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                try
+                {
+                    await using var context = _createContext();
+                    await context.Database.EnsureCreatedAsync(cancellationToken).ConfigureAwait(false);
+                    await context.TrackLyricOffsets.ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
+                    lock (_syncRoot)
+                    {
+                        _offsets.Clear();
+                    }
+
+                    return new TrackLyricOffsetSaveResult(true, null);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    Log.Error($"清除单曲歌词偏移失败: {ex.Message}");
+                    return new TrackLyricOffsetSaveResult(false, ex.Message);
+                }
+            }
+            finally
+            {
+                _writeGate.Release();
+            }
         }
         finally
         {
-            _writeGate.Release();
+            EndWrite();
         }
     }
 
@@ -312,38 +350,104 @@ public sealed class TrackLyricOffsetStore : IDisposable
 
     public void Dispose()
     {
-        if (_disposed)
+        lock (_lifetimeGate)
         {
-            return;
-        }
+            if (_disposed)
+            {
+                return;
+            }
 
-        _disposed = true;
-        _writeGate.Dispose();
+            _disposed = true;
+            if (_activeWrites == 0)
+            {
+                _writeGate.Dispose();
+            }
+        }
+    }
+
+    private void BeginWrite()
+    {
+        lock (_lifetimeGate)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            _activeWrites++;
+        }
+    }
+
+    private void EndWrite()
+    {
+        lock (_lifetimeGate)
+        {
+            _activeWrites--;
+            if (_disposed && _activeWrites == 0)
+            {
+                _writeGate.Dispose();
+            }
+        }
     }
 
     private async Task<TrackLyricOffsetSaveResult> SetSnapshotAsync(
         TrackLyricOffsetSnapshot snapshot,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool requireExisting = false)
     {
-        ObjectDisposedException.ThrowIf(_disposed, this);
-        List<TrackLyricOffsetKey> keysToDelete;
+        BeginWrite();
         TrackLyricOffsetSnapshot? snapshotToSave = snapshot.OffsetMilliseconds == 0 ? null : snapshot;
-
-        lock (_syncRoot)
+        try
         {
-            keysToDelete = ResolveKeysToReplace(snapshot.Key);
-            foreach (var key in keysToDelete)
+            await _writeGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
             {
-                _offsets.Remove(key);
-            }
+                List<TrackLyricOffsetKey> keysToDelete;
+                lock (_syncRoot)
+                {
+                    if (requireExisting)
+                    {
+                        if (!_offsets.TryGetValue(snapshot.Key, out var latest))
+                        {
+                            return new TrackLyricOffsetSaveResult(false, "没有找到要修改的单曲偏移记录。");
+                        }
 
-            if (snapshotToSave is not null)
+                        snapshot = latest with
+                        {
+                            OffsetMilliseconds = snapshot.OffsetMilliseconds,
+                            UpdatedAtUtc = snapshot.UpdatedAtUtc
+                        };
+                        snapshotToSave = snapshot.OffsetMilliseconds == 0 ? null : snapshot;
+                    }
+
+                    keysToDelete = ResolveKeysToReplace(snapshot.Key);
+                }
+
+                var result = await PersistAsync(snapshotToSave, keysToDelete, cancellationToken)
+                    .ConfigureAwait(false);
+                if (result.IsSaved)
+                {
+                    lock (_syncRoot)
+                    {
+                        foreach (var key in keysToDelete)
+                        {
+                            _offsets.Remove(key);
+                        }
+
+                        if (snapshotToSave is not null)
+                        {
+                            _offsets[snapshotToSave.Key] = snapshotToSave;
+                        }
+                    }
+                }
+
+                return result;
+            }
+            finally
             {
-                _offsets[snapshotToSave.Key] = snapshotToSave;
+                _writeGate.Release();
             }
         }
-
-        return await PersistAsync(snapshotToSave, keysToDelete, cancellationToken).ConfigureAwait(false);
+        finally
+        {
+            EndWrite();
+        }
     }
 
     private async Task<TrackLyricOffsetSaveResult> PersistAsync(
@@ -351,10 +455,9 @@ public sealed class TrackLyricOffsetStore : IDisposable
         IReadOnlyCollection<TrackLyricOffsetKey> keysToDelete,
         CancellationToken cancellationToken)
     {
-        await _writeGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await using var context = new UserDataDbContext();
+            await using var context = _createContext();
             await context.Database.EnsureCreatedAsync(cancellationToken).ConfigureAwait(false);
 
             var persistentDeletes = snapshot is null
@@ -393,17 +496,13 @@ public sealed class TrackLyricOffsetStore : IDisposable
             Log.Error($"保存单曲歌词偏移失败: {ex.Message}");
             return new TrackLyricOffsetSaveResult(false, ex.Message);
         }
-        finally
-        {
-            _writeGate.Release();
-        }
     }
 
     private void Load()
     {
         try
         {
-            using var context = new UserDataDbContext();
+            using var context = _createContext();
             context.Database.EnsureCreated();
             context.Database.ExecuteSqlRaw(
                 "CREATE INDEX IF NOT EXISTS IX_TrackLyricOffsets_UpdatedAtUtc ON TrackLyricOffsets (UpdatedAtUtc)");

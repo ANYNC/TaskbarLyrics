@@ -4,14 +4,29 @@ namespace TaskbarLyrics.Core.Database;
 
 public sealed class UserDataDbContext : DbContext
 {
+    private readonly string? _databasePath;
+
+    public UserDataDbContext()
+    {
+    }
+
+    internal UserDataDbContext(string databasePath)
+    {
+        _databasePath = Path.GetFullPath(databasePath);
+    }
+
     public DbSet<TrackLyricOffset> TrackLyricOffsets => Set<TrackLyricOffset>();
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
-        var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        var dbDirectory = Path.Combine(appData, "TaskbarLyrics", "database");
+        var databasePath = _databasePath ?? Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "TaskbarLyrics",
+            "database",
+            "user_data.db");
+        var dbDirectory = Path.GetDirectoryName(databasePath)!;
         Directory.CreateDirectory(dbDirectory);
-        optionsBuilder.UseSqlite($"Data Source={Path.Combine(dbDirectory, "user_data.db")}");
+        optionsBuilder.UseSqlite($"Data Source={databasePath}");
     }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
