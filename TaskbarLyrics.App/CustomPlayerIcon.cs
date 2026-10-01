@@ -7,6 +7,11 @@ internal static class CustomPlayerIcon
     public static string Normalize(string? dataUrl) =>
         TryNormalize(dataUrl, out var normalized) ? normalized : string.Empty;
 
+    public static string ToPngDataUrl(byte[] png) =>
+        png.Length == 0 ? string.Empty : $"data:image/png;base64,{Convert.ToBase64String(png)}";
+
+    public static bool AcceptsPng(byte[] png) => png.Length > 0 && TryNormalize(ToPngDataUrl(png), out _);
+
     public static bool TryNormalize(string? dataUrl, out string normalized)
     {
         normalized = string.Empty;
