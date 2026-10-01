@@ -135,4 +135,34 @@ public sealed class LyricsWebViewScriptFactoryTests
         Assert.Contains("\"type\":\"spectrum\"", script);
         Assert.Contains("[0,0.5,1]", script);
     }
+
+    [Fact]
+    public void SetCoverEmitsAppIconFallbackField()
+    {
+        var script = LyricsWebViewScriptFactory.SetCover(
+            null,
+            "N",
+            "rgba(229, 57, 53, 1)",
+            "data:image/png;base64,AAAA",
+            "track");
+
+        Assert.Contains("window.taskbarLyrics?.receive", script);
+        Assert.Contains("\"type\":\"cover\"", script);
+        Assert.Contains("\"dataUri\":\"\"", script);
+        Assert.Contains("\"fallbackIconDataUri\":\"data:image/png;base64,AAAA\"", script);
+    }
+
+    [Fact]
+    public void SetCoverAlwaysEmitsFallbackIconField()
+    {
+        var script = LyricsWebViewScriptFactory.SetCover(
+            "data:image/jpeg;base64,BBBB",
+            "Q",
+            "rgba(41, 182, 246, 1)",
+            null,
+            "track");
+
+        Assert.Contains("\"dataUri\":\"data:image/jpeg;base64,BBBB\"", script);
+        Assert.Contains("\"fallbackIconDataUri\":\"\"", script);
+    }
 }

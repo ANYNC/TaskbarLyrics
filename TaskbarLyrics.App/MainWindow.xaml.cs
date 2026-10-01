@@ -45,9 +45,12 @@ public partial class MainWindow : Window, IDisposable
     private double _lastLineProgress;
     private double? _lastWordScanProgress;
     private readonly CoverVisualTransitionState _coverVisualTransition = new();
+    private readonly CoverFallbackIconResolver _coverFallbackIconResolver = new();
     private string? _currentCoverDataUri;
     private string _currentCoverFallbackText = "N";
     private string _currentCoverFallbackColorCss = "rgba(67, 160, 71, 1)";
+    private string _currentCoverFallbackIconDataUri = string.Empty;
+    private string _lastPushedFallbackCoverIdentity = string.Empty;
     private string? _lastLocalCoverLookupIdentity;
     private DateTimeOffset _nextLocalCoverLookupUtc;
     private SpectrumDisplayMode _spectrumDisplayMode = SpectrumDisplayMode.Disabled;
@@ -940,6 +943,8 @@ public partial class MainWindow : Window, IDisposable
         if (snapshot.CoverImageBytes is { Length: > 0 } bytes)
         {
             _currentCoverDataUri = BuildCoverDataUri(bytes);
+            _currentCoverFallbackIconDataUri = string.Empty;
+            _lastPushedFallbackCoverIdentity = string.Empty;
             _coverVisualTransition.MarkVisual(coverIdentity);
             LogCoverVisualState(coverIdentity, "SMTC", bytes.Length, DetectImageMimeType(bytes));
             PushCoverToWebView();
@@ -957,15 +962,40 @@ public partial class MainWindow : Window, IDisposable
         if (localCoverBytes is { Length: > 0 })
         {
             _currentCoverDataUri = BuildCoverDataUri(localCoverBytes);
+            _currentCoverFallbackIconDataUri = string.Empty;
+            _lastPushedFallbackCoverIdentity = string.Empty;
             _coverVisualTransition.MarkVisual(coverIdentity);
             LogCoverVisualState(coverIdentity, "Local", localCoverBytes.Length, DetectImageMimeType(localCoverBytes));
             PushCoverToWebView();
             return;
         }
 
+        // A player can report a new track before publishing its artwork; hold the previous visual for a
+        // short settle delay instead of flashing the fallback icon and immediately switching back.
+        if (snapshot.Track is not null && _coverVisualTransition.ShouldDebounceFallback())
+        {
+            return;
+        }
+
         _currentCoverDataUri = null;
+        _currentCoverFallbackIconDataUri = snapshot.Track is null
+            ? string.Empty
+            : _coverFallbackIconResolver.Resolve(snapshot.SourceAppUserModelId, snapshot.Track.SourceApp);
         _coverVisualTransition.MarkVisual(coverIdentity);
         LogCoverVisualState(coverIdentity, "Fallback", 0, string.Empty);
+        PushCoverFallbackToWebView(coverIdentity);
+    }
+
+    // The fallback visual is derived from the cover identity, so a repeated push only restarts the
+    // WebView fallback timer and resends the app icon payload.
+    private void PushCoverFallbackToWebView(string coverIdentity)
+    {
+        if (string.Equals(coverIdentity, _lastPushedFallbackCoverIdentity, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _lastPushedFallbackCoverIdentity = coverIdentity;
         PushCoverToWebView();
     }
 
@@ -1132,6 +1162,7 @@ public partial class MainWindow : Window, IDisposable
             _currentCoverDataUri,
             _currentCoverFallbackText,
             _currentCoverFallbackColorCss,
+            _currentCoverFallbackIconDataUri,
             _coverVisualTransition.VisualIdentity);
         PublishPresentationCommand("cover", script, "lyrics cover update");
     }

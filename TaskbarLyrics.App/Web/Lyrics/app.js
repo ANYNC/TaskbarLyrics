@@ -1148,7 +1148,7 @@ function clearImageElement(imageEl) {
   imageEl.removeAttribute("src");
 }
 
-function crossfadeToCoverImage(uri, generation, onDone) {
+function crossfadeToCoverImage(uri, generation, isAppIcon, onDone) {
   if (!activeCoverImageEl || !standbyCoverImageEl) {
     if (typeof onDone === "function") {
       onDone();
@@ -1162,6 +1162,7 @@ function crossfadeToCoverImage(uri, generation, onDone) {
   incoming.onerror = null;
   incoming.style.opacity = "0";
   incoming.src = uri;
+  applyCoverSurfaceMode(isAppIcon);
 
   window.requestAnimationFrame(() => {
     if (generation !== coverGeneration) {
@@ -1194,7 +1195,23 @@ function crossfadeToCoverImage(uri, generation, onDone) {
   }, 460);
 }
 
+function applyCoverSurfaceMode(isAppIcon) {
+  if (!coverEl) {
+    return;
+  }
+
+  // App icons fill the cover area without the album art background.
+  coverEl.classList.toggle("app-icon", isAppIcon === true);
+  if (isAppIcon) {
+    coverEl.style.backgroundColor = "";
+  }
+}
+
 function applyFallbackCover(text, fallbackColor) {
+  if (coverEl) {
+    coverEl.classList.remove("app-icon");
+  }
+
   if (coverFallbackEl) {
     coverFallbackEl.textContent = text;
   }
@@ -1213,6 +1230,19 @@ function scheduleFallbackCoverUpdate(text, fallbackColor, onApplied) {
       onApplied();
     }
   }, coverSwapDelayMs);
+}
+
+function showCoverFallbackLetter(text, fallbackColor) {
+  scheduleFallbackCoverUpdate(text, fallbackColor, () => {
+    if (coverFallbackEl) {
+      coverFallbackEl.style.display = "flex";
+      coverFallbackEl.style.opacity = "1";
+    }
+    clearImageElement(activeCoverImageEl);
+    clearImageElement(standbyCoverImageEl);
+    currentCoverUri = "";
+    setCoverLoadingState(false);
+  });
 }
 
 function resolveQueuedPresentationFrame(frame) {
@@ -2195,80 +2225,67 @@ const lyricsApi = {
     }
   },
 
-  setCover(dataUri, fallbackText, fallbackColor, diagnosticTrackId) {
+  setCover(dataUri, fallbackText, fallbackColor, fallbackIconDataUri, diagnosticTrackId) {
     const uri = (dataUri ?? "").toString().trim();
+    const iconUri = (fallbackIconDataUri ?? "").toString().trim();
     const text = toDisplayLine(fallbackText, "N").slice(0, 1).toUpperCase();
     const trackId = (diagnosticTrackId ?? "").toString();
+    const isAppIcon = uri.length === 0 && iconUri.length > 0;
+    const visualUri = isAppIcon ? iconUri : uri;
     const generation = ++coverGeneration;
     clearCoverUpdateTimer();
 
-    if (uri.length > 0 && uri === currentCoverUri) {
+    if (visualUri.length > 0 && visualUri === currentCoverUri) {
       setCoverLoadingState(false);
       return;
     }
 
     setCoverLoadingState(true);
 
-    if (uri.length > 0) {
+    if (visualUri.length > 0) {
       const preloader = new Image();
       preloader.onload = () => {
         if (generation !== coverGeneration) {
           return;
         }
 
-        crossfadeToCoverImage(uri, generation, () => setCoverLoadingState(false));
+        crossfadeToCoverImage(visualUri, generation, isAppIcon, () => setCoverLoadingState(false));
       };
       preloader.onerror = () => {
         if (generation !== coverGeneration) {
           return;
         }
 
-        const mimeSeparatorIndex = uri.indexOf(";");
-        const mime = uri.startsWith("data:") && mimeSeparatorIndex > 5
-          ? uri.slice(5, mimeSeparatorIndex)
-          : "";
-        try {
-          window.taskbarLyricsBridge.post("coverDecodeError", {
-            trackId,
-            mime,
-            uriLength: uri.length,
-            generation
-          });
-        } catch {
-          // Diagnostics must not interrupt the fallback transition.
+        if (uri.length > 0) {
+          const mimeSeparatorIndex = uri.indexOf(";");
+          const mime = uri.startsWith("data:") && mimeSeparatorIndex > 5
+            ? uri.slice(5, mimeSeparatorIndex)
+            : "";
+          try {
+            window.taskbarLyricsBridge.post("coverDecodeError", {
+              trackId,
+              mime,
+              uriLength: uri.length,
+              generation
+            });
+          } catch {
+            // Diagnostics must not interrupt the fallback transition.
+          }
         }
 
-        scheduleFallbackCoverUpdate(text, fallbackColor, () => {
-          if (coverFallbackEl) {
-            coverFallbackEl.style.display = "flex";
-            coverFallbackEl.style.opacity = "1";
-          }
-          clearImageElement(activeCoverImageEl);
-          clearImageElement(standbyCoverImageEl);
-          currentCoverUri = "";
-          setCoverLoadingState(false);
-        });
+        showCoverFallbackLetter(text, fallbackColor);
       };
       window.setTimeout(() => {
         if (generation !== coverGeneration) {
           return;
         }
 
-        preloader.src = uri;
+        preloader.src = visualUri;
       }, coverSwapDelayMs);
       return;
     }
 
-    scheduleFallbackCoverUpdate(text, fallbackColor, () => {
-      if (coverFallbackEl) {
-        coverFallbackEl.style.display = "flex";
-        coverFallbackEl.style.opacity = "1";
-      }
-      clearImageElement(activeCoverImageEl);
-      clearImageElement(standbyCoverImageEl);
-      currentCoverUri = "";
-      setCoverLoadingState(false);
-    });
+    showCoverFallbackLetter(text, fallbackColor);
   },
 
   applyStyle(payload) {
@@ -2393,7 +2410,12 @@ window.taskbarLyrics = {
           payload?.scene);
         break;
       case "cover":
-        lyricsApi.setCover(payload?.dataUri, payload?.fallbackText, payload?.fallbackColor, payload?.trackId);
+        lyricsApi.setCover(
+          payload?.dataUri,
+          payload?.fallbackText,
+          payload?.fallbackColor,
+          payload?.fallbackIconDataUri,
+          payload?.trackId);
         break;
       case "spectrum":
         lyricsApi.setSpectrum(payload);
