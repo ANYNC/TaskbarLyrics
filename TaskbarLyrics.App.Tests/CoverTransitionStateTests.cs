@@ -69,4 +69,71 @@ public sealed class CoverTransitionStateTests
         Assert.Equal("lyrics-id", track.Id);
         Assert.Equal("song|7:QQMusic|5:qq-42", CoverIdentity.FromTrack(track));
     }
+
+    [Fact]
+    public void FallbackIsDebouncedWhileTheNewTrackMayStillPublishArtwork()
+    {
+        var now = new DateTimeOffset(2026, 8, 12, 0, 0, 0, TimeSpan.Zero);
+        var state = new CoverVisualTransitionState(
+            TimeSpan.FromMilliseconds(1500),
+            TimeSpan.FromMilliseconds(800),
+            () => now);
+        state.MarkVisual("old");
+        state.Begin("new");
+
+        Assert.True(state.ShouldDebounceFallback());
+
+        now = now.AddMilliseconds(800);
+        Assert.False(state.ShouldDebounceFallback());
+        Assert.True(state.ShouldRetainPreviousVisual());
+    }
+
+    [Fact]
+    public void FallbackIsNotDebouncedWithoutAPreviousVisual()
+    {
+        var now = new DateTimeOffset(2026, 8, 12, 0, 0, 0, TimeSpan.Zero);
+        var state = new CoverVisualTransitionState(TimeSpan.FromMilliseconds(1500), () => now);
+
+        state.Begin("first");
+
+        Assert.False(state.ShouldDebounceFallback());
+    }
+
+    [Fact]
+    public void FallbackIsNotDebouncedOnceTheCurrentIdentityIsVisible()
+    {
+        var now = new DateTimeOffset(2026, 8, 12, 0, 0, 0, TimeSpan.Zero);
+        var state = new CoverVisualTransitionState(TimeSpan.FromMilliseconds(1500), () => now);
+        state.MarkVisual("old");
+        state.Begin("new");
+        state.MarkVisual("new");
+
+        Assert.False(state.ShouldDebounceFallback());
+    }
+
+    [Fact]
+    public void RapidTrackChangesRestartTheFallbackSettleDelay()
+    {
+        var now = new DateTimeOffset(2026, 8, 12, 0, 0, 0, TimeSpan.Zero);
+        var state = new CoverVisualTransitionState(
+            TimeSpan.FromMilliseconds(1500),
+            TimeSpan.FromMilliseconds(800),
+            () => now);
+        state.MarkVisual("a");
+        state.Begin("b");
+
+        now = now.AddMilliseconds(600);
+        state.Begin("c");
+        now = now.AddMilliseconds(600);
+
+        Assert.True(state.ShouldDebounceFallback());
+    }
+
+    [Fact]
+    public void DefaultFallbackSettleDelayStaysShorterThanVisualRetention()
+    {
+        Assert.True(
+            CoverVisualTransitionState.DefaultFallbackSettleDelay <
+            CoverVisualTransitionState.DefaultRetention);
+    }
 }

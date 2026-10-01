@@ -134,6 +134,10 @@ html, body {
   filter: saturate(0.94) brightness(0.96);
 }
 
+.cover.app-icon {
+  background: transparent;
+}
+
 .cover-fallback {
   position: absolute;
   inset: 0;

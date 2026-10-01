@@ -37,13 +37,19 @@ internal static class LyricsWebViewScriptFactory
         });
     }
 
-    public static string SetCover(string? dataUri, string fallbackText, string fallbackColor, string? trackId)
+    public static string SetCover(
+        string? dataUri,
+        string fallbackText,
+        string fallbackColor,
+        string? fallbackIconDataUri,
+        string? trackId)
     {
         return WebViewMessageScriptFactory.Dispatch("taskbarLyrics", "cover", new
         {
             dataUri = dataUri ?? string.Empty,
             fallbackText,
             fallbackColor,
+            fallbackIconDataUri = fallbackIconDataUri ?? string.Empty,
             trackId = trackId ?? string.Empty
         });
     }

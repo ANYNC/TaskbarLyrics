@@ -7,4 +7,5 @@ public sealed record PlaybackSnapshot(
     byte[]? CoverImageBytes = null,
     TimeSpan? RawPosition = null,
     TimeSpan? ExtrapolatedPosition = null,
-    bool IsCoverLoading = false);
+    bool IsCoverLoading = false,
+    string SourceAppUserModelId = "");

@@ -61,20 +61,37 @@ internal sealed class CoverVisualTransitionState
 {
     internal static readonly TimeSpan DefaultRetention = TimeSpan.FromMilliseconds(1500);
 
+    /// <summary>
+    /// Players can report a new track several hundred milliseconds before publishing its artwork.
+    /// </summary>
+    internal static readonly TimeSpan DefaultFallbackSettleDelay = TimeSpan.FromMilliseconds(800);
+
     private readonly TimeSpan _retention;
+    private readonly TimeSpan _fallbackSettleDelay;
     private readonly Func<DateTimeOffset> _utcNow;
     private DateTimeOffset _transitionDeadlineUtc;
+    private DateTimeOffset _fallbackSettleDeadlineUtc;
 
     internal CoverVisualTransitionState()
-        : this(DefaultRetention, () => DateTimeOffset.UtcNow)
+        : this(DefaultRetention, DefaultFallbackSettleDelay, () => DateTimeOffset.UtcNow)
     {
     }
 
     internal CoverVisualTransitionState(TimeSpan retention, Func<DateTimeOffset> utcNow)
+        : this(retention, DefaultFallbackSettleDelay, utcNow)
+    {
+    }
+
+    internal CoverVisualTransitionState(
+        TimeSpan retention,
+        TimeSpan fallbackSettleDelay,
+        Func<DateTimeOffset> utcNow)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(retention, TimeSpan.Zero);
+        ArgumentOutOfRangeException.ThrowIfLessThan(fallbackSettleDelay, TimeSpan.Zero);
 
         _retention = retention;
+        _fallbackSettleDelay = fallbackSettleDelay;
         _utcNow = utcNow ?? throw new ArgumentNullException(nameof(utcNow));
     }
 
@@ -95,6 +112,9 @@ internal sealed class CoverVisualTransitionState
         _transitionDeadlineUtc = string.IsNullOrEmpty(normalizedIdentity)
             ? now
             : now + _retention;
+        _fallbackSettleDeadlineUtc = string.IsNullOrEmpty(normalizedIdentity)
+            ? now
+            : now + _fallbackSettleDelay;
         return true;
     }
 
@@ -108,6 +128,19 @@ internal sealed class CoverVisualTransitionState
         return !string.IsNullOrEmpty(RequestedIdentity) &&
                !IsVisualFor(RequestedIdentity) &&
                _utcNow() < _transitionDeadlineUtc;
+    }
+
+    /// <summary>
+    /// True right after a track change while its artwork may still be arriving. The caller holds the
+    /// previous visual instead of switching to the fallback icon, so a late cover cannot flash the
+    /// fallback in and immediately replace it.
+    /// </summary>
+    internal bool ShouldDebounceFallback()
+    {
+        return VisualIdentity.Length > 0 &&
+               !string.IsNullOrEmpty(RequestedIdentity) &&
+               !IsVisualFor(RequestedIdentity) &&
+               _utcNow() < _fallbackSettleDeadlineUtc;
     }
 
     internal void MarkVisual(string? identity)
@@ -522,7 +555,8 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
             CoverImageBytes: coverImageBytes,
             RawPosition: position,
             ExtrapolatedPosition: extrapolatedPosition,
-            IsCoverLoading: isCoverLoading);
+            IsCoverLoading: isCoverLoading,
+            SourceAppUserModelId: session.SourceAppUserModelId ?? string.Empty);
     }
 
     private PlaybackSnapshot BuildProcessFallbackSnapshot()
