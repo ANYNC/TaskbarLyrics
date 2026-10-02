@@ -95,4 +95,33 @@ internal static class NativeIconInterop
 
     [DllImport("gdi32.dll", SetLastError = true)]
     internal static extern bool DeleteObject(IntPtr gdiObject);
+
+    internal const uint DibRgbColors = 0;
+    internal const uint BiRgb = 0;
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct NativeBitmapInfoHeader
+    {
+        public uint Size;
+        public int Width;
+        public int Height;
+        public ushort Planes;
+        public ushort BitsPerPixel;
+        public uint Compression;
+        public uint SizeImage;
+        public int XPelsPerMeter;
+        public int YPelsPerMeter;
+        public uint ColorsUsed;
+        public uint ColorsImportant;
+    }
+
+    [DllImport("gdi32.dll", SetLastError = true)]
+    internal static extern int GetDIBits(IntPtr deviceContext, IntPtr bitmap, uint startScan, uint scanLines,
+        byte[]? bits, ref NativeBitmapInfoHeader bitmapInfo, uint usage);
+
+    [DllImport("user32.dll")]
+    internal static extern IntPtr GetDC(IntPtr window);
+
+    [DllImport("user32.dll")]
+    internal static extern int ReleaseDC(IntPtr window, IntPtr deviceContext);
 }

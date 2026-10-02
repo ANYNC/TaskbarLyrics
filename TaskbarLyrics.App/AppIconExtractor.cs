@@ -36,9 +36,9 @@ internal static class AppIconExtractor
         {
             try
             {
-                foreach (var size in CandidateSizes)
+                foreach (var flags in ShellItemImageFlags)
                 {
-                    foreach (var flags in ShellItemImageFlags)
+                    foreach (var size in CandidateSizes)
                     {
                         if (factory.GetImage(new NativeIconInterop.NativeSize(size), flags, out var bitmapHandle) != 0 ||
                             bitmapHandle == IntPtr.Zero)
@@ -129,42 +129,76 @@ internal static class AppIconExtractor
         }
     }
 
-    private static Bitmap? ToBitmap(IntPtr bitmapHandle)
+    internal static Bitmap? ToBitmap(IntPtr bitmapHandle)
     {
         if (NativeIconInterop.GetObject(bitmapHandle, Marshal.SizeOf<NativeIconInterop.NativeBitmapInfo>(), out var info) == 0)
         {
             return null;
         }
 
-        if (info.Bits == IntPtr.Zero || info.BitsPerPixel != 32)
+        if (info.Bits != IntPtr.Zero && info.BitsPerPixel == 32 && TryCopyTopDownPixels(bitmapHandle) is { } bitmap)
         {
-            return Bitmap.FromHbitmap(bitmapHandle);
+            return bitmap;
         }
 
-        var width = info.Width;
-        var height = Math.Abs(info.Height);
-        var stride = width * 4;
-        var raw = new byte[stride * height];
-        Marshal.Copy(info.Bits, raw, 0, raw.Length);
+        return Bitmap.FromHbitmap(bitmapHandle);
+    }
 
-        var flipped = new byte[raw.Length];
-        for (var row = 0; row < height; row++)
+    private static Bitmap? TryCopyTopDownPixels(IntPtr bitmapHandle)
+    {
+        var deviceContext = NativeIconInterop.GetDC(IntPtr.Zero);
+        if (deviceContext == IntPtr.Zero)
         {
-            Array.Copy(raw, row * stride, flipped, (height - 1 - row) * stride, stride);
+            return null;
         }
 
-        var bitmap = new Bitmap(width, height, PixelFormat.Format32bppArgb);
-        var data = bitmap.LockBits(new Rectangle(0, 0, width, height), ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);
         try
         {
-            Marshal.Copy(flipped, 0, data.Scan0, flipped.Length);
+            var header = new NativeIconInterop.NativeBitmapInfoHeader
+            {
+                Size = (uint)Marshal.SizeOf<NativeIconInterop.NativeBitmapInfoHeader>()
+            };
+            if (NativeIconInterop.GetDIBits(deviceContext, bitmapHandle, 0, 0, null, ref header, NativeIconInterop.DibRgbColors) == 0)
+            {
+                return null;
+            }
+
+            var width = header.Width;
+            var height = Math.Abs(header.Height);
+            if (width <= 0 || height <= 0)
+            {
+                return null;
+            }
+
+            header.Planes = 1;
+            header.BitsPerPixel = 32;
+            header.Compression = NativeIconInterop.BiRgb;
+            header.Height = -height;
+            header.SizeImage = (uint)(width * height * 4);
+
+            var pixels = new byte[width * height * 4];
+            if (NativeIconInterop.GetDIBits(deviceContext, bitmapHandle, 0, (uint)height, pixels, ref header, NativeIconInterop.DibRgbColors) == 0)
+            {
+                return null;
+            }
+
+            var bitmap = new Bitmap(width, height, PixelFormat.Format32bppArgb);
+            var data = bitmap.LockBits(new Rectangle(0, 0, width, height), ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);
+            try
+            {
+                Marshal.Copy(pixels, 0, data.Scan0, pixels.Length);
+            }
+            finally
+            {
+                bitmap.UnlockBits(data);
+            }
+
+            return bitmap;
         }
         finally
         {
-            bitmap.UnlockBits(data);
+            _ = NativeIconInterop.ReleaseDC(IntPtr.Zero, deviceContext);
         }
-
-        return bitmap;
     }
 
     // 取图结果必须先满足自定义播放器图标的落库约束；超限时降档到更小尺寸，而不是把图标整张丢弃。
