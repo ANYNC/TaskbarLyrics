@@ -1467,6 +1467,73 @@ describe("settings WebView bridge", () => {
     }]);
   });
 
+  it("keeps a dragged slider responsive while layout previews arrive out of order", async () => {
+    const { dom, script } = await createSettingsDom();
+    const document = dom.window.document;
+    dom.window.eval(script);
+    dom.window.settingsApp.receive({
+      version: 1,
+      type: "settingsState",
+      payload: {
+        settings: {
+          sourceRecognitionOrder: [],
+          playerLyricOffsets: {},
+          defaultPlayerLyricOffsets: {},
+          mediaHotkeys: [],
+          mediaHotkeyStatuses: {},
+          foregroundColorMode: "Light",
+          foregroundColor: "#FFFFFFFF",
+          backgroundOpacity: 0.55,
+          useFloatingWindow: false,
+          lyricsLayoutScalePercent: 100,
+          fontSize: 14,
+          coverSize: 34,
+          coverGap: 8,
+          coverCornerRadius: 6
+        },
+        fonts: []
+      }
+    });
+
+    const slider = document.querySelector('input[type="range"][data-setting="lyricsLayoutScalePercent"]');
+    const number = document.querySelector('input[type="number"][data-setting="lyricsLayoutScalePercent"]');
+    const unrelatedNumber = document.querySelector('input[type="number"][data-setting="fontSize"]');
+    unrelatedNumber.value = "37";
+    slider.value = "125";
+    slider.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+
+    expect(number.value).toBe("125");
+    expect(unrelatedNumber.value).toBe("37");
+
+    const layoutPreview = (scalePercent, taskbarMaxScalePercent) => dom.window.settingsApp.receive({
+      version: 1,
+      type: "lyricsLayoutPreview",
+      payload: {
+        scalePercent, fontSize: 14, coverSize: 34, coverGap: 8, coverCornerRadius: 6,
+        ...(taskbarMaxScalePercent === undefined ? {} : { taskbarMaxScalePercent })
+      }
+    });
+    layoutPreview(100, 180);
+    expect(slider.value).toBe("125");
+    expect(number.value).toBe("125");
+
+    slider.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+    layoutPreview(100);
+    expect(slider.value).toBe("125");
+    expect(slider.max).toBe("180");
+    layoutPreview(125);
+    layoutPreview(130);
+    expect(slider.value).toBe("130");
+    expect(number.value).toBe("130");
+
+    slider.value = "150";
+    slider.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+    slider.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+    layoutPreview(100, 100);
+    expect(slider.value).toBe("100");
+    expect(number.value).toBe("100");
+  });
+
   it("pairs every settings slider with a quiet numeric input", async () => {
     const { dom } = await createSettingsDom();
     const document = dom.window.document;
@@ -1499,6 +1566,7 @@ describe("settings WebView bridge", () => {
           foregroundColorMode: "Light",
           foregroundColor: "#FFFFFFFF",
           useFloatingWindow: false,
+          forceAlwaysOnTop: true,
           taskbarEmbeddingAvailable: true,
           taskbarMaxWidth: 420,
           taskbarMaxHeight: 48,
@@ -1518,7 +1586,13 @@ describe("settings WebView bridge", () => {
 
     const embeddedMode = document.querySelector('[data-window-mode="embedded"]');
     const floatingMode = document.querySelector('[data-window-mode="floating"]');
+    const topmostRow = document.querySelector("#floatingTopmostRow");
+    const topmostControl = topmostRow.querySelector('[data-setting="forceAlwaysOnTop"]');
     const dependentControls = [...document.querySelectorAll('[data-depends="useFloatingWindow"] input, [data-depends="useFloatingWindow"] button')];
+    expect(topmostRow.closest(".floating-window-mode-card")).not.toBeNull();
+    expect(topmostControl.closest(".window-mode-choice")).toBeNull();
+    expect(topmostRow.hidden).toBe(false);
+    expect(topmostControl.checked).toBe(true);
     expect(embeddedMode.checked).toBe(true);
     expect(embeddedMode.tabIndex).toBe(0);
     expect(floatingMode.checked).toBe(false);
@@ -1530,6 +1604,7 @@ describe("settings WebView bridge", () => {
 
     expect(floatingMode.checked).toBe(true);
     expect(floatingMode.tabIndex).toBe(0);
+    expect(topmostRow.hidden).toBe(false);
     expect(dependentControls.every(control => !control.disabled)).toBe(true);
     expect(sent.at(-1)).toEqual({
       version: 1,
@@ -1537,11 +1612,23 @@ describe("settings WebView bridge", () => {
       payload: { key: "useFloatingWindow", value: true }
     });
 
+    topmostControl.checked = false;
+    topmostControl.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+    expect(floatingMode.checked).toBe(true);
+    expect(sent.at(-1)).toEqual({
+      version: 1,
+      type: "update",
+      payload: { key: "forceAlwaysOnTop", value: false }
+    });
+
     floatingMode.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Home", bubbles: true }));
 
     expect(document.activeElement).toBe(embeddedMode);
     expect(embeddedMode.checked).toBe(true);
     expect(embeddedMode.tabIndex).toBe(0);
+    expect(topmostRow.hidden).toBe(false);
+    expect(topmostControl.disabled).toBe(true);
+    expect(topmostControl.checked).toBe(false);
     expect(dependentControls.every(control => control.disabled)).toBe(true);
     expect(sent.at(-1)).toEqual({
       version: 1,

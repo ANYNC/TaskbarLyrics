@@ -18,6 +18,9 @@ internal sealed class LyricsWindowHost : IDisposable
     private TrackLyricOffsetStore? _trackLyricOffsetStore;
     private IAppCompositionRoot? _compositionRoot;
     private readonly Dictionary<string, LyricsMirrorWindow> _mirrorWindows = new(StringComparer.OrdinalIgnoreCase);
+    private readonly object _previewGate = new();
+    private AppSettings? _pendingPreviewSettings;
+    private bool _previewScheduled;
     private AppSettings _currentSettings = new();
     private bool _disposed;
     private volatile bool _isVisible;
@@ -82,7 +85,50 @@ internal sealed class LyricsWindowHost : IDisposable
     public void ApplySettings(AppSettings settings)
     {
         var snapshot = settings.Clone();
+        lock (_previewGate)
+        {
+            _pendingPreviewSettings = null;
+        }
         InvokeAsync(() => ApplySettingsOnWindowThread(snapshot));
+    }
+
+    public void PreviewSettings(AppSettings settings)
+    {
+        var snapshot = settings.Clone();
+        lock (_previewGate)
+        {
+            if (_disposed || _dispatcher is null ||
+                _dispatcher.HasShutdownStarted || _dispatcher.HasShutdownFinished)
+            {
+                return;
+            }
+
+            // A busy lyrics dispatcher should render the newest drag value, not queued old values.
+            _pendingPreviewSettings = snapshot;
+            if (_previewScheduled)
+            {
+                return;
+            }
+
+            _previewScheduled = true;
+            _dispatcher.BeginInvoke((Action)ApplyPendingPreviewOnWindowThread, DispatcherPriority.Render);
+        }
+    }
+
+    private void ApplyPendingPreviewOnWindowThread()
+    {
+        AppSettings? snapshot;
+        lock (_previewGate)
+        {
+            snapshot = _pendingPreviewSettings;
+            _pendingPreviewSettings = null;
+            _previewScheduled = false;
+        }
+
+        if (snapshot is not null)
+        {
+            ApplySettingsOnWindowThread(snapshot);
+        }
     }
 
     public void ApplySpectrumTuning(SpectrumTuningSettings settings)
@@ -157,7 +203,11 @@ internal sealed class LyricsWindowHost : IDisposable
             _window?.Close();
             Dispatcher.CurrentDispatcher.BeginInvokeShutdown(DispatcherPriority.Normal);
         });
-        _disposed = true;
+        lock (_previewGate)
+        {
+            _disposed = true;
+            _pendingPreviewSettings = null;
+        }
 
         if (!_thread.Join(TimeSpan.FromMilliseconds(200)))
         {

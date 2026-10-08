@@ -315,13 +315,13 @@
     .window-mode-options { min-width: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
     .window-mode-card { min-width: 0; min-height: 88px; position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: 10px; padding: 12px; border: 1px solid var(--input); border-radius: var(--radius-sm); background: var(--background); cursor: pointer; transition: background var(--duration-fast) ease, border-color var(--duration-fast) ease, box-shadow var(--duration-fast) ease, transform var(--duration-fast) ease; }
     .window-mode-card:hover { border-color: color-mix(in oklch, var(--primary) 28%, var(--input)); background: var(--nav-hover); }
-    .window-mode-card:active { transform: scale(.995); }
-    .window-mode-card:has(input:checked) { border-color: color-mix(in oklch, var(--primary) 55%, var(--input)); background: color-mix(in oklch, var(--primary) 7%, var(--card)); box-shadow: var(--shadow-sm); }
-    .window-mode-card:has(input:focus-visible) { outline: 2px solid var(--ring); outline-offset: 2px; }
+    .window-mode-card:not(.floating-window-mode-card):active, .floating-window-mode-card:has(.window-mode-choice:active) { transform: scale(.995); }
+    .window-mode-card:has([data-window-mode]:checked) { border-color: color-mix(in oklch, var(--primary) 55%, var(--input)); background: color-mix(in oklch, var(--primary) 7%, var(--card)); box-shadow: var(--shadow-sm); }
+    .window-mode-card:has([data-window-mode]:focus-visible) { outline: 2px solid var(--ring); outline-offset: 2px; }
     .window-mode-radio { width: 16px; height: 16px; display: grid; place-items: center; margin-top: 1px; border: 1px solid var(--muted-foreground); border-radius: 50%; background: var(--card); }
     .window-mode-radio::after { width: 6px; height: 6px; border-radius: 50%; background: var(--primary-foreground); content: ""; opacity: 0; transform: scale(.5); transition: opacity var(--duration-fast) ease, transform var(--duration-fast) ease; }
-    .window-mode-card:has(input:checked) .window-mode-radio { border-color: var(--primary); background: var(--primary); }
-    .window-mode-card:has(input:checked) .window-mode-radio::after { opacity: 1; transform: scale(1); }
+    .window-mode-card:has([data-window-mode]:checked) .window-mode-radio { border-color: var(--primary); background: var(--primary); }
+    .window-mode-card:has([data-window-mode]:checked) .window-mode-radio::after { opacity: 1; transform: scale(1); }
     .window-mode-copy { min-width: 0; display: grid; gap: 5px; }
     .window-mode-title { min-width: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 7px; }
     .window-mode-title strong { font-size: 13px; font-weight: 600; }
@@ -329,7 +329,16 @@
     .window-mode-badge { padding: 2px 6px; border-radius: 999px; background: var(--secondary); color: var(--secondary-foreground); font-size: 10px; font-weight: 600; line-height: 1.35; }
     .window-mode-icon { width: 34px; height: 34px; display: grid; place-items: center; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--card); color: var(--muted-foreground); }
     .window-mode-icon svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
-    .window-mode-card:has(input:checked) .window-mode-icon { color: var(--foreground); }
+    .window-mode-card:has([data-window-mode]:checked) .window-mode-icon { color: var(--foreground); }
+    .floating-window-mode-card { display: block; padding: 0; cursor: default; }
+    .window-mode-choice { min-width: 0; min-height: 86px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: 10px; padding: 12px; cursor: pointer; }
+    .floating-topmost-row { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; margin: 0 12px 10px; padding-top: 8px; border-top: 1px solid var(--border); }
+    .floating-topmost-row.is-disabled { opacity: .46; }
+    .floating-topmost-copy { min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; }
+    .floating-topmost-row:not(.is-disabled) .floating-topmost-copy { cursor: pointer; }
+    .floating-topmost-copy strong { font-size: 11px; font-weight: 600; }
+    .floating-topmost-copy small { color: var(--muted-foreground); font-size: 10px; line-height: 1.4; }
+    .floating-topmost-row .switch input:disabled { cursor: not-allowed; }
     .window-mode-support { min-width: 0; display: grid; gap: 2px; padding: 9px 2px 0; }
     .setting-row.monitor-setting-row { grid-template-columns: minmax(0, 1fr) minmax(360px, 560px); align-items: start; gap: 32px; padding-block: 14px; }
     .monitor-selection { width: 100%; max-width: 560px; justify-self: end; display: grid; gap: 10px; }
@@ -806,10 +815,10 @@
       .diagnostics-variant-reasons { grid-column: 2; justify-self: start; text-align: left; }
     }
     @media (forced-colors: active) {
-      .window-mode-card:has(input:checked) { border-color: Highlight; }
+      .window-mode-card:has([data-window-mode]:checked) { border-color: Highlight; }
       .window-mode-radio { border-color: CanvasText; }
-      .window-mode-card:has(input:checked) .window-mode-radio { border-color: Highlight; background: Highlight; }
-      .window-mode-card:has(input:checked) .window-mode-radio::after { background: HighlightText; }
+      .window-mode-card:has([data-window-mode]:checked) .window-mode-radio { border-color: Highlight; background: Highlight; }
+      .window-mode-card:has([data-window-mode]:checked) .window-mode-radio::after { background: HighlightText; }
     }
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }

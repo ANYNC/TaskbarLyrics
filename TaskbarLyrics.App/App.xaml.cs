@@ -179,7 +179,7 @@ public partial class App : System.Windows.Application, IDisposable
     public void PreviewSettings(AppSettings settings)
     {
         ArgumentNullException.ThrowIfNull(settings);
-        _lyricsWindowHost?.ApplySettings(settings);
+        _lyricsWindowHost?.PreviewSettings(settings);
     }
 
     public IReadOnlyDictionary<string, string> GetMediaHotkeyStatuses()

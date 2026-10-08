@@ -78,6 +78,7 @@
     let pendingDeleteTrackOffsetKey = null;
     let focusCurrentTrackOnNextRender = false;
     const pendingRangePreviews = new Map();
+    const liveRangeValues = new Map();
     let rangePreviewFrame = 0;
     let announceNextLayoutPreview = false;
     let lyricDiagnosticsState = { status: "idle", track: null, report: null, message: "", apply: null };
@@ -1248,6 +1249,8 @@
     }
 
     function setState(nextState, fonts = []) {
+      pendingRangePreviews.clear();
+      liveRangeValues.clear();
       const previousPage = state?.page ?? "sources";
       const previousCustom = state?.customForegroundColor;
       const previousTrackOffsetSourceFilter = state?.trackOffsetSourceFilter ?? "All";
@@ -1399,7 +1402,24 @@
         return;
       }
       pendingRangePreviews.delete(key);
+      const liveRangeValue = liveRangeValues.get(key);
       const previousCornerRadius = applySettingLocally(key, value);
+      if (liveRangeValue) {
+        if (["lyricsLayoutScalePercent", "coverGap", "coverCornerRadius"].includes(key)) {
+          const committedRangeValue = { value: state[key], editing: false };
+          liveRangeValues.set(key, committedRangeValue);
+          setTimeout(() => {
+            if (liveRangeValues.get(key) !== committedRangeValue) return;
+            liveRangeValues.delete(key);
+            $$(`[data-setting="${key}"]`).forEach(control => {
+              setControlValue(control, state[key]);
+              if (control.type === "range") syncSliderProgress(control);
+            });
+          }, 1000);
+        } else {
+          liveRangeValues.delete(key);
+        }
+      }
       if (key === "lyricsLayoutScalePercent") announceNextLayoutPreview = true;
       const payload = key === "foregroundColor" ? toArgb(state.foregroundColor) : state[key];
       bridge.post({ type: "update", key, value: payload });
@@ -1409,10 +1429,15 @@
       markSaved();
     }
 
-    function scheduleSettingPreview(key, value) {
+    function scheduleSettingPreview(key, value, source) {
       if (!state) return;
-      applySettingLocally(key, value);
-      pendingRangePreviews.set(key, state[key]);
+      state[key] = value;
+      liveRangeValues.set(key, { value, editing: true });
+      $$(`[data-setting="${key}"]`).forEach(control => {
+        if (control !== source) setControlValue(control, value);
+        if (control.type === "range") syncSliderProgress(control);
+      });
+      pendingRangePreviews.set(key, value);
       if (rangePreviewFrame) return;
       rangePreviewFrame = requestAnimationFrame(() => {
         rangePreviewFrame = 0;
@@ -1671,6 +1696,11 @@
         const value = Number(payload[key]);
         if (!Number.isFinite(value)) return;
         const stateKey = key === "scalePercent" ? "lyricsLayoutScalePercent" : key;
+        const liveRangeValue = liveRangeValues.get(stateKey);
+        if (liveRangeValue) {
+          if (liveRangeValue.editing || value !== liveRangeValue.value) return;
+          liveRangeValues.delete(stateKey);
+        }
         state[stateKey] = value;
       });
       ["taskbarEmbeddingAvailable", "taskbarMaxWidth", "taskbarMaxHeight", "taskbarMaxScalePercent", "taskbarMaxFontSize", "taskbarMaxCoverSize", "taskbarMaxCoverGap", "taskbarMaxWindowWidth", "taskbarMinXOffset", "taskbarMaxXOffset", "taskbarMinYOffset", "taskbarMaxYOffset"].forEach(key => {
@@ -1678,7 +1708,10 @@
       });
       syncLayoutBounds();
       syncWindowBounds();
-      syncControls();
+      liveRangeValues.forEach((liveValue, key) => {
+        if (!liveValue.editing && state[key] !== liveValue.value) liveRangeValues.delete(key);
+      });
+      if (liveRangeValues.size === 0) syncControls();
       updateOutputs();
       if (announceNextLayoutPreview) {
         const coverAnnouncement = state.showCover === false
@@ -2142,12 +2175,12 @@
       }
       const control = event.target.closest('input[type="range"][data-setting]');
       if (control) {
-        scheduleSettingPreview(control.dataset.setting, readSettingControlValue(control));
+        scheduleSettingPreview(control.dataset.setting, readSettingControlValue(control), control);
         return;
       }
       const numberControl = event.target.closest('.slider-number-control input[type="number"][data-setting]');
       if (!numberControl || numberControl.value === "" || !numberControl.validity.valid) return;
-      scheduleSettingPreview(numberControl.dataset.setting, readSettingControlValue(numberControl));
+      scheduleSettingPreview(numberControl.dataset.setting, readSettingControlValue(numberControl), numberControl);
     });
 
     $$('[data-color-text="foregroundColor"]').forEach(input => input.addEventListener("change", () => {

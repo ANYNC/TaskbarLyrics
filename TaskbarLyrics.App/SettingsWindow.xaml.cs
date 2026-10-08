@@ -269,7 +269,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
 
                 if (IsLyricsLayoutSetting(message.Key))
                 {
-                    await PushLyricsLayoutPreviewAsync();
+                    await PushLyricsLayoutPreviewAsync(includeInputBounds: false);
                 }
                 break;
             case "reorderSources":
@@ -489,7 +489,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         }
     }
 
-    private async Task PushLyricsLayoutPreviewAsync()
+    private async Task PushLyricsLayoutPreviewAsync(bool includeInputBounds = true)
     {
         if (!_isWebReady || SettingsWebView.CoreWebView2 is null)
         {
@@ -500,7 +500,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             WebViewMessageScriptFactory.Dispatch(
                 "settingsApp",
                 "lyricsLayoutPreview",
-                CreateLyricsLayoutPreview()));
+                CreateLyricsLayoutPreview(includeInputBounds)));
     }
 
     private async Task RunLyricDiagnosticsAsync()
@@ -1301,7 +1301,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         return payload;
     }
 
-    private object CreateLyricsLayoutPreview()
+    private Dictionary<string, object> CreateLyricsLayoutPreview(bool includeInputBounds)
     {
         var metrics = CreateLyricsLayoutMetrics();
         var availableDisplays = DisplayMonitorService.GetDisplays();
@@ -1310,42 +1310,64 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             _settings.LyricsDisplayMode,
             _settings.SelectedDisplayIds);
         var taskbarConstraints = TaskbarEmbeddingLayoutPolicy.FromDisplays(targetDisplays);
-        var inputBounds = TaskbarEmbeddingLayoutPolicy.GetInputBounds(
+        return CreateLyricsLayoutPreviewPayload(
             _settings,
+            metrics,
             taskbarConstraints,
-            SystemParameters.WorkArea.Width);
-        return new
+            SystemParameters.WorkArea.Width,
+            includeInputBounds);
+    }
+
+    internal static Dictionary<string, object> CreateLyricsLayoutPreviewPayload(
+        AppSettings settings,
+        LyricsLayoutMetrics metrics,
+        TaskbarEmbeddingConstraints taskbarConstraints,
+        double fallbackWidth,
+        bool includeInputBounds)
+    {
+        var preview = new Dictionary<string, object>
         {
-            scalePercent = metrics.ScalePercent,
-            fontSize = AppSettings.ClampFontSize(_settings.FontSize),
-            coverSize = AppSettings.ClampCoverSize(_settings.CoverSize),
-            coverGap = AppSettings.ClampCoverGap(_settings.CoverGap),
-            coverCornerRadius = AppSettings.ClampCoverCornerRadius(
-                _settings.CoverCornerRadius,
-                AppSettings.ClampCoverSize(_settings.CoverSize)),
-            effectiveFontSize = metrics.FontSize,
-            effectiveCoverSize = metrics.CoverSize,
-            effectiveCoverGap = metrics.CoverGap,
-            effectiveCoverCornerRadius = metrics.CoverCornerRadius,
-            effectiveWindowWidth = AppSettings.ClampEffectiveWindowWidth(
-                _settings.WindowWidth,
-                _settings.LyricsLayoutScalePercent,
-                _settings.UseFloatingWindow || !taskbarConstraints.IsSupported
-                    ? SystemParameters.WorkArea.Width
-                    : taskbarConstraints.MaxWidth),
-            taskbarEmbeddingAvailable = inputBounds.IsSupported,
-            taskbarMaxWidth = inputBounds.MaxTaskbarWidth,
-            taskbarMaxHeight = inputBounds.MaxTaskbarHeight,
-            taskbarMaxScalePercent = inputBounds.MaxScalePercent,
-            taskbarMaxFontSize = inputBounds.MaxFontSize,
-            taskbarMaxCoverSize = inputBounds.MaxCoverSize,
-            taskbarMaxCoverGap = inputBounds.MaxCoverGap,
-            taskbarMaxWindowWidth = inputBounds.MaxWindowWidth,
-            taskbarMinXOffset = inputBounds.MinXOffset,
-            taskbarMaxXOffset = inputBounds.MaxXOffset,
-            taskbarMinYOffset = inputBounds.MinYOffset,
-            taskbarMaxYOffset = inputBounds.MaxYOffset
+            ["scalePercent"] = metrics.ScalePercent,
+            ["fontSize"] = AppSettings.ClampFontSize(settings.FontSize),
+            ["coverSize"] = AppSettings.ClampCoverSize(settings.CoverSize),
+            ["coverGap"] = AppSettings.ClampCoverGap(settings.CoverGap),
+            ["coverCornerRadius"] = AppSettings.ClampCoverCornerRadius(
+                settings.CoverCornerRadius,
+                AppSettings.ClampCoverSize(settings.CoverSize)),
+            ["effectiveFontSize"] = metrics.FontSize,
+            ["effectiveCoverSize"] = metrics.CoverSize,
+            ["effectiveCoverGap"] = metrics.CoverGap,
+            ["effectiveCoverCornerRadius"] = metrics.CoverCornerRadius,
+            ["effectiveWindowWidth"] = AppSettings.ClampEffectiveWindowWidth(
+                settings.WindowWidth,
+                settings.LyricsLayoutScalePercent,
+                settings.UseFloatingWindow || !taskbarConstraints.IsSupported
+                    ? fallbackWidth
+                    : taskbarConstraints.MaxWidth)
         };
+
+        if (!includeInputBounds)
+        {
+            return preview;
+        }
+
+        var inputBounds = TaskbarEmbeddingLayoutPolicy.GetInputBounds(
+            settings,
+            taskbarConstraints,
+            fallbackWidth);
+        preview["taskbarEmbeddingAvailable"] = inputBounds.IsSupported;
+        preview["taskbarMaxWidth"] = inputBounds.MaxTaskbarWidth;
+        preview["taskbarMaxHeight"] = inputBounds.MaxTaskbarHeight;
+        preview["taskbarMaxScalePercent"] = inputBounds.MaxScalePercent;
+        preview["taskbarMaxFontSize"] = inputBounds.MaxFontSize;
+        preview["taskbarMaxCoverSize"] = inputBounds.MaxCoverSize;
+        preview["taskbarMaxCoverGap"] = inputBounds.MaxCoverGap;
+        preview["taskbarMaxWindowWidth"] = inputBounds.MaxWindowWidth;
+        preview["taskbarMinXOffset"] = inputBounds.MinXOffset;
+        preview["taskbarMaxXOffset"] = inputBounds.MaxXOffset;
+        preview["taskbarMinYOffset"] = inputBounds.MinYOffset;
+        preview["taskbarMaxYOffset"] = inputBounds.MaxYOffset;
+        return preview;
     }
 
     private LyricsLayoutMetrics CreateLyricsLayoutMetrics()
