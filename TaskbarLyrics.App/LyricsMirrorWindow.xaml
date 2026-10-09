@@ -24,11 +24,17 @@
               ClipToBounds="False"
               MinHeight="30"
               VerticalAlignment="Stretch">
+            <Border x:Name="CoverHitSurface"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Center"
+                    Background="#01000000"
+                    IsHitTestVisible="False"
+                    Visibility="Collapsed" />
             <wv2:WebView2 x:Name="LyricsWebView"
                           HorizontalAlignment="Stretch"
                           VerticalAlignment="Stretch"
                           Focusable="False"
-                          IsHitTestVisible="False" />
+                          IsHitTestVisible="True" />
         </Grid>
     </Border>
 </Window>

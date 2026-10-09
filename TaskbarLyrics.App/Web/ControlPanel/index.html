@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+{{STYLE_CSS}}
+  </style>
+</head>
+<body>
+  <main id="panel" class="panel" aria-label="播放控制">
+    <header class="track">
+      <div class="artwork">
+        <img id="artworkImage" alt="" />
+        <span id="artworkFallback" aria-hidden="true">♫</span>
+      </div>
+      <div class="track-info">
+        <div id="title" class="title">暂无播放</div>
+        <div id="artist" class="artist">当前没有播放内容</div>
+        <div id="sourceRow" class="source-row" hidden>
+          <span class="source-mark" aria-hidden="true"><img id="sourceIcon" alt="" hidden /><svg id="sourceFallback" viewBox="0 0 24 24"><path d="M9 18V5l11-2v13M9 8l11-2"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg></span>
+          <span id="source" class="source"></span>
+        </div>
+      </div>
+      <button id="settings" class="icon-button settings-button" type="button" aria-label="打开设置" title="打开设置">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1l2-1.5-2-3.4-2.4 1A8 8 0 0 0 15 6l-.3-2.6h-4L10.4 6A8 8 0 0 0 9 7.1l-2.4-1-2 3.4L6.7 11a7 7 0 0 0 0 2l-2.1 1.5 2 3.4 2.4-1a8 8 0 0 0 1.4.8l.3 2.9h4l.3-2.9a8 8 0 0 0 1.4-.8l2.4 1 2-3.4-2-1.5c.1-.3.2-.7.2-1Z"/></svg>
+      </button>
+    </header>
+
+    <section class="timeline" aria-label="播放进度">
+      <input id="seek" type="range" min="0" max="1000" value="0" disabled aria-label="播放位置" />
+      <div class="time-labels"><span id="elapsed">0:00</span><span id="duration">0:00</span></div>
+    </section>
+
+    <div class="actions" role="group" aria-label="播放操作">
+      <button id="previous" class="icon-button" type="button" aria-label="上一首" disabled>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path class="skip-triangle" d="M18.1 5.2c.8-.5 1.9.1 1.9 1.1v11.4c0 1-1.1 1.6-1.9 1.1l-8.5-5.7a1.3 1.3 0 0 1 0-2.2l8.5-5.7Z"/><path d="M5 5.5v13"/></svg>
+      </button>
+      <button id="playPause" type="button" aria-label="播放" disabled>
+        <svg id="playIcon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.6c0-.95 1.05-1.5 1.83-.97l9 6.18c.82.56.82 1.82 0 2.38l-9 6.18C9.05 19.9 8 19.35 8 18.4V5.6Z" /></svg>
+        <svg id="pauseIcon" viewBox="0 0 24 24" aria-hidden="true" hidden><path d="M8 5.5v13m8-13v13" /></svg>
+      </button>
+      <button id="next" class="icon-button" type="button" aria-label="下一首" disabled>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path class="skip-triangle" d="M5.9 5.2C5.1 4.7 4 5.3 4 6.3v11.4c0 1 1.1 1.6 1.9 1.1l8.5-5.7a1.3 1.3 0 0 0 0-2.2L5.9 5.2Z"/><path d="M19 5.5v13"/></svg>
+      </button>
+    </div>
+
+    <footer class="utilities">
+      <button id="translation" class="translation-button" type="button" aria-pressed="false" aria-label="显示翻译">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h12M9 3v2m4 0c-.6 5.1-3.7 8.9-8 11m2-8c1 3 3.3 5.5 6.8 7.2M13 20l4-10 4 10m-6.5-3h5" /></svg>
+        <span>翻译</span><span class="switch" aria-hidden="true"></span>
+      </button>
+      <span class="utilities-divider" aria-hidden="true"></span>
+      <div class="volume-control">
+        <button id="mute" class="icon-button" type="button" aria-label="静音" title="系统音量">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4V9Zm12 0c1.3.7 2 1.7 2 3s-.7 2.3-2 3m2-9c2.1 1.4 3.2 3.4 3.2 6S20.1 16.6 18 18" /></svg>
+        </button>
+        <input id="volume" type="range" min="0" max="100" value="0" disabled aria-label="系统主音量" />
+      </div>
+    </footer>
+  </main>
+  <script>
+{{APP_JS}}
+  </script>
+</body>
+</html>

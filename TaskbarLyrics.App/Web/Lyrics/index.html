@@ -10,11 +10,16 @@
 <body>
   <div id="layout" class="layout">
     <div class="shell">
-      <div id="cover" class="cover">
-        <div id="coverFallback" class="cover-fallback">N</div>
+      <button id="cover" class="cover" type="button" aria-label="展开播放控制" aria-expanded="false">
+        <span id="coverFallback" class="cover-fallback">N</span>
         <img id="coverImage" class="cover-image" alt="" />
         <img id="coverImageNext" class="cover-image" alt="" />
-      </div>
+        <span class="cover-interaction" aria-hidden="true">
+          <svg class="cover-action-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="m5 11 7-6 7 6M5 19l7-6 7 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </span>
+      </button>
       <div class="cover-gap" aria-hidden="true"></div>
       <div class="lyrics-pane">
         <div id="lyricsLayer" class="lyrics-layer">

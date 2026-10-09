@@ -79,7 +79,10 @@ public partial class App : System.Windows.Application, IDisposable
 
         _compositionRoot = new AppCompositionRoot();
         _trackLyricOffsetStore = new TrackLyricOffsetStore();
-        _lyricsWindowHost = new LyricsWindowHost(Settings, _trackLyricOffsetStore, _compositionRoot);
+        _lyricsWindowHost = new LyricsWindowHost(
+            Settings, _trackLyricOffsetStore, _compositionRoot,
+            () => Dispatcher.BeginInvoke(OpenSettingsWindow),
+            () => ToggleMediaHotkeyAction(MediaHotkeyAction.ToggleTranslation));
         _mediaHotkeyService = new GlobalMediaHotkeyService(ExecuteMediaHotkeyAsync);
         _mediaHotkeyService.Apply(Settings.GlobalMediaHotkeys);
 

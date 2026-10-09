@@ -13,6 +13,8 @@ internal sealed class LyricsWindowHost : IDisposable
     private static readonly TimeSpan StartupTimeout = TimeSpan.FromSeconds(10);
     private readonly TaskCompletionSource _ready = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly Thread _thread;
+    private readonly Action _openSettings;
+    private readonly Action _toggleTranslation;
     private Dispatcher? _dispatcher;
     private MainWindow? _window;
     private TrackLyricOffsetStore? _trackLyricOffsetStore;
@@ -30,8 +32,12 @@ internal sealed class LyricsWindowHost : IDisposable
     public LyricsWindowHost(
         AppSettings initialSettings,
         TrackLyricOffsetStore trackLyricOffsetStore,
-        IAppCompositionRoot compositionRoot)
+        IAppCompositionRoot compositionRoot,
+        Action openSettings,
+        Action toggleTranslation)
     {
+        _openSettings = openSettings;
+        _toggleTranslation = toggleTranslation;
         var settings = initialSettings.Clone();
         _thread = new Thread(() => Run(settings, trackLyricOffsetStore, compositionRoot))
         {
@@ -74,6 +80,7 @@ internal sealed class LyricsWindowHost : IDisposable
             return;
         }
 
+        _window.CloseControlPanel();
         _window.Hide();
         foreach (var mirrorWindow in _mirrorWindows.Values)
         {
@@ -252,7 +259,7 @@ internal sealed class LyricsWindowHost : IDisposable
 
     private MainWindow CreateAndWireLyricsWindow()
     {
-        var window = new MainWindow(_trackLyricOffsetStore!, _compositionRoot!);
+        var window = new MainWindow(_trackLyricOffsetStore!, _compositionRoot!, _openSettings, _toggleTranslation);
         window.PresentationCommandCreated += OnPresentationCommandCreated;
         window.LyricsContentVisibilityChanged += OnLyricsContentVisibilityChanged;
         window.RecreateWindowRequested += OnLyricsWindowRecreateRequested;
@@ -353,6 +360,7 @@ internal sealed class LyricsWindowHost : IDisposable
         {
             var staleWindow = _mirrorWindows[staleId];
             _mirrorWindows.Remove(staleId);
+            _window?.CloseControlPanel();
             staleWindow.Close();
         }
 
@@ -365,12 +373,14 @@ internal sealed class LyricsWindowHost : IDisposable
                 // A mirror that leaves cross-process taskbar embedding can no longer
                 // composite as a top-level layered window; replace it with a fresh one.
                 _mirrorWindows.Remove(display.Id);
+                _window?.CloseControlPanel();
                 existingMirror.Close();
             }
 
             if (!_mirrorWindows.TryGetValue(display.Id, out var mirrorWindow))
             {
-                mirrorWindow = new LyricsMirrorWindow(display);
+                mirrorWindow = new LyricsMirrorWindow(display, (bounds, monitor, setExpanded) =>
+                    _window?.ToggleControlPanelNear(bounds, monitor, setExpanded));
                 _mirrorWindows.Add(display.Id, mirrorWindow);
             }
             else

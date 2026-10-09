@@ -114,13 +114,19 @@ html, body {
 }
 
 .cover {
+  display: block;
   width: var(--cover-size);
   height: var(--cover-size);
+  padding: 0;
+  border: 0;
+  appearance: none;
+  font: inherit;
   border-radius: var(--cover-radius);
   overflow: hidden;
   position: relative;
+  cursor: pointer;
   background: #1f2937;
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08) inset;
+  box-shadow: none;
   opacity: 1;
   filter: saturate(1) brightness(1);
   transition:
@@ -136,6 +142,52 @@ html, body {
 
 .cover.app-icon {
   background: transparent;
+}
+
+.cover-interaction {
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  color: white;
+  background: rgba(0, 0, 0, 0.66);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 150ms ease;
+}
+
+.cover-action-icon {
+  width: min(19px, 58%);
+  height: min(19px, 58%);
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4));
+  transform: translateY(2px);
+  transition: transform 150ms ease;
+}
+
+.cover:is(:hover, :focus-visible, .panel-open) .cover-interaction {
+  opacity: 1;
+}
+
+.cover:is(:hover, :focus-visible, .panel-open) .cover-action-icon {
+  transform: translateY(0);
+}
+
+.cover:active .cover-action-icon {
+  transform: translateY(-1px) scale(0.9);
+}
+
+.cover:focus-visible {
+  outline: 2px solid white;
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cover-interaction,
+  .cover-action-icon {
+    transition: none;
+  }
 }
 
 .cover-fallback {

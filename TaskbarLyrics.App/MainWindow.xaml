@@ -25,6 +25,12 @@
               ClipToBounds="False"
               MinHeight="30"
               VerticalAlignment="Stretch">
+            <Border x:Name="CoverHitSurface"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Center"
+                    Background="#01000000"
+                    IsHitTestVisible="False"
+                    Visibility="Collapsed" />
             <Grid x:Name="LyricsWebHost"
                   HorizontalAlignment="Stretch"
                   VerticalAlignment="Stretch"

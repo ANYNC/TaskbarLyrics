@@ -73,6 +73,35 @@ async function createHarness() {
 }
 
 describe("lyrics cover fallback", () => {
+  it("shows an accessible expand affordance and sends a bounded cover click", async () => {
+    const { dom } = await createHarness();
+    const cover = dom.window.document.querySelector("#cover");
+    const sent = [];
+    dom.window.chrome = { webview: { postMessage: message => sent.push(JSON.parse(message)) } };
+    cover.getBoundingClientRect = () => ({ x: 4, y: 3, width: 34, height: 34 });
+
+    expect(cover.tagName).toBe("BUTTON");
+    expect(cover.getAttribute("aria-expanded")).toBe("false");
+    expect(cover.querySelector(".cover-action-icon path")).not.toBeNull();
+    cover.click();
+    expect(sent).toEqual([{
+      version: 1,
+      type: "coverClick",
+      payload: {
+        x: 4, y: 3, width: 34, height: 34,
+        viewportWidth: dom.window.innerWidth,
+        viewportHeight: dom.window.innerHeight
+      }
+    }]);
+
+    dom.window.taskbarLyrics.receive({ version: 1, type: "controlPanelState", payload: { open: true } });
+    expect(cover.classList.contains("panel-open")).toBe(true);
+    expect(cover.getAttribute("aria-expanded")).toBe("true");
+    dom.window.document.documentElement.classList.add("cover-hidden");
+    cover.click();
+    expect(sent).toHaveLength(1);
+  });
+
   it("fills the cover slot with the app icon when album art is unavailable", async () => {
     const { dom, showCover, style } = await createHarness();
     const cover = dom.window.document.querySelector("#cover");

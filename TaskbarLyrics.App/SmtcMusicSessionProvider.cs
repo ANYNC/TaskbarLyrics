@@ -370,6 +370,38 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
     public Task ExecuteAsync(MediaHotkeyAction action, CancellationToken cancellationToken) =>
         TryControlAsync(action, cancellationToken);
 
+    public async Task SeekToAsync(TimeSpan position, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var manager = await GetManagerAsync(cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            var session = manager is null ? null : SelectSessionForControl(manager);
+            if (session?.GetPlaybackInfo()?.Controls?.IsPlaybackPositionEnabled != true)
+            {
+                return;
+            }
+
+            var timeline = session.GetTimelineProperties();
+            if (timeline.EndTime <= timeline.StartTime)
+            {
+                return;
+            }
+
+            var target = TimeSpan.FromTicks(Math.Clamp(position.Ticks, timeline.StartTime.Ticks, timeline.EndTime.Ticks));
+            cancellationToken.ThrowIfCancellationRequested();
+            await session.TryChangePlaybackPositionAsync(target.Ticks);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            Log.Warn($"SMTC seek command failed: {exception}");
+        }
+    }
+
     public void Dispose()
     {
         if (Interlocked.Exchange(ref _isDisposed, 1) != 0)
@@ -556,7 +588,8 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
             RawPosition: position,
             ExtrapolatedPosition: extrapolatedPosition,
             IsCoverLoading: isCoverLoading,
-            SourceAppUserModelId: session.SourceAppUserModelId ?? string.Empty);
+            SourceAppUserModelId: session.SourceAppUserModelId ?? string.Empty,
+            CanSeek: playbackInfo?.Controls?.IsPlaybackPositionEnabled == true);
     }
 
     private PlaybackSnapshot BuildProcessFallbackSnapshot()
