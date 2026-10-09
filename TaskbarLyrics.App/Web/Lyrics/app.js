@@ -2314,6 +2314,7 @@ const lyricsApi = {
 
     root.style.setProperty("--font-family", payload.fontFamily || "\"SF Pro Display\", \"Segoe UI Variable Display\", \"Segoe UI Variable Text\", \"Microsoft YaHei UI\", sans-serif");
     applyLyricsTextAlignment(payload.textAlignment);
+    root.dataset.coverPosition = payload.coverPosition === "Right" ? "Right" : "Left";
     const layoutScalePercent = Number(payload.layoutScalePercent);
     if (Number.isFinite(layoutScalePercent) && layoutScalePercent > 0) {
       layoutScaleFactor = layoutScalePercent / 100;

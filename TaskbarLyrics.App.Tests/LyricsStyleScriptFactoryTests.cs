@@ -5,13 +5,17 @@ namespace TaskbarLyrics.App.Tests;
 public sealed class LyricsStyleScriptFactoryTests
 {
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void CreateEmitsControlPanelSwitch(bool enabled)
+    [InlineData(true, false, true)]
+    [InlineData(false, false, false)]
+    [InlineData(true, true, false)]
+    [InlineData(false, true, false)]
+    public void CreateEmitsControlPanelAvailabilityForEmbeddedModeOnly(bool enabled, bool floating, bool expected)
     {
-        var script = LyricsStyleScriptFactory.Create(new AppSettings { EnableControlPanel = enabled }, 1);
+        var settings = new AppSettings { EnableControlPanel = enabled, UseFloatingWindow = floating };
+        var script = LyricsStyleScriptFactory.Create(settings, 1);
 
-        Assert.Contains($"\"enableControlPanel\":{enabled.ToString().ToLowerInvariant()}", script);
+        Assert.Contains($"\"enableControlPanel\":{expected.ToString().ToLowerInvariant()}", script);
+        Assert.Equal(enabled, settings.EnableControlPanel);
     }
 
     [Fact]
@@ -53,4 +57,14 @@ public sealed class LyricsStyleScriptFactoryTests
 
         Assert.Contains("\"textAlignment\":\"Left\"", script);
     }
+    [Theory]
+    [InlineData(CoverPosition.Left, "Left")]
+    [InlineData(CoverPosition.Right, "Right")]
+    [InlineData((CoverPosition)999, "Left")]
+    public void CreateEmitsNormalizedCoverPosition(CoverPosition position, string expected)
+    {
+        var script = LyricsStyleScriptFactory.Create(new AppSettings { CoverPosition = position }, 1);
+        Assert.Contains($"\"coverPosition\":\"{expected}\"", script);
+    }
+
 }

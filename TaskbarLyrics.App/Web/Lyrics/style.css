@@ -102,12 +102,23 @@ html, body {
   height: 100%;
   display: grid;
   grid-template-columns: var(--cover-size) var(--cover-gap) minmax(0, 1fr);
+  grid-template-areas: "cover gap lyrics";
   align-items: center;
 }
 
 .cover-hidden .shell {
   grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "lyrics";
 }
+
+:root[data-cover-position="Right"]:not(.cover-hidden) .shell {
+  grid-template-columns: minmax(0, 1fr) var(--cover-gap) var(--cover-size);
+  grid-template-areas: "lyrics gap cover";
+}
+
+.cover { grid-area: cover; }
+.cover-gap { grid-area: gap; }
+.lyrics-pane { grid-area: lyrics; }
 
 .cover-hidden :is(.cover, .cover-gap) {
   display: none;

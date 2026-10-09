@@ -189,4 +189,13 @@ public sealed class AppSettingsTests
 
         Assert.Equal(expected, settings.WindowWidth);
     }
+    [Fact]
+    public void CoverPositionDefaultsToLeftAndNormalizesUndefinedValues()
+    {
+        Assert.Equal(CoverPosition.Left, new AppSettings().CoverPosition);
+        var settings = new AppSettings { CoverPosition = (CoverPosition)999 };
+        settings.NormalizeLyricsLayout();
+        Assert.Equal(CoverPosition.Left, settings.CoverPosition);
+    }
+
 }

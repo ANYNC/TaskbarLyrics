@@ -217,4 +217,23 @@ describe("lyrics cover fallback", () => {
     expect(dom.window.document.querySelector("#cover").classList.contains("app-icon")).toBe(true);
     expect(dom.window.document.querySelector("#coverImageNext").getAttribute("src")).toBe(appIconUri);
   });
+  it.each(["Left", "Center", "Right"])("applies both cover positions independently of %s lyric alignment", async alignment => {
+    const { dom } = await createHarness();
+    const document = dom.window.document;
+    const style = payload => dom.window.taskbarLyrics.receive({ version: 1, type: "style", payload });
+    for (const position of ["Left", "Right"]) {
+      style({ coverPosition: position, textAlignment: alignment, showCover: true });
+      expect(document.documentElement.dataset.coverPosition).toBe(position);
+      expect(document.querySelector("#layout").dataset.textAlignment).toBe(alignment);
+      expect(document.documentElement.classList.contains("cover-hidden")).toBe(false);
+      style({ coverPosition: position, textAlignment: alignment, showCover: false });
+      expect(document.documentElement.classList.contains("cover-hidden")).toBe(true);
+      expect(document.documentElement.dataset.coverPosition).toBe(position);
+    }
+    style({ coverPosition: "Unsupported", textAlignment: alignment });
+    expect(document.documentElement.dataset.coverPosition).toBe("Left");
+    style({ textAlignment: alignment });
+    expect(document.documentElement.dataset.coverPosition).toBe("Left");
+  });
+
 });

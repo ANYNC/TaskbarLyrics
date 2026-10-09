@@ -10,6 +10,7 @@
       return {
         ...nextState,
         lyricsTextAlignment: normalizeLyricsTextAlignment(nextState?.lyricsTextAlignment),
+        coverPosition: nextState?.coverPosition === "Right" ? "Right" : "Left",
         page: previousState?.page ?? "sources",
         foregroundColor,
         trackOffsetSourceFilter: previousState?.trackOffsetSourceFilter ?? "All",

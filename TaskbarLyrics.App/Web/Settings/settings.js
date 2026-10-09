@@ -16,9 +16,7 @@
       spectrumDisplayMode: [{ value: "Disabled", label: "关闭" }, { value: "PureMusicOnly", label: "仅纯音乐时" }, { value: "PureMusicOrNoLyrics", label: "纯音乐或无歌词时" }, { value: "Always", label: "始终显示" }],
       fontFamily: [],
       fontWeight: [{ value: "Light", label: "细体" }, { value: "Normal", label: "常规" }, { value: "Medium", label: "中等" }, { value: "SemiBold", label: "半粗体" }, { value: "Bold", label: "粗体" }],
-      lyricsTextAlignment: [{ value: "Left", label: "左对齐" }, { value: "Center", label: "居中" }, { value: "Right", label: "右对齐" }],
       foregroundColorMode: [{ value: "System", label: "跟随系统" }, { value: "Dark", label: "深色" }, { value: "Light", label: "浅色" }, { value: "Custom", label: "自定义" }],
-      horizontalAnchor: [{ value: "Left", label: "左侧" }, { value: "Center", label: "居中" }, { value: "Right", label: "右侧" }],
       trackOffsetSourceFilter: [{ value: "All", label: "全部歌词源" }],
       trackOffsetSort: [{ value: "updated", label: "最近修改" }, { value: "title", label: "歌曲名称" }, { value: "offset", label: "偏移量" }]
     };
@@ -1084,6 +1082,7 @@
           option.tabIndex = selected ? 0 : -1;
         });
       }
+      else if (control.type === "radio") control.checked = control.value === value;
       else if (control.type === "checkbox") control.checked = Boolean(value);
       else if (control.tagName === "TEXTAREA" && Array.isArray(value)) control.value = value.join("\n");
       else if (Number.isFinite(Number(value)) && control.dataset.valueScale) {
@@ -1613,7 +1612,7 @@
           control.min = String(safeMin);
           control.max = String(safeMax);
         });
-        state[key] = Math.min(safeMax, Math.max(safeMin, Number(state[key]) || safeMin));
+        state[key] = Math.min(safeMax, Math.max(safeMin, limitOr(state[key], safeMin)));
       };
       bound(
         "lyricsLayoutScalePercent",
@@ -1653,7 +1652,8 @@
 
     function applyDependencies() {
       $$('[data-depends]').forEach(row => {
-        const enabled = Boolean(state[row.dataset.depends]);
+        const enabled = Boolean(state[row.dataset.depends]) &&
+          (!row.hasAttribute("data-embedded-only") || state.useFloatingWindow !== true);
         row.classList.toggle("is-disabled", !enabled);
         row.querySelectorAll("input, select, textarea, button").forEach(control => { control.disabled = !enabled; });
       });
@@ -1988,6 +1988,17 @@
 
     document.addEventListener("keydown", event => {
       const windowModeOption = event.target.closest("[data-window-mode]");
+      const layoutOption = event.target.closest('.layout-options input[type="radio"]');
+      if (layoutOption && !layoutOption.disabled && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) {
+        event.preventDefault();
+        const options = Array.from(layoutOption.closest(".layout-options").querySelectorAll('input:not(:disabled)'));
+        const current = options.indexOf(layoutOption);
+        const next = event.key === "Home" ? 0 : event.key === "End" ? options.length - 1
+          : (current + (["ArrowRight", "ArrowDown"].includes(event.key) ? 1 : -1) + options.length) % options.length;
+        options[next].focus({ preventScroll: true });
+        if (!options[next].checked) commitSetting(options[next].dataset.setting, options[next].value);
+        return;
+      }
       if (windowModeOption && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) {
         event.preventDefault();
         const options = $$('[data-window-mode]');
@@ -2158,6 +2169,7 @@
 
       const control = event.target.closest("[data-setting]");
       if (!control) return;
+      if (control.disabled || (control.type === "radio" && !control.checked)) return;
       const key = control.dataset.setting;
       let value = readSettingControlValue(control);
       if (key === "localMusicFolders") value = control.value.split(/\r?\n/).map(folder => folder.trim()).filter(Boolean);

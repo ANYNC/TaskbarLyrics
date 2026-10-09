@@ -313,7 +313,7 @@
     .mode-status { color: var(--muted-foreground); font-size: 11px; line-height: 1.45; }
     .window-mode-picker { min-width: 0; margin: 0; padding: 14px 18px 12px; border: 0; border-bottom: 1px solid var(--border); }
     .window-mode-options { min-width: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-    .window-mode-card { min-width: 0; min-height: 126px; position: relative; display: flex; flex-direction: column; border: 1px solid var(--input); border-radius: var(--radius-sm); background: var(--card); transition: background var(--duration-fast) ease, border-color var(--duration-fast) ease, box-shadow var(--duration-fast) ease, transform var(--duration-fast) ease; }
+    .window-mode-card { min-width: 0; min-height: 112px; position: relative; display: flex; flex-direction: column; border: 1px solid var(--input); border-radius: var(--radius-sm); background: var(--card); transition: background var(--duration-fast) ease, border-color var(--duration-fast) ease, box-shadow var(--duration-fast) ease, transform var(--duration-fast) ease; }
     .window-mode-card:has(.window-mode-choice:hover) { border-color: color-mix(in oklch, var(--primary) 28%, var(--input)); background: var(--nav-hover); }
     .window-mode-card:has(.window-mode-choice:active) { transform: scale(.995); }
     .window-mode-card:has([data-window-mode]:checked) { border-color: color-mix(in oklch, var(--primary) 55%, var(--input)); background: color-mix(in oklch, var(--primary) 7%, var(--card)); box-shadow: var(--shadow-sm); }
@@ -330,24 +330,25 @@
     .window-mode-icon { width: 30px; height: 30px; display: grid; place-items: center; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--background); color: var(--muted-foreground); }
     .window-mode-icon svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
     .window-mode-card:has([data-window-mode]:checked) .window-mode-icon { color: var(--foreground); }
-    .window-mode-choice { min-width: 0; min-height: 86px; flex: 1; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: 10px; padding: 12px; cursor: pointer; }
-    .embedded-mode-note, .floating-topmost-row { min-width: 0; min-height: 30px; margin: 0 12px 10px; padding-top: 8px; border-top: 1px solid var(--border); }
+    .window-mode-choice { min-width: 0; min-height: 72px; flex: 1; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: 10px; padding: 12px; cursor: pointer; }
+    .embedded-mode-note, .window-mode-setting-row { min-width: 0; min-height: 30px; margin: 0 12px 10px; padding-top: 8px; border-top: 1px solid var(--border); }
     .embedded-mode-note { display: grid; align-content: center; gap: 2px; }
-    .floating-topmost-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; }
-    .floating-topmost-row.is-disabled { opacity: .46; }
-    .floating-topmost-copy { min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; }
-    .floating-topmost-row:not(.is-disabled) .floating-topmost-copy { cursor: pointer; }
-    .floating-topmost-copy strong { font-size: 11px; font-weight: 600; }
-    .floating-topmost-copy small { color: var(--muted-foreground); font-size: 10px; line-height: 1.4; }
-    .floating-topmost-row .switch input:disabled { cursor: not-allowed; }
+    .embedded-mode-note:has(.mode-status[hidden]) { display: none; }
+    .window-mode-setting-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; }
+    .window-mode-setting-row.is-disabled { opacity: .46; }
+    .window-mode-setting-copy { min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; }
+    .window-mode-setting-row:not(.is-disabled) .window-mode-setting-copy { cursor: pointer; }
+    .window-mode-setting-copy strong { font-size: 11px; font-weight: 600; }
+    .window-mode-setting-copy small { color: var(--muted-foreground); font-size: 10px; line-height: 1.4; }
+    .window-mode-setting-row .switch input:disabled { cursor: not-allowed; }
     .setting-row.monitor-setting-row { grid-template-columns: minmax(0, 1fr) minmax(360px, 560px); align-items: start; gap: 32px; padding-block: 14px; }
     .monitor-selection { width: 100%; max-width: 560px; justify-self: end; display: grid; gap: 10px; }
     .monitor-mode { width: max-content; max-width: 100%; justify-self: end; display: inline-flex; gap: 3px; padding: 3px; border: 1px solid var(--input); border-radius: var(--radius-sm); background: var(--muted); }
     .monitor-mode label, .monitor-option { min-width: 0; display: flex; align-items: center; gap: 8px; }
     .monitor-mode label { min-height: 30px; padding: 0 12px; border-radius: calc(var(--radius-sm) - 2px); color: var(--muted-foreground); font-size: 12px; font-weight: 600; cursor: pointer; }
     .monitor-mode label:has(input:checked) { background: var(--card); color: var(--foreground); box-shadow: var(--shadow-sm); }
-    .monitor-mode label:hover, .monitor-option:not(.is-readonly):hover { background: var(--surface-hover); color: var(--foreground); }
-    .monitor-mode label:active, .monitor-option:not(.is-readonly):active { background: var(--accent); }
+    .monitor-mode label:not(:has(input:disabled)):hover, .monitor-option:not(.is-readonly):hover { background: var(--surface-hover); color: var(--foreground); }
+    .monitor-mode label:not(:has(input:disabled)):active, .monitor-option:not(.is-readonly):active { background: var(--accent); }
     .monitor-mode label:has(input:focus-visible), .monitor-option:has(input:focus-visible) { outline: 2px solid var(--ring); outline-offset: 2px; }
     .monitor-mode input { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
     .monitor-option input { accent-color: var(--primary); }
@@ -357,6 +358,9 @@
     .monitor-option:has(input:checked) { border-color: var(--primary); background: var(--accent); }
     .monitor-option:has(input:checked):not(.is-readonly):hover { background: var(--accent); }
     .monitor-option-copy { min-width: 0; display: grid; gap: 2px; }
+    .monitor-mode.layout-options { justify-self: end; }
+    .layout-options label { white-space: nowrap; }
+    .monitor-mode label:has(input:disabled) { cursor: default; }
     .monitor-option-title { min-width: 0; display: flex; align-items: center; gap: 6px; }
     .monitor-option-title strong { min-width: 0; overflow: hidden; font-size: 13px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
     .monitor-option-copy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

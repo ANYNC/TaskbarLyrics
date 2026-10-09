@@ -1173,6 +1173,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
     {
         _settings.NormalizePlayerSources();
         _settings.NormalizeLyricsTextAlignment();
+        _settings.NormalizeCoverPosition();
         _settings.NormalizeWindowLayout();
         var mediaHotkeys = _settings.GlobalMediaHotkeys ??= new GlobalMediaHotkeySettings();
         var layoutMetrics = CreateLyricsLayoutMetrics();
@@ -1266,6 +1267,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             WindowWidth = _settings.WindowWidth,
             HorizontalAnchor = _settings.HorizontalAnchor,
             LyricsTextAlignment = _settings.LyricsTextAlignment,
+            CoverPosition = _settings.CoverPosition,
             XOffset = _settings.XOffset,
             YOffset = _settings.YOffset,
             ForceAlwaysOnTop = _settings.ForceAlwaysOnTop,
@@ -1606,6 +1608,15 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                     Enum.IsDefined(parsedTextAlignment))
                 {
                     _settings.LyricsTextAlignment = parsedTextAlignment;
+                }
+                break;
+            case "coverPosition":
+                _settings.NormalizeCoverPosition();
+                var coverPosition = ReadString(element, string.Empty);
+                if (Enum.TryParse<CoverPosition>(coverPosition, ignoreCase: true, out var parsedCoverPosition) &&
+                    Enum.IsDefined(parsedCoverPosition))
+                {
+                    _settings.CoverPosition = parsedCoverPosition;
                 }
                 break;
             case "xOffset":
@@ -2088,6 +2099,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         target.WindowWidth = source.WindowWidth;
         target.HorizontalAnchor = source.HorizontalAnchor;
         target.LyricsTextAlignment = source.LyricsTextAlignment;
+        target.CoverPosition = source.CoverPosition;
         target.XOffset = source.XOffset;
         target.YOffset = source.YOffset;
         target.ForceAlwaysOnTop = source.ForceAlwaysOnTop;
@@ -2228,6 +2240,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         public double WindowWidth { get; set; }
         public LyricsHorizontalAnchor HorizontalAnchor { get; set; }
         public LyricsTextAlignment LyricsTextAlignment { get; set; }
+        public CoverPosition CoverPosition { get; set; }
         public double XOffset { get; set; }
         public double YOffset { get; set; }
         public bool ForceAlwaysOnTop { get; set; }

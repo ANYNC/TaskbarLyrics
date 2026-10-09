@@ -68,9 +68,11 @@ internal readonly record struct AppSettingsChangeSet(
             current.SpectrumAudioAccessGranted != next.SpectrumAudioAccessGranted;
 
         var visualStyleChanged = isInitialApplication ||
+            current.UseFloatingWindow != next.UseFloatingWindow ||
             current.FontSize != next.FontSize ||
             current.ShowCover != next.ShowCover ||
             current.EnableControlPanel != next.EnableControlPanel ||
+            current.CoverPosition != next.CoverPosition ||
             current.CoverSize != next.CoverSize ||
             current.CoverGap != next.CoverGap ||
             current.CoverCornerRadius != next.CoverCornerRadius ||

@@ -16,6 +16,12 @@ public enum LyricsTextAlignment
     Right = 2
 }
 
+public enum CoverPosition
+{
+    Left = 0,
+    Right = 1
+}
+
 public enum ForegroundColorMode
 {
     Dark = 0,
@@ -177,6 +183,8 @@ public sealed class AppSettings
 
     public LyricsTextAlignment LyricsTextAlignment { get; set; } = LyricsTextAlignment.Left;
 
+    public CoverPosition CoverPosition { get; set; } = CoverPosition.Left;
+
     public double XOffset { get; set; }
 
     public double YOffset { get; set; }
@@ -214,6 +222,7 @@ public sealed class AppSettings
     {
         NormalizePlayerSources();
         NormalizeLyricsTextAlignment();
+        NormalizeCoverPosition();
         var cloned = (AppSettings)MemberwiseClone();
         cloned.SourceRecognitionOrder = SourceRecognitionOrder.ToList();
         cloned.CustomPlayerSources = CustomPlayerSources.ToList();
@@ -359,6 +368,15 @@ public sealed class AppSettings
         CoverCornerRadius = ClampCoverCornerRadius(CoverCornerRadius, CoverSize);
         LyricsLayoutScalePercent = ClampLyricsLayoutScalePercent(LyricsLayoutScalePercent);
         NormalizeLyricsTextAlignment();
+        NormalizeCoverPosition();
+    }
+
+    public void NormalizeCoverPosition()
+    {
+        if (!Enum.IsDefined(CoverPosition))
+        {
+            CoverPosition = CoverPosition.Left;
+        }
     }
 
     public void NormalizeLyricsTextAlignment()

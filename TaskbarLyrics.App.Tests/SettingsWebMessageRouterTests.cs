@@ -117,4 +117,21 @@ public sealed class SettingsWebMessageRouterTests
         Assert.Null(SettingsWebMessageRouter.Parse("{\"version\":2,\"type\":\"ready\",\"payload\":{}}"));
         Assert.Null(SettingsWebMessageRouter.Parse("{\"version\":1,\"type\":\"ready\",\"payload\":"));
     }
+    [Theory]
+    [InlineData("Left")]
+    [InlineData("Right")]
+    public void ParseCoverPositionThroughV1Envelope(string position)
+    {
+        var json = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            version = 1,
+            type = "update",
+            payload = new { key = "coverPosition", value = position }
+        });
+        var message = SettingsWebMessageRouter.Parse(json);
+        Assert.NotNull(message);
+        Assert.Equal("coverPosition", message.Key);
+        Assert.Equal(position, message.Value!.Value.GetString());
+    }
+
 }

@@ -249,18 +249,21 @@ public sealed class AppSettingsChangeSetTests
         Assert.True(changes.GlobalMediaHotkeysChanged);
     }
 
-    [Fact]
-    public void CreateWhenFloatingWindowSwitchChangesReappliesLyricsWindowWithoutRebuildingOtherServices()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void CreateWhenFloatingWindowSwitchChangesReappliesLyricsWindowWithoutRebuildingOtherServices(bool floating)
     {
-        var current = new AppSettings();
+        var current = new AppSettings { UseFloatingWindow = floating };
         var next = current.Clone();
-        next.UseFloatingWindow = true;
+        next.UseFloatingWindow = !floating;
 
         var changes = AppSettingsChangeSet.Create(current, next);
 
         Assert.True(changes.TaskbarEmbeddingChanged);
         Assert.True(changes.RequiresLyricsWindowApply);
         Assert.True(changes.WindowLayoutChanged);
+        Assert.True(changes.VisualStyleChanged);
         Assert.False(changes.LyricSyncServiceChanged);
     }
 
@@ -292,4 +295,18 @@ public sealed class AppSettingsChangeSetTests
         Assert.True(changes.WindowLayoutChanged);
         Assert.True(changes.RequiresLyricsWindowApply);
     }
+    [Fact]
+    public void CoverPositionChangeOnlyReappliesVisualStyle()
+    {
+        var current = new AppSettings();
+        var next = current.Clone();
+        next.CoverPosition = CoverPosition.Right;
+        var changes = AppSettingsChangeSet.Create(current, next);
+        Assert.True(changes.VisualStyleChanged);
+        Assert.True(changes.RequiresLyricsWindowApply);
+        Assert.False(changes.LyricsLayoutChanged);
+        Assert.False(changes.WindowLayoutChanged);
+        Assert.False(changes.LyricSyncServiceChanged);
+    }
+
 }
