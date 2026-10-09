@@ -6,7 +6,7 @@ internal sealed record LyricsLayoutMetrics
     private const double BaseHostVerticalPadding = 3;
     private const double BaseMinimumContentHeight = 30;
     private const double BaseViewportDescenderBuffer = 2;
-    private const double BaseLayoutHorizontalPadding = 4;
+    private const double BaseLayoutHorizontalPadding = 0;
     private const double BaseLyricsPaneTopPadding = 3;
     private const double BaseLyricsPaneRightPadding = 4;
     private const double BaseLyricsPaneLeftPadding = 2;

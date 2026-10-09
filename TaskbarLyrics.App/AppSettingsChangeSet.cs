@@ -90,6 +90,7 @@ internal readonly record struct AppSettingsChangeSet(
         var lyricsLayoutChanged = isInitialApplication ||
             current.FontSize != next.FontSize ||
             current.ShowCover != next.ShowCover ||
+            current.CoverPosition != next.CoverPosition ||
             current.CoverSize != next.CoverSize ||
             current.CoverGap != next.CoverGap ||
             current.CoverCornerRadius != next.CoverCornerRadius ||

@@ -65,6 +65,7 @@ public sealed class LyricsStyleScriptFactoryTests
     {
         var script = LyricsStyleScriptFactory.Create(new AppSettings { CoverPosition = position }, 1);
         Assert.Contains($"\"coverPosition\":\"{expected}\"", script);
+        Assert.Contains("\"layoutHorizontalPadding\":0", script);
     }
 
 }

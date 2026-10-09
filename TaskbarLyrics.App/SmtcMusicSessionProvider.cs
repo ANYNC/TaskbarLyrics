@@ -222,6 +222,8 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
     private DateTimeOffset _nextMediaPropertiesErrorLogUtc;
     private string _lastPlaybackStateRefreshErrorKey = string.Empty;
     private DateTimeOffset _nextPlaybackStateRefreshErrorLogUtc;
+    private string _lastSessionReadErrorKey = string.Empty;
+    private DateTimeOffset _nextSessionReadErrorLogUtc;
     private int _isDisposed;
 
     public void SetRecognitionOrder(
@@ -442,7 +444,29 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
         await session.TryChangePlaybackPositionAsync(target.Ticks);
     }
 
-    public async Task<PlaybackSnapshot> GetCurrentAsync(CancellationToken cancellationToken = default)
+    public Task<PlaybackSnapshot> GetCurrentAsync(CancellationToken cancellationToken = default) =>
+        SmtcSessionReadBoundary.ReadAsync(
+            ReadCurrentSnapshotAsync,
+            () =>
+            {
+                _activeSessionCache.Clear();
+                _manager = null;
+                return BuildProcessFallbackSnapshot();
+            },
+            LogSessionReadUnavailable,
+            cancellationToken);
+
+    private void LogSessionReadUnavailable(Exception? exception)
+    {
+        var nowUtc = DateTimeOffset.UtcNow;
+        var errorKey = exception is null ? "missing-timeline" : $"{exception.GetType().Name}|{exception.HResult:X8}";
+        if (_lastSessionReadErrorKey == errorKey && nowUtc < _nextSessionReadErrorLogUtc) return;
+        _lastSessionReadErrorKey = errorKey;
+        _nextSessionReadErrorLogUtc = nowUtc.AddSeconds(30);
+        Log.Diagnostic("SMTC", $"SessionReadUnavailable Reason='{errorKey}' Action='process-fallback'.");
+    }
+
+    private async Task<PlaybackSnapshot?> ReadCurrentSnapshotAsync(CancellationToken cancellationToken)
     {
         var manager = await GetManagerAsync(cancellationToken);
         if (manager is null)
@@ -460,9 +484,11 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
 
         var playbackInfo = session.GetPlaybackInfo();
         var timeline = session.GetTimelineProperties();
+        if (timeline is null) return null;
         var nowUtc = DateTimeOffset.UtcNow;
 
-        var rawSource = ResolveSource(session.SourceAppUserModelId);
+        var sourceAppUserModelId = session.SourceAppUserModelId ?? string.Empty;
+        var rawSource = ResolveSource(sourceAppUserModelId);
         var sourceApp = ResolveSourceWithProcessFallback(rawSource);
 
         var isPlaying = playbackInfo?.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
@@ -520,6 +546,10 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
                 }
             }
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             // Keep fallback chain alive.
@@ -560,7 +590,7 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
         var track = new TrackInfo(trackId, title, artist, album, sourceApp, timeline.EndTime, songId);
         var diagnostics = new SmtcTimelineDiagnostics(
             CapturedAtUtc: nowUtc,
-            SourceAppUserModelId: session.SourceAppUserModelId ?? string.Empty,
+            SourceAppUserModelId: sourceAppUserModelId,
             NormalizedSource: rawSource,
             ResolvedSource: sourceApp,
             IsPlaying: isPlaying,
@@ -588,7 +618,7 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
             RawPosition: position,
             ExtrapolatedPosition: extrapolatedPosition,
             IsCoverLoading: isCoverLoading,
-            SourceAppUserModelId: session.SourceAppUserModelId ?? string.Empty,
+            SourceAppUserModelId: sourceAppUserModelId,
             CanSeek: playbackInfo?.Controls?.IsPlaybackPositionEnabled == true);
     }
 
@@ -751,6 +781,7 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
     private GlobalSystemMediaTransportControlsSession? SelectSession(
         IEnumerable<GlobalSystemMediaTransportControlsSession>? sessions)
     {
+        sessions = sessions?.Where(session => session is not null).ToArray();
         if (sessions is not null)
         {
             var supportedPlaying = sessions
@@ -845,8 +876,12 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
                 return _manager;
             }
 
-            _manager = await GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
+            _manager = await GlobalSystemMediaTransportControlsSessionManager.RequestAsync().AsTask(cancellationToken);
             return _manager;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch
         {
@@ -865,8 +900,9 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
         }
     }
 
-    internal static string NormalizeSource(string sourceAppUserModelId)
+    internal static string NormalizeSource(string? sourceAppUserModelId)
     {
+        if (string.IsNullOrWhiteSpace(sourceAppUserModelId)) return string.Empty;
         if (sourceAppUserModelId.Contains("spotify", StringComparison.OrdinalIgnoreCase))
         {
             return "Spotify";
@@ -896,8 +932,8 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
         return sourceAppUserModelId;
     }
 
-    private string ResolveSource(string sourceAppUserModelId) =>
-        _configuredCustomSources.Contains(sourceAppUserModelId)
+    private string ResolveSource(string? sourceAppUserModelId) =>
+        sourceAppUserModelId is not null && _configuredCustomSources.Contains(sourceAppUserModelId)
             ? sourceAppUserModelId
             : NormalizeSource(sourceAppUserModelId);
 
@@ -931,8 +967,9 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
                sourceAppUserModelId.Contains("vivaldi", StringComparison.OrdinalIgnoreCase);
     }
 
-    internal bool CanUseSource(string sourceAppUserModelId)
+    internal bool CanUseSource(string? sourceAppUserModelId)
     {
+        if (string.IsNullOrWhiteSpace(sourceAppUserModelId)) return false;
         if (IsBlockedSystemSource(sourceAppUserModelId)) return false;
         if (!IsBrowserSource(sourceAppUserModelId)) return true;
         return _configuredCustomSources.Contains(sourceAppUserModelId)

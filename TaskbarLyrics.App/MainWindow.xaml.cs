@@ -356,7 +356,13 @@ public partial class MainWindow : Window, IDisposable
         LyricsContentRoot.MinHeight = metrics.MinimumContentHeight;
         CoverHitSurface.Width = metrics.CoverSize;
         CoverHitSurface.Height = metrics.CoverSize;
-        CoverHitSurface.Margin = new Thickness(metrics.LayoutHorizontalPadding, 0, 0, 0);
+        var coverOnRight = _currentSettings.CoverPosition == CoverPosition.Right;
+        CoverHitSurface.HorizontalAlignment = coverOnRight
+            ? System.Windows.HorizontalAlignment.Right
+            : System.Windows.HorizontalAlignment.Left;
+        CoverHitSurface.Margin = coverOnRight
+            ? new Thickness(0, 0, metrics.LayoutHorizontalPadding, 0)
+            : new Thickness(metrics.LayoutHorizontalPadding, 0, 0, 0);
         CoverHitSurface.Visibility = _currentSettings.ShowCover ? Visibility.Visible : Visibility.Collapsed;
         LyricsWebHost.Margin = new Thickness(0, 0, 0, -metrics.ViewportDescenderBuffer);
     }
@@ -425,7 +431,7 @@ public partial class MainWindow : Window, IDisposable
             _currentCoverFallbackIconDataUri, _currentSettings.ShowLyricTranslation,
             _currentTrack is null ? default : PlayerSourceBadgeResolver.Resolve(_currentTrack.SourceApp, _currentSettings));
         panel.UpdateTimeline(_currentPlaybackPosition, _currentTrack?.Duration ?? TimeSpan.Zero, _isCurrentPlaybackPlaying, _canSeek);
-        TaskObserver.Observe(panel.ShowNearAsync(coverBoundsPx, targetDisplay), "lyrics control panel show");
+        TaskObserver.Observe(panel.ShowNearAsync(coverBoundsPx, targetDisplay, _currentSettings.CoverPosition), "lyrics control panel show");
         setExpanded(true);
     }
 

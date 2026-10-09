@@ -73,7 +73,13 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
         LyricsContentRoot.MinHeight = metrics.MinimumContentHeight;
         CoverHitSurface.Width = metrics.CoverSize;
         CoverHitSurface.Height = metrics.CoverSize;
-        CoverHitSurface.Margin = new Thickness(metrics.LayoutHorizontalPadding, 0, 0, 0);
+        var coverOnRight = _settings.CoverPosition == CoverPosition.Right;
+        CoverHitSurface.HorizontalAlignment = coverOnRight
+            ? System.Windows.HorizontalAlignment.Right
+            : System.Windows.HorizontalAlignment.Left;
+        CoverHitSurface.Margin = coverOnRight
+            ? new Thickness(0, 0, metrics.LayoutHorizontalPadding, 0)
+            : new Thickness(metrics.LayoutHorizontalPadding, 0, 0, 0);
         CoverHitSurface.Visibility = _settings.ShowCover ? Visibility.Visible : Visibility.Collapsed;
         LyricsWebView.Margin = new Thickness(0, 0, 0, -metrics.ViewportDescenderBuffer);
         _pendingScripts["style"] = LyricsStyleScriptFactory.Create(_settings, pixelsPerDip);

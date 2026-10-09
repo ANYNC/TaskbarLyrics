@@ -295,16 +295,19 @@ public sealed class AppSettingsChangeSetTests
         Assert.True(changes.WindowLayoutChanged);
         Assert.True(changes.RequiresLyricsWindowApply);
     }
-    [Fact]
-    public void CoverPositionChangeOnlyReappliesVisualStyle()
+    [Theory]
+    [InlineData(CoverPosition.Left, CoverPosition.Right)]
+    [InlineData(CoverPosition.Right, CoverPosition.Left)]
+    public void CoverPositionChangeReappliesHostLayoutAndStyleWithoutRebuildingServices(
+        CoverPosition currentPosition, CoverPosition nextPosition)
     {
-        var current = new AppSettings();
+        var current = new AppSettings { CoverPosition = currentPosition };
         var next = current.Clone();
-        next.CoverPosition = CoverPosition.Right;
+        next.CoverPosition = nextPosition;
         var changes = AppSettingsChangeSet.Create(current, next);
         Assert.True(changes.VisualStyleChanged);
         Assert.True(changes.RequiresLyricsWindowApply);
-        Assert.False(changes.LyricsLayoutChanged);
+        Assert.True(changes.LyricsLayoutChanged);
         Assert.False(changes.WindowLayoutChanged);
         Assert.False(changes.LyricSyncServiceChanged);
     }

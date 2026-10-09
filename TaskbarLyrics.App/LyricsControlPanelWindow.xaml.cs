@@ -115,7 +115,7 @@ public partial class LyricsControlPanelWindow : Window
         PushTimeline();
     }
 
-    internal async Task ShowNearAsync(Rect coverBoundsPx, DisplayMonitor display)
+    internal async Task ShowNearAsync(Rect coverBoundsPx, DisplayMonitor display, CoverPosition coverPosition)
     {
         if (_isDisposed)
         {
@@ -129,7 +129,7 @@ public partial class LyricsControlPanelWindow : Window
         var workAreaPx = new Rect(work.Left, work.Top, work.Right - work.Left, work.Bottom - work.Top);
         var displayScale = display.PixelsPerDip;
         var approximate = LyricsControlPanelPlacement.Place(
-            coverBoundsPx, workAreaPx, new Size(Width * displayScale, Height * displayScale), displayScale);
+            coverBoundsPx, workAreaPx, new Size(Width * displayScale, Height * displayScale), displayScale, coverPosition);
         try
         {
             if (!_isWebReady)
@@ -165,7 +165,7 @@ public partial class LyricsControlPanelWindow : Window
             Left = approximate.X / displayScale;
             Top = (approximate.Y + approximateSlideDistance) / displayScale;
             Show();
-            var (target, slideDistance) = PositionNear(coverBoundsPx, workAreaPx, displayScale);
+            var (target, slideDistance) = PositionNear(coverBoundsPx, workAreaPx, displayScale, coverPosition);
             StartSlide(target, slideDistance);
             _canDismissOnDeactivate = true;
             Activate();
@@ -245,7 +245,7 @@ public partial class LyricsControlPanelWindow : Window
     }
 
     private (Point Target, int SlideDistance) PositionNear(
-        Rect coverBoundsPx, Rect workAreaPx, double fallbackScale)
+        Rect coverBoundsPx, Rect workAreaPx, double fallbackScale, CoverPosition coverPosition)
     {
         var hwnd = new WindowInteropHelper(this).Handle;
         var pixelsPerDip = TaskbarNativeMethods.GetDpiForWindow(hwnd) / 96.0;
@@ -257,7 +257,7 @@ public partial class LyricsControlPanelWindow : Window
         var widthPx = Math.Max(1, (int)Math.Round(ActualWidth * pixelsPerDip));
         var heightPx = Math.Max(1, (int)Math.Round(ActualHeight * pixelsPerDip));
         var position = LyricsControlPanelPlacement.Place(
-            coverBoundsPx, workAreaPx, new Size(widthPx, heightPx), pixelsPerDip);
+            coverBoundsPx, workAreaPx, new Size(widthPx, heightPx), pixelsPerDip, coverPosition);
         var slideDistance = Math.Max(1, (int)Math.Round(SlideDistanceDip * pixelsPerDip));
         _ = TaskbarNativeMethods.SetWindowPos(
             hwnd, IntPtr.Zero,

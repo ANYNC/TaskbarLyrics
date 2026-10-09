@@ -23,6 +23,8 @@ public sealed class LyricsLayoutMetricsTests
         Assert.Equal(10, metrics.CoverGap);
         Assert.Equal(8, metrics.CoverCornerRadius);
         Assert.Equal(56, metrics.DesiredWindowHeight);
+        Assert.Equal(0, metrics.LayoutHorizontalPadding);
+        Assert.Equal(10, metrics.HostHorizontalPadding);
     }
 
     [Fact]
@@ -41,6 +43,8 @@ public sealed class LyricsLayoutMetricsTests
         Assert.Equal(34.3, settings.CoverSize);
         Assert.Equal(14.3, metrics.FontSize);
         Assert.Equal(34, metrics.CoverSize);
+        Assert.Equal(0, metrics.LayoutHorizontalPadding);
+        Assert.Equal(8, metrics.HostHorizontalPadding);
     }
 
     [Fact]
@@ -59,6 +63,7 @@ public sealed class LyricsLayoutMetricsTests
         Assert.Equal(53, metrics.CoverSize * 1.25);
         Assert.Equal(13, metrics.CoverGap * 1.25);
         Assert.Equal(9, metrics.CoverCornerRadius * 1.25);
+        Assert.Equal(0, metrics.LayoutHorizontalPadding);
         Assert.Equal(Math.Ceiling(metrics.DesiredWindowHeight * 1.25), metrics.DesiredWindowHeight * 1.25);
     }
 
