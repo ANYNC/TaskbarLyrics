@@ -313,9 +313,9 @@
     .mode-status { color: var(--muted-foreground); font-size: 11px; line-height: 1.45; }
     .window-mode-picker { min-width: 0; margin: 0; padding: 14px 18px 12px; border: 0; border-bottom: 1px solid var(--border); }
     .window-mode-options { min-width: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-    .window-mode-card { min-width: 0; min-height: 88px; position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: 10px; padding: 12px; border: 1px solid var(--input); border-radius: var(--radius-sm); background: var(--background); cursor: pointer; transition: background var(--duration-fast) ease, border-color var(--duration-fast) ease, box-shadow var(--duration-fast) ease, transform var(--duration-fast) ease; }
-    .window-mode-card:hover { border-color: color-mix(in oklch, var(--primary) 28%, var(--input)); background: var(--nav-hover); }
-    .window-mode-card:not(.floating-window-mode-card):active, .floating-window-mode-card:has(.window-mode-choice:active) { transform: scale(.995); }
+    .window-mode-card { min-width: 0; min-height: 126px; position: relative; display: flex; flex-direction: column; border: 1px solid var(--input); border-radius: var(--radius-sm); background: var(--card); transition: background var(--duration-fast) ease, border-color var(--duration-fast) ease, box-shadow var(--duration-fast) ease, transform var(--duration-fast) ease; }
+    .window-mode-card:has(.window-mode-choice:hover) { border-color: color-mix(in oklch, var(--primary) 28%, var(--input)); background: var(--nav-hover); }
+    .window-mode-card:has(.window-mode-choice:active) { transform: scale(.995); }
     .window-mode-card:has([data-window-mode]:checked) { border-color: color-mix(in oklch, var(--primary) 55%, var(--input)); background: color-mix(in oklch, var(--primary) 7%, var(--card)); box-shadow: var(--shadow-sm); }
     .window-mode-card:has([data-window-mode]:focus-visible) { outline: 2px solid var(--ring); outline-offset: 2px; }
     .window-mode-radio { width: 16px; height: 16px; display: grid; place-items: center; margin-top: 1px; border: 1px solid var(--muted-foreground); border-radius: 50%; background: var(--card); }
@@ -325,21 +325,21 @@
     .window-mode-copy { min-width: 0; display: grid; gap: 5px; }
     .window-mode-title { min-width: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 7px; }
     .window-mode-title strong { font-size: 13px; font-weight: 600; }
-    .window-mode-copy small, .window-mode-support small { color: var(--muted-foreground); font-size: 11px; line-height: 1.5; }
+    .window-mode-copy small, .embedded-mode-note small { color: var(--muted-foreground); font-size: 11px; line-height: 1.5; }
     .window-mode-badge { padding: 2px 6px; border-radius: 999px; background: var(--secondary); color: var(--secondary-foreground); font-size: 10px; font-weight: 600; line-height: 1.35; }
-    .window-mode-icon { width: 34px; height: 34px; display: grid; place-items: center; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--card); color: var(--muted-foreground); }
-    .window-mode-icon svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+    .window-mode-icon { width: 30px; height: 30px; display: grid; place-items: center; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--background); color: var(--muted-foreground); }
+    .window-mode-icon svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
     .window-mode-card:has([data-window-mode]:checked) .window-mode-icon { color: var(--foreground); }
-    .floating-window-mode-card { display: block; padding: 0; cursor: default; }
-    .window-mode-choice { min-width: 0; min-height: 86px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: 10px; padding: 12px; cursor: pointer; }
-    .floating-topmost-row { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; margin: 0 12px 10px; padding-top: 8px; border-top: 1px solid var(--border); }
+    .window-mode-choice { min-width: 0; min-height: 86px; flex: 1; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: 10px; padding: 12px; cursor: pointer; }
+    .embedded-mode-note, .floating-topmost-row { min-width: 0; min-height: 30px; margin: 0 12px 10px; padding-top: 8px; border-top: 1px solid var(--border); }
+    .embedded-mode-note { display: grid; align-content: center; gap: 2px; }
+    .floating-topmost-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; }
     .floating-topmost-row.is-disabled { opacity: .46; }
     .floating-topmost-copy { min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; }
     .floating-topmost-row:not(.is-disabled) .floating-topmost-copy { cursor: pointer; }
     .floating-topmost-copy strong { font-size: 11px; font-weight: 600; }
     .floating-topmost-copy small { color: var(--muted-foreground); font-size: 10px; line-height: 1.4; }
     .floating-topmost-row .switch input:disabled { cursor: not-allowed; }
-    .window-mode-support { min-width: 0; display: grid; gap: 2px; padding: 9px 2px 0; }
     .setting-row.monitor-setting-row { grid-template-columns: minmax(0, 1fr) minmax(360px, 560px); align-items: start; gap: 32px; padding-block: 14px; }
     .monitor-selection { width: 100%; max-width: 560px; justify-self: end; display: grid; gap: 10px; }
     .monitor-mode { width: max-content; max-width: 100%; justify-self: end; display: inline-flex; gap: 3px; padding: 3px; border: 1px solid var(--input); border-radius: var(--radius-sm); background: var(--muted); }

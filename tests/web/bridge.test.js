@@ -1588,7 +1588,11 @@ describe("settings WebView bridge", () => {
     const floatingMode = document.querySelector('[data-window-mode="floating"]');
     const topmostRow = document.querySelector("#floatingTopmostRow");
     const topmostControl = topmostRow.querySelector('[data-setting="forceAlwaysOnTop"]');
+    const embeddedNote = document.querySelector(".embedded-mode-note");
     const dependentControls = [...document.querySelectorAll('[data-depends="useFloatingWindow"] input, [data-depends="useFloatingWindow"] button')];
+    expect(embeddedNote.closest(".embedded-window-mode-card")).not.toBeNull();
+    expect(embeddedNote.closest(".window-mode-choice")).toBeNull();
+    expect(embeddedNote.querySelector("#taskbarEmbeddingStatus")).not.toBeNull();
     expect(topmostRow.closest(".floating-window-mode-card")).not.toBeNull();
     expect(topmostControl.closest(".window-mode-choice")).toBeNull();
     expect(topmostRow.hidden).toBe(false);
