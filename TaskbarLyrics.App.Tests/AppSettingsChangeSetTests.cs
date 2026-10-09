@@ -5,6 +5,22 @@ namespace TaskbarLyrics.App.Tests;
 public sealed class AppSettingsChangeSetTests
 {
     [Fact]
+    public void ControlPanelSwitchReappliesStyleWithoutChangingLayoutOrRebuildingServices()
+    {
+        var current = new AppSettings();
+        var next = current.Clone();
+        next.EnableControlPanel = false;
+
+        var changes = AppSettingsChangeSet.Create(current, next);
+
+        Assert.True(changes.VisualStyleChanged);
+        Assert.True(changes.RequiresLyricsWindowApply);
+        Assert.False(changes.LyricsLayoutChanged);
+        Assert.False(changes.WindowLayoutChanged);
+        Assert.False(changes.LyricSyncServiceChanged);
+    }
+
+    [Fact]
     public void CreateWhenOnlyVisualStyleChangesDoesNotRebuildLyricsOrHotkeys()
     {
         var current = new AppSettings();

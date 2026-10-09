@@ -70,6 +70,7 @@ internal readonly record struct AppSettingsChangeSet(
         var visualStyleChanged = isInitialApplication ||
             current.FontSize != next.FontSize ||
             current.ShowCover != next.ShowCover ||
+            current.EnableControlPanel != next.EnableControlPanel ||
             current.CoverSize != next.CoverSize ||
             current.CoverGap != next.CoverGap ||
             current.CoverCornerRadius != next.CoverCornerRadius ||

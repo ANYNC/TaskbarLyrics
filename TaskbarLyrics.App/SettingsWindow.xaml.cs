@@ -1240,6 +1240,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             SpectrumAudioAccessGranted = _settings.SpectrumAudioAccessGranted,
             FontSize = _settings.FontSize,
             ShowCover = _settings.ShowCover,
+            EnableControlPanel = _settings.EnableControlPanel,
             CoverSize = _settings.CoverSize,
             CoverGap = _settings.CoverGap,
             CoverCornerRadius = _settings.CoverCornerRadius,
@@ -1551,6 +1552,9 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 break;
             case "showCover":
                 _settings.ShowCover = ReadBool(element, _settings.ShowCover);
+                break;
+            case "enableControlPanel":
+                _settings.EnableControlPanel = ReadBool(element, _settings.EnableControlPanel);
                 break;
             case "coverSize":
                 _settings.CoverSize = AppSettings.ClampCoverSize(ReadDouble(element, _settings.CoverSize));
@@ -2068,6 +2072,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         target.FontSize = source.FontSize;
         target.UseSafeCoverSizeRange = source.UseSafeCoverSizeRange;
         target.ShowCover = source.ShowCover;
+        target.EnableControlPanel = source.EnableControlPanel;
         target.CoverSize = source.CoverSize;
         target.CoverGap = source.CoverGap;
         target.CoverCornerRadius = source.CoverCornerRadius;
@@ -2202,6 +2207,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         public bool SpectrumAudioAccessGranted { get; set; }
         public double FontSize { get; set; }
         public bool ShowCover { get; set; }
+        public bool EnableControlPanel { get; set; }
         public double CoverSize { get; set; }
         public double CoverGap { get; set; }
         public double CoverCornerRadius { get; set; }

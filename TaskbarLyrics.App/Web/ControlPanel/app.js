@@ -14,20 +14,68 @@ const pauseIcon = document.getElementById("pauseIcon");
 const seek = document.getElementById("seek");
 const elapsed = document.getElementById("elapsed");
 const duration = document.getElementById("duration");
-const translation = document.getElementById("translation");
-const volume = document.getElementById("volume");
-const mute = document.getElementById("mute");
+const metadataTooltip = document.getElementById("metadataTooltip");
+let tooltipOwner = null;
+let tooltipTimer = 0;
 let durationMs = 0;
 let positionMs = 0;
 let isPlaying = false;
 let positionUpdatedAt = performance.now();
 let seeking = false;
-let changingVolume = false;
-let volumeCommitTimer;
 
 function post(type, payload = {}) {
   window.chrome?.webview?.postMessage(JSON.stringify({ version: 1, type, payload }));
 }
+
+function hideMetadataTooltip() {
+  window.clearTimeout(tooltipTimer);
+  tooltipOwner?.removeAttribute("aria-describedby");
+  tooltipOwner = null;
+  metadataTooltip.hidden = true;
+}
+
+function showMetadataTooltip(element, delay = 400) {
+  hideMetadataTooltip();
+  tooltipOwner = element;
+  const show = () => {
+    metadataTooltip.textContent = element.textContent;
+    metadataTooltip.style.left = "8px";
+    metadataTooltip.style.top = "8px";
+    metadataTooltip.hidden = false;
+    element.setAttribute("aria-describedby", metadataTooltip.id);
+    const anchor = element.getBoundingClientRect();
+    const bounds = metadataTooltip.getBoundingClientRect();
+    const left = Math.max(8, Math.min(anchor.left, window.innerWidth - bounds.width - 8));
+    const preferredTop = anchor.bottom + 6 + bounds.height <= window.innerHeight - 8
+      ? anchor.bottom + 6
+      : anchor.top - bounds.height - 6;
+    const top = Math.max(8, Math.min(preferredTop, window.innerHeight - bounds.height - 8));
+    metadataTooltip.style.left = `${left}px`;
+    metadataTooltip.style.top = `${top}px`;
+  };
+  if (delay === 0) show();
+  else tooltipTimer = window.setTimeout(show, delay);
+}
+
+function scheduleTooltipHide() {
+  if (tooltipOwner === document.activeElement) return;
+  window.clearTimeout(tooltipTimer);
+  tooltipTimer = window.setTimeout(hideMetadataTooltip, 100);
+}
+
+for (const element of [title, artist]) {
+  element.addEventListener("pointerenter", () => showMetadataTooltip(element));
+  element.addEventListener("pointerleave", scheduleTooltipHide);
+  element.addEventListener("focus", () => showMetadataTooltip(element, 0));
+  element.addEventListener("blur", hideMetadataTooltip);
+}
+metadataTooltip.addEventListener("pointerenter", () => window.clearTimeout(tooltipTimer));
+metadataTooltip.addEventListener("pointerleave", scheduleTooltipHide);
+window.addEventListener("blur", hideMetadataTooltip);
+window.addEventListener("resize", hideMetadataTooltip);
+document.addEventListener("scroll", event => {
+  if (event.target !== metadataTooltip) hideMetadataTooltip();
+}, true);
 
 function formatTime(milliseconds) {
   const seconds = Math.max(0, Math.floor(milliseconds / 1000));
@@ -61,8 +109,6 @@ function paintPlaybackState(playing) {
 previous.addEventListener("click", () => post("mediaAction", { action: "previous" }));
 playPause.addEventListener("click", () => post("mediaAction", { action: "toggle" }));
 next.addEventListener("click", () => post("mediaAction", { action: "next" }));
-document.getElementById("settings").addEventListener("click", () => post("openSettings"));
-translation.addEventListener("click", () => post("toggleTranslation"));
 seek.addEventListener("input", () => {
   seeking = true;
   paintRange(seek);
@@ -81,22 +127,10 @@ for (const eventName of ["pointercancel", "blur"]) {
     paintTimeline();
   });
 }
-volume.addEventListener("input", () => {
-  changingVolume = true;
-  paintRange(volume);
-  clearTimeout(volumeCommitTimer);
-  volumeCommitTimer = setTimeout(() => post("setVolume", { level: Number(volume.value) }), 50);
-});
-volume.addEventListener("change", () => {
-  clearTimeout(volumeCommitTimer);
-  post("setVolume", { level: Number(volume.value) });
-  changingVolume = false;
-});
-volume.addEventListener("blur", () => { changingVolume = false; });
-mute.addEventListener("click", () => post("toggleMute"));
 document.addEventListener("keydown", event => {
   if (event.key === "Escape") {
     event.preventDefault();
+    hideMetadataTooltip();
     post("dismiss");
   }
 });
@@ -113,14 +147,6 @@ window.controlPanel = {
       positionUpdatedAt = performance.now();
       seek.disabled = data.canSeek !== true || durationMs <= 0;
       paintTimeline();
-    } else if (message.type === "volume") {
-      const data = message.payload;
-      if (!data || typeof data !== "object") return;
-      volume.disabled = !Number.isFinite(data.level);
-      if (!changingVolume && !volume.disabled) volume.value = String(Math.max(0, Math.min(100, data.level)));
-      paintRange(volume);
-      mute.setAttribute("aria-label", data.muted === true ? "取消静音" : "静音");
-      mute.setAttribute("aria-pressed", String(data.muted === true));
     } else if (message.type === "playback") {
       if (message.payload?.isPlaying !== true && message.payload?.isPlaying !== false) return;
       paintPlaybackState(message.payload.isPlaying);
@@ -129,8 +155,11 @@ window.controlPanel = {
       const data = message.payload;
       if (!data || typeof data !== "object") return;
       const hasTrack = data.hasTrack === true;
-      title.textContent = hasTrack ? data.title || "未知歌曲" : "暂无播放";
-      artist.textContent = hasTrack ? data.artist || "未知歌手" : "当前没有播放内容";
+      const nextTitle = hasTrack ? data.title || "未知歌曲" : "暂无播放";
+      const nextArtist = hasTrack ? data.artist || "未知歌手" : "当前没有播放内容";
+      if (title.textContent !== nextTitle || artist.textContent !== nextArtist) hideMetadataTooltip();
+      title.textContent = nextTitle;
+      artist.textContent = nextArtist;
       const sourceName = hasTrack ? data.source || "" : "";
       source.textContent = sourceName;
       sourceRow.hidden = !source.textContent;
@@ -146,8 +175,6 @@ window.controlPanel = {
         sourceFallback.removeAttribute("hidden");
         sourceRow.classList.remove("default-icon");
       };
-      title.title = title.textContent;
-      artist.title = artist.textContent;
       const coverUri = data.coverDataUri || data.fallbackIconDataUri || "";
       artwork.classList.toggle("visible", Boolean(coverUri));
       if (coverUri && artwork.src !== coverUri) artwork.src = coverUri;
@@ -155,7 +182,6 @@ window.controlPanel = {
       artwork.onerror = () => artwork.classList.remove("visible");
       for (const button of [previous, playPause, next]) button.disabled = !hasTrack;
       paintPlaybackState(data.isPlaying);
-      translation.setAttribute("aria-pressed", String(data.translationEnabled === true));
       root.classList.toggle("light", data.light === true);
     }
   }

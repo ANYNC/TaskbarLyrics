@@ -166,21 +166,25 @@ html, body {
   transition: transform 150ms ease;
 }
 
-.cover:is(:hover, :focus-visible, .panel-open) .cover-interaction {
+.cover:not(:disabled):is(:hover, :focus-visible, .panel-open) .cover-interaction {
   opacity: 1;
 }
 
-.cover:is(:hover, :focus-visible, .panel-open) .cover-action-icon {
+.cover:not(:disabled):is(:hover, :focus-visible, .panel-open) .cover-action-icon {
   transform: translateY(0);
 }
 
-.cover:active .cover-action-icon {
+.cover:not(:disabled):active .cover-action-icon {
   transform: translateY(-1px) scale(0.9);
 }
 
 .cover:focus-visible {
   outline: 2px solid white;
   outline-offset: 2px;
+}
+
+.cover:disabled {
+  cursor: default;
 }
 
 @media (prefers-reduced-motion: reduce) {

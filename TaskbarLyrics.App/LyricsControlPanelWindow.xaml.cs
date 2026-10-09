@@ -40,7 +40,6 @@ public partial class LyricsControlPanelWindow : Window
     private TimeSpan _position;
     private TimeSpan _duration;
     private DateTimeOffset _lastTimelinePushUtc;
-    private DateTimeOffset _lastVolumePushUtc;
     private bool _isSliding;
     private long _slideStartedAt;
     private int _slideX;
@@ -114,11 +113,6 @@ public partial class LyricsControlPanelWindow : Window
 
         _lastTimelinePushUtc = now;
         PushTimeline();
-        if (now - _lastVolumePushUtc >= TimeSpan.FromMilliseconds(750))
-        {
-            _lastVolumePushUtc = now;
-            PushVolume();
-        }
     }
 
     internal async Task ShowNearAsync(Rect coverBoundsPx, DisplayMonitor display)
@@ -157,7 +151,6 @@ public partial class LyricsControlPanelWindow : Window
             ApplyTheme();
             await PanelWebView.ExecuteScriptAsync(CreateSnapshotScript());
             await PanelWebView.ExecuteScriptAsync(CreateTimelineScript());
-            PushVolume();
             if (_isDisposed || version != _showVersion)
             {
                 return;

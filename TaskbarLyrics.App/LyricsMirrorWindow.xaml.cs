@@ -176,7 +176,7 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
 
     private void OnWebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
     {
-        if (_isDisposed || !_isContentVisible)
+        if (_isDisposed || !_isContentVisible || !_settings.EnableControlPanel || !_settings.ShowCover)
         {
             return;
         }

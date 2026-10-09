@@ -102,6 +102,32 @@ describe("lyrics cover fallback", () => {
     expect(sent).toHaveLength(1);
   });
 
+  it("keeps the cover usable in spectrum mode and disables the panel affordance on request", async () => {
+    const { dom, style } = await createHarness();
+    const cover = dom.window.document.querySelector("#cover");
+    const sent = [];
+    dom.window.chrome = { webview: { postMessage: message => sent.push(JSON.parse(message)) } };
+    cover.getBoundingClientRect = () => ({ x: 4, y: 3, width: 34, height: 34 });
+    dom.window.taskbarLyrics.receive({ version: 1, type: "lyrics", payload: {
+      current: "纯音乐", next: "", isPureMusic: true, isPlaying: true, animateTransition: false, scene: "spectrum"
+    } });
+    expect(dom.window.document.querySelector("#layout").classList.contains("spectrum-mode")).toBe(true);
+    cover.click();
+    expect(sent.at(-1).type).toBe("coverClick");
+    dom.window.taskbarLyrics.receive({ version: 1, type: "controlPanelState", payload: { open: true } });
+    dom.window.taskbarLyrics.receive({ version: 1, type: "style", payload: { enableControlPanel: false } });
+    expect(cover.disabled).toBe(true);
+    expect(cover.getAttribute("aria-expanded")).toBe("false");
+    const sentCount = sent.length;
+    cover.click();
+    cover.dispatchEvent(new dom.window.MouseEvent("click"));
+    expect(sent).toHaveLength(sentCount);
+    expect(style).toContain(".cover:not(:disabled):is(:hover, :focus-visible, .panel-open) .cover-interaction");
+    dom.window.taskbarLyrics.receive({ version: 1, type: "style", payload: { enableControlPanel: true } });
+    cover.click();
+    expect(sent).toHaveLength(sentCount + 1);
+  });
+
   it("fills the cover slot with the app icon when album art is unavailable", async () => {
     const { dom, showCover, style } = await createHarness();
     const cover = dom.window.document.querySelector("#cover");

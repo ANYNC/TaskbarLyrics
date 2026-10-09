@@ -164,7 +164,7 @@ public partial class MainWindow : Window, IDisposable
         _hasAppliedSettings = true;
         var animateLyricsTransition = true;
 
-        if (changes.WindowLayoutChanged || changes.LyricsLayoutChanged || changes.TaskbarEmbeddingChanged)
+        if (!snapshot.EnableControlPanel || changes.WindowLayoutChanged || changes.LyricsLayoutChanged || changes.TaskbarEmbeddingChanged)
         {
             CloseControlPanel();
         }
@@ -400,6 +400,12 @@ public partial class MainWindow : Window, IDisposable
 
     internal void ToggleControlPanelNear(Rect coverBoundsPx, DisplayMonitor targetDisplay, Action<bool> setExpanded)
     {
+        if (!_currentSettings.EnableControlPanel || !_currentSettings.ShowCover)
+        {
+            CloseControlPanel();
+            return;
+        }
+
         if (_controlPanelWindow is { IsVisible: true })
         {
             CloseControlPanel();

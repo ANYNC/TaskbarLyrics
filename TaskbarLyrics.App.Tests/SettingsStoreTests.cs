@@ -7,6 +7,31 @@ public sealed class SettingsStoreTests
 {
     [Theory]
     [InlineData("{}", true)]
+    [InlineData("{\"EnableControlPanel\":false}", false)]
+    [InlineData("{\"EnableControlPanel\":true}", true)]
+    public void ControlPanelSwitchPreservesDefaultAndRoundTrips(string json, bool expected)
+    {
+        var directory = Path.Combine(AppContext.BaseDirectory, $"settings-store-{Guid.NewGuid():N}");
+        var filePath = Path.Combine(directory, "settings.json");
+        Directory.CreateDirectory(directory);
+        try
+        {
+            File.WriteAllText(filePath, json);
+            var store = new SettingsStore(filePath);
+            var loaded = store.Load();
+            Assert.Equal(expected, loaded.EnableControlPanel);
+            Assert.Equal(expected, loaded.Clone().EnableControlPanel);
+            Assert.True(store.Save(loaded));
+            Assert.Equal(expected, store.Load().EnableControlPanel);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData("{}", true)]
     [InlineData("{\"EnableWordScanning\":false}", false)]
     [InlineData("{\"EnableWordScanning\":true}", true)]
     public void LoadPreservesWordScanningDefaultAndExplicitValue(

@@ -76,7 +76,7 @@ let currentCoverUri = "";
 let coverGeneration = 0;
 
 coverEl?.addEventListener("click", () => {
-  if (root.classList.contains("cover-hidden")) return;
+  if (coverEl.disabled || root.classList.contains("cover-hidden")) return;
   const bounds = coverEl.getBoundingClientRect();
   window.taskbarLyricsBridge?.post("coverClick", {
     x: bounds.x,
@@ -2322,6 +2322,10 @@ const lyricsApi = {
     root.style.setProperty("--font-size", `${requestedFontSize}px`);
     root.style.setProperty("--font-weight", window.taskbarLyricsState.normalizeWeight(payload.fontWeight));
     root.classList.toggle("cover-hidden", payload.showCover === false);
+    if (coverEl) {
+      coverEl.disabled = payload.enableControlPanel === false;
+      if (coverEl.disabled || payload.showCover === false) setControlPanelOpen(false);
+    }
 
     const coverSize = Number(payload.coverSize);
     if (Number.isFinite(coverSize) && coverSize > 0) {

@@ -4,6 +4,19 @@ namespace TaskbarLyrics.App.Tests;
 
 public sealed class SettingsWebMessageRouterTests
 {
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void ParseControlPanelSwitchThroughTheV1Envelope(bool enabled)
+    {
+        var message = SettingsWebMessageRouter.Parse(
+            $"{{\"version\":1,\"type\":\"update\",\"payload\":{{\"key\":\"enableControlPanel\",\"value\":{enabled.ToString().ToLowerInvariant()}}}}}");
+
+        Assert.NotNull(message);
+        Assert.Equal("enableControlPanel", message.Key);
+        Assert.Equal(enabled, message.Value!.Value.GetBoolean());
+    }
+
     [Fact]
     public void ParseDeserializesTheV1UpdateEnvelope()
     {

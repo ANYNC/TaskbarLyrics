@@ -21,6 +21,7 @@ internal static class LyricsStyleScriptFactory
             layoutScalePercent = metrics.ScalePercent,
             fontSize = metrics.FontSize,
             showCover = settings.ShowCover,
+            enableControlPanel = settings.EnableControlPanel,
             coverSize = metrics.CoverSize,
             coverGap = metrics.CoverGap,
             coverCornerRadius = metrics.CoverCornerRadius,

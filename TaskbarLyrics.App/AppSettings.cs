@@ -151,6 +151,8 @@ public sealed class AppSettings
 
     public bool ShowCover { get; set; } = true;
 
+    public bool EnableControlPanel { get; set; } = true;
+
     public double LyricsLayoutScalePercent { get; set; } = DefaultLyricsLayoutScalePercent;
 
     public string FontFamily { get; set; } = DefaultFontFamily;

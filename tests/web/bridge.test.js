@@ -8,7 +8,7 @@ const settingsPages = ["sources", "shortcuts", "lyrics", "trackOffsets", "displa
 const persistedSettings = [
   "enableLocalLyrics", "localMusicFolders", "enableGlobalMediaHotkeys", "showLyricsOnStartup", "autoHideWhenNoPlayback",
   "showLyricTranslation", "enableWordScanning", "spectrumDisplayMode", "lyricsLayoutScalePercent", "fontSize", "showCover",
-  "coverSize", "coverGap", "coverCornerRadius", "fontFamily", "fontWeight", "lyricsTextAlignment", "foregroundColorMode",
+  "enableControlPanel", "coverSize", "coverGap", "coverCornerRadius", "fontFamily", "fontWeight", "lyricsTextAlignment", "foregroundColorMode",
   "showTextShadow", "toolWindowTheme", "showBackground", "backgroundOpacity", "showBorder", "windowWidth", "horizontalAnchor",
   "xOffset", "yOffset", "forceAlwaysOnTop", "startWithWindows", "autoCheckUpdates"
 ];
@@ -1318,6 +1318,7 @@ describe("settings WebView bridge", () => {
           foregroundColor: "#FFFFFFFF",
           backgroundOpacity: 0.55,
           showCover: true,
+          enableControlPanel: true,
           coverSize: 34,
           coverGap: 8,
           coverCornerRadius: 6
@@ -1336,12 +1337,31 @@ describe("settings WebView bridge", () => {
       payload: { key: "showCover", value: false }
     });
     expect(document.querySelector('input[data-setting="coverSize"]').value).toBe("34");
+    expect(document.querySelector('input[data-setting="enableControlPanel"]').checked).toBe(true);
     expect(document.querySelector("[data-effective-cover-size]").textContent).toBe("已隐藏");
     expect(document.querySelector("[data-effective-cover-gap-item]").hidden).toBe(true);
     document.querySelectorAll('[data-depends="showCover"]').forEach(row => {
       expect(row.classList.contains("is-disabled")).toBe(true);
       row.querySelectorAll("input, button").forEach(control => expect(control.disabled).toBe(true));
     });
+  });
+
+  it("loads and saves the cover control panel switch independently of cover visibility", async () => {
+    const { dom, sent, script } = await createSettingsDom();
+    dom.window.eval(script);
+    dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: {
+      settings: { sourceRecognitionOrder: [], playerLyricOffsets: {}, showCover: true, enableControlPanel: true }
+    } });
+    const toggle = dom.window.document.querySelector('input[data-setting="enableControlPanel"]');
+    expect(toggle.checked).toBe(true);
+    toggle.checked = false;
+    toggle.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+    expect(sent.at(-1)).toEqual({ version: 1, type: "update", payload: { key: "enableControlPanel", value: false } });
+    expect(dom.window.document.querySelector('input[data-setting="showCover"]').checked).toBe(true);
+    dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: {
+      settings: { sourceRecognitionOrder: [], playerLyricOffsets: {}, showCover: true, enableControlPanel: false }
+    } });
+    expect(toggle.checked).toBe(false);
   });
 
   it("keeps X and Y offset sliders synchronized with numeric inputs", async () => {

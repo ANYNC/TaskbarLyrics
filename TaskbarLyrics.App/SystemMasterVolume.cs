@@ -4,6 +4,7 @@ namespace TaskbarLyrics.App;
 
 internal static class SystemMasterVolume
 {
+    private static readonly Guid DeviceEnumeratorId = new("BCDE0395-E52F-467C-8E3D-C4579291692E");
     private static readonly Guid EndpointVolumeId = new("5CDF2C82-841E-4546-9722-0CF74078229A");
     private static readonly Guid EventContext = new("73F989F3-78D2-4FF6-9953-DC4BA516F75F");
 
@@ -46,7 +47,15 @@ internal static class SystemMasterVolume
         IAudioEndpointVolume? endpoint = null;
         try
         {
-            enumerator = (IMMDeviceEnumerator)(object)new MMDeviceEnumerator();
+            // Request the interface directly: another audio feature can register a different
+            // managed coclass for this CLSID, making a typed coclass constructor cast fail.
+            var classId = DeviceEnumeratorId;
+            var enumeratorInterfaceId = typeof(IMMDeviceEnumerator).GUID;
+            if (CoCreateInstance(ref classId, IntPtr.Zero, 0x1, ref enumeratorInterfaceId, out enumerator) != 0 ||
+                enumerator is null)
+            {
+                return false;
+            }
             if (enumerator.GetDefaultAudioEndpoint(0, 1, out device) != 0 || device is null)
             {
                 return false;
@@ -62,7 +71,7 @@ internal static class SystemMasterVolume
             endpoint = volume;
             return operation(endpoint);
         }
-        catch (COMException)
+        catch (Exception ex) when (ex is COMException or InvalidCastException)
         {
             return false;
         }
@@ -82,9 +91,9 @@ internal static class SystemMasterVolume
         }
     }
 
-    [ComImport]
-    [Guid("BCDE0395-E52F-467C-8E3D-C4579291692E")]
-    private sealed class MMDeviceEnumerator { }
+    [DllImport("ole32.dll", ExactSpelling = true)]
+    private static extern int CoCreateInstance(ref Guid classId, IntPtr outer, uint context,
+        ref Guid interfaceId, [MarshalAs(UnmanagedType.Interface)] out IMMDeviceEnumerator? enumerator);
 
     [ComImport]
     [Guid("A95664D2-9614-4F35-A746-DE8DB63617E6")]
@@ -100,7 +109,8 @@ internal static class SystemMasterVolume
     [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
     private interface IMMDevice
     {
-        [PreserveSig] int Activate(ref Guid interfaceId, int context, IntPtr parameters,
+        [PreserveSig]
+        int Activate(ref Guid interfaceId, int context, IntPtr parameters,
             [MarshalAs(UnmanagedType.IUnknown)] out object endpoint);
         [PreserveSig] int OpenPropertyStore(int access, out IntPtr properties);
         [PreserveSig] int GetId(out IntPtr id);

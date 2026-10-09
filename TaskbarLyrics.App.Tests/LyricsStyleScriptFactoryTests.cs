@@ -4,6 +4,16 @@ namespace TaskbarLyrics.App.Tests;
 
 public sealed class LyricsStyleScriptFactoryTests
 {
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void CreateEmitsControlPanelSwitch(bool enabled)
+    {
+        var script = LyricsStyleScriptFactory.Create(new AppSettings { EnableControlPanel = enabled }, 1);
+
+        Assert.Contains($"\"enableControlPanel\":{enabled.ToString().ToLowerInvariant()}", script);
+    }
+
     [Fact]
     public void CreateAppliesLyricsOpacityHierarchyWithoutChangingStoredForegroundColor()
     {
