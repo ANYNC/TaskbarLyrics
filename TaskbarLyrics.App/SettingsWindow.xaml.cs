@@ -269,7 +269,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
 
                 if (IsLyricsLayoutSetting(message.Key))
                 {
-                    await PushLyricsLayoutPreviewAsync();
+                    await PushLyricsLayoutPreviewAsync(includeInputBounds: false);
                 }
                 break;
             case "reorderSources":
@@ -489,7 +489,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         }
     }
 
-    private async Task PushLyricsLayoutPreviewAsync()
+    private async Task PushLyricsLayoutPreviewAsync(bool includeInputBounds = true)
     {
         if (!_isWebReady || SettingsWebView.CoreWebView2 is null)
         {
@@ -500,7 +500,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             WebViewMessageScriptFactory.Dispatch(
                 "settingsApp",
                 "lyricsLayoutPreview",
-                CreateLyricsLayoutPreview()));
+                CreateLyricsLayoutPreview(includeInputBounds)));
     }
 
     private async Task RunLyricDiagnosticsAsync()
@@ -1173,6 +1173,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
     {
         _settings.NormalizePlayerSources();
         _settings.NormalizeLyricsTextAlignment();
+        _settings.NormalizeCoverPosition();
         _settings.NormalizeWindowLayout();
         var mediaHotkeys = _settings.GlobalMediaHotkeys ??= new GlobalMediaHotkeySettings();
         var layoutMetrics = CreateLyricsLayoutMetrics();
@@ -1240,6 +1241,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             SpectrumAudioAccessGranted = _settings.SpectrumAudioAccessGranted,
             FontSize = _settings.FontSize,
             ShowCover = _settings.ShowCover,
+            EnableControlPanel = _settings.EnableControlPanel,
             CoverSize = _settings.CoverSize,
             CoverGap = _settings.CoverGap,
             CoverCornerRadius = _settings.CoverCornerRadius,
@@ -1265,6 +1267,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             WindowWidth = _settings.WindowWidth,
             HorizontalAnchor = _settings.HorizontalAnchor,
             LyricsTextAlignment = _settings.LyricsTextAlignment,
+            CoverPosition = _settings.CoverPosition,
             XOffset = _settings.XOffset,
             YOffset = _settings.YOffset,
             ForceAlwaysOnTop = _settings.ForceAlwaysOnTop,
@@ -1301,7 +1304,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         return payload;
     }
 
-    private object CreateLyricsLayoutPreview()
+    private Dictionary<string, object> CreateLyricsLayoutPreview(bool includeInputBounds)
     {
         var metrics = CreateLyricsLayoutMetrics();
         var availableDisplays = DisplayMonitorService.GetDisplays();
@@ -1310,42 +1313,64 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             _settings.LyricsDisplayMode,
             _settings.SelectedDisplayIds);
         var taskbarConstraints = TaskbarEmbeddingLayoutPolicy.FromDisplays(targetDisplays);
-        var inputBounds = TaskbarEmbeddingLayoutPolicy.GetInputBounds(
+        return CreateLyricsLayoutPreviewPayload(
             _settings,
+            metrics,
             taskbarConstraints,
-            SystemParameters.WorkArea.Width);
-        return new
+            SystemParameters.WorkArea.Width,
+            includeInputBounds);
+    }
+
+    internal static Dictionary<string, object> CreateLyricsLayoutPreviewPayload(
+        AppSettings settings,
+        LyricsLayoutMetrics metrics,
+        TaskbarEmbeddingConstraints taskbarConstraints,
+        double fallbackWidth,
+        bool includeInputBounds)
+    {
+        var preview = new Dictionary<string, object>
         {
-            scalePercent = metrics.ScalePercent,
-            fontSize = AppSettings.ClampFontSize(_settings.FontSize),
-            coverSize = AppSettings.ClampCoverSize(_settings.CoverSize),
-            coverGap = AppSettings.ClampCoverGap(_settings.CoverGap),
-            coverCornerRadius = AppSettings.ClampCoverCornerRadius(
-                _settings.CoverCornerRadius,
-                AppSettings.ClampCoverSize(_settings.CoverSize)),
-            effectiveFontSize = metrics.FontSize,
-            effectiveCoverSize = metrics.CoverSize,
-            effectiveCoverGap = metrics.CoverGap,
-            effectiveCoverCornerRadius = metrics.CoverCornerRadius,
-            effectiveWindowWidth = AppSettings.ClampEffectiveWindowWidth(
-                _settings.WindowWidth,
-                _settings.LyricsLayoutScalePercent,
-                _settings.UseFloatingWindow || !taskbarConstraints.IsSupported
-                    ? SystemParameters.WorkArea.Width
-                    : taskbarConstraints.MaxWidth),
-            taskbarEmbeddingAvailable = inputBounds.IsSupported,
-            taskbarMaxWidth = inputBounds.MaxTaskbarWidth,
-            taskbarMaxHeight = inputBounds.MaxTaskbarHeight,
-            taskbarMaxScalePercent = inputBounds.MaxScalePercent,
-            taskbarMaxFontSize = inputBounds.MaxFontSize,
-            taskbarMaxCoverSize = inputBounds.MaxCoverSize,
-            taskbarMaxCoverGap = inputBounds.MaxCoverGap,
-            taskbarMaxWindowWidth = inputBounds.MaxWindowWidth,
-            taskbarMinXOffset = inputBounds.MinXOffset,
-            taskbarMaxXOffset = inputBounds.MaxXOffset,
-            taskbarMinYOffset = inputBounds.MinYOffset,
-            taskbarMaxYOffset = inputBounds.MaxYOffset
+            ["scalePercent"] = metrics.ScalePercent,
+            ["fontSize"] = AppSettings.ClampFontSize(settings.FontSize),
+            ["coverSize"] = AppSettings.ClampCoverSize(settings.CoverSize),
+            ["coverGap"] = AppSettings.ClampCoverGap(settings.CoverGap),
+            ["coverCornerRadius"] = AppSettings.ClampCoverCornerRadius(
+                settings.CoverCornerRadius,
+                AppSettings.ClampCoverSize(settings.CoverSize)),
+            ["effectiveFontSize"] = metrics.FontSize,
+            ["effectiveCoverSize"] = metrics.CoverSize,
+            ["effectiveCoverGap"] = metrics.CoverGap,
+            ["effectiveCoverCornerRadius"] = metrics.CoverCornerRadius,
+            ["effectiveWindowWidth"] = AppSettings.ClampEffectiveWindowWidth(
+                settings.WindowWidth,
+                settings.LyricsLayoutScalePercent,
+                settings.UseFloatingWindow || !taskbarConstraints.IsSupported
+                    ? fallbackWidth
+                    : taskbarConstraints.MaxWidth)
         };
+
+        if (!includeInputBounds)
+        {
+            return preview;
+        }
+
+        var inputBounds = TaskbarEmbeddingLayoutPolicy.GetInputBounds(
+            settings,
+            taskbarConstraints,
+            fallbackWidth);
+        preview["taskbarEmbeddingAvailable"] = inputBounds.IsSupported;
+        preview["taskbarMaxWidth"] = inputBounds.MaxTaskbarWidth;
+        preview["taskbarMaxHeight"] = inputBounds.MaxTaskbarHeight;
+        preview["taskbarMaxScalePercent"] = inputBounds.MaxScalePercent;
+        preview["taskbarMaxFontSize"] = inputBounds.MaxFontSize;
+        preview["taskbarMaxCoverSize"] = inputBounds.MaxCoverSize;
+        preview["taskbarMaxCoverGap"] = inputBounds.MaxCoverGap;
+        preview["taskbarMaxWindowWidth"] = inputBounds.MaxWindowWidth;
+        preview["taskbarMinXOffset"] = inputBounds.MinXOffset;
+        preview["taskbarMaxXOffset"] = inputBounds.MaxXOffset;
+        preview["taskbarMinYOffset"] = inputBounds.MinYOffset;
+        preview["taskbarMaxYOffset"] = inputBounds.MaxYOffset;
+        return preview;
     }
 
     private LyricsLayoutMetrics CreateLyricsLayoutMetrics()
@@ -1530,6 +1555,9 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             case "showCover":
                 _settings.ShowCover = ReadBool(element, _settings.ShowCover);
                 break;
+            case "enableControlPanel":
+                _settings.EnableControlPanel = ReadBool(element, _settings.EnableControlPanel);
+                break;
             case "coverSize":
                 _settings.CoverSize = AppSettings.ClampCoverSize(ReadDouble(element, _settings.CoverSize));
                 _settings.CoverCornerRadius = AppSettings.ClampCoverCornerRadius(_settings.CoverCornerRadius, _settings.CoverSize);
@@ -1580,6 +1608,15 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                     Enum.IsDefined(parsedTextAlignment))
                 {
                     _settings.LyricsTextAlignment = parsedTextAlignment;
+                }
+                break;
+            case "coverPosition":
+                _settings.NormalizeCoverPosition();
+                var coverPosition = ReadString(element, string.Empty);
+                if (Enum.TryParse<CoverPosition>(coverPosition, ignoreCase: true, out var parsedCoverPosition) &&
+                    Enum.IsDefined(parsedCoverPosition))
+                {
+                    _settings.CoverPosition = parsedCoverPosition;
                 }
                 break;
             case "xOffset":
@@ -2046,6 +2083,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         target.FontSize = source.FontSize;
         target.UseSafeCoverSizeRange = source.UseSafeCoverSizeRange;
         target.ShowCover = source.ShowCover;
+        target.EnableControlPanel = source.EnableControlPanel;
         target.CoverSize = source.CoverSize;
         target.CoverGap = source.CoverGap;
         target.CoverCornerRadius = source.CoverCornerRadius;
@@ -2061,6 +2099,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         target.WindowWidth = source.WindowWidth;
         target.HorizontalAnchor = source.HorizontalAnchor;
         target.LyricsTextAlignment = source.LyricsTextAlignment;
+        target.CoverPosition = source.CoverPosition;
         target.XOffset = source.XOffset;
         target.YOffset = source.YOffset;
         target.ForceAlwaysOnTop = source.ForceAlwaysOnTop;
@@ -2180,6 +2219,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         public bool SpectrumAudioAccessGranted { get; set; }
         public double FontSize { get; set; }
         public bool ShowCover { get; set; }
+        public bool EnableControlPanel { get; set; }
         public double CoverSize { get; set; }
         public double CoverGap { get; set; }
         public double CoverCornerRadius { get; set; }
@@ -2200,6 +2240,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         public double WindowWidth { get; set; }
         public LyricsHorizontalAnchor HorizontalAnchor { get; set; }
         public LyricsTextAlignment LyricsTextAlignment { get; set; }
+        public CoverPosition CoverPosition { get; set; }
         public double XOffset { get; set; }
         public double YOffset { get; set; }
         public bool ForceAlwaysOnTop { get; set; }

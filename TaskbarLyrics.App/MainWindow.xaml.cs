@@ -16,6 +16,7 @@ using TaskbarLyrics.Core.Abstractions;
 using TaskbarLyrics.Core.Models;
 using TaskbarLyrics.Core.Services;
 using TaskbarLyrics.Core.Utilities;
+using Size = System.Windows.Size;
 
 namespace TaskbarLyrics.App;
 
@@ -26,6 +27,8 @@ public partial class MainWindow : Window, IDisposable
     private readonly IPlayerRecognitionController _playerRecognitionController;
     private readonly IAppCompositionRoot _compositionRoot;
     private readonly TrackLyricOffsetStore _trackLyricOffsetStore;
+    private readonly Action _openSettings;
+    private readonly Action _toggleTranslation;
     private readonly SystemAudioSpectrumService _audioSpectrumService = new();
     private readonly DispatcherTimer _timer;
     private readonly DispatcherTimer _spectrumTimer;
@@ -50,6 +53,9 @@ public partial class MainWindow : Window, IDisposable
     private string _currentCoverFallbackText = "N";
     private string _currentCoverFallbackColorCss = "rgba(67, 160, 71, 1)";
     private string _currentCoverFallbackIconDataUri = string.Empty;
+    private LyricsControlPanelWindow? _controlPanelWindow;
+    private Action<bool>? _setControlPanelOpen;
+    private DateTimeOffset _lastControlPanelClosedUtc;
     private string _lastPushedFallbackCoverIdentity = string.Empty;
     private string? _lastLocalCoverLookupIdentity;
     private DateTimeOffset _nextLocalCoverLookupUtc;
@@ -86,6 +92,8 @@ public partial class MainWindow : Window, IDisposable
     private string _lastSpectrumDiagnosticsKey = string.Empty;
     private AppSettings _currentSettings = new();
     private TrackInfo? _currentTrack;
+    private TimeSpan _currentPlaybackPosition;
+    private bool _canSeek;
     private readonly LyricsContentVisibilityStateMachine _lyricsContentVisibilityState = new();
     private readonly PlaybackSnapshotStabilityGate _playbackSnapshotStabilityGate = new();
     private bool _hasAppliedSettings;
@@ -106,13 +114,16 @@ public partial class MainWindow : Window, IDisposable
 
     internal bool IsLyricsContentVisible => _isLyricsContentVisible;
 
-    internal MainWindow(TrackLyricOffsetStore trackLyricOffsetStore, IAppCompositionRoot compositionRoot)
+    internal MainWindow(TrackLyricOffsetStore trackLyricOffsetStore, IAppCompositionRoot compositionRoot,
+        Action openSettings, Action toggleTranslation)
     {
         InitializeComponent();
 
         _smartTopmostController = new SmartTopmostController(this);
 
         _trackLyricOffsetStore = trackLyricOffsetStore;
+        _openSettings = openSettings;
+        _toggleTranslation = toggleTranslation;
         _compositionRoot = compositionRoot;
         var musicServices = _compositionRoot.CreateMusicSessionServices();
         _musicSessionProvider = musicServices.SessionProvider;
@@ -152,6 +163,11 @@ public partial class MainWindow : Window, IDisposable
         _currentSettings = snapshot;
         _hasAppliedSettings = true;
         var animateLyricsTransition = true;
+
+        if (snapshot.UseFloatingWindow || !snapshot.EnableControlPanel || changes.WindowLayoutChanged || changes.LyricsLayoutChanged || changes.TaskbarEmbeddingChanged)
+        {
+            CloseControlPanel();
+        }
 
         if (changes.PlayerRecognitionChanged)
         {
@@ -242,6 +258,12 @@ public partial class MainWindow : Window, IDisposable
 
     internal void SetDisplayMonitor(DisplayMonitor displayMonitor)
     {
+        if (!RequiresDisplayReposition(_displayMonitor, displayMonitor))
+        {
+            return;
+        }
+
+        CloseControlPanel();
         _displayMonitor = displayMonitor;
         if (!_hasAppliedSettings)
         {
@@ -262,6 +284,13 @@ public partial class MainWindow : Window, IDisposable
         AttachToTaskbarHost();
         PushStyleToWebView(_currentSettings);
     }
+
+    internal static bool RequiresDisplayReposition(DisplayMonitor? current, DisplayMonitor next) =>
+        current is null ||
+        !string.Equals(current.Id, next.Id, StringComparison.OrdinalIgnoreCase) ||
+        current.Bounds != next.Bounds ||
+        current.WorkArea != next.WorkArea ||
+        current.PixelsPerDip != next.PixelsPerDip;
 
     internal void ReplayPresentationState()
     {
@@ -325,6 +354,16 @@ public partial class MainWindow : Window, IDisposable
             metrics.HostHorizontalPadding,
             metrics.HostVerticalPadding);
         LyricsContentRoot.MinHeight = metrics.MinimumContentHeight;
+        CoverHitSurface.Width = metrics.CoverSize;
+        CoverHitSurface.Height = metrics.CoverSize;
+        var coverOnRight = _currentSettings.CoverPosition == CoverPosition.Right;
+        CoverHitSurface.HorizontalAlignment = coverOnRight
+            ? System.Windows.HorizontalAlignment.Right
+            : System.Windows.HorizontalAlignment.Left;
+        CoverHitSurface.Margin = coverOnRight
+            ? new Thickness(0, 0, metrics.LayoutHorizontalPadding, 0)
+            : new Thickness(metrics.LayoutHorizontalPadding, 0, 0, 0);
+        CoverHitSurface.Visibility = _currentSettings.ShowCover ? Visibility.Visible : Visibility.Collapsed;
         LyricsWebHost.Margin = new Thickness(0, 0, 0, -metrics.ViewportDescenderBuffer);
     }
 
@@ -363,6 +402,80 @@ public partial class MainWindow : Window, IDisposable
     internal Task ExecuteMediaHotkeyAsync(MediaHotkeyAction action, CancellationToken cancellationToken)
     {
         return _mediaPlaybackController.ExecuteAsync(action, cancellationToken);
+    }
+
+    internal void ToggleControlPanelNear(Rect coverBoundsPx, DisplayMonitor targetDisplay, Action<bool> setExpanded)
+    {
+        if (_currentSettings.UseFloatingWindow || !_currentSettings.EnableControlPanel || !_currentSettings.ShowCover)
+        {
+            CloseControlPanel();
+            return;
+        }
+
+        if (_controlPanelWindow is { IsVisible: true })
+        {
+            CloseControlPanel(animate: true);
+            return;
+        }
+
+        if (!IsVisible || !_isLyricsContentVisible ||
+            DateTimeOffset.UtcNow - _lastControlPanelClosedUtc < TimeSpan.FromMilliseconds(200))
+        {
+            return;
+        }
+
+        var panel = _controlPanelWindow ??= CreateControlPanelWindow();
+        _setControlPanelOpen = setExpanded;
+        panel.Topmost = !_currentSettings.UseFloatingWindow || Topmost;
+        panel.UpdateTrack(_currentTrack, _isCurrentPlaybackPlaying, _currentCoverDataUri,
+            _currentCoverFallbackIconDataUri, _currentSettings.ShowLyricTranslation,
+            _currentTrack is null ? default : PlayerSourceBadgeResolver.Resolve(_currentTrack.SourceApp, _currentSettings));
+        panel.UpdateTimeline(_currentPlaybackPosition, _currentTrack?.Duration ?? TimeSpan.Zero, _isCurrentPlaybackPlaying, _canSeek);
+        TaskObserver.Observe(panel.ShowNearAsync(coverBoundsPx, targetDisplay, _currentSettings.CoverPosition), "lyrics control panel show");
+        setExpanded(true);
+    }
+
+    internal void CloseControlPanel(bool animate = false) => _controlPanelWindow?.HidePanel(immediate: !animate);
+
+    private LyricsControlPanelWindow CreateControlPanelWindow()
+    {
+        var panel = new LyricsControlPanelWindow(
+            action => TaskObserver.Observe(ExecuteMediaHotkeyAsync(action, CancellationToken.None), $"lyrics control panel {action}"),
+            _openSettings, _toggleTranslation,
+            position => TaskObserver.Observe(_mediaPlaybackController.SeekToAsync(position, CancellationToken.None), "lyrics control panel seek"));
+        panel.Hidden += OnControlPanelHidden;
+        return panel;
+    }
+
+    private void OnControlPanelHidden(object? sender, EventArgs e)
+    {
+        _setControlPanelOpen?.Invoke(false);
+        _setControlPanelOpen = null;
+        _lastControlPanelClosedUtc = DateTimeOffset.UtcNow;
+    }
+
+    private void SetPrimaryControlPanelOpen(bool open)
+    {
+        if (_isWebViewReady && _isWebDocumentReady && !_isShowingWebErrorPage)
+        {
+            TaskObserver.Observe(
+                ExecuteWebScriptAsync(LyricsWebViewScriptFactory.SetControlPanelOpen(open)),
+                "lyrics cover panel state");
+        }
+    }
+
+    private void OnCoverClick(LyricsCoverClickBounds click)
+    {
+        if (_displayMonitor is null || _lyricsWebViewElement is null)
+        {
+            return;
+        }
+
+        var inHost = click.InHost(new Size(_lyricsWebViewElement.ActualWidth, _lyricsWebViewElement.ActualHeight));
+        var topLeft = _lyricsWebViewElement.PointToScreen(inHost.TopLeft);
+        var bottomRight = _lyricsWebViewElement.PointToScreen(inHost.BottomRight);
+        Log.Diagnostic("CONTROL_PANEL", "Primary cover click received by WebView");
+        ToggleControlPanelNear(new Rect(topLeft, bottomRight), _displayMonitor, SetPrimaryControlPanelOpen);
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
@@ -406,6 +519,7 @@ public partial class MainWindow : Window, IDisposable
         }
         else
         {
+            CloseControlPanel();
             if (_timer.IsEnabled)
             {
                 _timer.Stop();
@@ -445,6 +559,12 @@ public partial class MainWindow : Window, IDisposable
             return;
         }
 
+        if (_controlPanelWindow is not null)
+        {
+            _controlPanelWindow.Hidden -= OnControlPanelHidden;
+            _controlPanelWindow.Close();
+            _controlPanelWindow = null;
+        }
         CloseSmtcTimelineMonitorWindow();
         _timer.Stop();
         _spectrumTimer.Stop();
@@ -570,6 +690,8 @@ public partial class MainWindow : Window, IDisposable
             _currentTrack = inputKind == PlaybackInputKind.ValidTrack
                 ? snapshot.Track
                 : null;
+            _currentPlaybackPosition = snapshot.Position;
+            _canSeek = snapshot.CanSeek;
             var visibilityTransition = _lyricsContentVisibilityState.ObservePlaybackInput(
                 inputKind,
                 DateTimeOffset.UtcNow);
@@ -632,6 +754,8 @@ public partial class MainWindow : Window, IDisposable
 
             _isCurrentFramePureMusic = ShouldShowSpectrum(frame);
             _isCurrentPlaybackPlaying = snapshot.IsPlaying;
+            _currentPlaybackPosition = snapshot.Position;
+            _canSeek = snapshot.CanSeek;
             _lyricsPresentationScene = ResolveLyricsPresentationScene(frame);
             if (_lyricsPresentationScene == LyricsPresentationScene.Searching)
             {
@@ -672,6 +796,16 @@ public partial class MainWindow : Window, IDisposable
         }
         finally
         {
+            _controlPanelWindow?.UpdateTrack(
+                _currentTrack,
+                _isCurrentPlaybackPlaying,
+                _currentCoverDataUri,
+                _currentCoverFallbackIconDataUri,
+                _currentSettings.ShowLyricTranslation,
+                _currentTrack is null ? default : PlayerSourceBadgeResolver.Resolve(_currentTrack.SourceApp, _currentSettings));
+            _controlPanelWindow?.UpdateTimeline(
+                _currentPlaybackPosition, _currentTrack?.Duration ?? TimeSpan.Zero,
+                _isCurrentPlaybackPlaying, _canSeek);
             _isTimerTickRunning = false;
         }
     }
@@ -1433,6 +1567,11 @@ public partial class MainWindow : Window, IDisposable
         try
         {
             var message = LyricsWebMessageRouter.Parse(e.TryGetWebMessageAsString());
+            if (LyricsWebMessageRouter.TryGetCoverClick(message, out var click))
+            {
+                OnCoverClick(click);
+                return;
+            }
             if (message?.Payload is not { ValueKind: JsonValueKind.Object } payload ||
                 !string.Equals(message.Type, "coverDecodeError", StringComparison.Ordinal))
             {
@@ -1499,7 +1638,7 @@ public partial class MainWindow : Window, IDisposable
         element.HorizontalAlignment = System.Windows.HorizontalAlignment.Stretch;
         element.VerticalAlignment = System.Windows.VerticalAlignment.Stretch;
         element.Focusable = false;
-        element.IsHitTestVisible = false;
+        element.IsHitTestVisible = true;
         // A taskbar child may become visible before its first WebView document is ready.
         // Keep the uninitialized native surface out of the taskbar until it has painted.
         element.Visibility = Visibility.Hidden;

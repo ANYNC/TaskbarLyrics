@@ -13,11 +13,16 @@ internal sealed class LyricsWindowHost : IDisposable
     private static readonly TimeSpan StartupTimeout = TimeSpan.FromSeconds(10);
     private readonly TaskCompletionSource _ready = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly Thread _thread;
+    private readonly Action _openSettings;
+    private readonly Action _toggleTranslation;
     private Dispatcher? _dispatcher;
     private MainWindow? _window;
     private TrackLyricOffsetStore? _trackLyricOffsetStore;
     private IAppCompositionRoot? _compositionRoot;
     private readonly Dictionary<string, LyricsMirrorWindow> _mirrorWindows = new(StringComparer.OrdinalIgnoreCase);
+    private readonly object _previewGate = new();
+    private AppSettings? _pendingPreviewSettings;
+    private bool _previewScheduled;
     private AppSettings _currentSettings = new();
     private bool _disposed;
     private volatile bool _isVisible;
@@ -27,8 +32,12 @@ internal sealed class LyricsWindowHost : IDisposable
     public LyricsWindowHost(
         AppSettings initialSettings,
         TrackLyricOffsetStore trackLyricOffsetStore,
-        IAppCompositionRoot compositionRoot)
+        IAppCompositionRoot compositionRoot,
+        Action openSettings,
+        Action toggleTranslation)
     {
+        _openSettings = openSettings;
+        _toggleTranslation = toggleTranslation;
         var settings = initialSettings.Clone();
         _thread = new Thread(() => Run(settings, trackLyricOffsetStore, compositionRoot))
         {
@@ -71,6 +80,7 @@ internal sealed class LyricsWindowHost : IDisposable
             return;
         }
 
+        _window.CloseControlPanel();
         _window.Hide();
         foreach (var mirrorWindow in _mirrorWindows.Values)
         {
@@ -82,7 +92,50 @@ internal sealed class LyricsWindowHost : IDisposable
     public void ApplySettings(AppSettings settings)
     {
         var snapshot = settings.Clone();
+        lock (_previewGate)
+        {
+            _pendingPreviewSettings = null;
+        }
         InvokeAsync(() => ApplySettingsOnWindowThread(snapshot));
+    }
+
+    public void PreviewSettings(AppSettings settings)
+    {
+        var snapshot = settings.Clone();
+        lock (_previewGate)
+        {
+            if (_disposed || _dispatcher is null ||
+                _dispatcher.HasShutdownStarted || _dispatcher.HasShutdownFinished)
+            {
+                return;
+            }
+
+            // A busy lyrics dispatcher should render the newest drag value, not queued old values.
+            _pendingPreviewSettings = snapshot;
+            if (_previewScheduled)
+            {
+                return;
+            }
+
+            _previewScheduled = true;
+            _dispatcher.BeginInvoke((Action)ApplyPendingPreviewOnWindowThread, DispatcherPriority.Render);
+        }
+    }
+
+    private void ApplyPendingPreviewOnWindowThread()
+    {
+        AppSettings? snapshot;
+        lock (_previewGate)
+        {
+            snapshot = _pendingPreviewSettings;
+            _pendingPreviewSettings = null;
+            _previewScheduled = false;
+        }
+
+        if (snapshot is not null)
+        {
+            ApplySettingsOnWindowThread(snapshot);
+        }
     }
 
     public void ApplySpectrumTuning(SpectrumTuningSettings settings)
@@ -157,7 +210,11 @@ internal sealed class LyricsWindowHost : IDisposable
             _window?.Close();
             Dispatcher.CurrentDispatcher.BeginInvokeShutdown(DispatcherPriority.Normal);
         });
-        _disposed = true;
+        lock (_previewGate)
+        {
+            _disposed = true;
+            _pendingPreviewSettings = null;
+        }
 
         if (!_thread.Join(TimeSpan.FromMilliseconds(200)))
         {
@@ -202,7 +259,7 @@ internal sealed class LyricsWindowHost : IDisposable
 
     private MainWindow CreateAndWireLyricsWindow()
     {
-        var window = new MainWindow(_trackLyricOffsetStore!, _compositionRoot!);
+        var window = new MainWindow(_trackLyricOffsetStore!, _compositionRoot!, _openSettings, _toggleTranslation);
         window.PresentationCommandCreated += OnPresentationCommandCreated;
         window.LyricsContentVisibilityChanged += OnLyricsContentVisibilityChanged;
         window.RecreateWindowRequested += OnLyricsWindowRecreateRequested;
@@ -303,6 +360,7 @@ internal sealed class LyricsWindowHost : IDisposable
         {
             var staleWindow = _mirrorWindows[staleId];
             _mirrorWindows.Remove(staleId);
+            _window?.CloseControlPanel();
             staleWindow.Close();
         }
 
@@ -315,12 +373,14 @@ internal sealed class LyricsWindowHost : IDisposable
                 // A mirror that leaves cross-process taskbar embedding can no longer
                 // composite as a top-level layered window; replace it with a fresh one.
                 _mirrorWindows.Remove(display.Id);
+                _window?.CloseControlPanel();
                 existingMirror.Close();
             }
 
             if (!_mirrorWindows.TryGetValue(display.Id, out var mirrorWindow))
             {
-                mirrorWindow = new LyricsMirrorWindow(display);
+                mirrorWindow = new LyricsMirrorWindow(display, (bounds, monitor, setExpanded) =>
+                    _window?.ToggleControlPanelNear(bounds, monitor, setExpanded));
                 _mirrorWindows.Add(display.Id, mirrorWindow);
             }
             else

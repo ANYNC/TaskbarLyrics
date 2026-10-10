@@ -8,6 +8,190 @@ namespace TaskbarLyrics.Core.Tests;
 public sealed class LyricSyncServiceTests
 {
     [Fact]
+    public async Task RetriesTransientFailureAfterTwoSecondsAndPublishesRecoveredLyrics()
+    {
+        var clock = new RetryTimeProvider();
+        var coordinator = new SequenceCoordinator(
+            new(null, LyricResolutionStatus.TransientFailure),
+            LyricResolutionResult.FromLyrics(CreateResolved("recovered", "Recovered lyric")));
+        using var service = new LyricSyncService(coordinator, metadataStabilizationDelay: TimeSpan.Zero, timeProvider: clock);
+        var snapshot = new PlaybackSnapshot(true, TimeSpan.Zero, CreateTrack());
+        Assert.Equal(LyricSyncService.SearchingText, (await service.GetDisplayFrameAsync(snapshot)).CurrentLine);
+        var retry = await clock.NextTimerAsync();
+        Assert.Equal(TimeSpan.FromSeconds(2), retry.Delay);
+        Assert.Equal(1, coordinator.ResolveCallCount);
+        retry.Fire();
+        await WaitForAcquisitionAsync(service, LyricAcquisitionKind.Remote);
+        Assert.Equal("Recovered lyric", (await service.GetDisplayFrameAsync(snapshot)).CurrentLine);
+        Assert.Equal(2, coordinator.ResolveCallCount);
+        Assert.False(clock.HasPendingTimer);
+    }
+
+    [Fact]
+    public async Task ExhaustsTwoRetriesWithBackoffAndDoesNotRestartOnEveryTick()
+    {
+        var clock = new RetryTimeProvider();
+        var coordinator = new SequenceCoordinator(new LyricResolutionResult(null, LyricResolutionStatus.TransientFailure));
+        using var service = new LyricSyncService(coordinator, metadataStabilizationDelay: TimeSpan.Zero, timeProvider: clock);
+        var snapshot = new PlaybackSnapshot(true, TimeSpan.Zero, CreateTrack());
+        await service.GetDisplayFrameAsync(snapshot);
+        var first = await clock.NextTimerAsync();
+        Assert.Equal(TimeSpan.FromSeconds(2), first.Delay);
+        first.Fire();
+        var second = await clock.NextTimerAsync();
+        Assert.Equal(TimeSpan.FromSeconds(5), second.Delay);
+        second.Fire();
+        await WaitForAcquisitionAsync(service, LyricAcquisitionKind.NotFound);
+        for (var tick = 0; tick < 10; tick++)
+            Assert.Equal(LyricSyncService.NoLyricsText, (await service.GetDisplayFrameAsync(snapshot)).CurrentLine);
+        Assert.Equal(3, coordinator.ResolveCallCount);
+        Assert.False(clock.HasPendingTimer);
+    }
+
+    [Theory]
+    [InlineData(LyricResolutionStatus.NotFound)]
+    [InlineData(LyricResolutionStatus.Failed)]
+    [InlineData(LyricResolutionStatus.Unavailable)]
+    public async Task DoesNotRetryNonTransientOutcomes(LyricResolutionStatus status)
+    {
+        var clock = new RetryTimeProvider();
+        var coordinator = new SequenceCoordinator(new LyricResolutionResult(null, status));
+        using var service = new LyricSyncService(coordinator, metadataStabilizationDelay: TimeSpan.Zero, timeProvider: clock);
+        var snapshot = new PlaybackSnapshot(true, TimeSpan.Zero, CreateTrack());
+        Assert.Equal(LyricSyncService.NoLyricsText, (await service.GetDisplayFrameAsync(snapshot)).CurrentLine);
+        await service.GetDisplayFrameAsync(snapshot);
+        Assert.Equal(1, coordinator.ResolveCallCount);
+        Assert.False(clock.HasPendingTimer);
+    }
+
+    [Fact]
+    public async Task StopsRetryingWhenTheNextAttemptFindsNoCandidates()
+    {
+        var clock = new RetryTimeProvider();
+        var coordinator = new SequenceCoordinator(new(null, LyricResolutionStatus.TransientFailure), new(null, LyricResolutionStatus.NotFound));
+        using var service = new LyricSyncService(coordinator, metadataStabilizationDelay: TimeSpan.Zero, timeProvider: clock);
+        await service.GetDisplayFrameAsync(new PlaybackSnapshot(true, TimeSpan.Zero, CreateTrack()));
+        (await clock.NextTimerAsync()).Fire();
+        await WaitForAcquisitionAsync(service, LyricAcquisitionKind.NotFound);
+        Assert.Equal(2, coordinator.ResolveCallCount);
+        Assert.False(clock.HasPendingTimer);
+    }
+
+    [Theory]
+    [InlineData("track-change")]
+    [InlineData("no-track")]
+    [InlineData("manual-selection")]
+    [InlineData("dispose")]
+    public async Task PendingRetryIsCanceledWhenItNoLongerOwnsTheTrack(string action)
+    {
+        var clock = new RetryTimeProvider();
+        var coordinator = new SequenceCoordinator(
+            new(null, LyricResolutionStatus.TransientFailure),
+            LyricResolutionResult.FromLyrics(CreateResolved("new", "New lyric")));
+        using var service = new LyricSyncService(coordinator, metadataStabilizationDelay: TimeSpan.Zero, timeProvider: clock);
+        var track = CreateTrack();
+        var snapshot = new PlaybackSnapshot(true, TimeSpan.Zero, track);
+        await service.GetDisplayFrameAsync(snapshot);
+        var retry = await clock.NextTimerAsync();
+        switch (action)
+        {
+            case "track-change":
+                Assert.Equal("New lyric", (await service.GetDisplayFrameAsync(snapshot with { Track = CreateTrack("Next song") })).CurrentLine);
+                break;
+            case "no-track":
+                await service.GetDisplayFrameAsync(snapshot with { Track = null });
+                break;
+            case "manual-selection":
+                Assert.True(service.TryApplyResolvedLyrics(track, CreateResolved("manual", "Manual lyric")));
+                break;
+            default:
+                service.Dispose();
+                break;
+        }
+        Assert.True(retry.IsDisposed);
+        retry.Fire();
+        await Task.Yield();
+        Assert.Equal(action == "track-change" ? 2 : 1, coordinator.ResolveCallCount);
+        if (action == "manual-selection")
+            Assert.Equal("Manual lyric", (await service.GetDisplayFrameAsync(snapshot)).CurrentLine);
+    }
+
+    private static async Task WaitForAcquisitionAsync(LyricSyncService service, LyricAcquisitionKind acquisition)
+    {
+        for (var attempt = 0; attempt < 100 && service.CurrentLyricAcquisition != acquisition; attempt++)
+            await Task.Delay(5);
+        Assert.Equal(acquisition, service.CurrentLyricAcquisition);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task LateNetworkFailureCannotReplaceManuallySelectedLyricsOrScheduleARetry(bool throws)
+    {
+        var clock = new RetryTimeProvider();
+        var coordinator = new LateFailureCoordinator();
+        using var service = new LyricSyncService(coordinator, metadataStabilizationDelay: TimeSpan.Zero, timeProvider: clock);
+        var track = CreateTrack();
+        var snapshot = new PlaybackSnapshot(true, TimeSpan.Zero, track);
+        await service.GetDisplayFrameAsync(snapshot);
+        Assert.True(service.TryApplyResolvedLyrics(track, CreateResolved("manual", "Manual lyric")));
+        if (throws) coordinator.Result.SetException(new System.Net.Http.HttpRequestException("late failure"));
+        else coordinator.Result.SetResult(new(null, LyricResolutionStatus.TransientFailure));
+        await Task.Delay(20);
+        Assert.Equal(LyricAcquisitionKind.Remote, service.CurrentLyricAcquisition);
+        Assert.Equal("Manual lyric", (await service.GetDisplayFrameAsync(snapshot)).CurrentLine);
+        Assert.False(clock.HasPendingTimer);
+    }
+
+    private sealed class LateFailureCoordinator : ILyricResolutionCoordinator
+    {
+        public TaskCompletionSource<LyricResolutionResult> Result { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public Task<LyricResolutionResult> ResolveWithResultAsync(TrackInfo track, CancellationToken cancellationToken = default) => Result.Task;
+        public async Task<ResolvedLyrics?> ResolveAsync(TrackInfo track, CancellationToken cancellationToken = default) =>
+            (await ResolveWithResultAsync(track, cancellationToken)).Lyrics;
+        public void Dispose() { }
+    }
+
+    private sealed class SequenceCoordinator(params LyricResolutionResult[] results) : ILyricResolutionCoordinator
+    {
+        public int ResolveCallCount { get; private set; }
+        public Task<LyricResolutionResult> ResolveWithResultAsync(TrackInfo track, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var index = Math.Min(ResolveCallCount++, results.Length - 1);
+            return Task.FromResult(results[index]);
+        }
+        public async Task<ResolvedLyrics?> ResolveAsync(TrackInfo track, CancellationToken cancellationToken = default) =>
+            (await ResolveWithResultAsync(track, cancellationToken)).Lyrics;
+        public void Dispose() { }
+    }
+
+    private sealed class RetryTimeProvider : TimeProvider
+    {
+        private readonly System.Threading.Channels.Channel<RetryTimer> _timers =
+            global::System.Threading.Channels.Channel.CreateUnbounded<RetryTimer>();
+        public bool HasPendingTimer => _timers.Reader.TryPeek(out _);
+        public async Task<RetryTimer> NextTimerAsync() =>
+            await _timers.Reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(1));
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        {
+            var timer = new RetryTimer(callback, state, dueTime);
+            _timers.Writer.TryWrite(timer);
+            return timer;
+        }
+    }
+
+    private sealed class RetryTimer(TimerCallback callback, object? state, TimeSpan delay) : ITimer
+    {
+        public TimeSpan Delay { get; } = delay;
+        public bool IsDisposed { get; private set; }
+        public void Fire() { if (!IsDisposed) callback(state); }
+        public bool Change(TimeSpan dueTime, TimeSpan period) => throw new NotSupportedException();
+        public void Dispose() => IsDisposed = true;
+        public ValueTask DisposeAsync() { Dispose(); return ValueTask.CompletedTask; }
+    }
+
+    [Fact]
     public async Task GetDisplayFrameAsyncAppliesPlayerAndTrackOffsetsBeforeSelectingTheLine()
     {
         var coordinator = new ImmediateCoordinator(CreateResolved(

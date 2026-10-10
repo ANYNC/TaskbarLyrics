@@ -7,6 +7,31 @@ public sealed class SettingsStoreTests
 {
     [Theory]
     [InlineData("{}", true)]
+    [InlineData("{\"EnableControlPanel\":false}", false)]
+    [InlineData("{\"EnableControlPanel\":true}", true)]
+    public void ControlPanelSwitchPreservesDefaultAndRoundTrips(string json, bool expected)
+    {
+        var directory = Path.Combine(AppContext.BaseDirectory, $"settings-store-{Guid.NewGuid():N}");
+        var filePath = Path.Combine(directory, "settings.json");
+        Directory.CreateDirectory(directory);
+        try
+        {
+            File.WriteAllText(filePath, json);
+            var store = new SettingsStore(filePath);
+            var loaded = store.Load();
+            Assert.Equal(expected, loaded.EnableControlPanel);
+            Assert.Equal(expected, loaded.Clone().EnableControlPanel);
+            Assert.True(store.Save(loaded));
+            Assert.Equal(expected, store.Load().EnableControlPanel);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData("{}", true)]
     [InlineData("{\"EnableWordScanning\":false}", false)]
     [InlineData("{\"EnableWordScanning\":true}", true)]
     public void LoadPreservesWordScanningDefaultAndExplicitValue(
@@ -584,4 +609,44 @@ public sealed class SettingsStoreTests
             }
         }
     }
+    [Theory]
+    [InlineData(CoverPosition.Left)]
+    [InlineData(CoverPosition.Right)]
+    public void SaveAndLoadRoundTripsCoverPositionWithoutChangingAlignment(CoverPosition position)
+    {
+        var directory = Path.Combine(AppContext.BaseDirectory, $"settings-store-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var store = new SettingsStore(Path.Combine(directory, "settings.json"));
+            Assert.True(store.Save(new AppSettings { CoverPosition = position, LyricsTextAlignment = LyricsTextAlignment.Center }));
+            var loaded = store.Load();
+            Assert.Equal(position, loaded.CoverPosition);
+            Assert.Equal(LyricsTextAlignment.Center, loaded.LyricsTextAlignment);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("{\"CoverPosition\":999}")]
+    public void LoadMissingOrInvalidCoverPositionPreservesExistingLayout(string json)
+    {
+        var directory = Path.Combine(AppContext.BaseDirectory, $"settings-store-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var path = Path.Combine(directory, "settings.json");
+            File.WriteAllText(path, json);
+            Assert.Equal(CoverPosition.Left, new SettingsStore(path).Load().CoverPosition);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
 }

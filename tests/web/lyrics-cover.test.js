@@ -73,6 +73,61 @@ async function createHarness() {
 }
 
 describe("lyrics cover fallback", () => {
+  it("shows an accessible expand affordance and sends a bounded cover click", async () => {
+    const { dom } = await createHarness();
+    const cover = dom.window.document.querySelector("#cover");
+    const sent = [];
+    dom.window.chrome = { webview: { postMessage: message => sent.push(JSON.parse(message)) } };
+    cover.getBoundingClientRect = () => ({ x: 4, y: 3, width: 34, height: 34 });
+
+    expect(cover.tagName).toBe("BUTTON");
+    expect(cover.getAttribute("aria-expanded")).toBe("false");
+    expect(cover.querySelector(".cover-action-icon path")).not.toBeNull();
+    cover.click();
+    expect(sent).toEqual([{
+      version: 1,
+      type: "coverClick",
+      payload: {
+        x: 4, y: 3, width: 34, height: 34,
+        viewportWidth: dom.window.innerWidth,
+        viewportHeight: dom.window.innerHeight
+      }
+    }]);
+
+    dom.window.taskbarLyrics.receive({ version: 1, type: "controlPanelState", payload: { open: true } });
+    expect(cover.classList.contains("panel-open")).toBe(true);
+    expect(cover.getAttribute("aria-expanded")).toBe("true");
+    dom.window.document.documentElement.classList.add("cover-hidden");
+    cover.click();
+    expect(sent).toHaveLength(1);
+  });
+
+  it("keeps the cover usable in spectrum mode and disables the panel affordance on request", async () => {
+    const { dom, style } = await createHarness();
+    const cover = dom.window.document.querySelector("#cover");
+    const sent = [];
+    dom.window.chrome = { webview: { postMessage: message => sent.push(JSON.parse(message)) } };
+    cover.getBoundingClientRect = () => ({ x: 4, y: 3, width: 34, height: 34 });
+    dom.window.taskbarLyrics.receive({ version: 1, type: "lyrics", payload: {
+      current: "纯音乐", next: "", isPureMusic: true, isPlaying: true, animateTransition: false, scene: "spectrum"
+    } });
+    expect(dom.window.document.querySelector("#layout").classList.contains("spectrum-mode")).toBe(true);
+    cover.click();
+    expect(sent.at(-1).type).toBe("coverClick");
+    dom.window.taskbarLyrics.receive({ version: 1, type: "controlPanelState", payload: { open: true } });
+    dom.window.taskbarLyrics.receive({ version: 1, type: "style", payload: { enableControlPanel: false } });
+    expect(cover.disabled).toBe(true);
+    expect(cover.getAttribute("aria-expanded")).toBe("false");
+    const sentCount = sent.length;
+    cover.click();
+    cover.dispatchEvent(new dom.window.MouseEvent("click"));
+    expect(sent).toHaveLength(sentCount);
+    expect(style).toContain(".cover:not(:disabled):is(:hover, :focus-visible, .panel-open) .cover-interaction");
+    dom.window.taskbarLyrics.receive({ version: 1, type: "style", payload: { enableControlPanel: true } });
+    cover.click();
+    expect(sent).toHaveLength(sentCount + 1);
+  });
+
   it("fills the cover slot with the app icon when album art is unavailable", async () => {
     const { dom, showCover, style } = await createHarness();
     const cover = dom.window.document.querySelector("#cover");
@@ -162,4 +217,23 @@ describe("lyrics cover fallback", () => {
     expect(dom.window.document.querySelector("#cover").classList.contains("app-icon")).toBe(true);
     expect(dom.window.document.querySelector("#coverImageNext").getAttribute("src")).toBe(appIconUri);
   });
+  it.each(["Left", "Center", "Right"])("applies both cover positions independently of %s lyric alignment", async alignment => {
+    const { dom } = await createHarness();
+    const document = dom.window.document;
+    const style = payload => dom.window.taskbarLyrics.receive({ version: 1, type: "style", payload });
+    for (const position of ["Left", "Right"]) {
+      style({ coverPosition: position, textAlignment: alignment, showCover: true });
+      expect(document.documentElement.dataset.coverPosition).toBe(position);
+      expect(document.querySelector("#layout").dataset.textAlignment).toBe(alignment);
+      expect(document.documentElement.classList.contains("cover-hidden")).toBe(false);
+      style({ coverPosition: position, textAlignment: alignment, showCover: false });
+      expect(document.documentElement.classList.contains("cover-hidden")).toBe(true);
+      expect(document.documentElement.dataset.coverPosition).toBe(position);
+    }
+    style({ coverPosition: "Unsupported", textAlignment: alignment });
+    expect(document.documentElement.dataset.coverPosition).toBe("Left");
+    style({ textAlignment: alignment });
+    expect(document.documentElement.dataset.coverPosition).toBe("Left");
+  });
+
 });

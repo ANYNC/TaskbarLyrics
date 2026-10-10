@@ -16,6 +16,12 @@ public enum LyricsTextAlignment
     Right = 2
 }
 
+public enum CoverPosition
+{
+    Left = 0,
+    Right = 1
+}
+
 public enum ForegroundColorMode
 {
     Dark = 0,
@@ -151,6 +157,8 @@ public sealed class AppSettings
 
     public bool ShowCover { get; set; } = true;
 
+    public bool EnableControlPanel { get; set; } = true;
+
     public double LyricsLayoutScalePercent { get; set; } = DefaultLyricsLayoutScalePercent;
 
     public string FontFamily { get; set; } = DefaultFontFamily;
@@ -174,6 +182,8 @@ public sealed class AppSettings
     public LyricsHorizontalAnchor HorizontalAnchor { get; set; } = LyricsHorizontalAnchor.Left;
 
     public LyricsTextAlignment LyricsTextAlignment { get; set; } = LyricsTextAlignment.Left;
+
+    public CoverPosition CoverPosition { get; set; } = CoverPosition.Left;
 
     public double XOffset { get; set; }
 
@@ -212,6 +222,7 @@ public sealed class AppSettings
     {
         NormalizePlayerSources();
         NormalizeLyricsTextAlignment();
+        NormalizeCoverPosition();
         var cloned = (AppSettings)MemberwiseClone();
         cloned.SourceRecognitionOrder = SourceRecognitionOrder.ToList();
         cloned.CustomPlayerSources = CustomPlayerSources.ToList();
@@ -357,6 +368,15 @@ public sealed class AppSettings
         CoverCornerRadius = ClampCoverCornerRadius(CoverCornerRadius, CoverSize);
         LyricsLayoutScalePercent = ClampLyricsLayoutScalePercent(LyricsLayoutScalePercent);
         NormalizeLyricsTextAlignment();
+        NormalizeCoverPosition();
+    }
+
+    public void NormalizeCoverPosition()
+    {
+        if (!Enum.IsDefined(CoverPosition))
+        {
+            CoverPosition = CoverPosition.Left;
+        }
     }
 
     public void NormalizeLyricsTextAlignment()

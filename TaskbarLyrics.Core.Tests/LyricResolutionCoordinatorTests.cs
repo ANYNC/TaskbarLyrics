@@ -7,6 +7,80 @@ namespace TaskbarLyrics.Core.Tests;
 
 public sealed class LyricResolutionCoordinatorTests
 {
+    [Theory]
+    [InlineData(false, LyricResolutionStatus.Failed)]
+    [InlineData(true, LyricResolutionStatus.TransientFailure)]
+    public async Task ReportsNetworkFailureSeparatelyFromOtherSourceFailures(bool transient, LyricResolutionStatus expected)
+    {
+        var source = CreateFailingSource(KnownLyricProviders.QQMusic);
+        source.SearchHandler = (_, _) => throw (transient
+            ? new System.Net.Http.HttpRequestException("DNS unavailable")
+            : new InvalidOperationException("invalid source response"));
+        using var coordinator = CreateOutcomeCoordinator([source]);
+        var result = await coordinator.ResolveWithResultAsync(CreateTrack("Failure Song"));
+        Assert.Null(result.Lyrics);
+        Assert.Equal(expected, result.Status);
+        Assert.Equal(1, source.SearchCalls);
+    }
+
+    [Fact]
+    public async Task NoCandidatesIsNotATransientFailure()
+    {
+        using var coordinator = CreateOutcomeCoordinator([CreateNoLyricsSource(KnownLyricProviders.QQMusic)]);
+        var result = await coordinator.ResolveWithResultAsync(CreateTrack("Missing Song"));
+        Assert.Equal(LyricResolutionStatus.NotFound, result.Status);
+    }
+
+    [Fact]
+    public async Task SourceTimeoutIsRetryableButCallerCancellationIsPropagated()
+    {
+        var source = CreateCancellationSensitiveSources()[0];
+        using var coordinator = CreateOutcomeCoordinator([source], sourceTimeout: TimeSpan.FromMilliseconds(40));
+        var result = await coordinator.ResolveWithResultAsync(CreateTrack("Timeout Song"));
+        Assert.Equal(LyricResolutionStatus.TransientFailure, result.Status);
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            coordinator.ResolveWithResultAsync(CreateTrack("Canceled Song"), cancellation.Token));
+    }
+
+    [Fact]
+    public async Task RequestTimeoutWithoutCallerCancellationIsRetryable()
+    {
+        var source = CreateFailingSource(KnownLyricProviders.QQMusic);
+        source.SearchHandler = (_, _) => throw new TaskCanceledException("HTTP timeout");
+        using var coordinator = CreateOutcomeCoordinator([source]);
+        Assert.Equal(LyricResolutionStatus.TransientFailure,
+            (await coordinator.ResolveWithResultAsync(CreateTrack("Timeout Song"))).Status);
+    }
+
+    [Fact]
+    public async Task SuccessfulFallbackWinsOverTransientFailureAndPreservesTrustOrder()
+    {
+        var source = CreateFailingSource(KnownLyricProviders.QQMusic);
+        source.SearchHandler = (_, _) => throw new System.Net.Http.HttpRequestException("DNS unavailable");
+        using var coordinator = CreateOutcomeCoordinator([source, CreateValidSource(KnownLyricProviders.Kugou)]);
+        var result = await coordinator.ResolveWithResultAsync(CreateTrack("Fallback Song"));
+        Assert.Equal(LyricResolutionStatus.Succeeded, result.Status);
+        Assert.Equal(KnownLyricProviders.Kugou, result.Lyrics!.ProviderId);
+    }
+
+    [Fact]
+    public async Task FetchFailureIsRetryableAndDoesNotPoisonTheNextRequest()
+    {
+        var source = CreateValidSource(KnownLyricProviders.QQMusic);
+        var fetch = source.FetchHandler;
+        source.FetchHandler = (candidate, token) => source.FetchCalls == 1
+            ? throw new System.Net.Http.HttpRequestException("connection lost")
+            : fetch(candidate, token);
+        using var coordinator = CreateOutcomeCoordinator([source]);
+        Assert.Equal(LyricResolutionStatus.TransientFailure,
+            (await coordinator.ResolveWithResultAsync(CreateTrack("Fetch Song"))).Status);
+        Assert.Equal(LyricResolutionStatus.Succeeded,
+            (await coordinator.ResolveWithResultAsync(CreateTrack("Fetch Song"))).Status);
+        Assert.Equal(2, source.FetchCalls);
+    }
+
     [Fact]
     public async Task PlayerSelectionChangesPrimaryTrustAndSkipsDisabledSources()
     {
@@ -507,6 +581,11 @@ public sealed class LyricResolutionCoordinatorTests
         Assert.Null(afterDispose);
         Assert.All(sources, source => Assert.Equal(1, source.SearchCalls));
     }
+
+    private static LyricResolutionCoordinator CreateOutcomeCoordinator(TestSource[] sources, TimeSpan? sourceTimeout = null) =>
+        CreateCoordinator(sources,
+            trustPolicy: new LyricProviderTrustPolicy(sources.Select(source => source.ProviderId), sources.Select(source => source.ProviderId)),
+            sourceTimeout: sourceTimeout);
 
     private static LyricResolutionCoordinator CreateCoordinator(
         IEnumerable<TestSource> sources,

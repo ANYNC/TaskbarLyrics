@@ -5,6 +5,16 @@ namespace TaskbarLyrics.App.Tests;
 
 public sealed class SmtcMusicSessionProviderTests
 {
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(" ")]
+    public void MissingSourceMetadataIsIgnoredWithoutDereferencingIt(string? source)
+    {
+        using var provider = new SmtcMusicSessionProvider();
+        Assert.False(provider.CanUseSource(source));
+        Assert.Equal(string.Empty, SmtcMusicSessionProvider.NormalizeSource(source));
+    }
     [Fact]
     public void ProcessFallbackDetectionCacheUsesCachedResultWithinRefreshInterval()
     {

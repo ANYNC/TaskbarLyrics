@@ -8,4 +8,5 @@ public sealed record PlaybackSnapshot(
     TimeSpan? RawPosition = null,
     TimeSpan? ExtrapolatedPosition = null,
     bool IsCoverLoading = false,
-    string SourceAppUserModelId = "");
+    string SourceAppUserModelId = "",
+    bool CanSeek = false);

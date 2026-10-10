@@ -140,22 +140,49 @@
                 <fieldset class="window-mode-picker">
                   <legend class="sr-only">歌词窗口显示方式</legend>
                   <div class="window-mode-options">
-                    <label class="window-mode-card">
-                      <input class="sr-only" type="radio" name="windowPresentationMode" value="embedded" data-window-mode="embedded">
-                      <span class="window-mode-radio" aria-hidden="true"></span>
-                      <span class="window-mode-copy"><span class="window-mode-title"><strong>任务栏嵌入</strong><span class="window-mode-badge">推荐</span></span><small>歌词保持在任务栏范围内，尺寸与位置会自动限制。</small></span>
-                      <span class="window-mode-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 15h18M8 15v4"/></svg></span>
-                    </label>
-                    <label class="window-mode-card">
-                      <input class="sr-only" type="radio" name="windowPresentationMode" value="floating" data-window-mode="floating">
-                      <span class="window-mode-radio" aria-hidden="true"></span>
-                      <span class="window-mode-copy"><span class="window-mode-title"><strong>悬浮窗口</strong></span><small>可自由调整尺寸与位置，并支持强制置顶。</small></span>
-                      <span class="window-mode-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12" rx="2"/><path d="M4 10h16M16.5 8h.01"/></svg></span>
-                    </label>
+                    <div class="window-mode-card embedded-window-mode-card">
+                      <label class="window-mode-choice">
+                        <input class="sr-only" type="radio" name="windowPresentationMode" value="embedded" data-window-mode="embedded">
+                        <span class="window-mode-radio" aria-hidden="true"></span>
+                        <span class="window-mode-copy"><span class="window-mode-title"><strong>任务栏嵌入</strong><span class="window-mode-badge">推荐</span></span><small>歌词保持在任务栏范围内，尺寸与位置会自动限制。</small></span>
+                        <span class="window-mode-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 15h18M8 15v4"/></svg></span>
+                      </label>
+                      <div class="embedded-mode-note"><small id="taskbarEmbeddingStatus" class="mode-status" role="status" hidden></small></div>
+                      <div id="embeddedControlPanelRow" class="window-mode-setting-row is-disabled" data-depends="showCover" data-embedded-only>
+                        <label class="window-mode-setting-copy" for="embeddedControlPanelToggle"><strong>封面控制面板</strong><small id="embeddedControlPanelDescription">点击封面打开播放控制与进度面板。</small></label>
+                        <label class="switch small"><input id="embeddedControlPanelToggle" type="checkbox" data-setting="enableControlPanel" aria-label="封面控制面板" aria-describedby="embeddedControlPanelDescription" disabled><span class="switch-track"></span></label>
+                      </div>
+                    </div>
+                    <div class="window-mode-card floating-window-mode-card">
+                      <label class="window-mode-choice">
+                        <input class="sr-only" type="radio" name="windowPresentationMode" value="floating" data-window-mode="floating">
+                        <span class="window-mode-radio" aria-hidden="true"></span>
+                        <span class="window-mode-copy"><span class="window-mode-title"><strong>悬浮窗口</strong></span><small>可自由调整尺寸与位置。</small></span>
+                        <span class="window-mode-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12" rx="2"/><path d="M4 10h16M16.5 8h.01"/></svg></span>
+                      </label>
+                      <div id="floatingTopmostRow" class="window-mode-setting-row is-disabled" data-depends="useFloatingWindow">
+                        <label class="window-mode-setting-copy" for="floatingTopmostToggle"><strong>强制置顶</strong><small id="floatingTopmostDescription">全屏时也尽量保持可见</small></label>
+                        <label class="switch small"><input id="floatingTopmostToggle" type="checkbox" data-setting="forceAlwaysOnTop" aria-label="强制歌词置顶" aria-describedby="floatingTopmostDescription" disabled><span class="switch-track"></span></label>
+                      </div>
+                    </div>
                   </div>
-                  <div class="window-mode-support"><small>切回任务栏嵌入时，超出任务栏的布局会恢复默认尺寸与位置。</small><small id="taskbarEmbeddingStatus" class="mode-status" role="status" hidden></small></div>
                 </fieldset>
-                <div class="setting-row compact"><div class="setting-label"><strong>显示封面</strong><small>关闭后歌词会占满可用宽度，封面尺寸设置仍会保留。</small></div><label class="switch"><input type="checkbox" data-setting="showCover" aria-label="显示封面"><span class="switch-track"></span></label></div>
+                <div class="setting-row compact"><div class="setting-label"><strong>显示封面</strong></div><label class="switch"><input type="checkbox" data-setting="showCover" aria-label="显示封面"><span class="switch-track"></span></label></div>
+                <div class="setting-row compact layout-choice-row" data-depends="showCover">
+                  <div class="setting-label"><strong id="coverPositionLabel">封面位置</strong></div>
+                  <div class="monitor-mode layout-options" role="radiogroup" aria-labelledby="coverPositionLabel">
+                    <label><input type="radio" name="coverPosition" value="Left" data-setting="coverPosition" aria-label="封面在歌词左侧"><span>歌词左侧</span></label>
+                    <label><input type="radio" name="coverPosition" value="Right" data-setting="coverPosition" aria-label="封面在歌词右侧"><span>歌词右侧</span></label>
+                  </div>
+                </div>
+                <div class="setting-row compact layout-choice-row">
+                  <div class="setting-label"><strong id="lyricsTextAlignmentLabel">歌词对齐</strong></div>
+                  <div class="monitor-mode layout-options" role="radiogroup" aria-labelledby="lyricsTextAlignmentLabel">
+                    <label><input type="radio" name="lyricsTextAlignment" value="Left" data-setting="lyricsTextAlignment" aria-label="歌词左对齐"><span>左对齐</span></label>
+                    <label><input type="radio" name="lyricsTextAlignment" value="Center" data-setting="lyricsTextAlignment" aria-label="歌词居中"><span>居中</span></label>
+                    <label><input type="radio" name="lyricsTextAlignment" value="Right" data-setting="lyricsTextAlignment" aria-label="歌词右对齐"><span>右对齐</span></label>
+                  </div>
+                </div>
                 <div class="setting-row layout-scale-row"><div class="setting-label"><strong>歌词区域缩放</strong><small>窗口宽度随缩放等比变化；X/Y 偏移保持不变，范围 25%～300%。</small></div><div class="layout-scale-control"><div class="slider-number-control"><input type="range" min="25" max="300" step="5" data-setting="lyricsLayoutScalePercent" aria-label="歌词区域缩放"><label class="unit-input compact-number-input percentage-input"><input type="number" min="25" max="300" step="1" data-setting="lyricsLayoutScalePercent" aria-label="歌词区域缩放百分比"><span>%</span></label></div><div class="layout-scale-footer"><output id="layoutScalePreview" class="layout-scale-preview"><span>字号 <strong data-effective-font-size>14 px</strong></span><span>封面 <strong data-effective-cover-size>34 px</strong></span><span data-effective-cover-gap-item>间距 <strong data-effective-cover-gap>8 px</strong></span><span>宽度 <strong data-effective-window-width>420 px</strong></span></output><button class="btn ghost small" type="button" data-reset-layout-scale aria-label="恢复歌词区域缩放到 100%" title="恢复到 100%">恢复 100%</button></div><span id="layoutScaleAnnouncement" class="sr-only" aria-live="polite"></span></div></div>
                 <details class="advanced-size-panel">
                   <summary class="advanced-size-summary"><div class="setting-label"><strong>高级尺寸微调</strong><small>编辑缩放前的基础值；最终尺寸还会乘以整体缩放倍率。</small></div><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></summary>
@@ -175,7 +202,6 @@
               <div class="settings">
                 <div class="setting-row"><div class="setting-label"><strong>字体</strong></div><button id="fontFamilySelect" class="control select-trigger" type="button" data-setting="fontFamily" aria-label="字体" aria-haspopup="listbox" aria-expanded="false"><span class="select-trigger-value"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
                 <div class="setting-row"><div class="setting-label"><strong>字重</strong></div><button class="control select-trigger" type="button" data-setting="fontWeight" aria-label="字重" aria-haspopup="listbox" aria-expanded="false"><span class="select-trigger-value"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
-                <div class="setting-row"><div class="setting-label"><strong>歌词对齐</strong></div><button class="control select-trigger" type="button" data-setting="lyricsTextAlignment" aria-label="歌词对齐" aria-haspopup="listbox" aria-expanded="false"><span class="select-trigger-value"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
                 <div class="setting-row"><div class="setting-label"><strong>文字颜色</strong></div><div class="color-mode-control"><button class="control select-trigger" type="button" data-setting="foregroundColorMode" aria-label="文字颜色模式" aria-haspopup="listbox" aria-expanded="false"><span class="select-trigger-value"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><div class="preset-color-readout" data-preset-color><span class="color-swatch" data-mode-swatch></span><span data-mode-value>#FFFFFF</span></div><div class="color-control custom-color-control" data-custom-color hidden><button id="colorPickerButton" class="color-picker-button" type="button" data-setting="foregroundColor" aria-label="打开自定义取色器" aria-haspopup="dialog" aria-expanded="false"><span class="color-swatch" data-color-swatch></span><span>选择颜色</span></button><input class="control color-value-input" data-color-text="foregroundColor" aria-label="自定义文字颜色值" aria-describedby="foregroundColorError" aria-invalid="false" maxlength="7" spellcheck="false"><small id="foregroundColorError" class="input-error" hidden>请输入类似 #FFFFFF 的颜色值。</small></div></div></div>
                 <div class="setting-row compact"><div class="setting-label"><strong>文字阴影</strong></div><label class="switch"><input type="checkbox" data-setting="showTextShadow" aria-label="文字阴影"><span class="switch-track"></span></label></div>
               </div>
@@ -189,13 +215,12 @@
               </div>
             </div>
             <div class="panel">
-              <div class="panel-head"><div><h2>窗口位置</h2><p>调整歌词窗口的锚点、偏移与置顶行为。</p></div></div>
+              <div class="panel-head"><div><h2>窗口位置</h2><p>调整歌词窗口的锚点与偏移。</p></div></div>
               <div class="settings">
                 <div class="setting-row monitor-setting-row"><div class="setting-label"><strong>显示器</strong><small>选择歌词显示在哪些显示器的任务栏。</small></div><div class="monitor-selection"><div class="monitor-mode" role="radiogroup" aria-label="歌词显示器模式"><label><input type="radio" name="lyricsDisplayMode" value="All" data-display-mode><span>全部显示器</span></label><label><input type="radio" name="lyricsDisplayMode" value="Selected" data-display-mode><span>指定显示器</span></label></div><span id="displayMonitorListLabel" class="sr-only">选择显示歌词的显示器</span><div id="displayMonitorList" class="monitor-list" role="group" aria-labelledby="displayMonitorListLabel"></div><small id="displayMonitorHint" class="monitor-hint" role="status"></small></div></div>
-                <div class="setting-row"><div class="setting-label"><strong>水平锚点</strong><small>决定歌词依附在任务栏的区域。</small></div><button class="control select-trigger" type="button" data-setting="horizontalAnchor" aria-label="水平锚点" aria-haspopup="listbox" aria-expanded="false"><span class="select-trigger-value"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+                <div class="setting-row compact"><div class="setting-label"><strong id="horizontalAnchorLabel">水平锚点</strong><small>决定歌词依附在任务栏的区域。</small></div><div class="monitor-mode layout-options" role="radiogroup" aria-labelledby="horizontalAnchorLabel"><label><input type="radio" name="horizontalAnchor" value="Left" data-setting="horizontalAnchor" aria-label="水平锚点左侧"><span>左侧</span></label><label><input type="radio" name="horizontalAnchor" value="Center" data-setting="horizontalAnchor" aria-label="水平锚点居中"><span>居中</span></label><label><input type="radio" name="horizontalAnchor" value="Right" data-setting="horizontalAnchor" aria-label="水平锚点右侧"><span>右侧</span></label></div></div>
                 <div class="setting-row"><div class="setting-label"><strong>X 偏移</strong><small>相对水平锚点微调窗口位置，范围 -2000～2000 px。</small></div><div class="slider-number-control"><input type="range" min="-2000" max="2000" step="1" data-setting="xOffset" aria-label="X 偏移滑块"><label class="unit-input compact-number-input pixel-input"><input type="number" min="-2000" max="2000" step="1" inputmode="numeric" data-setting="xOffset" aria-label="X 偏移数值"><span>px</span></label></div></div>
                 <div class="setting-row"><div class="setting-label"><strong>Y 偏移</strong><small>相对任务栏垂直微调窗口位置，范围 -2000～2000 px。</small></div><div class="slider-number-control"><input type="range" min="-2000" max="2000" step="1" data-setting="yOffset" aria-label="Y 偏移滑块"><label class="unit-input compact-number-input pixel-input"><input type="number" min="-2000" max="2000" step="1" inputmode="numeric" data-setting="yOffset" aria-label="Y 偏移数值"><span>px</span></label></div></div>
-                <div class="setting-row compact" data-depends="useFloatingWindow"><div class="setting-label"><strong>强制歌词置顶</strong><small id="floatingTopmostDescription">关闭时使用智能置顶：平时保持可见，当前显示器有前台全屏应用时让位；开启后全屏时也保持置顶。系统菜单仍可能遮挡歌词。</small></div><label class="switch"><input type="checkbox" data-setting="forceAlwaysOnTop" aria-label="强制歌词置顶" aria-describedby="floatingTopmostDescription"><span class="switch-track"></span></label></div>
               </div>
             </div>
           </div>

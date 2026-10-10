@@ -74,6 +74,25 @@ let activeCoverImageEl = coverImageEl;
 let standbyCoverImageEl = coverImageNextEl;
 let currentCoverUri = "";
 let coverGeneration = 0;
+
+coverEl?.addEventListener("click", () => {
+  if (coverEl.disabled || root.classList.contains("cover-hidden")) return;
+  const bounds = coverEl.getBoundingClientRect();
+  window.taskbarLyricsBridge?.post("coverClick", {
+    x: bounds.x,
+    y: bounds.y,
+    width: bounds.width,
+    height: bounds.height,
+    viewportWidth: window.innerWidth,
+    viewportHeight: window.innerHeight
+  });
+});
+
+function setControlPanelOpen(open) {
+  if (!coverEl) return;
+  coverEl.classList.toggle("panel-open", open === true);
+  coverEl.setAttribute("aria-expanded", String(open === true));
+}
 let isSpectrumMode = false;
 let hasAudioDrivenSpectrum = false;
 let spectrumAnimationFrame = 0;
@@ -2295,6 +2314,7 @@ const lyricsApi = {
 
     root.style.setProperty("--font-family", payload.fontFamily || "\"SF Pro Display\", \"Segoe UI Variable Display\", \"Segoe UI Variable Text\", \"Microsoft YaHei UI\", sans-serif");
     applyLyricsTextAlignment(payload.textAlignment);
+    root.dataset.coverPosition = payload.coverPosition === "Right" ? "Right" : "Left";
     const layoutScalePercent = Number(payload.layoutScalePercent);
     if (Number.isFinite(layoutScalePercent) && layoutScalePercent > 0) {
       layoutScaleFactor = layoutScalePercent / 100;
@@ -2303,6 +2323,10 @@ const lyricsApi = {
     root.style.setProperty("--font-size", `${requestedFontSize}px`);
     root.style.setProperty("--font-weight", window.taskbarLyricsState.normalizeWeight(payload.fontWeight));
     root.classList.toggle("cover-hidden", payload.showCover === false);
+    if (coverEl) {
+      coverEl.disabled = payload.enableControlPanel === false;
+      if (coverEl.disabled || payload.showCover === false) setControlPanelOpen(false);
+    }
 
     const coverSize = Number(payload.coverSize);
     if (Number.isFinite(coverSize) && coverSize > 0) {
@@ -2425,6 +2449,9 @@ window.taskbarLyrics = {
         break;
       case "style":
         lyricsApi.applyStyle(payload);
+        break;
+      case "controlPanelState":
+        setControlPanelOpen(payload?.open);
         break;
     }
   }

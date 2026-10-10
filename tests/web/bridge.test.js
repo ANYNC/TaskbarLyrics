@@ -8,7 +8,7 @@ const settingsPages = ["sources", "shortcuts", "lyrics", "trackOffsets", "displa
 const persistedSettings = [
   "enableLocalLyrics", "localMusicFolders", "enableGlobalMediaHotkeys", "showLyricsOnStartup", "autoHideWhenNoPlayback",
   "showLyricTranslation", "enableWordScanning", "spectrumDisplayMode", "lyricsLayoutScalePercent", "fontSize", "showCover",
-  "coverSize", "coverGap", "coverCornerRadius", "fontFamily", "fontWeight", "lyricsTextAlignment", "foregroundColorMode",
+  "enableControlPanel", "coverPosition", "coverSize", "coverGap", "coverCornerRadius", "fontFamily", "fontWeight", "lyricsTextAlignment", "foregroundColorMode",
   "showTextShadow", "toolWindowTheme", "showBackground", "backgroundOpacity", "showBorder", "windowWidth", "horizontalAnchor",
   "xOffset", "yOffset", "forceAlwaysOnTop", "startWithWindows", "autoCheckUpdates"
 ];
@@ -1318,6 +1318,7 @@ describe("settings WebView bridge", () => {
           foregroundColor: "#FFFFFFFF",
           backgroundOpacity: 0.55,
           showCover: true,
+          enableControlPanel: true,
           coverSize: 34,
           coverGap: 8,
           coverCornerRadius: 6
@@ -1336,12 +1337,96 @@ describe("settings WebView bridge", () => {
       payload: { key: "showCover", value: false }
     });
     expect(document.querySelector('input[data-setting="coverSize"]').value).toBe("34");
+    expect(document.querySelector('input[data-setting="enableControlPanel"]').checked).toBe(true);
     expect(document.querySelector("[data-effective-cover-size]").textContent).toBe("已隐藏");
     expect(document.querySelector("[data-effective-cover-gap-item]").hidden).toBe(true);
     document.querySelectorAll('[data-depends="showCover"]').forEach(row => {
       expect(row.classList.contains("is-disabled")).toBe(true);
       row.querySelectorAll("input, button").forEach(control => expect(control.disabled).toBe(true));
     });
+  });
+
+  it("loads and saves the cover control panel switch independently of cover visibility", async () => {
+    const { dom, sent, script } = await createSettingsDom();
+    dom.window.eval(script);
+    dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: {
+      settings: { sourceRecognitionOrder: [], playerLyricOffsets: {}, showCover: true, enableControlPanel: true }
+    } });
+    const toggle = dom.window.document.querySelector('input[data-setting="enableControlPanel"]');
+    expect(toggle.checked).toBe(true);
+    toggle.checked = false;
+    toggle.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+    expect(sent.at(-1)).toEqual({ version: 1, type: "update", payload: { key: "enableControlPanel", value: false } });
+    expect(dom.window.document.querySelector('input[data-setting="showCover"]').checked).toBe(true);
+    dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: {
+      settings: { sourceRecognitionOrder: [], playerLyricOffsets: {}, showCover: true, enableControlPanel: false }
+    } });
+    expect(toggle.checked).toBe(false);
+  });
+
+  it.each([
+    [false, true, false],
+    [false, false, true],
+    [true, true, true],
+    [true, false, true]
+  ])("gates the embedded control panel switch for floating=%s, cover=%s", async (floating, showCover, disabled) => {
+    const { dom, sent, script } = await createSettingsDom();
+    dom.window.eval(script);
+    const initialCount = sent.length;
+    dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: {
+      settings: { useFloatingWindow: floating, showCover, enableControlPanel: true }
+    } });
+    const document = dom.window.document;
+    const toggle = document.querySelector('input[data-setting="enableControlPanel"]');
+    const row = document.querySelector("#embeddedControlPanelRow");
+    expect(document.querySelectorAll('input[data-setting="enableControlPanel"]')).toHaveLength(1);
+    expect(row.closest(".embedded-window-mode-card")).not.toBeNull();
+    expect(row.closest(".window-mode-choice")).toBeNull();
+    expect(toggle.disabled).toBe(disabled);
+    expect(toggle.checked).toBe(true);
+    expect(row.classList.contains("is-disabled")).toBe(disabled);
+    expect(sent).toHaveLength(initialCount);
+    if (disabled) {
+      row.querySelector('label[for="embeddedControlPanelToggle"]').click();
+      toggle.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+      expect(sent).toHaveLength(initialCount);
+    }
+  });
+
+  it("preserves the panel preference while switching display modes and cover visibility", async () => {
+    const { dom, sent, script } = await createSettingsDom();
+    dom.window.eval(script);
+    dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: {
+      settings: { useFloatingWindow: false, showCover: true, enableControlPanel: true, forceAlwaysOnTop: true }
+    } });
+    const document = dom.window.document;
+    const toggle = document.querySelector("#embeddedControlPanelToggle");
+    const floating = document.querySelector('[data-window-mode="floating"]');
+    const embedded = document.querySelector('[data-window-mode="embedded"]');
+    const topmost = document.querySelector("#floatingTopmostToggle");
+    floating.click();
+    expect(toggle.disabled).toBe(true);
+    expect(toggle.checked).toBe(true);
+    expect(topmost.disabled).toBe(false);
+    embedded.click();
+    expect(toggle.disabled).toBe(false);
+    expect(topmost.disabled).toBe(true);
+    document.querySelector('label[for="embeddedControlPanelToggle"]').click();
+    expect(embedded.checked).toBe(true);
+    expect(toggle.checked).toBe(false);
+    expect(sent.at(-1).payload).toEqual({ key: "enableControlPanel", value: false });
+    floating.click();
+    embedded.click();
+    expect(toggle.checked).toBe(false);
+    toggle.click();
+    const cover = document.querySelector('input[data-setting="showCover"]');
+    cover.click();
+    expect(toggle.disabled).toBe(true);
+    expect(toggle.checked).toBe(true);
+    cover.click();
+    expect(toggle.disabled).toBe(false);
+    expect(toggle.checked).toBe(true);
+    expect(sent.filter(message => message.type === "update" && message.payload.key === "enableControlPanel").map(message => message.payload.value)).toEqual([false, true]);
   });
 
   it("keeps X and Y offset sliders synchronized with numeric inputs", async () => {
@@ -1427,6 +1512,54 @@ describe("settings WebView bridge", () => {
     });
   });
 
+  it.each([
+    { name: "embedded center anchor", floating: false, anchor: "Center", minX: -500, maxX: 500, minY: -2, maxY: 2 },
+    { name: "embedded right anchor", floating: false, anchor: "Right", minX: -1000, maxX: 0, minY: -2, maxY: 2 },
+    { name: "floating window", floating: true, anchor: "Left", minX: -2000, maxX: 2000, minY: -2000, maxY: 2000 }
+  ])("preserves zero offsets when loading and editing $name", async ({ floating, anchor, minX, maxX, minY, maxY }) => {
+    const { dom, sent, script } = await createSettingsDom();
+    const document = dom.window.document;
+    dom.window.eval(script);
+    const initialCount = sent.length;
+    dom.window.settingsApp.receive({
+      version: 1,
+      type: "settingsState",
+      payload: { settings: {
+        useFloatingWindow: floating, horizontalAnchor: anchor, xOffset: 0, yOffset: 0,
+        taskbarMinXOffset: minX, taskbarMaxXOffset: maxX,
+        taskbarMinYOffset: minY, taskbarMaxYOffset: maxY
+      }, fonts: [] }
+    });
+    expect(sent).toHaveLength(initialCount);
+
+    for (const key of ["xOffset", "yOffset"]) {
+      const number = document.querySelector(`input[type="number"][data-setting="${key}"]`);
+      const slider = document.querySelector(`input[type="range"][data-setting="${key}"]`);
+      expect(number.value).toBe("0");
+      expect(slider.value).toBe("0");
+      expect(Number(slider.min)).toBe(key === "xOffset" ? minX : minY);
+      expect(Number(slider.max)).toBe(key === "xOffset" ? maxX : maxY);
+
+      number.value = "-1";
+      number.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+      number.value = "0";
+      number.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+      expect(sent.at(-1)).toEqual({ version: 1, type: "previewUpdate", payload: { key, value: 0 } });
+      number.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+      expect(sent.at(-1)).toEqual({ version: 1, type: "update", payload: { key, value: 0 } });
+      expect(number.value).toBe("0");
+      expect(slider.value).toBe("0");
+
+      slider.value = "-1";
+      slider.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+      slider.value = "0";
+      slider.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+      expect(sent.at(-1)).toEqual({ version: 1, type: "update", payload: { key, value: 0 } });
+      expect(number.value).toBe("0");
+      expect(slider.value).toBe("0");
+    }
+  });
+
   it("coalesces repeated slider input into one preview per animation frame", async () => {
     const { dom, sent, script, runAnimationFrames } = await createSettingsDom({ deferAnimationFrames: true });
     const document = dom.window.document;
@@ -1467,6 +1600,73 @@ describe("settings WebView bridge", () => {
     }]);
   });
 
+  it("keeps a dragged slider responsive while layout previews arrive out of order", async () => {
+    const { dom, script } = await createSettingsDom();
+    const document = dom.window.document;
+    dom.window.eval(script);
+    dom.window.settingsApp.receive({
+      version: 1,
+      type: "settingsState",
+      payload: {
+        settings: {
+          sourceRecognitionOrder: [],
+          playerLyricOffsets: {},
+          defaultPlayerLyricOffsets: {},
+          mediaHotkeys: [],
+          mediaHotkeyStatuses: {},
+          foregroundColorMode: "Light",
+          foregroundColor: "#FFFFFFFF",
+          backgroundOpacity: 0.55,
+          useFloatingWindow: false,
+          lyricsLayoutScalePercent: 100,
+          fontSize: 14,
+          coverSize: 34,
+          coverGap: 8,
+          coverCornerRadius: 6
+        },
+        fonts: []
+      }
+    });
+
+    const slider = document.querySelector('input[type="range"][data-setting="lyricsLayoutScalePercent"]');
+    const number = document.querySelector('input[type="number"][data-setting="lyricsLayoutScalePercent"]');
+    const unrelatedNumber = document.querySelector('input[type="number"][data-setting="fontSize"]');
+    unrelatedNumber.value = "37";
+    slider.value = "125";
+    slider.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+
+    expect(number.value).toBe("125");
+    expect(unrelatedNumber.value).toBe("37");
+
+    const layoutPreview = (scalePercent, taskbarMaxScalePercent) => dom.window.settingsApp.receive({
+      version: 1,
+      type: "lyricsLayoutPreview",
+      payload: {
+        scalePercent, fontSize: 14, coverSize: 34, coverGap: 8, coverCornerRadius: 6,
+        ...(taskbarMaxScalePercent === undefined ? {} : { taskbarMaxScalePercent })
+      }
+    });
+    layoutPreview(100, 180);
+    expect(slider.value).toBe("125");
+    expect(number.value).toBe("125");
+
+    slider.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+    layoutPreview(100);
+    expect(slider.value).toBe("125");
+    expect(slider.max).toBe("180");
+    layoutPreview(125);
+    layoutPreview(130);
+    expect(slider.value).toBe("130");
+    expect(number.value).toBe("130");
+
+    slider.value = "150";
+    slider.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+    slider.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+    layoutPreview(100, 100);
+    expect(slider.value).toBe("100");
+    expect(number.value).toBe("100");
+  });
+
   it("pairs every settings slider with a quiet numeric input", async () => {
     const { dom } = await createSettingsDom();
     const document = dom.window.document;
@@ -1499,6 +1699,7 @@ describe("settings WebView bridge", () => {
           foregroundColorMode: "Light",
           foregroundColor: "#FFFFFFFF",
           useFloatingWindow: false,
+          forceAlwaysOnTop: true,
           taskbarEmbeddingAvailable: true,
           taskbarMaxWidth: 420,
           taskbarMaxHeight: 48,
@@ -1518,7 +1719,17 @@ describe("settings WebView bridge", () => {
 
     const embeddedMode = document.querySelector('[data-window-mode="embedded"]');
     const floatingMode = document.querySelector('[data-window-mode="floating"]');
+    const topmostRow = document.querySelector("#floatingTopmostRow");
+    const topmostControl = topmostRow.querySelector('[data-setting="forceAlwaysOnTop"]');
+    const embeddedNote = document.querySelector(".embedded-mode-note");
     const dependentControls = [...document.querySelectorAll('[data-depends="useFloatingWindow"] input, [data-depends="useFloatingWindow"] button')];
+    expect(embeddedNote.closest(".embedded-window-mode-card")).not.toBeNull();
+    expect(embeddedNote.closest(".window-mode-choice")).toBeNull();
+    expect(embeddedNote.querySelector("#taskbarEmbeddingStatus")).not.toBeNull();
+    expect(topmostRow.closest(".floating-window-mode-card")).not.toBeNull();
+    expect(topmostControl.closest(".window-mode-choice")).toBeNull();
+    expect(topmostRow.hidden).toBe(false);
+    expect(topmostControl.checked).toBe(true);
     expect(embeddedMode.checked).toBe(true);
     expect(embeddedMode.tabIndex).toBe(0);
     expect(floatingMode.checked).toBe(false);
@@ -1530,6 +1741,7 @@ describe("settings WebView bridge", () => {
 
     expect(floatingMode.checked).toBe(true);
     expect(floatingMode.tabIndex).toBe(0);
+    expect(topmostRow.hidden).toBe(false);
     expect(dependentControls.every(control => !control.disabled)).toBe(true);
     expect(sent.at(-1)).toEqual({
       version: 1,
@@ -1537,11 +1749,23 @@ describe("settings WebView bridge", () => {
       payload: { key: "useFloatingWindow", value: true }
     });
 
+    topmostControl.checked = false;
+    topmostControl.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+    expect(floatingMode.checked).toBe(true);
+    expect(sent.at(-1)).toEqual({
+      version: 1,
+      type: "update",
+      payload: { key: "forceAlwaysOnTop", value: false }
+    });
+
     floatingMode.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Home", bubbles: true }));
 
     expect(document.activeElement).toBe(embeddedMode);
     expect(embeddedMode.checked).toBe(true);
     expect(embeddedMode.tabIndex).toBe(0);
+    expect(topmostRow.hidden).toBe(false);
+    expect(topmostControl.disabled).toBe(true);
+    expect(topmostControl.checked).toBe(false);
     expect(dependentControls.every(control => control.disabled)).toBe(true);
     expect(sent.at(-1)).toEqual({
       version: 1,
@@ -1713,12 +1937,13 @@ describe("settings WebView bridge", () => {
       payload: { settings: { lyricsTextAlignment: "Unsupported" }, fonts: [] }
     });
 
-    const trigger = document.querySelector('[data-setting="lyricsTextAlignment"]');
-    expect(trigger.querySelector(".select-trigger-value").textContent).toBe("左对齐");
+    const left = document.querySelector('input[data-setting="lyricsTextAlignment"][value="Left"]');
+    expect(left.checked).toBe(true);
+    expect(left.closest('[data-page]').dataset.page).toBe("displayArea");
+    expect(document.querySelector('.select-trigger[data-setting="lyricsTextAlignment"]')).toBeNull();
     expect(sent).toHaveLength(initialSentCount);
 
-    trigger.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
-    document.querySelector('[data-option-index="2"]').dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+    document.querySelector('input[data-setting="lyricsTextAlignment"][value="Right"]').click();
 
     expect(sent.at(-1)).toEqual({
       version: 1,
@@ -1726,4 +1951,70 @@ describe("settings WebView bridge", () => {
       payload: { key: "lyricsTextAlignment", value: "Right" }
     });
   });
+  it("keeps cover cards independent of alignment and preserves the choice while cover is hidden", async () => {
+    const { dom, sent, script } = await createSettingsDom();
+    dom.window.eval(script);
+    const document = dom.window.document;
+    const receive = settings => dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings, fonts: [] } });
+    receive({ showCover: true, coverPosition: "Unsupported", lyricsTextAlignment: "Center" });
+    const cover = value => document.querySelector(`input[data-setting="coverPosition"][value="${value}"]`);
+    const alignment = value => document.querySelector(`input[data-setting="lyricsTextAlignment"][value="${value}"]`);
+    expect(cover("Left").checked).toBe(true);
+    expect(alignment("Center").checked).toBe(true);
+    expect(cover("Left").closest('[data-page]').dataset.page).toBe("displayArea");
+    cover("Right").closest("label").click();
+    expect(sent.at(-1)).toEqual({ version: 1, type: "update", payload: { key: "coverPosition", value: "Right" } });
+    expect(alignment("Center").checked).toBe(true);
+    document.querySelector('input[data-setting="showCover"]').click();
+    expect(cover("Right").checked).toBe(true);
+    expect(cover("Right").disabled).toBe(true);
+    const count = sent.length;
+    cover("Left").closest("label").click();
+    expect(sent).toHaveLength(count);
+    alignment("Right").click();
+    expect(alignment("Right").disabled).toBe(false);
+    expect(sent.at(-1).payload).toEqual({ key: "lyricsTextAlignment", value: "Right" });
+    document.querySelector('input[data-setting="showCover"]').click();
+    expect(cover("Right").disabled).toBe(false);
+    expect(cover("Right").checked).toBe(true);
+    receive({ showCover: true, coverPosition: "Left", lyricsTextAlignment: "Center" });
+    expect(cover("Left").checked).toBe(true);
+    expect(alignment("Center").checked).toBe(true);
+  });
+
+  it("navigates layout radio cards with arrows and Home/End without duplicate updates", async () => {
+    const { dom, sent, script } = await createSettingsDom();
+    dom.window.eval(script);
+    dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings: { showCover: true, coverPosition: "Left", lyricsTextAlignment: "Left", horizontalAnchor: "Center" }, fonts: [] } });
+    const document = dom.window.document;
+    const coverLeft = document.querySelector('input[data-setting="coverPosition"][value="Left"]');
+    const coverRight = document.querySelector('input[data-setting="coverPosition"][value="Right"]');
+    const key = (input, value) => input.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: value, bubbles: true, cancelable: true }));
+    key(coverLeft, "ArrowRight");
+    expect(coverRight.checked).toBe(true);
+    expect(document.activeElement).toBe(coverRight);
+    const count = sent.length;
+    key(coverRight, "End");
+    expect(sent).toHaveLength(count);
+    key(coverRight, "Home");
+    expect(coverLeft.checked).toBe(true);
+    const alignmentLeft = document.querySelector('input[data-setting="lyricsTextAlignment"][value="Left"]');
+    key(alignmentLeft, "End");
+    expect(sent.at(-1).payload).toEqual({ key: "lyricsTextAlignment", value: "Right" });
+    expect(coverLeft.checked).toBe(true);
+    const anchorCenter = document.querySelector('input[data-setting="horizontalAnchor"][value="Center"]');
+    expect(anchorCenter.checked).toBe(true);
+    expect(document.querySelector('.select-trigger[data-setting="horizontalAnchor"]')).toBeNull();
+    document.querySelector('input[data-setting="horizontalAnchor"][value="Left"]').closest("label").click();
+    expect(sent.at(-1).payload).toEqual({ key: "horizontalAnchor", value: "Left" });
+    key(document.querySelector('input[data-setting="horizontalAnchor"][value="Left"]'), "End");
+    expect(sent.at(-1).payload).toEqual({ key: "horizontalAnchor", value: "Right" });
+    expect(coverLeft.checked).toBe(true);
+    expect(document.querySelector('input[data-setting="lyricsTextAlignment"][value="Right"]').checked).toBe(true);
+    const finalCount = sent.length;
+    dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings: { showCover: true, coverPosition: "Left", lyricsTextAlignment: "Right", horizontalAnchor: "Center" }, fonts: [] } });
+    expect(anchorCenter.checked).toBe(true);
+    expect(sent).toHaveLength(finalCount);
+  });
+
 });

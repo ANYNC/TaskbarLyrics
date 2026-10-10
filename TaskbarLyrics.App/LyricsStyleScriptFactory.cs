@@ -9,6 +9,7 @@ internal static class LyricsStyleScriptFactory
     {
         ArgumentNullException.ThrowIfNull(settings);
         settings.NormalizeLyricsTextAlignment();
+        settings.NormalizeCoverPosition();
         var foregroundColor = ParseColor(settings.ForegroundColor);
         var primaryColor = ForegroundColorPolicy.CreatePrimaryColor(foregroundColor);
         var secondaryColor = ForegroundColorPolicy.CreateSecondaryColor(foregroundColor);
@@ -21,6 +22,8 @@ internal static class LyricsStyleScriptFactory
             layoutScalePercent = metrics.ScalePercent,
             fontSize = metrics.FontSize,
             showCover = settings.ShowCover,
+            coverPosition = settings.CoverPosition,
+            enableControlPanel = settings.EnableControlPanel && !settings.UseFloatingWindow,
             coverSize = metrics.CoverSize,
             coverGap = metrics.CoverGap,
             coverCornerRadius = metrics.CoverCornerRadius,

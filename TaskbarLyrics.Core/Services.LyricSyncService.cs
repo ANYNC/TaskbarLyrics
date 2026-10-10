@@ -10,11 +10,13 @@ public sealed class LyricSyncService : IDisposable
     public const string NoLyricsText = "暂未找到歌词";
     private static readonly TimeSpan StartupLineGuardPositionThreshold = TimeSpan.FromMilliseconds(500);
     private static readonly TimeSpan DefaultMetadataStabilizationDelay = TimeSpan.FromMilliseconds(750);
+    private static readonly TimeSpan[] NetworkRetryDelays = [TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(5)];
 
     private readonly ILyricResolutionCoordinator _coordinator;
     private readonly Func<string?, TimeSpan> _getPlayerLeadTime;
     private readonly Func<TrackInfo?, string?, TimeSpan> _getTrackLeadTime;
     private readonly TimeSpan _metadataStabilizationDelay;
+    private readonly TimeProvider _timeProvider;
     private TrackInfo? _currentTrack;
     private string? _currentTrackId;
     private LyricDocument? _currentDocument;
@@ -41,12 +43,14 @@ public sealed class LyricSyncService : IDisposable
         ILyricResolutionCoordinator coordinator,
         Func<string?, TimeSpan>? getPlayerLeadTime = null,
         Func<TrackInfo?, string?, TimeSpan>? getTrackLeadTime = null,
-        TimeSpan? metadataStabilizationDelay = null)
+        TimeSpan? metadataStabilizationDelay = null,
+        TimeProvider? timeProvider = null)
     {
         _coordinator = coordinator ?? throw new ArgumentNullException(nameof(coordinator));
         _getPlayerLeadTime = getPlayerLeadTime ?? (_ => TimeSpan.Zero);
         _getTrackLeadTime = getTrackLeadTime ?? ((_, _) => TimeSpan.Zero);
         _metadataStabilizationDelay = metadataStabilizationDelay ?? DefaultMetadataStabilizationDelay;
+        _timeProvider = timeProvider ?? TimeProvider.System;
         if (_metadataStabilizationDelay < TimeSpan.Zero)
         {
             throw new ArgumentOutOfRangeException(
@@ -257,7 +261,24 @@ public sealed class LyricSyncService : IDisposable
 
             searchTrack = track;
             _lastSearchDuration = NormalizeDuration(track.Duration);
-            var resolved = await _coordinator.ResolveAsync(track, cts.Token);
+            var result = await _coordinator.ResolveWithResultAsync(track, cts.Token);
+            for (var retry = 0; result.Lyrics is null &&
+                result.Status == LyricResolutionStatus.TransientFailure && retry < NetworkRetryDelays.Length; retry++)
+            {
+                if (cts.IsCancellationRequested || !ReferenceEquals(_searchCts, cts) || _currentTrackId != trackId) return;
+                var delay = NetworkRetryDelays[retry];
+                Log.Diagnostic("LYRIC_RETRY", $"Track='{trackId}' Attempt='{retry + 1}' DelayMs='{delay.TotalMilliseconds}' Reason='{result.Status}'.");
+                await Task.Delay(delay, _timeProvider, cts.Token);
+                if (cts.IsCancellationRequested || !ReferenceEquals(_searchCts, cts) || _currentTrackId != trackId) return;
+                // Use current metadata, including any duration that stabilized while waiting.
+                if (_currentTrack is not { } retryTrack) return;
+                track = retryTrack;
+                _lastSearchDuration = NormalizeDuration(track.Duration);
+                result = await _coordinator.ResolveWithResultAsync(track, cts.Token);
+            }
+            var resolved = result.Lyrics;
+            if (resolved is null)
+                Log.Diagnostic("LYRIC_RETRY", $"Track='{trackId}' State='Completed' Outcome='{result.Status}'.");
 
             if (cts.IsCancellationRequested || !ReferenceEquals(_searchCts, cts)) return;
             var document = resolved is null
@@ -294,7 +315,7 @@ public sealed class LyricSyncService : IDisposable
         catch (Exception exception)
         {
             Log.Warn($"Lyrics update failed for '{searchTrack?.Title}' - '{searchTrack?.Artist}': {exception}");
-            if (_currentTrackId == trackId)
+            if (!cts.IsCancellationRequested && ReferenceEquals(_searchCts, cts) && _currentTrackId == trackId)
             {
                 _currentLyricAcquisition = LyricAcquisitionKind.NotFound;
                 _currentLyricFetchElapsedMilliseconds = 0;

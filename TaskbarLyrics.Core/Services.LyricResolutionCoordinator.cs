@@ -89,12 +89,17 @@ public sealed class LyricResolutionCoordinator : ILyricResolutionCoordinator
 
     public async Task<ResolvedLyrics?> ResolveAsync(
         TrackInfo track,
+        CancellationToken cancellationToken = default) =>
+        (await ResolveWithResultAsync(track, cancellationToken)).Lyrics;
+
+    public async Task<LyricResolutionResult> ResolveWithResultAsync(
+        TrackInfo track,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(track);
         if (!TryEnterOperation())
         {
-            return null;
+            return new(null, LyricResolutionStatus.Unavailable);
         }
 
         using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(
@@ -113,13 +118,13 @@ public sealed class LyricResolutionCoordinator : ILyricResolutionCoordinator
                 string.Equals(track.Title, "Unknown Title", StringComparison.OrdinalIgnoreCase))
             {
                 LogSelection(requestId, null);
-                return null;
+                return LyricResolutionResult.FromLyrics(null);
             }
 
             if (TryGetCachedLyrics(track, selection, out var cachedLyrics))
             {
                 LogSelection(requestId, cachedLyrics);
-                return cachedLyrics;
+                return LyricResolutionResult.FromLyrics(cachedLyrics);
             }
 
             var mapping = _mappingResolver.Resolve(track);
@@ -141,7 +146,7 @@ public sealed class LyricResolutionCoordinator : ILyricResolutionCoordinator
             {
                 var pureMusic = CreateMappedPureMusic(mappedTrack);
                 LogSelection(requestId, pureMusic);
-                return pureMusic;
+                return LyricResolutionResult.FromLyrics(pureMusic);
             }
 
             if (!string.IsNullOrWhiteSpace(mapping.PreferredProvider) &&
@@ -153,8 +158,8 @@ public sealed class LyricResolutionCoordinator : ILyricResolutionCoordinator
                     mapping.PreferredProvider,
                     requestId,
                     token);
-                TryStoreAutomaticResolution(track, preferred, selection);
-                LogSelection(requestId, preferred);
+                TryStoreAutomaticResolution(track, preferred.Lyrics, selection);
+                LogSelection(requestId, preferred.Lyrics);
                 return preferred;
             }
 
@@ -162,18 +167,18 @@ public sealed class LyricResolutionCoordinator : ILyricResolutionCoordinator
             if (local is not null)
             {
                 LogSelection(requestId, local);
-                return local;
+                return LyricResolutionResult.FromLyrics(local);
             }
 
             var online = await ResolveOnlineAsync(mappedTrack, searchPlan, requestId, selection.Order, token);
-            TryStoreAutomaticResolution(track, online, selection);
-            LogSelection(requestId, online);
+            TryStoreAutomaticResolution(track, online.Lyrics, selection);
+            LogSelection(requestId, online.Lyrics);
             return online;
         }
         catch (OperationCanceledException) when (_lifetimeCancellation.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
         {
             Log.Diagnostic("LYRIC_PIPELINE", $"Request='{requestId}' State='Disposed'.");
-            return null;
+            return new(null, LyricResolutionStatus.Unavailable);
         }
         catch (OperationCanceledException)
         {
@@ -324,7 +329,7 @@ public sealed class LyricResolutionCoordinator : ILyricResolutionCoordinator
         TryDisposeResources();
     }
 
-    private async Task<ResolvedLyrics?> ResolvePreferredAsync(
+    private async Task<LyricResolutionResult> ResolvePreferredAsync(
         TrackInfo track,
         LyricSearchPlan searchPlan,
         string providerName,
@@ -334,7 +339,7 @@ public sealed class LyricResolutionCoordinator : ILyricResolutionCoordinator
         if (!_sources.TryGetValue(providerName, out var source))
         {
             Log.Warn($"Mapped preferred lyric provider '{providerName}' is not registered.");
-            return null;
+            return new(null, LyricResolutionStatus.Unavailable);
         }
 
         var outcome = await ResolveSourceWithTraceAsync(
@@ -343,7 +348,7 @@ public sealed class LyricResolutionCoordinator : ILyricResolutionCoordinator
             searchPlan,
             requestId,
             cancellationToken);
-        return outcome.Lyrics;
+        return SummarizeOutcomes([outcome]);
     }
 
     private async Task<ResolvedLyrics?> ResolveLocalAsync(
@@ -379,7 +384,7 @@ public sealed class LyricResolutionCoordinator : ILyricResolutionCoordinator
         }
     }
 
-    private async Task<ResolvedLyrics?> ResolveOnlineAsync(
+    private async Task<LyricResolutionResult> ResolveOnlineAsync(
         TrackInfo track,
         LyricSearchPlan searchPlan,
         string requestId,
@@ -388,7 +393,7 @@ public sealed class LyricResolutionCoordinator : ILyricResolutionCoordinator
     {
         if (trustOrder.Count == 0)
         {
-            return null;
+            return LyricResolutionResult.FromLyrics(null);
         }
 
         using var batchCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -414,11 +419,12 @@ public sealed class LyricResolutionCoordinator : ILyricResolutionCoordinator
                 primaryScore >= LyricMatchingPolicy.ImmediateAcceptanceScore)
             {
                 batchCancellation.Cancel();
-                return primaryOutcome.Lyrics;
+                return LyricResolutionResult.FromLyrics(primaryOutcome.Lyrics);
             }
         }
 
         var outcomes = new List<(LyricProviderId ProviderId, SourceOutcome Outcome)>();
+        var completedOutcomes = new List<SourceOutcome>();
         foreach (var providerId in trustOrder)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -427,6 +433,7 @@ public sealed class LyricResolutionCoordinator : ILyricResolutionCoordinator
             {
                 await outcome;
             }
+            completedOutcomes.Add(outcome.Result);
             if (outcome.Result is { State: LyricSourceTerminalState.Succeeded, Lyrics: not null } result)
             {
                 outcomes.Add((providerId, outcome.Result));
@@ -435,10 +442,22 @@ public sealed class LyricResolutionCoordinator : ILyricResolutionCoordinator
 
         if (outcomes.Count == 0)
         {
-            return null;
+            return SummarizeOutcomes(completedOutcomes);
         }
 
-        return SelectBestOutcome(outcomes, trustOrder);
+        return LyricResolutionResult.FromLyrics(SelectBestOutcome(outcomes, trustOrder));
+    }
+
+    private static LyricResolutionResult SummarizeOutcomes(IReadOnlyList<SourceOutcome> outcomes)
+    {
+        var succeeded = outcomes.FirstOrDefault(outcome => outcome.Lyrics is not null);
+        if (succeeded is not null) return LyricResolutionResult.FromLyrics(succeeded.Lyrics);
+        var status = outcomes.Any(outcome => outcome.IsTransientFailure)
+            ? LyricResolutionStatus.TransientFailure
+            : outcomes.Any(outcome => outcome.State is LyricSourceTerminalState.Failed or LyricSourceTerminalState.InvalidContent)
+                ? LyricResolutionStatus.Failed
+                : LyricResolutionStatus.NotFound;
+        return new(null, status);
     }
 
     private static ResolvedLyrics SelectBestOutcome(
@@ -562,7 +581,11 @@ public sealed class LyricResolutionCoordinator : ILyricResolutionCoordinator
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && timeout.IsCancellationRequested)
         {
-            return new SourceOutcome(source.ProviderId, LyricSourceTerminalState.TimedOut, null, "source-timeout");
+            return new SourceOutcome(source.ProviderId, LyricSourceTerminalState.TimedOut, null, "source-timeout", true);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return new SourceOutcome(source.ProviderId, LyricSourceTerminalState.TimedOut, null, "request-timeout", true);
         }
         catch (OperationCanceledException)
         {
@@ -571,7 +594,8 @@ public sealed class LyricResolutionCoordinator : ILyricResolutionCoordinator
         catch (Exception exception)
         {
             Log.Warn($"Lyric request '{requestId}' source '{source.ProviderId}' failed: {exception.Message}");
-            return new SourceOutcome(source.ProviderId, LyricSourceTerminalState.Failed, null, exception.GetType().Name);
+            return new SourceOutcome(source.ProviderId, LyricSourceTerminalState.Failed, null,
+                exception.GetType().Name, LyricTransientFailurePolicy.IsTransient(exception));
         }
         finally
         {
@@ -733,7 +757,7 @@ public sealed class LyricResolutionCoordinator : ILyricResolutionCoordinator
     {
         Log.Diagnostic(
             "LYRIC_PIPELINE",
-            $"Request='{requestId}' Provider='{outcome.ProviderId}' TerminalState='{outcome.State}' Detail='{outcome.Detail ?? "none"}' Selected='{outcome.Lyrics is not null}'.");
+            $"Request='{requestId}' Provider='{outcome.ProviderId}' TerminalState='{outcome.State}' Detail='{outcome.Detail ?? "none"}' Retryable='{outcome.IsTransientFailure}' Selected='{outcome.Lyrics is not null}'.");
         Trace(sink => sink.SourceCompleted(new LyricResolutionSourceTrace(
             requestId,
             outcome.ProviderId,
@@ -861,7 +885,8 @@ public sealed class LyricResolutionCoordinator : ILyricResolutionCoordinator
         LyricProviderId ProviderId,
         LyricSourceTerminalState State,
         ResolvedLyrics? Lyrics,
-        string? Detail);
+        string? Detail,
+        bool IsTransientFailure = false);
 
     private sealed record CandidateResolution(ResolvedLyrics? Lyrics, bool InvalidContent)
     {

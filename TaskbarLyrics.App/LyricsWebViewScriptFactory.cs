@@ -60,6 +60,9 @@ internal static class LyricsWebViewScriptFactory
         return WebViewMessageScriptFactory.Dispatch("taskbarLyrics", "spectrum", values);
     }
 
+    public static string SetControlPanelOpen(bool open) =>
+        WebViewMessageScriptFactory.Dispatch("taskbarLyrics", "controlPanelState", new { open });
+
     public static string SetSpectrumTuning(SpectrumTuningSettings settings)
     {
         var payload = new
