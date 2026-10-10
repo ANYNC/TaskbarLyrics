@@ -2,6 +2,10 @@
 
 本文只讲三件事：**怎么拿 songid → 怎么取歌词 → 怎么生成歌词文件**。文末附完整可运行代码。
 
+TaskbarLyrics 当前还支持精确身份路径：播放器提供数字 songid 时直接下载；提供字母 songmid 时先请求 `https://c.y.qq.com/v8/fcg-bin/fcg_play_single_song.fcg`（POST 表单，`songmid`、`tpl=yqq_song_detail`、`format=jsonp`、`callback` 和 `jsonpCallback` 均为 `getOneSongInfoCallback` 及公共参数），只接受返回 mid 与请求值一致的正数字 id。转换失败才按标题、歌手搜索；数字直连需要 LRC 兜底时，也可用该接口按 songid 补查 mid。
+
+应用对原文和译文分别解密、解包，并验证原文能解析；主歌词为空或损坏时按同歌曲 mid 取普通 LRC，取消请求不进入回退。HTTP/业务错误、畸形响应与真正无歌词分别处理。下面的独立脚本用于接口演示，不包含应用的完整取消、恢复和缓存策略。
+
 整体流程：
 
 ```

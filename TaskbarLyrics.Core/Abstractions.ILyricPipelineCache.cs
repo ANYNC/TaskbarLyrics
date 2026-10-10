@@ -12,6 +12,8 @@ public interface ILyricPipelineCache
 
     void StoreRaw(RawLyricPayload payload, DateTimeOffset fetchedAtUtc);
 
+    void Invalidate(LyricProviderId providerId, string candidateId);
+
     bool TryGetParsed(
         RawLyricPayload rawPayload,
         string parserId,

@@ -1,11 +1,13 @@
 using Lyricify.Lyrics.Models;
 using Lyricify.Lyrics.Parsers;
+using System.Text.RegularExpressions;
 using TaskbarLyrics.Core.Abstractions;
 using TaskbarLyrics.Core.Models;
+using TaskbarLyrics.Core.Utilities;
 
 namespace TaskbarLyrics.Core.Services;
 
-public sealed class LyricifyPayloadParser : ILyricPayloadParser
+public sealed partial class LyricifyPayloadParser : ILyricPayloadParser
 {
     public const string InformationLineStartTimesDiagnostic = "informationLineStartTimesMs";
 
@@ -51,7 +53,14 @@ public sealed class LyricifyPayloadParser : ILyricPayloadParser
             : ConvertLines(ParseExplicit(payload.Format, payload.OriginalLyrics).Lines);
         if (!string.IsNullOrWhiteSpace(payload.TranslationLyrics))
         {
-            lines = ApplyLrcTranslations(lines, payload.TranslationLyrics);
+            try
+            {
+                lines = ApplyTranslations(lines, payload.TranslationLyrics);
+            }
+            catch (Exception exception) when (exception is FormatException or ArgumentException or IndexOutOfRangeException)
+            {
+                Log.Warn($"Lyric translation rejected. Provider='{payload.ProviderId}' Candidate='{payload.CandidateId}' Error='{exception.Message}'");
+            }
         }
 
         lines = ApplyInformationLineMarkers(lines, payload.Diagnostics);
@@ -175,11 +184,13 @@ public sealed class LyricifyPayloadParser : ILyricPayloadParser
             : null;
     }
 
-    private static List<ParsedLyricLine> ApplyLrcTranslations(
+    private static List<ParsedLyricLine> ApplyTranslations(
         IReadOnlyList<ParsedLyricLine> originalLines,
         string translationContent)
     {
-        var translationLines = ParseLrcLines(translationContent);
+        var translationLines = QrcTimingRegex().IsMatch(translationContent)
+            ? ConvertLines(QrcParser.Parse(translationContent).Lines)
+            : ParseLrcLines(translationContent);
         return originalLines
             .Select(line =>
             {
@@ -334,6 +345,9 @@ public sealed class LyricifyPayloadParser : ILyricPayloadParser
     }
 
     private static TimeSpan Max(TimeSpan left, TimeSpan right) => left >= right ? left : right;
+
+    [GeneratedRegex(@"^\s*\[\d+,\d+\]", RegexOptions.Multiline)]
+    private static partial Regex QrcTimingRegex();
 
     private static string NormalizeLineText(string text)
     {

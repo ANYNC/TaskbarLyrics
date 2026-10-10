@@ -259,6 +259,10 @@ public sealed class ResolvedLyricCacheCoordinatorTests
         {
         }
 
+        public void Invalidate(LyricProviderId providerId, string candidateId)
+        {
+        }
+
         public bool TryGetParsed(
             RawLyricPayload rawPayload,
             string parserId,

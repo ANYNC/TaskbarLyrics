@@ -9,6 +9,7 @@ internal static class LyricTransientFailurePolicy
 {
     public static bool IsTransient(Exception exception) => exception switch
     {
+        QqMusicApiException qq => qq.IsTransient,
         TimeoutException => true,
         SocketException socket => socket.SocketErrorCode is
             SocketError.HostNotFound or SocketError.TryAgain or SocketError.NoData or

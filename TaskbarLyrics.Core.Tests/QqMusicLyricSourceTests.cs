@@ -281,7 +281,7 @@ public sealed class QqMusicLyricSourceTests
     private static SearchQueryVariant CreateVariant() =>
         new("exact", "嘘月", ["ヨルシカ"], "創作", TimeSpan.FromSeconds(290), []);
 
-    private static string ReadFixture(string fileName)
+    internal static string ReadFixture(string fileName)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
         while (directory is not null &&

@@ -97,6 +97,13 @@ public sealed class LyricPipelineCache : ILyricPipelineCache
         _rawStore.Store(BuildKey(payload.ProviderId, payload.CandidateId), envelope);
     }
 
+    public void Invalidate(LyricProviderId providerId, string candidateId)
+    {
+        var key = BuildKey(providerId, candidateId);
+        _rawStore.Remove(key);
+        _parsedStore.Remove(key);
+    }
+
     public bool TryGetParsed(
         RawLyricPayload rawPayload,
         string parserId,

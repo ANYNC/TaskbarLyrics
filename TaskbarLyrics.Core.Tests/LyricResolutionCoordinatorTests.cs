@@ -7,6 +7,85 @@ namespace TaskbarLyrics.Core.Tests;
 
 public sealed class LyricResolutionCoordinatorTests
 {
+    [Fact]
+    public async Task InvalidCachedQrcIsRemovedAndRefetchedWithinTheSameRequest()
+    {
+        var source = CreateValidSource(KnownLyricProviders.QQMusic);
+        var cache = new RecordingCache();
+        var track = CreateTrack("Corrupted Cache");
+        var candidate = CreateCandidate(source.ProviderId,
+            LyricSearchPlanner.CreatePlan(TrackIdentity.FromTrackInfo(track)));
+        cache.StoreRaw(new RawLyricPayload(source.ProviderId, candidate.CandidateId,
+            LyricPayloadFormat.Qrc, "AA", null, true, false, new Dictionary<string, string>()),
+            DateTimeOffset.UtcNow);
+        using var coordinator = new LyricResolutionCoordinator(
+            [source], [new LyricifyPayloadDecoder()],
+            [new PlainTextParser(), new LyricifyPayloadParser()], cache,
+            trustPolicy: new LyricProviderTrustPolicy([source.ProviderId], [source.ProviderId]));
+
+        var result = await coordinator.ResolveWithResultAsync(track);
+
+        Assert.Equal(LyricResolutionStatus.Succeeded, result.Status);
+        Assert.Equal(1, source.FetchCalls);
+        Assert.True(cache.TryGetRaw(source.ProviderId, candidate.CandidateId, out var raw, out _));
+        Assert.Equal(LyricPayloadFormat.PlainText, raw!.Format);
+    }
+
+    [Fact]
+    public async Task InvalidRemotePayloadIsNotCachedAndNextRequestCanRecover()
+    {
+        var source = CreateValidSource(KnownLyricProviders.QQMusic);
+        var validFetch = source.FetchHandler;
+        source.FetchHandler = (candidate, token) => source.FetchCalls == 1
+            ? Task.FromResult<RawLyricPayload?>(new RawLyricPayload(source.ProviderId,
+                candidate.CandidateId, LyricPayloadFormat.Qrc, "AA", null,
+                true, false, new Dictionary<string, string>()))
+            : validFetch(candidate, token);
+        var cache = new RecordingCache();
+        using var coordinator = new LyricResolutionCoordinator(
+            [source], [new LyricifyPayloadDecoder()],
+            [new PlainTextParser(), new LyricifyPayloadParser()], cache,
+            trustPolicy: new LyricProviderTrustPolicy([source.ProviderId], [source.ProviderId]));
+        var track = CreateTrack("Remote Recovery");
+        var candidate = CreateCandidate(source.ProviderId,
+            LyricSearchPlanner.CreatePlan(TrackIdentity.FromTrackInfo(track)));
+
+        Assert.Null((await coordinator.ResolveWithResultAsync(track)).Lyrics);
+        Assert.False(cache.TryGetRaw(source.ProviderId, candidate.CandidateId, out _, out _));
+        Assert.Equal(LyricResolutionStatus.Succeeded,
+            (await coordinator.ResolveWithResultAsync(track)).Status);
+        Assert.Equal(2, source.FetchCalls);
+    }
+
+    [Fact]
+    public async Task ExistingQqRawCacheIsReparsedWithNewTranslationRulesWithoutNetwork()
+    {
+        var source = CreateValidSource(KnownLyricProviders.QQMusic);
+        source.FetchHandler = (_, _) => throw new InvalidOperationException("Valid raw cache must remain reusable.");
+        var track = CreateTrack("Translation Cache");
+        var candidate = CreateCandidate(source.ProviderId,
+            LyricSearchPlanner.CreatePlan(TrackIdentity.FromTrackInfo(track)));
+        var raw = QqMusicResponseMapper.MapLyricDownload(candidate,
+            QqMusicLyricSourceTests.ReadFixture("qq-lyric-download.xml"))!;
+        var cache = new RecordingCache();
+        cache.StoreRaw(raw, DateTimeOffset.UtcNow);
+        cache.StoreParsed(raw, new ParsedLyrics(
+            [new ParsedLyricLine(TimeSpan.Zero, null, "stale")],
+            LyricTimingKind.LineTimed, LyricTimingProvenance.ProviderSupplied, LyricPayloadFormat.Qrc),
+            typeof(LyricifyPayloadParser).FullName!,
+            typeof(LyricifyPayloadParser).Assembly.GetName().Version!.ToString(), "2");
+        using var coordinator = new LyricResolutionCoordinator(
+            [source], [new LyricifyPayloadDecoder()], [new LyricifyPayloadParser()], cache,
+            trustPolicy: new LyricProviderTrustPolicy([source.ProviderId], [source.ProviderId]));
+
+        var result = await coordinator.ResolveAsync(track);
+
+        Assert.NotNull(result);
+        Assert.Equal(10, result.Content.Lines.Count);
+        Assert.Contains(result.Content.Lines, line => line.Translation == "它们的作用是把氢变成可呼吸的氧气");
+        Assert.Equal(0, source.FetchCalls);
+    }
+
     [Theory]
     [InlineData(false, LyricResolutionStatus.Failed)]
     [InlineData(true, LyricResolutionStatus.TransientFailure)]
@@ -862,6 +941,19 @@ public sealed class LyricResolutionCoordinatorTests
             lock (_syncRoot)
             {
                 _raw[GetRawKey(payload.ProviderId, payload.CandidateId)] = payload;
+            }
+        }
+
+        public void Invalidate(LyricProviderId providerId, string candidateId)
+        {
+            lock (_syncRoot)
+            {
+                var key = GetRawKey(providerId, candidateId);
+                _raw.Remove(key);
+                foreach (var parsedKey in _parsed.Keys.Where(value => value.StartsWith(key + "\u001f", StringComparison.Ordinal)).ToArray())
+                {
+                    _parsed.Remove(parsedKey);
+                }
             }
         }
 

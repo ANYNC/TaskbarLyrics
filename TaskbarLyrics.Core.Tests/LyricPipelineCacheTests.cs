@@ -6,6 +6,29 @@ namespace TaskbarLyrics.Core.Tests;
 
 public sealed class LyricPipelineCacheTests
 {
+    [Fact]
+    public void InvalidationRemovesOnlyTheRejectedCandidatesRawAndParsedEntries()
+    {
+        var rawStore = new InMemoryLyricCacheStore<RawLyricCacheEnvelope>();
+        var parsedStore = new InMemoryLyricCacheStore<ParsedLyricCacheEnvelope>();
+        var cache = new LyricPipelineCache(rawStore, parsedStore);
+        foreach (var id in new[] { "bad", "keep" })
+        {
+            var raw = CreateRawPayload(LyricPayloadFormat.Qrc, id);
+            cache.StoreRaw(raw, DateTimeOffset.UtcNow);
+            cache.StoreParsed(raw, CreateParsedLyrics(LyricPayloadFormat.Qrc, LyricTimingKind.WordTimed),
+                "parser", "1", "1");
+        }
+
+        cache.Invalidate(KnownLyricProviders.QQMusic, "bad");
+
+        Assert.False(cache.TryGetRaw(KnownLyricProviders.QQMusic, "bad", out _, out _));
+        Assert.True(cache.TryGetRaw(KnownLyricProviders.QQMusic, "keep", out var keep, out _));
+        Assert.True(cache.TryGetParsed(keep!, "parser", "1", "1", out _, out _));
+        Assert.Equal(["QQMusic:bad"], rawStore.RemovedKeys);
+        Assert.Equal(["QQMusic:bad"], parsedStore.RemovedKeys);
+    }
+
     [Theory]
     [InlineData(LyricPayloadFormat.Qrc, LyricTimingKind.WordTimed)]
     [InlineData(LyricPayloadFormat.Krc, LyricTimingKind.WordTimed)]

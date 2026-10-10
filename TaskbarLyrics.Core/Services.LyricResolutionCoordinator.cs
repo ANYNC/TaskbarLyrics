@@ -611,95 +611,105 @@ public sealed class LyricResolutionCoordinator : ILyricResolutionCoordinator
     {
         var candidate = admission.Candidate;
         var stopwatch = Stopwatch.StartNew();
-        RawLyricPayload? rawPayload;
-        LyricAcquisitionKind acquisition;
-        if (!_cache.TryGetRaw(source.ProviderId, candidate.CandidateId, out rawPayload, out acquisition))
+        // QQ 解码行为改变时只失效它的解析结果，已有原始载荷和其他源仍可复用。
+        var normalizationVersion = source.ProviderId == KnownLyricProviders.QQMusic
+            ? NormalizationVersion + "-qq-2"
+            : NormalizationVersion;
+        for (var attempt = 0; attempt < 2; attempt++)
         {
-            rawPayload = await source.FetchAsync(candidate, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            var fromCache = _cache.TryGetRaw(source.ProviderId, candidate.CandidateId,
+                out var rawPayload, out var acquisition);
+            if (!fromCache)
+            {
+                rawPayload = await source.FetchAsync(candidate, cancellationToken).ConfigureAwait(false);
+                acquisition = LyricAcquisitionKind.Remote;
+            }
+
             if (rawPayload is null)
             {
                 return CandidateResolution.NoLyrics;
             }
 
-            acquisition = LyricAcquisitionKind.Remote;
-            _cache.StoreRaw(rawPayload, DateTimeOffset.UtcNow);
-        }
-
-        if (rawPayload is null ||
-            rawPayload.ProviderId != source.ProviderId ||
-            !string.Equals(rawPayload.CandidateId, candidate.CandidateId, StringComparison.Ordinal))
-        {
-            return CandidateResolution.Invalid;
-        }
-
-        var parser = _parsers.FirstOrDefault(candidateParser => candidateParser.CanParse(rawPayload.Format));
-        if (parser is null)
-        {
-            return CandidateResolution.Invalid;
-        }
-
-        var parserId = parser.GetType().FullName ?? parser.GetType().Name;
-        var parserVersion = parser.GetType().Assembly.GetName().Version?.ToString() ?? "0";
-        if (!_cache.TryGetParsed(
-                rawPayload,
-                parserId,
-                parserVersion,
-                NormalizationVersion,
-                out var parsed,
-                out var parsedAcquisition))
-        {
+            ParsedLyrics? parsed;
             try
             {
-                var decoded = await DecodeAsync(rawPayload, cancellationToken);
-                if (decoded.ProviderId != source.ProviderId ||
-                    !string.Equals(decoded.CandidateId, candidate.CandidateId, StringComparison.Ordinal))
+                if (rawPayload.ProviderId != source.ProviderId ||
+                    !string.Equals(rawPayload.CandidateId, candidate.CandidateId, StringComparison.Ordinal))
                 {
-                    return CandidateResolution.Invalid;
+                    throw new FormatException("Lyric payload identity does not match the candidate.");
                 }
 
-                parsed = await parser.ParseAsync(decoded, cancellationToken);
+                var parser = _parsers.FirstOrDefault(candidateParser => candidateParser.CanParse(rawPayload.Format)) ??
+                             throw new NotSupportedException("No parser is registered for this lyric payload.");
+                var parserId = parser.GetType().FullName ?? parser.GetType().Name;
+                var parserVersion = parser.GetType().Assembly.GetName().Version?.ToString() ?? "0";
+                if (!_cache.TryGetParsed(rawPayload, parserId, parserVersion, normalizationVersion,
+                        out parsed, out var parsedAcquisition))
+                {
+                    var decoded = await DecodeAsync(rawPayload, cancellationToken).ConfigureAwait(false);
+                    if (decoded.ProviderId != source.ProviderId ||
+                        !string.Equals(decoded.CandidateId, candidate.CandidateId, StringComparison.Ordinal))
+                    {
+                        throw new FormatException("Decoded lyric identity does not match the candidate.");
+                    }
+
+                    parsed = await parser.ParseAsync(decoded, cancellationToken).ConfigureAwait(false);
+                    if (parsed.Lines.Count == 0 && !parsed.IsPureMusic)
+                    {
+                        throw new FormatException("Lyric payload has no usable lines.");
+                    }
+
+                    if (!fromCache)
+                    {
+                        _cache.StoreRaw(rawPayload, DateTimeOffset.UtcNow);
+                    }
+
+                    _cache.StoreParsed(rawPayload, parsed, parserId, parserVersion, normalizationVersion);
+                }
+                else
+                {
+                    acquisition = parsedAcquisition;
+                    if (parsed is null || (parsed.Lines.Count == 0 && !parsed.IsPureMusic))
+                    {
+                        throw new FormatException("Cached lyrics have no usable lines.");
+                    }
+                }
             }
             catch (Exception exception) when (exception is FormatException or NotSupportedException or ArgumentException)
             {
+                _cache.Invalidate(source.ProviderId, candidate.CandidateId);
                 Log.Warn($"Lyric payload rejected. Request='{requestId}' Provider='{source.ProviderId}' Candidate='{candidate.CandidateId}' Format='{rawPayload.Format}' Error='{exception.Message}'");
+                if (fromCache && attempt == 0)
+                {
+                    continue;
+                }
+
                 return CandidateResolution.Invalid;
             }
 
-            if (parsed.Lines.Count == 0 && !parsed.IsPureMusic)
+            var diagnostics = new Dictionary<string, string>(rawPayload.Diagnostics, StringComparer.Ordinal)
             {
-                return CandidateResolution.Invalid;
-            }
-
-            _cache.StoreParsed(rawPayload, parsed, parserId, parserVersion, NormalizationVersion);
+                ["requestId"] = requestId,
+                ["queryVariant"] = candidate.QueryVariantId,
+                ["identityScore"] = admission.Evaluation.Score.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                ["format"] = rawPayload.Format.ToString(),
+                ["elapsedMs"] = stopwatch.ElapsedMilliseconds.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            };
+            return new CandidateResolution(
+                new ResolvedLyrics(parsed!, source.ProviderId, candidate.CandidateId, acquisition, diagnostics), false);
         }
-        else
-        {
-            acquisition = parsedAcquisition;
-        }
 
-        var diagnostics = new Dictionary<string, string>(rawPayload.Diagnostics, StringComparer.Ordinal)
-        {
-            ["requestId"] = requestId,
-            ["queryVariant"] = candidate.QueryVariantId,
-            ["identityScore"] = admission.Evaluation.Score.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            ["format"] = rawPayload.Format.ToString(),
-            ["elapsedMs"] = stopwatch.ElapsedMilliseconds.ToString(System.Globalization.CultureInfo.InvariantCulture)
-        };
-        return new CandidateResolution(
-            new ResolvedLyrics(
-                parsed!,
-                source.ProviderId,
-                candidate.CandidateId,
-                acquisition,
-                diagnostics),
-            false);
+        return CandidateResolution.Invalid;
     }
 
     private async Task<DecodedLyricPayload> DecodeAsync(
         RawLyricPayload payload,
         CancellationToken cancellationToken)
     {
-        if (!payload.IsEncrypted)
+        if (!payload.IsEncrypted &&
+            (payload.ProviderId != KnownLyricProviders.QQMusic ||
+             !QqMusicResponseMapper.IsHexPayload(payload.TranslationLyrics)))
         {
             return new DecodedLyricPayload(
                 payload.ProviderId,

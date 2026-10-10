@@ -518,6 +518,10 @@ internal sealed class NoOpLyricPipelineCache : ILyricPipelineCache
     {
     }
 
+    public void Invalidate(LyricProviderId providerId, string candidateId)
+    {
+    }
+
     public bool TryGetParsed(
         RawLyricPayload rawPayload,
         string parserId,

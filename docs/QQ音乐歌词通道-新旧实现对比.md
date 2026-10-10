@@ -1,4 +1,6 @@
-# QQ 音乐歌词通道：新旧实现对比与旧版失效分析
+# QQ 音乐歌词通道：PR #61 首版对比与旧版失效分析
+
+本文保留 PR #61 首版的接口对比和当时的网络实测记录。合并后的链路修补以 `docs/工程变更记录.md` 中「QQ 音乐歌词链路容错与精确身份补齐」为准：songmid 优先精确转换，原文与译文分别解密，坏 QRC 回退同歌曲 LRC，解析成功后才写入新缓存。下文的「新实现」特指 PR 首版。
 
 - 对比对象：TaskbarLyrics `main`（改动前，基于 Lyricify 0.2.0 封装） vs 本次改动（Core 内自持传输层）
 - 测试时间：2026-10-10，同一台机器、同一出口 IP、同一时段
@@ -16,7 +18,7 @@
 
 | 环节 | 旧实现 |
 | --- | --- |
-| 搜索 | `ProviderHelper.QQMusicApi.Search(...)` → POST `https://u.y.qq.com/cgi-bin/musicu.fcg`，body 只有 `req_1`（`DoSearchForQQMusicDesktop` / `music.search.SearchCgiService`）；请求头为 Chrome 63 的 UA 与 `Referer: https://c.y.qq.com/`，无 cookie、无签名、无 `comm` 块；结果取 `Req_1.Data.Body.Song.List` |
+| 搜索 | `ProviderHelper.QQMusicApi.Search(...)` → POST `https://u.y.qq.com/cgi-bin/musicu.fcg`，body 只有 `req_1`（`DoSearchForQQMusicDesktop` / `music.search.SearchCgiService`）；请求头为 Chrome 63 的 UA 与 `Referer: https://c.y.qq.com/`，库默认携带通用 Cookie（网易云客户端字段），无 QQ 登录 Cookie、无签名、无 `comm` 块；结果取 `Req_1.Data.Body.Song.List` |
 | 候选 | `CandidateId = song.Id`（数字 songid），`songmid` 存入 `FetchMetadata["mid"]` |
 | 歌词 | `ProviderHelper.QQMusicApi.GetLyricsAsync(id)` → POST `lyric_download.fcg`（`version=15&miniversion=82&lrctype=4&musicid=<id>`）；Lyricify 内部完成：剥 `<!--`/`-->` → XmlDocument → 找 `content`/`contentts`/`contentroma` → 对 hex 用自实现 3DES + inflate 解密 → 解压结果是 `QrcInfos` XML → 取 `Lyric_1` 的 `LyricContent` → 返回明文 QRC 文本；因此载荷被标记为**未加密** |
 | 兜底 | `ProviderHelper.QQMusicApi.GetLyric(mid)` → POST `lyric/fcgi-bin/fcg_query_lyric_new.fcg`，Lyricify 解析 JSONP + base64 → 普通 LRC |

@@ -345,6 +345,19 @@ public sealed class LyricResolutionTraceTests
             }
         }
 
+        public void Invalidate(LyricProviderId providerId, string candidateId)
+        {
+            lock (_syncRoot)
+            {
+                var key = Key(providerId, candidateId);
+                _raw.Remove(key);
+                foreach (var parsedKey in _parsed.Keys.Where(value => value.StartsWith(key + "\u001f", StringComparison.Ordinal)).ToArray())
+                {
+                    _parsed.Remove(parsedKey);
+                }
+            }
+        }
+
         public bool TryGetParsed(
             RawLyricPayload rawPayload,
             string parserId,
