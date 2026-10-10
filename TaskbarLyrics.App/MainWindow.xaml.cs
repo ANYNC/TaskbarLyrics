@@ -414,7 +414,7 @@ public partial class MainWindow : Window, IDisposable
 
         if (_controlPanelWindow is { IsVisible: true })
         {
-            CloseControlPanel();
+            CloseControlPanel(animate: true);
             return;
         }
 
@@ -435,7 +435,7 @@ public partial class MainWindow : Window, IDisposable
         setExpanded(true);
     }
 
-    internal void CloseControlPanel() => _controlPanelWindow?.HidePanel();
+    internal void CloseControlPanel(bool animate = false) => _controlPanelWindow?.HidePanel(immediate: !animate);
 
     private LyricsControlPanelWindow CreateControlPanelWindow()
     {

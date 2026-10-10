@@ -17,6 +17,8 @@ public partial class LyricsControlPanelWindow : Window
 {
     private const double SlideDurationMs = 220;
     private const double SlideDistanceDip = 20;
+    private const double ExitSlideDurationMs = 150;
+    private const double ExitSlideDistanceDip = 12;
     private readonly Action<MediaHotkeyAction> _executeAction;
     private readonly Action _openSettings;
     private readonly Action _toggleTranslation;
@@ -41,6 +43,7 @@ public partial class LyricsControlPanelWindow : Window
     private TimeSpan _duration;
     private DateTimeOffset _lastTimelinePushUtc;
     private bool _isSliding;
+    private bool _isExitSlide;
     private long _slideStartedAt;
     private int _slideX;
     private int _slideFromY;
@@ -173,17 +176,38 @@ public partial class LyricsControlPanelWindow : Window
         }
         catch
         {
-            HidePanel();
+            HidePanel(immediate: true);
             _initialization = null;
             throw;
         }
     }
 
-    internal void HidePanel()
+    internal void HidePanel(bool immediate = false)
     {
+        if (_isExitSlide && !immediate)
+        {
+            return;
+        }
+
         ++_showVersion;
-        StopSlide();
         _canDismissOnDeactivate = false;
+        StopSlide();
+        if (!IsVisible)
+        {
+            return;
+        }
+
+        if (immediate || _isDisposed || !_isWebReady || Left < -10000)
+        {
+            FinishHidePanel();
+            return;
+        }
+
+        StartExitSlide();
+    }
+
+    private void FinishHidePanel()
+    {
         if (!IsVisible)
         {
             return;
@@ -269,11 +293,32 @@ public partial class LyricsControlPanelWindow : Window
 
     private void StartSlide(Point target, int slideDistance)
     {
+        _isExitSlide = false;
         _slideX = (int)Math.Round(target.X);
         _slideToY = (int)Math.Round(target.Y);
         _slideFromY = _slideToY + slideDistance;
         _slideLastY = _slideFromY;
         _slideStartedAt = Stopwatch.GetTimestamp();
+        _isSliding = true;
+        CompositionTarget.Rendering += OnSlideFrame;
+    }
+
+    private void StartExitSlide()
+    {
+        var hwnd = new WindowInteropHelper(this).Handle;
+        var pixelsPerDip = TaskbarNativeMethods.GetDpiForWindow(hwnd) / 96.0;
+        if (pixelsPerDip <= 0)
+        {
+            pixelsPerDip = 1;
+        }
+
+        var current = PointToScreen(new Point(0, 0));
+        _slideX = (int)Math.Round(current.X);
+        _slideFromY = (int)Math.Round(current.Y);
+        _slideToY = _slideFromY + Math.Max(1, (int)Math.Round(ExitSlideDistanceDip * pixelsPerDip));
+        _slideLastY = _slideFromY;
+        _slideStartedAt = Stopwatch.GetTimestamp();
+        _isExitSlide = true;
         _isSliding = true;
         CompositionTarget.Rendering += OnSlideFrame;
     }
@@ -286,8 +331,9 @@ public partial class LyricsControlPanelWindow : Window
             return;
         }
 
-        var progress = Math.Clamp(Stopwatch.GetElapsedTime(_slideStartedAt).TotalMilliseconds / SlideDurationMs, 0, 1);
-        var eased = 1 - Math.Pow(1 - progress, 3);
+        var duration = _isExitSlide ? ExitSlideDurationMs : SlideDurationMs;
+        var progress = Math.Clamp(Stopwatch.GetElapsedTime(_slideStartedAt).TotalMilliseconds / duration, 0, 1);
+        var eased = _isExitSlide ? progress * progress : 1 - Math.Pow(1 - progress, 3);
         var y = progress >= 1
             ? _slideToY
             : (int)Math.Round(_slideFromY + ((_slideToY - _slideFromY) * eased));
@@ -304,19 +350,24 @@ public partial class LyricsControlPanelWindow : Window
 
         if (progress >= 1)
         {
+            var wasExiting = _isExitSlide;
             StopSlide();
+            if (wasExiting)
+            {
+                FinishHidePanel();
+            }
         }
     }
 
     private void StopSlide()
     {
-        if (!_isSliding)
+        if (_isSliding)
         {
-            return;
+            CompositionTarget.Rendering -= OnSlideFrame;
+            _isSliding = false;
         }
 
-        CompositionTarget.Rendering -= OnSlideFrame;
-        _isSliding = false;
+        _isExitSlide = false;
     }
 
     private void PushSnapshot()
@@ -382,6 +433,11 @@ public partial class LyricsControlPanelWindow : Window
 
     private void OnWebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
     {
+        if (_isExitSlide)
+        {
+            return;
+        }
+
         try
         {
             var message = WebViewMessageRouter.Parse(e.TryGetWebMessageAsString());
@@ -396,7 +452,7 @@ public partial class LyricsControlPanelWindow : Window
                     HidePanel();
                     break;
                 case LyricsControlPanelCommandKind.OpenSettings:
-                    HidePanel();
+                    HidePanel(immediate: true);
                     _openSettings();
                     break;
                 case LyricsControlPanelCommandKind.ToggleTranslation:
