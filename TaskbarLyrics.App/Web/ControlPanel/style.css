@@ -131,7 +131,7 @@ button:disabled, input:disabled { opacity: .4; cursor: default; }
   color: var(--text);
 }
 .icon-button:not(:disabled):hover { background: var(--hover); }
-.icon-button:not(:disabled):active, #playPause:not(:disabled):active { transform: scale(.94); }
+.icon-button:not(:disabled):active svg { transform: scale(.94); }
 .icon-button svg {
   width: 20px;
   height: 20px;
@@ -161,8 +161,10 @@ button:disabled, input:disabled { opacity: .4; cursor: default; }
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+.actions button svg { pointer-events: none; }
 .actions .icon-button .skip-triangle { fill: currentColor; stroke: none; }
 .actions #playPause {
+  position: relative;
   display: grid;
   place-items: center;
   width: 36px;
@@ -170,10 +172,21 @@ button:disabled, input:disabled { opacity: .4; cursor: default; }
   padding: 0;
   border: 0;
   border-radius: 50%;
-  background: var(--button);
+  background: transparent;
   color: var(--button-text);
 }
-.actions #playPause:hover:not(:disabled) { filter: brightness(.92); }
+.actions #playPause::before {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--button);
+  pointer-events: none;
+  content: "";
+}
+.actions #playPause svg { position: relative; }
+.actions #playPause:hover:not(:disabled)::before { filter: brightness(.92); }
+.actions #playPause:active:not(:disabled)::before,
+.actions #playPause:active:not(:disabled) svg { transform: scale(.94); }
 #playPause #playIcon path { fill: currentColor; stroke: none; }
 #playPause svg[hidden] { display: none; }
 
