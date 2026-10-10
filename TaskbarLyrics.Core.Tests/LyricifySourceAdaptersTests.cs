@@ -7,56 +7,6 @@ namespace TaskbarLyrics.Core.Tests;
 public sealed class LyricifySourceAdaptersTests
 {
     [Fact]
-    public void QqMappingPreservesCandidateIdentityAndPrefersQrcPayload()
-    {
-        var song = new Lyricify.Lyrics.Providers.Web.QQMusic.Song
-        {
-            Id = "qq-id",
-            Mid = "qq-mid",
-            Title = "Song",
-            Interval = 180,
-            Album = new Lyricify.Lyrics.Providers.Web.QQMusic.Album { Name = "Album" },
-            Singer = [new Lyricify.Lyrics.Providers.Web.QQMusic.Singer { Name = "Artist" }]
-        };
-
-        var candidate = QqMusicLyricSource.MapSong(song, CreateVariant());
-        Assert.NotNull(candidate);
-        Assert.Equal(KnownLyricProviders.QQMusic, candidate.ProviderId);
-        Assert.Equal("qq-id", candidate.CandidateId);
-        Assert.Equal("Song", candidate.Title);
-        Assert.Equal(TimeSpan.FromMinutes(3), candidate.Duration);
-        Assert.Equal("qq-mid", candidate.FetchMetadata["mid"]);
-
-        var qrc = QqMusicLyricSource.MapQrc(
-            candidate,
-            new Lyricify.Lyrics.Decrypter.Qrc.QqLyricsResponse
-            {
-                Lyrics = "qrc",
-                Trans = "translation"
-            });
-        var lrc = QqMusicLyricSource.MapLrc(
-            candidate,
-            new Lyricify.Lyrics.Providers.Web.QQMusic.LyricResult
-            {
-                Lyric = "lrc",
-                Trans = "translation"
-            });
-
-        Assert.Equal(LyricPayloadFormat.Qrc, qrc!.Format);
-        Assert.Equal(KnownLyricProviders.QQMusic, qrc.ProviderId);
-        Assert.Equal("qq-id", qrc.CandidateId);
-        Assert.Equal("qrc", qrc.OriginalLyrics);
-        Assert.Equal("translation", qrc.TranslationLyrics);
-        Assert.Equal(LyricPayloadFormat.Lrc, lrc!.Format);
-        Assert.Equal(KnownLyricProviders.QQMusic, lrc.ProviderId);
-        Assert.Equal("qq-id", lrc.CandidateId);
-        Assert.Equal("lrc", lrc.OriginalLyrics);
-        Assert.Null(QqMusicLyricSource.MapQrc(
-            candidate,
-            new Lyricify.Lyrics.Decrypter.Qrc.QqLyricsResponse()));
-    }
-
-    [Fact]
     public void KugouMappingKeepsLyricCandidateAndKrcFormat()
     {
         var song = new Lyricify.Lyrics.Providers.Web.Kugou.SearchSongResponse.DataItem.InfoItem
@@ -196,9 +146,9 @@ public sealed class LyricifySourceAdaptersTests
     }
 
     [Theory]
-    [InlineData("QQMusic")]
-    [InlineData("Netease")]
-    public async Task MatchingProviderSongIdCreatesDirectCandidateWithoutNetwork(string sourceApp)
+    [InlineData("QQMusic", "295618479")]
+    [InlineData("Netease", "provider-song-id")]
+    public async Task MatchingProviderSongIdCreatesDirectCandidateWithoutNetwork(string sourceApp, string songId)
     {
         var track = new TrackIdentity(
             "track",
@@ -207,7 +157,7 @@ public sealed class LyricifySourceAdaptersTests
             "Album",
             TimeSpan.FromMinutes(3),
             sourceApp,
-            "provider-song-id",
+            songId,
             []);
         var plan = LyricSearchPlanner.CreatePlan(track);
         var candidates = sourceApp == "QQMusic"
@@ -215,7 +165,7 @@ public sealed class LyricifySourceAdaptersTests
             : await new NeteaseLyricSource().SearchAsync(plan);
 
         var candidate = Assert.Single(candidates);
-        Assert.Equal("provider-song-id", candidate.CandidateId);
+        Assert.Equal(songId, candidate.CandidateId);
         Assert.Equal("direct-song-id", candidate.QueryVariantId);
     }
 

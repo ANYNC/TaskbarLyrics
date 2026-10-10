@@ -1,0 +1,145 @@
+{
+  "code": 0,
+  "data": {
+    "keyword": "嘘月 ヨルシカ",
+    "priority": 0,
+    "qc": [],
+    "semantic": {
+      "curnum": 0,
+      "curpage": 1,
+      "list": [],
+      "totalnum": 0
+    },
+    "song": {
+      "curnum": 10,
+      "curpage": 1,
+      "list": [
+        {
+          "albumid": 17210512,
+          "albummid": "000CCyIy2SjrUq",
+          "albumname": "創作",
+          "albumname_hilight": "創作",
+          "alertid": 2,
+          "chinesesinger": 0,
+          "docid": "999637037532589536",
+          "grp": [],
+          "interval": 290,
+          "isonly": 0,
+          "lyric": "《想哭的我戴上了猫的面具》动画电影片尾曲",
+          "lyric_hilight": "《想哭的我戴上了猫的面具》动画电影片尾曲",
+          "msgid": 13,
+          "nt": 1355491619,
+          "pay": {
+            "payalbum": 0,
+            "payalbumprice": 0,
+            "paydownload": 1,
+            "payinfo": 1,
+            "payplay": 1,
+            "paytrackmouth": 1,
+            "paytrackprice": 200
+          },
+          "preview": {
+            "trybegin": 91606,
+            "tryend": 113571,
+            "trysize": 960887
+          },
+          "pubtime": 1611590400,
+          "pure": 0,
+          "singer": [
+            {
+              "id": 1496914,
+              "mid": "004HzXIi4FOMWs",
+              "name": "ヨルシカ",
+              "name_hilight": "<span class=\"c_tx_highlight\">ヨルシカ</span>"
+            }
+          ],
+          "size128": 4648316,
+          "size320": 11620502,
+          "sizeape": 0,
+          "sizeflac": 58356062,
+          "sizeogg": 6101264,
+          "songid": 295618479,
+          "songmid": "003WkhSf2FOUwq",
+          "songname": "嘘月",
+          "songname_hilight": "<span class=\"c_tx_highlight\">嘘月</span>",
+          "stream": 1,
+          "switch": 103169,
+          "t": 1,
+          "tag": 11,
+          "type": 0,
+          "ver": 0,
+          "vid": ""
+        },
+        {
+          "albumid": 0,
+          "albummid": "",
+          "albumname": "",
+          "albumname_hilight": "",
+          "alertid": 11,
+          "chinesesinger": 0,
+          "docid": "4695544756542291014",
+          "format": "5:ナブナ;6:ナブナ;",
+          "grp": [],
+          "interval": 337,
+          "isonly": 0,
+          "lyric": "",
+          "lyric_hilight": "",
+          "msgid": 0,
+          "nt": 2163110176,
+          "pay": {
+            "payalbum": 0,
+            "payalbumprice": 0,
+            "paydownload": 0,
+            "payinfo": 0,
+            "payplay": 0,
+            "paytrackmouth": 0,
+            "paytrackprice": 0
+          },
+          "preview": {
+            "trybegin": 92456,
+            "tryend": 113041,
+            "trysize": 0
+          },
+          "pubtime": 0,
+          "pure": 0,
+          "singer": [
+            {
+              "id": 0,
+              "mid": "0032fmHO2UDnV3",
+              "name": "ヨルシカ",
+              "name_hilight": "<span class=\"c_tx_highlight\">ヨルシカ</span>"
+            }
+          ],
+          "size128": 5402645,
+          "size320": 0,
+          "sizeape": 0,
+          "sizeflac": 0,
+          "sizeogg": 0,
+          "songid": 325666794,
+          "songmid": "000vjoch0C0Fwt",
+          "songname": "噓月",
+          "songname_hilight": "<span class=\"c_tx_highlight\">噓月</span>",
+          "songurl": "http://y.qq.com/#type=song&id=325666794",
+          "stream": 1,
+          "switch": 81683,
+          "t": 0,
+          "tag": 0,
+          "type": 0,
+          "ver": 0,
+          "vid": ""
+        }
+      ],
+      "totalnum": 249
+    },
+    "totaltime": 0,
+    "zhida": {
+      "chinesesinger": 0,
+      "type": 0
+    }
+  },
+  "message": "",
+  "notice": "",
+  "subcode": 0,
+  "time": 1791625855,
+  "tips": ""
+}

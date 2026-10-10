@@ -20,8 +20,10 @@ public sealed class LyricifyPayloadDecoder : ILyricPayloadDecoder
         {
             original = payload.Format switch
             {
+                // QRC 密文解压后是 QrcInfos XML，真正的歌词文本在 Lyric_1 的 LyricContent 属性里。
                 LyricPayloadFormat.Qrc =>
-                    Lyricify.Lyrics.Decrypter.Qrc.Decrypter.DecryptLyrics(original),
+                    QqMusicResponseMapper.UnwrapQrcContent(
+                        Lyricify.Lyrics.Decrypter.Qrc.Decrypter.DecryptLyrics(original)),
                 LyricPayloadFormat.Krc =>
                     Lyricify.Lyrics.Decrypter.Krc.Decrypter.DecryptLyrics(original),
                 _ => throw new NotSupportedException(
