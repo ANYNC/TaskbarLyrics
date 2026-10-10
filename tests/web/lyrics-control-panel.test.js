@@ -6,11 +6,12 @@ const root = new URL("../..", import.meta.url);
 const read = path => readFile(new URL(path, root), "utf8");
 
 async function createPanel() {
-  const [html, script] = await Promise.all([
+  const [html, script, style] = await Promise.all([
     read("TaskbarLyrics.App/Web/ControlPanel/index.html"),
-    read("TaskbarLyrics.App/Web/ControlPanel/app.js")
+    read("TaskbarLyrics.App/Web/ControlPanel/app.js"),
+    read("TaskbarLyrics.App/Web/ControlPanel/style.css")
   ]);
-  const dom = new JSDOM(html.replace("{{STYLE_CSS}}", "").replace("{{APP_JS}}", ""), {
+  const dom = new JSDOM(html.replace("{{STYLE_CSS}}", style).replace("{{APP_JS}}", ""), {
     runScripts: "outside-only"
   });
   const sent = [];
@@ -95,6 +96,8 @@ describe("lyrics control panel", () => {
     expect(doc.querySelector("#sourceIcon").src).toBe("data:image/png;base64,AAAA");
     expect(doc.querySelector("#sourceFallback").hasAttribute("hidden")).toBe(true);
     expect(doc.querySelector(".track .actions")).not.toBeNull();
+    expect(dom.window.getComputedStyle(doc.body).userSelect).toBe("none");
+    expect([...doc.querySelectorAll("img")].every(image => !image.draggable)).toBe(true);
     expect([...doc.querySelectorAll("button")].map(button => button.id)).toEqual(["previous", "playPause", "next"]);
     expect(doc.querySelector("#settings, #translation, #volume, #mute, .utilities")).toBeNull();
     expect(doc.querySelector("#elapsed").textContent).toBe("0:30");
@@ -113,8 +116,15 @@ describe("lyrics control panel", () => {
     dom.window.controlPanel.receive({ version: 1, type: "timeline", payload: {
       positionMs: 0, durationMs: 120000, canSeek: false
     } });
-    expect(dom.window.document.querySelector("#seek").disabled).toBe(true);
+    const seek = dom.window.document.querySelector("#seek");
+    expect(seek.disabled).toBe(true);
+    expect(dom.window.getComputedStyle(seek).cursor).toBe("default");
     expect(sent).toHaveLength(0);
+    dom.window.controlPanel.receive({ version: 1, type: "timeline", payload: {
+      positionMs: 0, durationMs: 120000, canSeek: true
+    } });
+    expect(seek.disabled).toBe(false);
+    expect(dom.window.getComputedStyle(seek).cursor).toBe("pointer");
   });
 
   it("uses the local fallback icon when no valid source image is available", async () => {
