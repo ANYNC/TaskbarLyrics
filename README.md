@@ -17,7 +17,7 @@
 逐字扫描·歌词翻译·主题切换·音频频谱
 
 <p align="center">
-  <img src="docs/images/preview/display-preview.gif" alt="TaskbarLyrics 任务栏歌词、翻译与频谱动态效果" height="400">
+  <img src="docs/images/preview/demo.gif" alt="TaskbarLyrics 任务栏歌词、翻译与频谱动态效果" height="400">
 </p>
 
 <p align="center">
