@@ -5,7 +5,7 @@
 <p align="center">
   <a href="https://github.com/ANYNC/TaskbarLyrics/releases/latest"><img src="https://img.shields.io/github/v/release/ANYNC/TaskbarLyrics?style=flat&amp;label=release&amp;labelColor=202124&amp;color=58a6ff" alt="最新版本"></a>
   <a href="https://github.com/ANYNC/TaskbarLyrics/releases"><img src="https://img.shields.io/github/downloads/ANYNC/TaskbarLyrics/total?style=flat&amp;label=downloads&amp;labelColor=202124&amp;color=3fb950" alt="总下载量"></a>
-  <a href="https://github.com/ANYNC/TaskbarLyrics"><img src="https://img.shields.io/github/languages/top/ANYNC/TaskbarLyrics?style=flat&amp;labelColor=202124&amp;color=a371f7" alt="主要开发语言：C#"></a>
+  <a href="https://github.com/ANYNC/TaskbarLyrics"><img src="https://img.shields.io/badge/language-C%23-a371f7?style=flat&amp;labelColor=202124" alt="language: C#"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/ANYNC/TaskbarLyrics?style=flat&amp;labelColor=202124&amp;color=d29922" alt="MIT 许可证"></a>
 </p>
 
@@ -118,8 +118,7 @@ dotnet run --project TaskbarLyrics.App
 - [常见问题与故障排查](docs/常见问题与故障排查.md)：播放器兼容、本地歌词、卸载与问题反馈。
 - [功能与技术说明](docs/功能与技术说明.md)：完整功能、系统结构与实现说明。
 - [歌曲歌词匹配与录用评分标准](docs/歌曲歌词匹配与录用评分标准.md)：歌词候选的匹配与选择规则。
-- [歌词呈现引擎](docs/歌词呈现引擎.md) · [频谱调节参数说明](docs/频谱调节参数说明.md)。
-- [WebView 界面视觉与交互规范](docs/WebView界面视觉与交互规范.md) · [工程变更记录](docs/工程变更记录.md)。
+- [频谱调节参数说明](docs/频谱调节参数说明.md)。
 
 <details>
 <summary><strong>构建与发布</strong></summary>
