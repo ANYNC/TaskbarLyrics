@@ -18,6 +18,7 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
     private readonly EmbeddedTaskbarAnchor _embeddedTaskbarAnchor = new();
     private readonly SmartTopmostController _smartTopmostController;
     private readonly WindowClickThroughController _clickThroughController;
+    private readonly FloatingWindowHitSurfaceController _hitSurfaceController;
     private readonly FloatingPanelHost _floatingPanelHost;
     private readonly Action<Rect, DisplayMonitor, Action<bool>> _onCoverClicked;
     private DisplayMonitor _displayMonitor;
@@ -37,7 +38,10 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
         LyricsWebView.Visibility = Visibility.Hidden;
         _smartTopmostController = new SmartTopmostController(this);
         _clickThroughController = new WindowClickThroughController(this);
-        _floatingPanelHost = new FloatingPanelHost(this);
+        _hitSurfaceController = new FloatingWindowHitSurfaceController(this, RootBorder);
+        _hitSurfaceController.PointerInsideChanged += OnFloatingPointerInsideChanged;
+        _floatingPanelHost = new FloatingPanelHost(this, ReportFloatingPanelProgress);
+        _floatingPanelHost.Collapsed += OnFloatingPanelCollapsed;
         _displayMonitor = displayMonitor;
         Loaded += OnLoaded;
         SourceInitialized += OnSourceInitialized;
@@ -67,9 +71,6 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
             _settings.ForceAlwaysOnTop,
             _displayMonitor.Bounds);
         ApplyWindowInputMode();
-        RootBorder.Background = _settings.UseFloatingWindow
-            ? FloatingWindowHitSurface.Fill
-            : System.Windows.Media.Brushes.Transparent;
         var pixelsPerDip = _displayMonitor.PixelsPerDip;
         var metrics = LyricsLayoutMetrics.Create(_settings, pixelsPerDip);
         Width = !_settings.UseFloatingWindow
@@ -80,8 +81,8 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
             : AppSettings.ClampEffectiveWindowWidth(
                 _settings.WindowWidth,
                 _settings.LyricsLayoutScalePercent,
-                _displayMonitor.WorkAreaWidth / pixelsPerDip);
-        Height = metrics.DesiredWindowHeight;
+                _displayMonitor.WorkAreaWidth / pixelsPerDip) + (2 * _settings.ResolveFloatingFrameInset());
+        Height = metrics.DesiredWindowHeight + (2 * _settings.ResolveFloatingFrameInset());
         RootBorder.Padding = new Thickness(
             metrics.HostHorizontalPadding,
             metrics.HostVerticalPadding,
@@ -119,6 +120,9 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
     {
         _clickThroughController.Apply(
             _settings.UseFloatingWindow && _settings.FloatingWindowClickThrough);
+        _hitSurfaceController.Apply(FloatingWindowHitSurface.ShouldTrackPointer(
+            _settings.UseFloatingWindow,
+            _settings.FloatingWindowClickThrough));
     }
 
     private void OnWindowDragRequested()
@@ -205,6 +209,7 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
         LyricsWebView.Dispose();
         _embeddedTaskbarAnchor.Dispose();
         _smartTopmostController.Dispose();
+        _hitSurfaceController.Dispose();
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
@@ -258,7 +263,7 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
     /// Grows the window around the floating control panel exactly like the primary
     /// window does; the lyrics keep their screen position.
     /// </summary>
-    private void ApplyFloatingPanelToggle(bool open, double panelHeight, double inset, double gap, bool above)
+    private void ApplyFloatingPanelToggle(bool open, double panelHeight, double inset, double gap)
     {
         if (!_settings.UseFloatingWindow)
         {
@@ -267,27 +272,30 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
 
         if (!open)
         {
-            RestoreFloatingPanelBounds();
+            _floatingPanelHost.Collapse(_displayMonitor);
             return;
         }
 
-        if (_floatingPanelHost.TryExpand(_displayMonitor, panelHeight, inset, gap, above, out var appliedAbove))
+        if (_floatingPanelHost.TryExpand(_displayMonitor, panelHeight, inset, gap))
         {
-            PushFloatingPanelLayout(open: true, appliedAbove);
+            PushFloatingPanelLayout(open: true);
         }
     }
 
     private void RestoreFloatingPanelBounds()
     {
-        if (!_floatingPanelHost.Collapse())
+        if (_floatingPanelHost.Reset())
         {
-            return;
+            PushFloatingPanelLayout(open: false);
         }
-
-        PushFloatingPanelLayout(open: false, above: false);
     }
 
-    private void PushFloatingPanelLayout(bool open, bool above)
+    private void OnFloatingPanelCollapsed(object? sender, EventArgs e)
+    {
+        PushFloatingPanelLayout(open: false);
+    }
+
+    private void ReportFloatingPanelProgress(double progress)
     {
         if (_isDisposed || !_isWebReady || LyricsWebView.CoreWebView2 is null)
         {
@@ -295,7 +303,36 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
         }
 
         TaskObserver.Observe(
-            LyricsWebView.ExecuteScriptAsync(LyricsWebViewScriptFactory.SetFloatingPanelLayout(open, above)),
+            LyricsWebView.ExecuteScriptAsync(LyricsWebViewScriptFactory.SetFloatingPanelProgress(progress)),
+            "lyrics mirror floating panel progress");
+    }
+
+    /// <summary>
+    /// Reports the pointer to the page: the fill that makes the surface hit-testable is only
+    /// applied while the cursor is inside it, so an unmoved cursor produces no enter event.
+    /// </summary>
+    private void OnFloatingPointerInsideChanged(object? sender, bool inside)
+    {
+        if (_isDisposed || !_isWebReady || LyricsWebView.CoreWebView2 is null)
+        {
+            return;
+        }
+
+        TaskObserver.Observe(
+            LyricsWebView.ExecuteScriptAsync(LyricsWebViewScriptFactory.SetFloatingPointer(inside)),
+            "lyrics mirror floating pointer");
+    }
+
+
+    private void PushFloatingPanelLayout(bool open)
+    {
+        if (_isDisposed || !_isWebReady || LyricsWebView.CoreWebView2 is null)
+        {
+            return;
+        }
+
+        TaskObserver.Observe(
+            LyricsWebView.ExecuteScriptAsync(LyricsWebViewScriptFactory.SetFloatingPanelLayout(open)),
             "lyrics mirror floating panel layout");
     }
 
@@ -315,10 +352,16 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
                 return;
             }
 
-            if (LyricsWebMessageRouter.TryGetFloatingPanelToggle(
-                message, out var panelOpen, out var panelHeight, out var panelInset, out var panelGap, out var panelAbove))
+            if (LyricsWebMessageRouter.IsFloatingPanelLayoutApplied(message))
             {
-                ApplyFloatingPanelToggle(panelOpen, panelHeight, panelInset, panelGap, panelAbove);
+                _floatingPanelHost.AcknowledgeLayout();
+                return;
+            }
+
+            if (LyricsWebMessageRouter.TryGetFloatingPanelToggle(
+                message, out var panelOpen, out var panelHeight, out var panelInset, out var panelGap))
+            {
+                ApplyFloatingPanelToggle(panelOpen, panelHeight, panelInset, panelGap);
                 return;
             }
 

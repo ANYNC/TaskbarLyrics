@@ -46,6 +46,13 @@ internal static class LyricsWebMessageRouter
         string.Equals(message?.Type, "windowDrag", StringComparison.Ordinal);
 
     /// <summary>
+    /// The lyrics surface reports that it applied the requested reveal direction; the host
+    /// then starts growing the window.
+    /// </summary>
+    public static bool IsFloatingPanelLayoutApplied(WebViewMessage? message) =>
+        string.Equals(message?.Type, "floatingPanelLayoutApplied", StringComparison.Ordinal);
+
+    /// <summary>
     /// Panel size request from the floating lyrics surface. The height must be finite
     /// and positive because the host sizes its native window from it.
     /// </summary>
@@ -54,14 +61,12 @@ internal static class LyricsWebMessageRouter
         out bool open,
         out double panelHeight,
         out double inset,
-        out double gap,
-        out bool above)
+        out double gap)
     {
         open = false;
         panelHeight = 0;
         inset = 0;
         gap = 0;
-        above = false;
         if (message?.Type != "floatingPanelToggle" ||
             message.Payload is not { ValueKind: JsonValueKind.Object } payload ||
             !payload.TryGetProperty("open", out var openElement) ||
@@ -77,14 +82,6 @@ internal static class LyricsWebMessageRouter
         }
 
         open = openElement.ValueKind == JsonValueKind.True;
-        // The surface picks the direction from its own screen space so the lyrics can be
-        // pinned before the host resizes the window.
-        if (payload.TryGetProperty("direction", out var directionElement) &&
-            directionElement.ValueKind == JsonValueKind.String)
-        {
-            above = string.Equals(directionElement.GetString(), "up", StringComparison.Ordinal);
-        }
-
         return true;
     }
 

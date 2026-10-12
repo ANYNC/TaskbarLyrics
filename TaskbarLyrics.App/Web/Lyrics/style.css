@@ -80,6 +80,18 @@
   -webkit-user-select: none;
 }
 
+/* Sources are the only draggable content; nothing in the lyrics surface should start a
+   native drag (dragging an image out of the floating window looked like the cover being
+   pulled off the surface). */
+img {
+  -webkit-user-drag: none;
+  user-drag: none;
+}
+
+body {
+  overscroll-behavior: none;
+}
+
 html, body {
   width: 100%;
   height: 100%;
@@ -100,6 +112,9 @@ html, body {
   border: 0;
   border-radius: var(--surface-radius);
   box-shadow: var(--surface-shadow);
+  /* Also declared on the resting rule so removing the revealed class fades out instead of
+     snapping the surface back to transparent. */
+  transition: background-color 200ms ease, box-shadow 200ms ease, border-radius 200ms ease;
 }
 
 .layout.free-drag {
@@ -113,6 +128,7 @@ html, body {
   grid-template-columns: var(--cover-size) var(--cover-gap) minmax(0, 1fr);
   grid-template-areas: "cover gap lyrics";
   align-items: center;
+  transition: background-color 200ms ease, box-shadow 200ms ease, border-radius 200ms ease;
 }
 
 .cover-hidden .shell {
@@ -648,35 +664,53 @@ html, body {
    outer frame (the layout itself) and the lyrics shell, which gains its own
    rounded background. Both fade in with the panel so the resized host window
    never flashes a bare rectangle. */
+.layout.panel-capable {
+  /* The frame is reserved up front: the collapsed surface already keeps this margin, so
+     opening the panel never moves the window anchor or the lyrics. */
+  padding: var(--panel-inset);
+}
+
+.layout.panel-capable .shell {
+  position: relative;
+  z-index: 1;
+}
+
+.layout.panel-capable .floating-panel {
+  position: relative;
+  z-index: 0;
+}
+
 .layout.panel-expanded {
   display: flex;
   flex-direction: column;
   align-items: stretch;
   gap: var(--panel-gap);
-  /* No bottom inset: the lyrics keep their exact screen position, only the side facing
-     the panel and the outer edges gain the frame. */
-  padding: var(--panel-inset) var(--panel-inset) 0;
-  background: var(--surface-color-frame);
+  /* The deepening itself is driven by the revealed class so it can fade out while the
+     panel is still retracting. */
   border-radius: calc(var(--surface-radius) + var(--panel-inset));
   box-shadow: none;
-  transition: background-color 220ms ease;
 }
 
-.layout.panel-expanded.panel-above {
-  flex-direction: column-reverse;
+.layout.panel-revealed {
+  background: var(--surface-color-frame);
+}
+
+.layout.panel-revealed .shell {
+  background: var(--surface-color-expanded);
 }
 
 .layout.panel-expanded .shell {
-  /* The panel reserves its own space, so the lyrics keep the exact height they had
-     before the window grew. The height is pinned by the page before the host resizes,
-     which keeps the lyrics from moving for even one frame. */
+  /* The lyrics keep the height they have when collapsed: the panel reserves its own slot
+     and the frame absorbs the rest, so growing the window never stretches the lyrics. */
   flex: 0 0 auto;
-  height: var(--panel-shell-height, 100%);
+  height: var(--panel-shell-height, auto);
   padding: 0 var(--layout-padding-inline);
-  background: var(--surface-color-expanded);
+}
+
+
+.layout.panel-revealed .shell {
   border-radius: var(--surface-radius);
   box-shadow: var(--surface-shadow);
-  transition: background-color 220ms ease;
 }
 
 .floating-panel {
@@ -685,33 +719,20 @@ html, body {
   flex-direction: column;
   justify-content: center;
   gap: 4px;
-  height: 0;
+  /* Height is animated here with the same duration and curve as the host's window resize
+     (easeOutCubic), so the panel and the surface grow together without per-frame messages
+     crossing the WebView boundary. */
+  height: var(--panel-progress-height, 0px);
   padding: 0 6px;
   overflow: hidden;
   opacity: 0;
-  transform: translateY(-4px);
   pointer-events: none;
-  transition:
-    height 220ms cubic-bezier(0.22, 0.72, 0.24, 1),
-    opacity 160ms ease,
-    transform 220ms cubic-bezier(0.22, 0.72, 0.24, 1);
-}
-
-.layout.panel-expanded.panel-above .floating-panel {
-  transform: translateY(4px);
+  transition: opacity 160ms ease;
 }
 
 .layout.panel-expanded .floating-panel {
-  height: var(--panel-height);
   opacity: 1;
-  transform: none;
   pointer-events: auto;
-}
-
-.layout.panel-closing .floating-panel {
-  height: 0;
-  opacity: 0;
-  pointer-events: none;
 }
 
 .layout.panel-unavailable .floating-panel {

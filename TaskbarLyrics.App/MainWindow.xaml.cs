@@ -115,6 +115,7 @@ public partial class MainWindow : Window, IDisposable
 
 
     private readonly WindowClickThroughController _clickThroughController;
+    private readonly FloatingWindowHitSurfaceController _hitSurfaceController;
 
     internal event Action<LyricsPresentationCommand>? PresentationCommandCreated;
 
@@ -135,7 +136,10 @@ public partial class MainWindow : Window, IDisposable
 
         _smartTopmostController = new SmartTopmostController(this);
         _clickThroughController = new WindowClickThroughController(this);
-        _floatingPanelHost = new FloatingPanelHost(this);
+        _hitSurfaceController = new FloatingWindowHitSurfaceController(this, RootBorder);
+        _hitSurfaceController.PointerInsideChanged += OnFloatingPointerInsideChanged;
+        _floatingPanelHost = new FloatingPanelHost(this, ReportFloatingPanelProgress);
+        _floatingPanelHost.Collapsed += OnFloatingPanelCollapsed;
 
         _trackLyricOffsetStore = trackLyricOffsetStore;
         _openSettings = openSettings;
@@ -203,7 +207,7 @@ public partial class MainWindow : Window, IDisposable
                 : AppSettings.ClampEffectiveWindowWidth(
                     snapshot.WindowWidth,
                     snapshot.LyricsLayoutScalePercent,
-                    GetTargetWorkAreaWidth());
+                    GetTargetWorkAreaWidth()) + (2 * snapshot.ResolveFloatingFrameInset());
         }
 
         if (changes.WindowLayoutChanged)
@@ -356,13 +360,10 @@ public partial class MainWindow : Window, IDisposable
 
         _secondaryTextColor = ForegroundColorPolicy.CreateSecondaryColor(_primaryTextColor);
         _translationTextColor = ForegroundColorPolicy.CreateTranslationColor(_primaryTextColor);
-        // Keep the WPF host transparent; the WebView draws the optional surface. A
-        // floating surface still needs an (invisible) layered pixel everywhere: a WPF
-        // layered window drops mouse input on fully transparent pixels, which would
-        // otherwise leave hover, dragging and the control panel without input.
-        RootBorder.Background = settings.UseFloatingWindow
-            ? FloatingWindowHitSurface.Fill
-            : Media.Brushes.Transparent;
+        // Keep the WPF host transparent; the WebView draws the optional surface. A floating
+        // surface still needs an (invisible) layered pixel wherever it should receive the
+        // mouse — a layered window drops input on fully transparent pixels — and the hit
+        // surface controller holds that fill only while the cursor is inside the window.
         RootBorder.BorderBrush = Media.Brushes.Transparent;
         RootBorder.BorderThickness = new Thickness(0);
     }
@@ -550,6 +551,25 @@ public partial class MainWindow : Window, IDisposable
     {
         _clickThroughController.Apply(
             _currentSettings.UseFloatingWindow && _currentSettings.FloatingWindowClickThrough);
+        _hitSurfaceController.Apply(FloatingWindowHitSurface.ShouldTrackPointer(
+            _currentSettings.UseFloatingWindow,
+            _currentSettings.FloatingWindowClickThrough));
+    }
+
+    /// <summary>
+    /// Reports the pointer to the page: the fill that makes the surface hit-testable is only
+    /// applied while the cursor is inside it, so an unmoved cursor produces no enter event.
+    /// </summary>
+    private void OnFloatingPointerInsideChanged(object? sender, bool inside)
+    {
+        if (!_isWebViewReady || !_isWebDocumentReady || _isShowingWebErrorPage)
+        {
+            return;
+        }
+
+        TaskObserver.Observe(
+            ExecuteWebScriptAsync(LyricsWebViewScriptFactory.SetFloatingPointer(inside)),
+            "lyrics floating pointer");
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
@@ -666,6 +686,7 @@ public partial class MainWindow : Window, IDisposable
         _audioSpectrumService.Dispose();
         _embeddedTaskbarAnchor.Dispose();
         _smartTopmostController.Dispose();
+        _hitSurfaceController.Dispose();
         (_musicSessionProvider as IDisposable)?.Dispose();
         GC.SuppressFinalize(this);
     }
@@ -1460,11 +1481,10 @@ public partial class MainWindow : Window, IDisposable
     }
 
     /// <summary>
-    /// Applies the panel geometry the lyrics surface asked for. The lyrics keep their
-    /// screen position: the window grows downwards, or upwards where the work area
-    /// leaves no room below.
+    /// Applies the panel geometry the lyrics surface asked for. The host drives the whole
+    /// reveal frame by frame so the window and the panel grow together.
     /// </summary>
-    private void ApplyFloatingPanelToggle(bool open, double panelHeight, double inset, double gap, bool above)
+    private void ApplyFloatingPanelToggle(bool open, double panelHeight, double inset, double gap)
     {
         if (!_currentSettings.UseFloatingWindow)
         {
@@ -1473,30 +1493,28 @@ public partial class MainWindow : Window, IDisposable
 
         if (!open)
         {
-            RestoreFloatingPanelBounds();
+            _floatingPanelHost.Collapse(_displayMonitor);
             return;
         }
 
-        if (_floatingPanelHost.TryExpand(_displayMonitor, panelHeight, inset, gap, above, out var appliedAbove))
+        if (_floatingPanelHost.TryExpand(_displayMonitor, panelHeight, inset, gap))
         {
-            PushFloatingPanelLayoutToWebView(open: true, appliedAbove);
+            // The page lays its panel out below the lyrics before the host grows the window.
+            PushFloatingPanelLayoutToWebView(open: true);
         }
     }
 
     internal void RestoreFloatingPanelBounds()
     {
-        if (!_floatingPanelHost.Collapse())
+        if (_floatingPanelHost.Reset())
         {
-            return;
+            PushFloatingPanelLayoutToWebView(open: false);
         }
-
-        PushFloatingPanelLayoutToWebView(open: false, above: false);
-        // Re-anchors were deferred while the panel was open, so the remembered base may
-        // be stale; restore authoritative bounds now that the surface is collapsed.
-        AnchorToTaskbarCore();
     }
 
-    private void PushFloatingPanelLayoutToWebView(bool open, bool above)
+    /// <summary>Pushes the reveal geometry; the page answers with
+    /// <c>floatingPanelLayoutApplied</c> once its panel sits on the same side.</summary>
+    private void PushFloatingPanelLayoutToWebView(bool open)
     {
         if (!_isWebViewReady || !_isWebDocumentReady || _isShowingWebErrorPage)
         {
@@ -1505,8 +1523,29 @@ public partial class MainWindow : Window, IDisposable
 
         PublishPresentationCommand(
             "floatingPanelLayout",
-            LyricsWebViewScriptFactory.SetFloatingPanelLayout(open, above),
+            LyricsWebViewScriptFactory.SetFloatingPanelLayout(open),
             "lyrics floating panel layout");
+    }
+
+    /// <summary>
+    /// Reveal progress for this window only: mirror displays run their own animation, so
+    /// the broadcast presentation channel would cross the two windows' progress.
+    /// </summary>
+    private void ReportFloatingPanelProgress(double progress)
+    {
+        if (!_isWebViewReady || !_isWebDocumentReady || _isShowingWebErrorPage)
+        {
+            return;
+        }
+
+        TaskObserver.Observe(
+            ExecuteWebScriptAsync(LyricsWebViewScriptFactory.SetFloatingPanelProgress(progress)),
+            "lyrics floating panel progress");
+    }
+
+    private void OnFloatingPanelCollapsed(object? sender, EventArgs e)
+    {
+        PushFloatingPanelLayoutToWebView(open: false);
     }
 
     internal void ExecuteFloatingPanelAction(string action)
@@ -1786,9 +1825,14 @@ public partial class MainWindow : Window, IDisposable
                 return;
             }
             if (LyricsWebMessageRouter.TryGetFloatingPanelToggle(
-                message, out var panelOpen, out var panelHeight, out var panelInset, out var panelGap, out var panelAbove))
+                message, out var panelOpen, out var panelHeight, out var panelInset, out var panelGap))
             {
-                ApplyFloatingPanelToggle(panelOpen, panelHeight, panelInset, panelGap, panelAbove);
+                ApplyFloatingPanelToggle(panelOpen, panelHeight, panelInset, panelGap);
+                return;
+            }
+            if (LyricsWebMessageRouter.IsFloatingPanelLayoutApplied(message))
+            {
+                _floatingPanelHost.AcknowledgeLayout();
                 return;
             }
             if (LyricsWebMessageRouter.TryGetFloatingPanelAction(message, out var panelAction))
@@ -2076,7 +2120,7 @@ public partial class MainWindow : Window, IDisposable
             return;
         }
 
-        if (_floatingPanelHost.IsExpanded)
+        if (_floatingPanelHost.HoldsGeometry)
         {
             // The surface is currently sized for an open panel, and a re-anchor resizes
             // it twice per pass (back to base, then out again), which reads as flicker.

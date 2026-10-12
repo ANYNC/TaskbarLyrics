@@ -83,7 +83,7 @@ describe("floating control panel", () => {
 
   const harness = () => shared;
 
-  it("requests the panel geometry and pins the lyrics height when the pointer enters", async () => {
+  it("requests the panel geometry when the pointer enters the floating surface", async () => {
     const { dom, sent, enablePanel } = harness();
     enablePanel();
 
@@ -93,10 +93,9 @@ describe("floating control panel", () => {
     const request = sent.at(-1);
     expect(request.type).toBe("floatingPanelToggle");
     expect(request.payload).toMatchObject({ open: true, height: 48, inset: 4, gap: 4 });
-    expect(["down", "up"]).toContain(request.payload.direction);
-    // The surface reserves the panel space itself, so the host can resize afterwards.
-    expect(layout.classList.contains("panel-expanded")).toBe(true);
-    expect(layout.style.getPropertyValue("--panel-shell-height")).toMatch(/^\d+px$/);
+    // The host owns the direction: it answers with a layout message, not the page.
+    expect(request.payload.direction).toBeUndefined();
+    expect(layout.classList.contains("panel-expanded")).toBe(false);
   });
 
   it("stays inert while the panel is unavailable", async () => {
@@ -108,43 +107,114 @@ describe("floating control panel", () => {
     expect(sent.some(message => message.type === "floatingPanelToggle")).toBe(false);
   });
 
-  it("applies the direction reported by the host", async () => {
+  it("reveals from the host layout message and keeps the slot until the window has shrunk", async () => {
     const { dom, receive, enablePanel } = harness();
     enablePanel();
-    receive("floatingPanelLayout", { open: true, direction: "up" });
 
+    const root = dom.window.document.documentElement;
     const layout = dom.window.document.getElementById("layout");
+    expect(root.style.getPropertyValue("--panel-progress-height")).toBe("0px");
+
+    receive("floatingPanelLayout", { open: true });
     expect(layout.classList.contains("panel-expanded")).toBe(true);
-    expect(layout.classList.contains("panel-above")).toBe(true);
+    expect(layout.classList.contains("panel-revealed")).toBe(true);
 
     receive("floatingPanelLayout", { open: false });
     expect(layout.classList.contains("panel-expanded")).toBe(false);
-    expect(layout.classList.contains("panel-above")).toBe(false);
-    expect(layout.style.getPropertyValue("--panel-shell-height")).toBe("");
+    expect(layout.classList.contains("panel-revealed")).toBe(false);
+    expect(root.style.getPropertyValue("--panel-progress-height")).toBe("0px");
   });
 
-  it("collapses 1.5 seconds after the pointer leaves the expanded surface", async () => {
+  it("acknowledges the layout so the host only grows the window afterwards", async () => {
+    const { dom, sent, receive, enablePanel } = harness();
+    enablePanel();
+
+    receive("floatingPanelLayout", { open: true });
+
+    expect(sent.at(-1)).toEqual({
+      version: 1,
+      type: "floatingPanelLayoutApplied",
+      payload: { open: true }
+    });
+  });
+
+  it("retracts on the shared curve without dropping the slot the host still needs", async () => {
     const { dom, sent, receive, enablePanel, flushTimers } = harness();
     enablePanel();
     const layout = dom.window.document.getElementById("layout");
+    const root = dom.window.document.documentElement;
     layout.dispatchEvent(new dom.window.MouseEvent("mouseenter"));
-    receive("floatingPanelLayout", { open: true, direction: "down" });
+    receive("floatingPanelLayout", { open: true });
+    // The host drives the panel height frame by frame; this is the last frame of the reveal.
+    receive("floatingPanelProgress", { progress: 1 });
 
     layout.dispatchEvent(new dom.window.MouseEvent("mouseleave"));
     flushTimers();
 
-    // The panel animates out, but the reserved lyrics height stays until the host has
-    // shrunk the window.
-    expect(layout.classList.contains("panel-closing")).toBe(true);
-    expect(layout.classList.contains("panel-expanded")).toBe(true);
-
-    flushTimers();
+    // The retract leaves the slot and the height alone: the window is still tall, so
+    // releasing either here stretched the lyrics downwards for a moment.
     expect(sent.at(-1).payload).toMatchObject({ open: false, height: 48, inset: 4, gap: 4 });
+    expect(layout.classList.contains("panel-expanded")).toBe(true);
+    expect(root.style.getPropertyValue("--panel-progress-height")).toBe("48px");
 
+    receive("floatingPanelProgress", { progress: 0.25 });
+    expect(root.style.getPropertyValue("--panel-progress-height")).toBe("12px");
+
+    // Once the window is back at its resting size the host releases the slot.
     receive("floatingPanelLayout", { open: false });
     expect(layout.classList.contains("panel-expanded")).toBe(false);
-    expect(layout.classList.contains("panel-closing")).toBe(false);
-    expect(layout.style.getPropertyValue("--panel-shell-height")).toBe("");
+    expect(root.style.getPropertyValue("--panel-progress-height")).toBe("0px");
+  });
+
+  it("waits for the surface to shrink before it drops the slot", async () => {
+    const { dom, receive, enablePanel } = harness();
+    const layout = dom.window.document.getElementById("layout");
+    const setViewport = height => Object.defineProperty(dom.window, "innerHeight", {
+      configurable: true,
+      value: height
+    });
+
+    // jsdom has no layout, so report a resting surface and viewport for this test.
+    layout.querySelector(".shell").getBoundingClientRect = () => ({ height: 40, top: 4 });
+    setViewport(48);
+    enablePanel();
+    layout.dispatchEvent(new dom.window.MouseEvent("mouseenter"));
+    receive("floatingPanelLayout", { open: true });
+
+    // The host reports the window is collapsed while this surface still sees the tall viewport.
+    setViewport(100);
+    receive("floatingPanelLayout", { open: false });
+    expect(layout.classList.contains("panel-expanded")).toBe(true);
+
+    // The native shrink reaches the surface: only now may the lyrics go back to filling it.
+    setViewport(48);
+    dom.window.dispatchEvent(new dom.window.Event("resize"));
+    expect(layout.classList.contains("panel-expanded")).toBe(false);
+  });
+
+  it("follows the pointer the host reports, because it is what makes the surface hittable", async () => {
+    const { dom, sent, receive, enablePanel, flushTimers } = harness();
+    enablePanel();
+    const layout = dom.window.document.getElementById("layout");
+
+    // The host only fills the surface while the cursor is inside it, so entering is
+    // reported here as well: a cursor that does not move afterwards sends no DOM event.
+    receive("floatingPointer", { inside: true });
+    expect(sent.at(-1)).toMatchObject({ type: "floatingPanelToggle", payload: { open: true } });
+
+    receive("floatingPanelLayout", { open: true });
+    receive("floatingPointer", { inside: false });
+    flushTimers();
+    expect(sent.at(-1)).toMatchObject({ type: "floatingPanelToggle", payload: { open: false } });
+  });
+
+  it("ignores a pointer report while the panel is unavailable", async () => {
+    const { dom, sent, applyStyle } = harness();
+    applyStyle({ floatingPanel: false, layoutScalePercent: 100, surfaceTone: 0, themeLight: true });
+
+    dom.window.taskbarLyricsFloatingPanel.setPointerInside(true);
+
+    expect(sent.some(message => message.type === "floatingPanelToggle")).toBe(false);
   });
 
   it("scales the requested height with the lyrics layout scale", async () => {
@@ -155,21 +225,32 @@ describe("floating control panel", () => {
     expect(sent.at(-1).payload.height).toBe(72);
   });
 
-  it("deepens a faint surface to 80% and keeps a dense one", async () => {
+  it("deepens a faint surface to a composite 80% and keeps a dense one", async () => {
     const { dom, enablePanel } = harness();
     const root = dom.window.document.documentElement;
+    // The lyric container paints over the frame container, so the two alphas composite:
+    // 1 - (1 - frame)(1 - inner) is the density the surface actually shows.
+    const composite = () => {
+      const read = name => Number(
+        /rgba\([^)]*,\s*([\d.]+)\)/.exec(root.style.getPropertyValue(name))[1]);
+      const frame = read("--surface-color-frame");
+      return 1 - (1 - frame) * (1 - read("--surface-color-expanded"));
+    };
 
     enablePanel({ surfaceTone: 40 });
-    expect(root.style.getPropertyValue("--surface-color-expanded")).toBe("rgba(0, 0, 0, 0.800)");
+    expect(root.style.getPropertyValue("--surface-color-expanded")).toBe("rgba(0, 0, 0, 0.200)");
     expect(root.style.getPropertyValue("--surface-color-frame")).toBe("rgba(0, 0, 0, 0.750)");
+    expect(composite()).toBeCloseTo(0.8, 3);
 
     enablePanel({ surfaceTone: -35 });
-    expect(root.style.getPropertyValue("--surface-color-expanded")).toBe("rgba(255, 255, 255, 0.800)");
+    expect(root.style.getPropertyValue("--surface-color-expanded")).toBe("rgba(255, 255, 255, 0.200)");
     expect(root.style.getPropertyValue("--surface-color-frame")).toBe("rgba(255, 255, 255, 0.750)");
+    expect(composite()).toBeCloseTo(0.8, 3);
 
     enablePanel({ surfaceTone: 90 });
-    expect(root.style.getPropertyValue("--surface-color-expanded")).toBe("rgba(0, 0, 0, 0.900)");
+    expect(root.style.getPropertyValue("--surface-color-expanded")).toBe("rgba(0, 0, 0, 0.333)");
     expect(root.style.getPropertyValue("--surface-color-frame")).toBe("rgba(0, 0, 0, 0.850)");
+    expect(composite()).toBeCloseTo(0.9, 3);
   });
 
   it("falls back to the interface theme for a transparent surface", async () => {
@@ -177,10 +258,10 @@ describe("floating control panel", () => {
     const root = dom.window.document.documentElement;
 
     enablePanel({ surfaceTone: 0, themeLight: true });
-    expect(root.style.getPropertyValue("--surface-color-expanded")).toBe("rgba(255, 255, 255, 0.800)");
+    expect(root.style.getPropertyValue("--surface-color-frame")).toBe("rgba(255, 255, 255, 0.750)");
 
     enablePanel({ surfaceTone: 0, themeLight: false });
-    expect(root.style.getPropertyValue("--surface-color-expanded")).toBe("rgba(0, 0, 0, 0.800)");
+    expect(root.style.getPropertyValue("--surface-color-frame")).toBe("rgba(0, 0, 0, 0.750)");
   });
 
   it("renders the track and playback state pushed by the host", async () => {

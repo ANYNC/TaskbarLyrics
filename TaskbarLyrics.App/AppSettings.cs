@@ -167,6 +167,15 @@ public sealed class AppSettings
 
     public bool ShowCover { get; set; } = true;
 
+    /// <summary>
+    /// Frame the floating surface reserves for its control panel, in DIP. Zero when the
+    /// surface cannot host a panel, so plain floating windows stay as tight as before.
+    /// </summary>
+    public double ResolveFloatingFrameInset() =>
+        UseFloatingWindow && FloatingWindowControlPanel && !FloatingWindowClickThrough
+            ? FloatingPanelPlacement.FrameInset
+            : 0;
+
     /// <summary>Embedded taskbar-cover control panel switch.</summary>
     public bool EnableControlPanel { get; set; } = true;
 

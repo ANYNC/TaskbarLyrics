@@ -47,15 +47,14 @@ public sealed class LyricsWebMessageRouterTests
     public void FloatingPanelToggleAcceptsBoundedSizing()
     {
         var message = LyricsWebMessageRouter.Parse(
-            "{\"version\":1,\"type\":\"floatingPanelToggle\",\"payload\":{\"open\":true,\"height\":56,\"inset\":4,\"gap\":4,\"direction\":\"up\"}}");
+            "{\"version\":1,\"type\":\"floatingPanelToggle\",\"payload\":{\"open\":true,\"height\":56,\"inset\":4,\"gap\":4}}");
 
         Assert.True(LyricsWebMessageRouter.TryGetFloatingPanelToggle(
-            message, out var open, out var height, out var inset, out var gap, out var above));
+            message, out var open, out var height, out var inset, out var gap));
         Assert.True(open);
         Assert.Equal(56, height);
         Assert.Equal(4, inset);
         Assert.Equal(4, gap);
-        Assert.True(above);
     }
 
     [Theory]
@@ -69,7 +68,7 @@ public sealed class LyricsWebMessageRouterTests
     public void FloatingPanelToggleRejectsUnusableSizing(string json)
     {
         Assert.False(LyricsWebMessageRouter.TryGetFloatingPanelToggle(
-            LyricsWebMessageRouter.Parse(json), out _, out _, out _, out _, out _));
+            LyricsWebMessageRouter.Parse(json), out _, out _, out _, out _));
     }
 
     [Theory]

@@ -104,6 +104,12 @@ function setFreeDragEnabled(enabled) {
   layoutEl?.classList.toggle("free-drag", enabled);
 }
 
+// A native drag (image/link drag or text selection) would fight the window move loop,
+// so the surface cancels every drag start.
+root.addEventListener("dragstart", event => {
+  event.preventDefault();
+});
+
 function setControlPanelOpen(open) {
   if (!coverEl) return;
   coverEl.classList.toggle("panel-open", open === true);
@@ -2480,6 +2486,12 @@ window.taskbarLyrics = {
         break;
       case "floatingPanelLayout":
         window.taskbarLyricsFloatingPanel?.applyLayout(payload);
+        break;
+      case "floatingPanelProgress":
+        window.taskbarLyricsFloatingPanel?.applyProgress(payload?.progress);
+        break;
+      case "floatingPointer":
+        window.taskbarLyricsFloatingPanel?.setPointerInside(payload?.inside === true);
         break;
     }
   }

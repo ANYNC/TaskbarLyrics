@@ -12,8 +12,8 @@
     <div class="shell">
       <button id="cover" class="cover" type="button" aria-label="展开播放控制" aria-expanded="false">
         <span id="coverFallback" class="cover-fallback">N</span>
-        <img id="coverImage" class="cover-image" alt="" />
-        <img id="coverImageNext" class="cover-image" alt="" />
+        <img id="coverImage" class="cover-image" alt="" draggable="false" />
+        <img id="coverImageNext" class="cover-image" alt="" draggable="false" />
         <span class="cover-interaction" aria-hidden="true">
           <svg class="cover-action-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="m5 11 7-6 7 6M5 19l7-6 7 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
@@ -111,8 +111,8 @@
             <svg viewBox="0 0 24 24" aria-hidden="true"><path class="skip-triangle" d="M5.9 5.2C5.1 4.7 4 5.3 4 6.3v11.4c0 1 1.1 1.6 1.9 1.1l8.5-5.7a1.3 1.3 0 0 0 0-2.2L5.9 5.2Z"/><path d="M19 5.5v13"/></svg>
           </button>
         </div>
-        <input id="panelSeek" class="panel-seek" type="range" min="0" max="1000" value="0" disabled aria-label="播放位置" />
         <span id="panelElapsed" class="panel-time">0:00</span>
+        <input id="panelSeek" class="panel-seek" type="range" min="0" max="1000" value="0" disabled aria-label="播放位置" />
         <span id="panelDuration" class="panel-time">4:49</span>
       </div>
     </section>

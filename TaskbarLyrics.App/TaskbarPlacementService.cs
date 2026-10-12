@@ -26,7 +26,10 @@ internal sealed class TaskbarPlacementService
             : ConvertPhysicalDisplayMetrics(targetDisplay.Bounds, targetDisplay.WorkArea, pixelsPerDip);
         var taskbar = ResolveTaskbarBounds(display);
         var metrics = LyricsLayoutMetrics.Create(settings, pixelsPerDip);
-        window.Height = Math.Min(metrics.DesiredWindowHeight, display.Height);
+        // A floating surface that can host the control panel reserves its frame up front,
+        // so opening the panel never has to move the window anchor.
+        var frameInset = settings.ResolveFloatingFrameInset();
+        window.Height = Math.Min(metrics.DesiredWindowHeight + (2 * frameInset), display.Height);
 
         if (settings.UseFloatingWindow &&
             settings.FloatingWindowPlacement.TryGet(targetDisplay?.Id, out var floatingPlacement))
@@ -143,10 +146,33 @@ internal sealed class TaskbarPlacementService
     }
 
     /// <summary>
-    /// Moves and resizes the window with a single native call before updating the WPF
-    /// properties, so no intermediate geometry is ever composited.
+    /// Moves and resizes the window with a single native call and then mirrors the values
+    /// into the WPF properties.
     /// </summary>
     internal static bool ApplyLogicalBounds(Window window, Rect bounds, double pixelsPerDip)
+    {
+        if (!ApplyNativeBounds(window, bounds, pixelsPerDip))
+        {
+            return false;
+        }
+
+        // WPF re-applies the same numbers here, which is a visual no-op once the native
+        // geometry already matches.
+        window.Left = bounds.Left;
+        window.Top = bounds.Top;
+        window.Width = bounds.Width;
+        window.Height = bounds.Height;
+        return true;
+    }
+
+    /// <summary>
+    /// Applies the geometry natively without touching the WPF properties. Every WPF
+    /// property write issues its own native move, so animating through them leaves
+    /// intermediate states behind — a window that moved to its new top while still
+    /// carrying the old height is exactly the "lyrics jumped up and snapped back" glitch
+    /// when the panel reveals upwards.
+    /// </summary>
+    internal static bool ApplyNativeBounds(Window window, Rect bounds, double pixelsPerDip)
     {
         var hwnd = new WindowInteropHelper(window).Handle;
         if (hwnd == IntPtr.Zero)
@@ -160,7 +186,7 @@ internal sealed class TaskbarPlacementService
             bounds.Width,
             bounds.Height,
             pixelsPerDip);
-        TaskbarNativeMethods.SetWindowPos(
+        return TaskbarNativeMethods.SetWindowPos(
             hwnd,
             IntPtr.Zero,
             physical.Left,
@@ -168,11 +194,38 @@ internal sealed class TaskbarPlacementService
             physical.Width,
             physical.Height,
             TaskbarNativeMethods.SWP_NOZORDER | TaskbarNativeMethods.SWP_NOACTIVATE);
-        // WPF then re-applies the same numbers, which is a visual no-op.
-        window.Left = bounds.Left;
-        window.Top = bounds.Top;
-        window.Width = bounds.Width;
-        window.Height = bounds.Height;
+    }
+
+    /// <summary>
+    /// Reads the window's real bounds as DIP. The WPF properties can be stale (an OS move
+    /// loop or any external reposition bypasses them), and the reveal geometry must start
+    /// from where the window actually is.
+    /// </summary>
+    internal static bool TryGetNativeLogicalBounds(Window window, double pixelsPerDip, out Rect bounds)
+    {
+        bounds = Rect.Empty;
+        var hwnd = new WindowInteropHelper(window).Handle;
+        if (hwnd == IntPtr.Zero || !TaskbarNativeMethods.GetWindowRect(hwnd, out var rect))
+        {
+            return false;
+        }
+
+        var width = rect.Right - rect.Left;
+        var height = rect.Bottom - rect.Top;
+        if (width <= 0 || height <= 0)
+        {
+            return false;
+        }
+
+        var scale = pixelsPerDip > 0 && double.IsFinite(pixelsPerDip)
+            ? pixelsPerDip
+            : GetPixelsPerDip(window);
+        if (scale <= 0 || !double.IsFinite(scale))
+        {
+            return false;
+        }
+
+        bounds = new Rect(rect.Left / scale, rect.Top / scale, width / scale, height / scale);
         return true;
     }
 

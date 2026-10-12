@@ -1,12 +1,14 @@
 (function () {
   "use strict";
 
-  // Floating-window control panel. The host owns the native window geometry; this
-  // module owns the expanded layout, the surface layering and the hover timing.
+  // Floating-window control panel. The host owns the native window geometry and drives
+  // the reveal progress frame by frame, so the panel height and the window height always
+  // advance together; this module owns the surface layering and the hover timing.
   const PANEL_BASE_HEIGHT = 48;
   const PANEL_INSET = 4;
   const PANEL_GAP = 4;
   const COLLAPSE_DELAY_MS = 1500;
+  const REVEAL_DURATION_MS = 200;
   const DEPTH_LAYER_STEP = 0.05;
 
   const layout = document.getElementById("layout");
@@ -29,15 +31,20 @@
   let enabled = false;
   let surfaceTone = 0;
   let themeLight = false;
-  let scaleFactor = 1;
   let panelHeight = PANEL_BASE_HEIGHT;
   let expandRequested = false;
   let expanded = false;
-  let direction = "down";
+  let revealDepth = false;
+  // True while the surface keeps the panel slot reserved: the lyrics stay pinned to their
+  // resting height and the panel owns the extra window height.
+  let slotReserved = false;
+  // Resting surface height, recorded with the resting lyrics pin so a release can wait for
+  // the viewport to actually shrink back to it.
+  let restingViewportHeight = 0;
+  let releasePending = false;
   let collapseTimer = 0;
   let hasTrack = false;
   let isPlaying = false;
-  let translationEnabled = false;
   let positionSeconds = 0;
   let durationSeconds = 0;
   let canSeek = false;
@@ -59,23 +66,23 @@
 
   /**
    * Expanded surfaces always carry their own background: a nearly transparent one is
-   * deepened to 80% so the panel keeps contrast, while an already dense surface keeps
-   * its tone. The outer frame stays 5% lighter in density to separate the two layers.
+   * deepened to 80% so the panel keeps contrast, while an already dense surface keeps its
+   * tone. The outer frame stays 5% lighter in density to separate the two layers. A
+   * transparent surface follows the interface theme colour instead.
    */
   function resolveExpandedSurfaces(tone) {
-    // A transparent surface (tone 0) falls back to the interface theme colour, so the
-    // light theme deepens towards white and the dark theme towards black.
     const channelIsBlack = tone === 0 ? !themeLight : tone > 0;
     const density = Math.abs(tone) / 100;
-    const inner = density >= 0.8
-      ? Math.min(1, density)
-      : 0.8;
-    const red = channelIsBlack ? 0 : 255;
-    const green = channelIsBlack ? 0 : 255;
-    const blue = channelIsBlack ? 0 : 255;
+    const inner = density >= 0.8 ? Math.min(1, density) : 0.8;
+    const frame = Math.max(0, inner - DEPTH_LAYER_STEP);
+    const channel = channelIsBlack ? 0 : 255;
     return {
-      inner: toRgba(red, green, blue, inner),
-      frame: toRgba(red, green, blue, inner - DEPTH_LAYER_STEP)
+      // The lyrics container sits *inside* the frame container, so its own alpha composites
+      // over the frame's instead of replacing it: solve for the alpha that lands the two
+      // layers on `inner`, otherwise the lyrics area reads far denser than the frame around
+      // it (80% over 75% is 95%, not 80%).
+      inner: toRgba(channel, channel, channel, frame >= 1 ? 1 : (inner - frame) / (1 - frame)),
+      frame: toRgba(channel, channel, channel, frame)
     };
   }
 
@@ -87,9 +94,65 @@
     root.style.setProperty("--panel-inset", `${PANEL_INSET}px`);
     root.style.setProperty("--panel-gap", `${PANEL_GAP}px`);
     root.style.setProperty("--panel-height", `${panelHeight}px`);
-    root.style.setProperty(
-      "--panel-growth",
-      `${PANEL_INSET + PANEL_GAP + panelHeight}px`);
+    root.style.setProperty("--panel-duration", `${REVEAL_DURATION_MS}ms`);
+  }
+
+  /**
+   * The host asks for the reveal and this module answers with an acknowledgement once the
+   * panel is laid out below the lyrics; only then does the host grow the window, so the
+   * reveal cannot stretch the lyrics for a frame.
+   */
+  function applyReveal(open) {
+    expanded = open;
+    expandRequested = open;
+    revealDepth = open;
+    // A reveal always wins over a pending release, and it keeps the slot reserved until the
+    // host reports the window has shrunk again.
+    releasePending = false;
+    if (open) {
+      slotReserved = true;
+    }
+
+    applyExpandedClasses();
+    post("floatingPanelLayoutApplied", { open });
+  }
+
+  /**
+   * Drops the panel slot, once the surface really is back at its resting size: the host
+   * reports the window is collapsed as soon as it has shrunk it, but the WebView only sees
+   * the matching viewport a frame or two later, and unpinning in between stretched the
+   * lyrics into the height the surface still had. The panel height is left alone while
+   * retracting as well — the host drives it frame by frame, and zeroing it here made the
+   * panel vanish for a frame before the first frame report put it back.
+   */
+  function releaseSlot(force = false) {
+    if (!force && slotReserved && restingViewportHeight > 0 &&
+      window.innerHeight > restingViewportHeight + 1) {
+      releasePending = true;
+      return;
+    }
+
+    releasePending = false;
+    clearCollapseTimer();
+    expanded = false;
+    expandRequested = false;
+    revealDepth = false;
+    slotReserved = false;
+    applyExpandedClasses();
+    document.documentElement.style.setProperty("--panel-progress-height", "0px");
+  }
+
+  function measureRestingShellHeight() {
+    // Measure the resting lyrics height while the surface is collapsed, then pin it: any
+    // window growth belongs to the panel slot, so the lyrics never stretch or shift while
+    // the reveal animates. Measuring after the frame padding is applied matters — before
+    // that the shell still spans the full window height.
+    const shell = layout.querySelector(".shell");
+    const measured = shell ? Math.round(shell.getBoundingClientRect().height) : 0;
+    if (measured > 0) {
+      document.documentElement.style.setProperty("--panel-shell-height", `${measured}px`);
+      restingViewportHeight = Math.round(window.innerHeight);
+    }
   }
 
   function clearCollapseTimer() {
@@ -100,50 +163,34 @@
   }
 
   function applyExpandedClasses() {
-    layout.classList.toggle("panel-expanded", expanded);
-    layout.classList.toggle("panel-above", expanded && direction === "up");
+    // The slot outlives the reveal: it is released when the host reports the window is back
+    // at its resting size, not when the retract starts.
+    layout.classList.toggle("panel-expanded", slotReserved);
+    // The deepening fades with the reveal: it turns on as soon as the panel starts and off
+    // as soon as the retract starts, so opening and closing follow the same path.
+    layout.classList.toggle("panel-revealed", revealDepth);
   }
 
   /**
-   * The page owns the panel direction so the lyrics never shift: the fixed shell height
-   * and the class change land before the host resizes the window, in one frame.
+   * The host reports the reveal state
+   * (the page only has an estimate of its own screen position, which lagged a drag).
    */
-  function resolveDirection(growth) {
-    const viewportHeight = Number(window.innerHeight) || 0;
-    const screenTop = Number(window.screenY) || 0;
-    const availableBottom = Number(window.screen?.availTop || 0) + (Number(window.screen?.availHeight) || 0);
-    const spaceBelow = availableBottom - (screenTop + viewportHeight);
-    return spaceBelow >= growth ? "down" : "up";
-  }
-
   function requestExpand() {
     if (!enabled || expandRequested) {
       return;
     }
 
     expandRequested = true;
-    direction = resolveDirection(PANEL_INSET + PANEL_GAP + panelHeight);
-    // Pin the lyrics to their current height before the window grows, so the extra
-    // space is added around them instead of stretching them.
-    layout.style.setProperty("--panel-shell-height", `${Math.max(1, layout.clientHeight)}px`);
-    expanded = true;
-    applyExpandedClasses();
     post("floatingPanelToggle", {
       open: true,
       height: panelHeight,
       inset: PANEL_INSET,
-      gap: PANEL_GAP,
-      direction
+      gap: PANEL_GAP
     });
   }
 
   function collapseNow() {
-    clearCollapseTimer();
-    expandRequested = false;
-    expanded = false;
-    layout.classList.remove("panel-closing");
-    layout.style.removeProperty("--panel-shell-height");
-    applyExpandedClasses();
+    releaseSlot(true);
   }
 
   function requestCollapse() {
@@ -151,23 +198,16 @@
       return;
     }
 
-    expandRequested = false;
-    // Animate the panel out but keep the reserved lyrics height until the host has
-    // shrunk the window, so the lyrics stay put during the whole transition.
-    layout.classList.add("panel-closing");
-    window.setTimeout(() => {
-      if (expandRequested) {
-        return;
-      }
-
-      post("floatingPanelToggle", {
-        open: false,
-        height: panelHeight,
-        inset: PANEL_INSET,
-        gap: PANEL_GAP,
-        direction
-      });
-    }, 240);
+    // The host owns the window size and drives the retract frame by frame from here. The
+    // panel slot stays reserved until the host reports the window has shrunk, otherwise the
+    // lyrics stretch into the height the window still has.
+    applyReveal(false);
+    post("floatingPanelToggle", {
+      open: false,
+      height: panelHeight,
+      inset: PANEL_INSET,
+      gap: PANEL_GAP
+    });
   }
 
   function onPointerEnter() {
@@ -208,6 +248,7 @@
 
     if (playPauseEl) {
       playPauseEl.setAttribute("aria-label", isPlaying ? "暂停" : "播放");
+      playPauseEl.disabled = !hasTrack;
     }
 
     if (previousEl) {
@@ -216,10 +257,6 @@
 
     if (nextEl) {
       nextEl.disabled = !hasTrack;
-    }
-
-    if (playPauseEl) {
-      playPauseEl.disabled = !hasTrack;
     }
   }
 
@@ -248,20 +285,25 @@
       return;
     }
 
-    sendAction("seek");
     post("floatingPanelSeek", {
       position: (Number(seekEl.value) / 1000) * durationSeconds
     });
   });
   seekEl.addEventListener("input", () => {
     if (elapsedEl && durationSeconds > 0) {
-      const previewSeconds = (Number(seekEl.value) / 1000) * durationSeconds;
-      elapsedEl.textContent = formatTime(previewSeconds);
+      elapsedEl.textContent = formatTime((Number(seekEl.value) / 1000) * durationSeconds);
     }
   });
 
   layout.addEventListener("mouseenter", onPointerEnter);
   layout.addEventListener("mouseleave", onPointerLeave);
+  // The surface shrinks a frame or two after the host reports it done; that resize is the
+  // moment a pending release can be applied without stretching the lyrics.
+  window.addEventListener("resize", () => {
+    if (releasePending) {
+      releaseSlot();
+    }
+  });
 
   updatePlaybackArt();
   updateTimelineUi();
@@ -273,16 +315,22 @@
       }
 
       const scale = Number(payload.layoutScalePercent);
-      scaleFactor = Number.isFinite(scale) && scale > 0 ? scale / 100 : 1;
-      panelHeight = Math.round(PANEL_BASE_HEIGHT * scaleFactor);
+      panelHeight = Math.round(PANEL_BASE_HEIGHT * (Number.isFinite(scale) && scale > 0 ? scale / 100 : 1));
       surfaceTone = Number(payload.surfaceTone) || 0;
       themeLight = payload.themeLight === true;
       enabled = payload.floatingPanel === true;
       applySurfaceColors();
+      layout.classList.toggle("panel-capable", enabled);
       layout.classList.toggle("panel-unavailable", !enabled);
       if (!enabled) {
-        // The host collapses the geometry itself when the panel becomes unavailable.
-        collapseNow();
+        // Leaving the floating surface must not leave the lyrics pinned to a panel slot, no
+        // matter what the surface height is doing.
+        releaseSlot(true);
+      } else if (!slotReserved) {
+        // Measure the resting lyrics height (the frame padding is applied by now) and pin
+        // it: window growth belongs to the panel slot, so the lyrics neither stretch nor
+        // shift while the reveal animates.
+        measureRestingShellHeight();
       }
     },
     applyTrack(payload) {
@@ -292,7 +340,6 @@
 
       hasTrack = payload.hasTrack === true;
       isPlaying = payload.isPlaying === true;
-      translationEnabled = payload.translationEnabled === true;
       if (titleEl) {
         titleEl.textContent = hasTrack ? (payload.title || "未知曲目") : "暂无播放";
       }
@@ -301,7 +348,6 @@
         artistEl.textContent = hasTrack ? (payload.artist || "") : "当前没有播放内容";
       }
 
-      panelEl.dataset.translation = translationEnabled ? "on" : "off";
       updatePlaybackArt();
     },
     applyTimeline(payload) {
@@ -321,25 +367,45 @@
         return;
       }
 
-      if (payload.open === true) {
-        direction = payload.direction === "up" ? "up" : "down";
-        expanded = enabled;
-        expandRequested = expanded;
-        applyExpandedClasses();
+      if (payload.open === true && enabled) {
+        // The host answers before it grows the window; reserving the slot now is what keeps
+        // the lyrics from stretching while the window grows around them, and the host then
+        // drives the panel height frame by frame.
+        applyReveal(true);
         return;
       }
 
-      collapseNow();
+      // The retract ends here: the window is back at its resting size, so the lyrics may
+      // fill the surface again.
+      releaseSlot();
     },
-    /** Forces the collapsed state without telling the host (it already knows). */
+    /**
+     * Reveal progress driven by the host, so the panel and the window are always the same
+     * fraction of the animation (a CSS-only transition ran on its own clock and the panel
+     * outran the window it lives in).
+     */
+    applyProgress(value) {
+      const progress = Math.max(0, Math.min(1, Number(value) || 0));
+      document.documentElement.style.setProperty(
+        "--panel-progress-height",
+        `${Math.round(panelHeight * progress)}px`);
+    },
+    /**
+     * Pointer presence reported by the host. The floating surface only becomes hit-testable
+     * while the cursor is over it (the host adds its invisible fill then), so a cursor that
+     * arrives without moving afterwards cannot raise a DOM enter event by itself. Leaving is
+     * reported for the same reason, and both paths are idempotent with the DOM events.
+     */
+    setPointerInside(inside) {
+      if (inside) {
+        onPointerEnter();
+        return;
+      }
+
+      onPointerLeave();
+    },
     reset() {
       collapseNow();
-    },
-    get expanded() {
-      return expanded;
-    },
-    get panelHeight() {
-      return panelHeight;
     }
   };
 })();

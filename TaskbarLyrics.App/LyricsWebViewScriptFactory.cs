@@ -91,12 +91,28 @@ internal static class LyricsWebViewScriptFactory
             canSeek
         });
 
-    public static string SetFloatingPanelLayout(bool open, bool above) =>
-        WebViewMessageScriptFactory.Dispatch("taskbarLyrics", "floatingPanelLayout", new
+    public static string SetFloatingPanelLayout(bool open) =>
+        WebViewMessageScriptFactory.Dispatch("taskbarLyrics", "floatingPanelLayout", new { open });
+
+    /// <summary>
+    /// Pointer presence for the floating surface. The host only keeps the transparent-pixel
+    /// fill while the cursor is inside the window, so hovering is reported here as well: a
+    /// cursor that does not move after the fill arrives would otherwise produce no enter event.
+    /// </summary>
+    public static string SetFloatingPointer(bool inside) =>
+        WebViewMessageScriptFactory.Dispatch("taskbarLyrics", "floatingPointer", new { inside });
+
+    /// <summary>
+    /// Reveal progress driven by the host. The panel height and the native window size are
+    /// then the same fraction of one animation; a CSS transition alone ran on its own clock
+    /// and the panel visibly outran the window it lives in.
+    /// </summary>
+    public static string SetFloatingPanelProgress(double progress) =>
+        WebViewMessageScriptFactory.Dispatch("taskbarLyrics", "floatingPanelProgress", new
         {
-            open,
-            direction = above ? "up" : "down"
+            progress = double.IsFinite(progress) ? Math.Clamp(progress, 0, 1) : 0
         });
+
 
     public static string SetSpectrumTuning(SpectrumTuningSettings settings)
     {
