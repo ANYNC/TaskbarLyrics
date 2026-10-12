@@ -167,6 +167,7 @@ public sealed class AppSettings
 
     public bool ShowCover { get; set; } = true;
 
+    /// <summary>Embedded taskbar-cover control panel switch.</summary>
     public bool EnableControlPanel { get; set; } = true;
 
     public double LyricsLayoutScalePercent { get; set; } = DefaultLyricsLayoutScalePercent;
@@ -212,6 +213,10 @@ public sealed class AppSettings
     public bool FloatingWindowFreeDrag { get; set; } = true;
 
     public bool FloatingWindowClickThrough { get; set; }
+
+    // Kept apart from EnableControlPanel so the embedded and floating surfaces can
+    // enable their control panel independently.
+    public bool FloatingWindowControlPanel { get; set; } = true;
 
     // TODO(后续接入): 任务栏不可见时（被完全隐藏或收起）自动改用悬浮窗口显示。
     // 目前仅保存开关状态，渲染路径尚未消费该值。

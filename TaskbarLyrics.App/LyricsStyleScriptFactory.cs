@@ -23,6 +23,9 @@ internal static class LyricsStyleScriptFactory
         var showBackground = floatingWindow ? floatingBackground.ShowBackground : settings.ShowBackground;
         var backgroundTone = floatingWindow ? floatingBackground.Tone : settings.BackgroundTone;
         var showBorder = floatingWindow ? floatingBackground.ShowBorder : settings.ShowBorder;
+        // A transparent surface (or no surface at all) counts as zero density for the
+        // contrast rules below.
+        var effectiveTone = showBackground ? backgroundTone : 0;
         var stylePayload = new
         {
             fontFamily = AppSettings.NormalizeFontFamily(settings.FontFamily),
@@ -31,6 +34,11 @@ internal static class LyricsStyleScriptFactory
             showCover = settings.ShowCover,
             coverPosition = settings.CoverPosition,
             enableControlPanel = settings.EnableControlPanel && !floatingWindow,
+            floatingPanel = floatingWindow &&
+                settings.FloatingWindowControlPanel &&
+                !settings.FloatingWindowClickThrough,
+            surfaceTone = effectiveTone,
+            themeLight = NativeWindowTheme.IsLight,
             freeDrag = floatingWindow && settings.FloatingWindowFreeDrag && !settings.FloatingWindowClickThrough,
             coverSize = metrics.CoverSize,
             coverGap = metrics.CoverGap,

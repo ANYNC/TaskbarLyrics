@@ -24,8 +24,15 @@ internal static class NativeWindowInteraction
 
     public static void BeginDrag(Window window)
     {
+        NonClientInteractionActive = true;
         BeginNonClientInteraction(window, HitTestCaption);
     }
+
+    /// <summary>
+    /// True while the OS owns a move/resize loop. Re-anchoring during that loop would
+    /// fight the user's gesture (the window snaps back to its stale bounds).
+    /// </summary>
+    internal static bool NonClientInteractionActive { get; private set; }
 
     public static void BeginResize(Window window, string? edge)
     {
@@ -64,6 +71,9 @@ internal static class NativeWindowInteraction
         _ = ReleaseCapture();
         _ = SendMessage(hwnd, WindowMessageNonClientLeftButtonDown, hitTest, 0);
     }
+
+    /// <summary>Called from the window procedure when the OS move/resize loop ends.</summary>
+    internal static void EndNonClientInteraction() => NonClientInteractionActive = false;
 
     /// <summary>
     /// Computes the extended style that makes a window ignore mouse input and, for the

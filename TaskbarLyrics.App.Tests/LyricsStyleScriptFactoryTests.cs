@@ -18,6 +18,52 @@ public sealed class LyricsStyleScriptFactoryTests
         Assert.Equal(enabled, settings.EnableControlPanel);
     }
 
+    [Theory]
+    [InlineData(true, true, false, true)]
+    [InlineData(true, false, false, false)]
+    [InlineData(false, true, false, false)]
+    [InlineData(true, true, true, false)]
+    public void CreateEmitsFloatingPanelAvailability(
+        bool floating,
+        bool panelEnabled,
+        bool clickThrough,
+        bool expected)
+    {
+        var settings = new AppSettings
+        {
+            UseFloatingWindow = floating,
+            FloatingWindowControlPanel = panelEnabled,
+            FloatingWindowClickThrough = clickThrough
+        };
+
+        var script = LyricsStyleScriptFactory.Create(settings, pixelsPerDip: 1);
+
+        Assert.Contains($"\"floatingPanel\":{expected.ToString().ToLowerInvariant()}", script);
+    }
+
+    [Fact]
+    public void CreateEmitsTheSignedSurfaceToneForTheActiveDisplayMode()
+    {
+        var settings = new AppSettings
+        {
+            UseFloatingWindow = true,
+            ShowBackground = true,
+            BackgroundTone = 90,
+            FloatingWindowBackground = new FloatingWindowBackgroundSettings
+            {
+                ShowBackground = false,
+                Tone = -55
+            }
+        };
+
+        var floatingScript = LyricsStyleScriptFactory.Create(settings, pixelsPerDip: 1);
+        Assert.Contains("\"surfaceTone\":0", floatingScript);
+
+        settings.UseFloatingWindow = false;
+        var embeddedScript = LyricsStyleScriptFactory.Create(settings, pixelsPerDip: 1);
+        Assert.Contains("\"surfaceTone\":90", embeddedScript);
+    }
+
     [Fact]
     public void CreateEmitsFloatingWindowSurfaceAndFreeDragForFloatingModeOnly()
     {

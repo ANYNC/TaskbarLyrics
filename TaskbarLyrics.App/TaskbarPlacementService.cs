@@ -142,6 +142,72 @@ internal sealed class TaskbarPlacementService
             workArea.Height);
     }
 
+    /// <summary>
+    /// Moves and resizes the window with a single native call before updating the WPF
+    /// properties, so no intermediate geometry is ever composited.
+    /// </summary>
+    internal static bool ApplyLogicalBounds(Window window, Rect bounds, double pixelsPerDip)
+    {
+        var hwnd = new WindowInteropHelper(window).Handle;
+        if (hwnd == IntPtr.Zero)
+        {
+            return false;
+        }
+
+        var physical = ConvertLogicalWindowBounds(
+            bounds.Left,
+            bounds.Top,
+            bounds.Width,
+            bounds.Height,
+            pixelsPerDip);
+        TaskbarNativeMethods.SetWindowPos(
+            hwnd,
+            IntPtr.Zero,
+            physical.Left,
+            physical.Top,
+            physical.Width,
+            physical.Height,
+            TaskbarNativeMethods.SWP_NOZORDER | TaskbarNativeMethods.SWP_NOACTIVATE);
+        // WPF then re-applies the same numbers, which is a visual no-op.
+        window.Left = bounds.Left;
+        window.Top = bounds.Top;
+        window.Width = bounds.Width;
+        window.Height = bounds.Height;
+        return true;
+    }
+
+    /// <summary>
+    /// Copies the window's real bounds back into its WPF properties. A native move loop
+    /// (the free-drag gesture) moves the HWND without telling WPF, so every later layout
+    /// pass — including the floating panel and the placement captured on drop — would
+    /// otherwise snap the window back to its pre-drag position.
+    /// </summary>
+    internal static bool SyncBoundsFromNativeWindow(Window window, double pixelsPerDip)
+    {
+        var hwnd = new WindowInteropHelper(window).Handle;
+        if (hwnd == IntPtr.Zero ||
+            !TaskbarNativeMethods.GetWindowRect(hwnd, out var rect) ||
+            rect.Right <= rect.Left ||
+            rect.Bottom <= rect.Top)
+        {
+            return false;
+        }
+
+        var scale = pixelsPerDip > 0 && double.IsFinite(pixelsPerDip)
+            ? pixelsPerDip
+            : GetPixelsPerDip(window);
+        if (scale <= 0 || !double.IsFinite(scale))
+        {
+            return false;
+        }
+
+        window.Left = rect.Left / scale;
+        window.Top = rect.Top / scale;
+        window.Width = (rect.Right - rect.Left) / scale;
+        window.Height = (rect.Bottom - rect.Top) / scale;
+        return true;
+    }
+
     private static void CommitNativeBounds(Window window, double pixelsPerDip)
     {
         var hwnd = new WindowInteropHelper(window).Handle;
@@ -434,6 +500,9 @@ internal static class TaskbarNativeMethods
         int cx,
         int cy,
         uint uFlags);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    internal static extern bool GetWindowRect(IntPtr hWnd, out NativeRect rect);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     internal static extern uint RegisterWindowMessage(string lpString);

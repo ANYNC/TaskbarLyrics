@@ -64,6 +64,11 @@
   --surface-color: transparent;
   --surface-shadow: none;
   --text-shadow: 0 1px 2px rgba(0, 0, 0, 0.36);
+  --surface-color-expanded: transparent;
+  --surface-color-frame: transparent;
+  --panel-height: 0px;
+  --panel-inset: 0px;
+  --panel-gap: 0px;
   --line-transform-origin: left center;
 }
 
@@ -639,6 +644,244 @@ html, body {
   }
 }
 
+/* Floating-window control panel. The expanded surface nests two containers: the
+   outer frame (the layout itself) and the lyrics shell, which gains its own
+   rounded background. Both fade in with the panel so the resized host window
+   never flashes a bare rectangle. */
+.layout.panel-expanded {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--panel-gap);
+  /* No bottom inset: the lyrics keep their exact screen position, only the side facing
+     the panel and the outer edges gain the frame. */
+  padding: var(--panel-inset) var(--panel-inset) 0;
+  background: var(--surface-color-frame);
+  border-radius: calc(var(--surface-radius) + var(--panel-inset));
+  box-shadow: none;
+  transition: background-color 220ms ease;
+}
+
+.layout.panel-expanded.panel-above {
+  flex-direction: column-reverse;
+}
+
+.layout.panel-expanded .shell {
+  /* The panel reserves its own space, so the lyrics keep the exact height they had
+     before the window grew. The height is pinned by the page before the host resizes,
+     which keeps the lyrics from moving for even one frame. */
+  flex: 0 0 auto;
+  height: var(--panel-shell-height, 100%);
+  padding: 0 var(--layout-padding-inline);
+  background: var(--surface-color-expanded);
+  border-radius: var(--surface-radius);
+  box-shadow: var(--surface-shadow);
+  transition: background-color 220ms ease;
+}
+
+.floating-panel {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  height: 0;
+  padding: 0 6px;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(-4px);
+  pointer-events: none;
+  transition:
+    height 220ms cubic-bezier(0.22, 0.72, 0.24, 1),
+    opacity 160ms ease,
+    transform 220ms cubic-bezier(0.22, 0.72, 0.24, 1);
+}
+
+.layout.panel-expanded.panel-above .floating-panel {
+  transform: translateY(4px);
+}
+
+.layout.panel-expanded .floating-panel {
+  height: var(--panel-height);
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+
+.layout.panel-closing .floating-panel {
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.layout.panel-unavailable .floating-panel {
+  display: none;
+}
+
+.floating-panel-track {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.floating-panel-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.floating-panel-title {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 70%;
+  font-size: var(--current-size);
+  font-weight: var(--font-weight);
+  color: var(--primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.floating-panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+}
+
+.panel-icon-button {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--primary);
+  cursor: pointer;
+  transition: background-color 140ms ease, opacity 140ms ease;
+}
+
+.panel-icon-button svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+
+.panel-icon-button svg .skip-triangle {
+  fill: currentColor;
+  stroke: none;
+}
+
+.panel-icon-button:hover:not(:disabled) {
+  background: rgba(127, 127, 127, 0.22);
+}
+
+.panel-icon-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.panel-icon-button svg.is-hidden {
+  display: none;
+}
+
+.panel-play-button {
+  width: 24px;
+  height: 24px;
+}
+
+.panel-play-button svg {
+  width: 16px;
+  height: 16px;
+}
+
+.floating-panel-track {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.floating-panel-title {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 70%;
+  font-size: var(--current-size);
+  font-weight: var(--font-weight);
+  color: var(--primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.floating-panel-artist {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--next-size);
+  color: var(--secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.floating-panel-timeline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.panel-time {
+  font-size: 10px;
+  color: var(--secondary);
+  font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
+}
+
+.panel-seek {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 12px;
+  margin: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.panel-seek:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.panel-seek::-webkit-slider-runnable-track {
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(127, 127, 127, 0.42);
+}
+
+.panel-seek::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 9px;
+  height: 9px;
+  margin-top: -3px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--primary);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .lyrics-layer,
   .spectrum-layer,
@@ -662,5 +905,11 @@ html, body {
   .line.horizontal-scrolling.word-scan-smoothing .line-text-stack {
     transition: none;
     will-change: auto;
+  }
+
+  .layout.panel-expanded,
+  .layout.panel-expanded .shell,
+  .floating-panel {
+    transition: none;
   }
 }

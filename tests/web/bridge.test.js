@@ -1381,7 +1381,7 @@ describe("settings WebView bridge", () => {
     const document = dom.window.document;
     const toggle = document.querySelector('input[data-setting="enableControlPanel"]');
     const row = document.querySelector("#embeddedControlPanelRow");
-    expect(document.querySelectorAll('input[data-setting="enableControlPanel"]')).toHaveLength(2);
+    expect(document.querySelectorAll('input[data-setting="enableControlPanel"]')).toHaveLength(1);
     expect(row.closest(".embedded-window-mode-card")).not.toBeNull();
     expect(row.closest(".window-mode-choice")).toBeNull();
     expect(toggle.disabled).toBe(disabled);
@@ -1809,6 +1809,7 @@ describe("settings WebView bridge", () => {
       settings: {
         useFloatingWindow: true,
         enableControlPanel: true,
+        floatingWindowControlPanel: true,
         floatingWindowFreeDrag: true,
         floatingWindowClickThrough: false
       }

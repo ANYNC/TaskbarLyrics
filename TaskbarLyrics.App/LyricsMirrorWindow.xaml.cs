@@ -11,12 +11,14 @@ namespace TaskbarLyrics.App;
 
 internal partial class LyricsMirrorWindow : Window, IDisposable
 {
-    private static readonly string[] InitialScriptSlots = ["style", "lyrics", "cover", "spectrumTuning", "spectrum"];
+    private static readonly string[] InitialScriptSlots =
+        ["style", "lyrics", "cover", "spectrumTuning", "spectrum", "panelTrack", "panelTimeline"];
 
     private readonly Dictionary<string, string> _pendingScripts = new(StringComparer.Ordinal);
     private readonly EmbeddedTaskbarAnchor _embeddedTaskbarAnchor = new();
     private readonly SmartTopmostController _smartTopmostController;
     private readonly WindowClickThroughController _clickThroughController;
+    private readonly FloatingPanelHost _floatingPanelHost;
     private readonly Action<Rect, DisplayMonitor, Action<bool>> _onCoverClicked;
     private DisplayMonitor _displayMonitor;
     private AppSettings _settings = new();
@@ -35,6 +37,7 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
         LyricsWebView.Visibility = Visibility.Hidden;
         _smartTopmostController = new SmartTopmostController(this);
         _clickThroughController = new WindowClickThroughController(this);
+        _floatingPanelHost = new FloatingPanelHost(this);
         _displayMonitor = displayMonitor;
         Loaded += OnLoaded;
         SourceInitialized += OnSourceInitialized;
@@ -46,6 +49,8 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
 
     internal event EventHandler<FloatingWindowPositionChangedEventArgs>? FloatingWindowPositionChanged;
 
+    internal event EventHandler<FloatingPanelActionRequestedEventArgs>? FloatingPanelActionRequested;
+
     public void SetDisplayMonitor(DisplayMonitor displayMonitor)
     {
         _displayMonitor = displayMonitor;
@@ -53,13 +58,18 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
 
     public void ApplySettings(AppSettings settings)
     {
+        // Settings changes re-anchor the mirror, so an open panel collapses first and
+        // reopens on the next hover instead of fighting the new bounds.
+        RestoreFloatingPanelBounds();
         _settings = settings.Clone();
         _smartTopmostController.ApplySettings(
             _settings.UseFloatingWindow,
             _settings.ForceAlwaysOnTop,
             _displayMonitor.Bounds);
         ApplyWindowInputMode();
-        RootBorder.Background = System.Windows.Media.Brushes.Transparent;
+        RootBorder.Background = _settings.UseFloatingWindow
+            ? FloatingWindowHitSurface.Fill
+            : System.Windows.Media.Brushes.Transparent;
         var pixelsPerDip = _displayMonitor.PixelsPerDip;
         var metrics = LyricsLayoutMetrics.Create(_settings, pixelsPerDip);
         Width = !_settings.UseFloatingWindow
@@ -120,6 +130,7 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
             return;
         }
 
+        RestoreFloatingPanelBounds();
         NativeWindowInteraction.BeginDrag(this);
     }
 
@@ -130,12 +141,18 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
             return;
         }
 
+        // See MainWindow: WPF does not observe the native move loop.
+        TaskbarPlacementService.SyncBoundsFromNativeWindow(this, _displayMonitor.PixelsPerDip);
         var placement = TaskbarPlacementService.TryCaptureFloatingPlacement(
             this,
             _displayMonitor,
             _displayMonitor.PixelsPerDip);
         if (placement is not null)
         {
+            _settings.FloatingWindowPlacement.Set(
+                _displayMonitor.Id,
+                placement.OffsetX,
+                placement.OffsetY);
             FloatingWindowPositionChanged?.Invoke(
                 this,
                 new FloatingWindowPositionChangedEventArgs(_displayMonitor.Id, placement));
@@ -210,6 +227,7 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
     {
         if (msg == NativeWindowInteraction.WindowMessageExitSizeMove)
         {
+            NativeWindowInteraction.EndNonClientInteraction();
             OnDragCompleted();
         }
 
@@ -236,6 +254,51 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
         }
     }
 
+    /// <summary>
+    /// Grows the window around the floating control panel exactly like the primary
+    /// window does; the lyrics keep their screen position.
+    /// </summary>
+    private void ApplyFloatingPanelToggle(bool open, double panelHeight, double inset, double gap, bool above)
+    {
+        if (!_settings.UseFloatingWindow)
+        {
+            return;
+        }
+
+        if (!open)
+        {
+            RestoreFloatingPanelBounds();
+            return;
+        }
+
+        if (_floatingPanelHost.TryExpand(_displayMonitor, panelHeight, inset, gap, above, out var appliedAbove))
+        {
+            PushFloatingPanelLayout(open: true, appliedAbove);
+        }
+    }
+
+    private void RestoreFloatingPanelBounds()
+    {
+        if (!_floatingPanelHost.Collapse())
+        {
+            return;
+        }
+
+        PushFloatingPanelLayout(open: false, above: false);
+    }
+
+    private void PushFloatingPanelLayout(bool open, bool above)
+    {
+        if (_isDisposed || !_isWebReady || LyricsWebView.CoreWebView2 is null)
+        {
+            return;
+        }
+
+        TaskObserver.Observe(
+            LyricsWebView.ExecuteScriptAsync(LyricsWebViewScriptFactory.SetFloatingPanelLayout(open, above)),
+            "lyrics mirror floating panel layout");
+    }
+
     private void OnWebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
     {
         if (_isDisposed)
@@ -249,6 +312,25 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
             if (LyricsWebMessageRouter.IsWindowDragRequest(message))
             {
                 OnWindowDragRequested();
+                return;
+            }
+
+            if (LyricsWebMessageRouter.TryGetFloatingPanelToggle(
+                message, out var panelOpen, out var panelHeight, out var panelInset, out var panelGap, out var panelAbove))
+            {
+                ApplyFloatingPanelToggle(panelOpen, panelHeight, panelInset, panelGap, panelAbove);
+                return;
+            }
+
+            if (LyricsWebMessageRouter.TryGetFloatingPanelAction(message, out var panelAction))
+            {
+                FloatingPanelActionRequested?.Invoke(this, new FloatingPanelActionRequestedEventArgs(panelAction));
+                return;
+            }
+
+            if (LyricsWebMessageRouter.TryGetFloatingPanelSeek(message, out var panelSeek))
+            {
+                FloatingPanelActionRequested?.Invoke(this, new FloatingPanelActionRequestedEventArgs("seek", panelSeek));
                 return;
             }
 

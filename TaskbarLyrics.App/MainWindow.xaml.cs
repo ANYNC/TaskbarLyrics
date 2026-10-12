@@ -54,6 +54,15 @@ public partial class MainWindow : Window, IDisposable
     private string _currentCoverFallbackColorCss = "rgba(67, 160, 71, 1)";
     private string _currentCoverFallbackIconDataUri = string.Empty;
     private LyricsControlPanelWindow? _controlPanelWindow;
+    private readonly FloatingPanelHost _floatingPanelHost;
+    private string _lastPanelTitle = string.Empty;
+    private string _lastPanelArtist = string.Empty;
+    private bool _lastPanelHasTrack;
+    private bool _lastPanelTranslationEnabled;
+    private bool _lastPanelPlaying;
+    private bool _lastPanelCanSeek;
+    private TimeSpan? _lastPanelDuration;
+    private DateTimeOffset _lastPanelTimelineUtc;
     private Action<bool>? _setControlPanelOpen;
     private DateTimeOffset _lastControlPanelClosedUtc;
     private string _lastPushedFallbackCoverIdentity = string.Empty;
@@ -126,6 +135,7 @@ public partial class MainWindow : Window, IDisposable
 
         _smartTopmostController = new SmartTopmostController(this);
         _clickThroughController = new WindowClickThroughController(this);
+        _floatingPanelHost = new FloatingPanelHost(this);
 
         _trackLyricOffsetStore = trackLyricOffsetStore;
         _openSettings = openSettings;
@@ -346,8 +356,13 @@ public partial class MainWindow : Window, IDisposable
 
         _secondaryTextColor = ForegroundColorPolicy.CreateSecondaryColor(_primaryTextColor);
         _translationTextColor = ForegroundColorPolicy.CreateTranslationColor(_primaryTextColor);
-        // Keep the WPF host transparent; the WebView draws the optional surface.
-        RootBorder.Background = Media.Brushes.Transparent;
+        // Keep the WPF host transparent; the WebView draws the optional surface. A
+        // floating surface still needs an (invisible) layered pixel everywhere: a WPF
+        // layered window drops mouse input on fully transparent pixels, which would
+        // otherwise leave hover, dragging and the control panel without input.
+        RootBorder.Background = settings.UseFloatingWindow
+            ? FloatingWindowHitSurface.Fill
+            : Media.Brushes.Transparent;
         RootBorder.BorderBrush = Media.Brushes.Transparent;
         RootBorder.BorderThickness = new Thickness(0);
     }
@@ -495,6 +510,9 @@ public partial class MainWindow : Window, IDisposable
             return;
         }
 
+        // A drag moves the surface itself, so an open panel collapses before the
+        // native move loop keeps its geometry.
+        RestoreFloatingPanelBounds();
         NativeWindowInteraction.BeginDrag(this);
     }
 
@@ -507,12 +525,21 @@ public partial class MainWindow : Window, IDisposable
             return;
         }
 
+        // The native move loop bypasses WPF, so sync the real bounds before they are
+        // captured as the persisted floating position.
+        TaskbarPlacementService.SyncBoundsFromNativeWindow(this, _displayMonitor.PixelsPerDip);
         var placement = TaskbarPlacementService.TryCaptureFloatingPlacement(
             this,
             _displayMonitor,
             GetTargetPixelsPerDip());
         if (placement is not null)
         {
+            // The window keeps its own snapshot of the settings; without this the next
+            // re-anchor would restore the position the drag started from.
+            _currentSettings.FloatingWindowPlacement.Set(
+                _displayMonitor.Id,
+                placement.OffsetX,
+                placement.OffsetY);
             FloatingWindowPositionChanged?.Invoke(
                 this,
                 new FloatingWindowPositionChangedEventArgs(_displayMonitor.Id, placement));
@@ -854,6 +881,7 @@ public partial class MainWindow : Window, IDisposable
             _controlPanelWindow?.UpdateTimeline(
                 _currentPlaybackPosition, _currentTrack?.Duration ?? TimeSpan.Zero,
                 _isCurrentPlaybackPlaying, _canSeek);
+            PushFloatingPanelToWebView();
             _isTimerTickRunning = false;
         }
     }
@@ -1377,6 +1405,134 @@ public partial class MainWindow : Window, IDisposable
         PublishPresentationCommand("spectrumTuning", script, "lyrics spectrum tuning update");
     }
 
+    /// <summary>
+    /// Feeds the floating control panel. The track payload is deduplicated and pushed
+    /// with the lyric tick, while the timeline follows the same cadence as the
+    /// embedded control panel.
+    /// </summary>
+    private void PushFloatingPanelToWebView()
+    {
+        if (!_isWebViewReady || !_isWebDocumentReady || _isShowingWebErrorPage)
+        {
+            return;
+        }
+
+        var title = _currentTrack?.Title ?? string.Empty;
+        var artist = _currentTrack?.Artist ?? string.Empty;
+        var translationEnabled = _currentSettings.ShowLyricTranslation && _hasTrackTranslation;
+        if (_lastPanelTitle != title ||
+            _lastPanelArtist != artist ||
+            _lastPanelHasTrack != (_currentTrack is not null) ||
+            _lastPanelTranslationEnabled != translationEnabled)
+        {
+            _lastPanelTitle = title;
+            _lastPanelArtist = artist;
+            _lastPanelHasTrack = _currentTrack is not null;
+            _lastPanelTranslationEnabled = translationEnabled;
+            PublishPresentationCommand(
+                "panelTrack",
+                LyricsWebViewScriptFactory.SetFloatingPanelTrack(
+                    title, artist, _currentTrack is not null, _isCurrentPlaybackPlaying, translationEnabled),
+                "lyrics floating panel track");
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var timelineChanged = _lastPanelPlaying != _isCurrentPlaybackPlaying ||
+            _lastPanelCanSeek != _canSeek ||
+            _lastPanelDuration != _currentTrack?.Duration;
+        if (!timelineChanged && now - _lastPanelTimelineUtc < TimeSpan.FromMilliseconds(250))
+        {
+            return;
+        }
+
+        _lastPanelTimelineUtc = now;
+        _lastPanelPlaying = _isCurrentPlaybackPlaying;
+        _lastPanelCanSeek = _canSeek;
+        _lastPanelDuration = _currentTrack?.Duration;
+        PublishPresentationCommand(
+            "panelTimeline",
+            LyricsWebViewScriptFactory.SetFloatingPanelTimeline(
+                _currentPlaybackPosition.TotalSeconds,
+                (_currentTrack?.Duration ?? TimeSpan.Zero).TotalSeconds,
+                _isCurrentPlaybackPlaying,
+                _canSeek),
+            "lyrics floating panel timeline");
+    }
+
+    /// <summary>
+    /// Applies the panel geometry the lyrics surface asked for. The lyrics keep their
+    /// screen position: the window grows downwards, or upwards where the work area
+    /// leaves no room below.
+    /// </summary>
+    private void ApplyFloatingPanelToggle(bool open, double panelHeight, double inset, double gap, bool above)
+    {
+        if (!_currentSettings.UseFloatingWindow)
+        {
+            return;
+        }
+
+        if (!open)
+        {
+            RestoreFloatingPanelBounds();
+            return;
+        }
+
+        if (_floatingPanelHost.TryExpand(_displayMonitor, panelHeight, inset, gap, above, out var appliedAbove))
+        {
+            PushFloatingPanelLayoutToWebView(open: true, appliedAbove);
+        }
+    }
+
+    internal void RestoreFloatingPanelBounds()
+    {
+        if (!_floatingPanelHost.Collapse())
+        {
+            return;
+        }
+
+        PushFloatingPanelLayoutToWebView(open: false, above: false);
+        // Re-anchors were deferred while the panel was open, so the remembered base may
+        // be stale; restore authoritative bounds now that the surface is collapsed.
+        AnchorToTaskbarCore();
+    }
+
+    private void PushFloatingPanelLayoutToWebView(bool open, bool above)
+    {
+        if (!_isWebViewReady || !_isWebDocumentReady || _isShowingWebErrorPage)
+        {
+            return;
+        }
+
+        PublishPresentationCommand(
+            "floatingPanelLayout",
+            LyricsWebViewScriptFactory.SetFloatingPanelLayout(open, above),
+            "lyrics floating panel layout");
+    }
+
+    internal void ExecuteFloatingPanelAction(string action)
+    {
+        if (string.Equals(action, "seek", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        var mediaAction = action switch
+        {
+            "previous" => MediaHotkeyAction.PreviousTrack,
+            "next" => MediaHotkeyAction.NextTrack,
+            _ => MediaHotkeyAction.TogglePlayPause
+        };
+        TaskObserver.Observe(ExecuteMediaHotkeyAsync(mediaAction, CancellationToken.None), $"floating panel {action}");
+        PushFloatingPanelToWebView();
+    }
+
+    internal void ExecuteFloatingPanelSeek(TimeSpan position)
+    {
+        TaskObserver.Observe(
+            _mediaPlaybackController.SeekToAsync(position, CancellationToken.None),
+            "floating panel seek");
+    }
+
     private void SendSpectrumToWebView(string script)
     {
         var task = ExecuteWebScriptAsync(script);
@@ -1629,6 +1785,22 @@ public partial class MainWindow : Window, IDisposable
                 TryBeginFloatingWindowDrag();
                 return;
             }
+            if (LyricsWebMessageRouter.TryGetFloatingPanelToggle(
+                message, out var panelOpen, out var panelHeight, out var panelInset, out var panelGap, out var panelAbove))
+            {
+                ApplyFloatingPanelToggle(panelOpen, panelHeight, panelInset, panelGap, panelAbove);
+                return;
+            }
+            if (LyricsWebMessageRouter.TryGetFloatingPanelAction(message, out var panelAction))
+            {
+                ExecuteFloatingPanelAction(panelAction);
+                return;
+            }
+            if (LyricsWebMessageRouter.TryGetFloatingPanelSeek(message, out var panelSeek))
+            {
+                ExecuteFloatingPanelSeek(panelSeek);
+                return;
+            }
             if (message?.Payload is not { ValueKind: JsonValueKind.Object } payload ||
                 !string.Equals(message.Type, "coverDecodeError", StringComparison.Ordinal))
             {
@@ -1839,6 +2011,7 @@ public partial class MainWindow : Window, IDisposable
                 File.ReadAllText(Path.Combine(lyricsWebDir, "bridge.js")),
                 File.ReadAllText(Path.Combine(lyricsWebDir, "state.js")),
                 File.ReadAllText(Path.Combine(lyricsWebDir, "presentation.js")),
+                File.ReadAllText(Path.Combine(lyricsWebDir, "floatingPanel.js")),
                 File.ReadAllText(Path.Combine(lyricsWebDir, "app.js"))
             ]);
 
@@ -1896,6 +2069,34 @@ public partial class MainWindow : Window, IDisposable
 
     private void AnchorToTaskbar()
     {
+        // The OS owns the geometry while the user moves the window; re-anchoring here
+        // would snap it back to the recorded bounds mid-gesture.
+        if (NativeWindowInteraction.NonClientInteractionActive)
+        {
+            return;
+        }
+
+        if (_floatingPanelHost.IsExpanded)
+        {
+            // The surface is currently sized for an open panel, and a re-anchor resizes
+            // it twice per pass (back to base, then out again), which reads as flicker.
+            // Wait until the panel closes — RestoreFloatingPanelBounds re-anchors then —
+            // unless the panel is no longer allowed, in which case drop it first.
+            if (_currentSettings.UseFloatingWindow &&
+                _currentSettings.FloatingWindowControlPanel &&
+                !_currentSettings.FloatingWindowClickThrough)
+            {
+                return;
+            }
+
+            RestoreFloatingPanelBounds();
+        }
+
+        AnchorToTaskbarCore();
+    }
+
+    private void AnchorToTaskbarCore()
+    {
         var wasEmbedded = _embeddedTaskbarAnchor.IsAttached;
         if (!_currentSettings.UseFloatingWindow)
         {
@@ -1939,6 +2140,9 @@ public partial class MainWindow : Window, IDisposable
     protected override void OnDpiChanged(DpiScale oldDpi, DpiScale newDpi)
     {
         base.OnDpiChanged(oldDpi, newDpi);
+        // A real DPI change invalidates the panel geometry, so drop the panel before the
+        // refresh re-anchors the surface.
+        RestoreFloatingPanelBounds();
         QueueDisplayLayoutRefresh();
     }
 
@@ -2005,6 +2209,7 @@ public partial class MainWindow : Window, IDisposable
     {
         if (msg == NativeWindowInteraction.WindowMessageExitSizeMove)
         {
+            NativeWindowInteraction.EndNonClientInteraction();
             OnFloatingWindowDragCompleted();
         }
 
@@ -2044,11 +2249,15 @@ public partial class MainWindow : Window, IDisposable
             return;
         }
 
-        if (!IsVisible)
+        if (IsVisible)
         {
-            Show();
+            // The lyrics tick runs several times per second. Re-anchoring here would
+            // move the window back to its recorded bounds on every tick, which fights
+            // both the user's drag and an open control panel.
+            return;
         }
 
+        Show();
         AnchorToTaskbar();
         AttachToTaskbarHost();
     }

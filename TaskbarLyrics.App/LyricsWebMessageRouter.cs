@@ -45,6 +45,79 @@ internal static class LyricsWebMessageRouter
     public static bool IsWindowDragRequest(WebViewMessage? message) =>
         string.Equals(message?.Type, "windowDrag", StringComparison.Ordinal);
 
+    /// <summary>
+    /// Panel size request from the floating lyrics surface. The height must be finite
+    /// and positive because the host sizes its native window from it.
+    /// </summary>
+    public static bool TryGetFloatingPanelToggle(
+        WebViewMessage? message,
+        out bool open,
+        out double panelHeight,
+        out double inset,
+        out double gap,
+        out bool above)
+    {
+        open = false;
+        panelHeight = 0;
+        inset = 0;
+        gap = 0;
+        above = false;
+        if (message?.Type != "floatingPanelToggle" ||
+            message.Payload is not { ValueKind: JsonValueKind.Object } payload ||
+            !payload.TryGetProperty("open", out var openElement) ||
+            openElement.ValueKind is not (JsonValueKind.True or JsonValueKind.False) ||
+            !TryReadNumber(payload, "height", out panelHeight) ||
+            !TryReadNumber(payload, "inset", out inset) ||
+            !TryReadNumber(payload, "gap", out gap) ||
+            panelHeight is <= 0 or > 400 ||
+            inset is < 0 or > 40 ||
+            gap is < 0 or > 40)
+        {
+            return false;
+        }
+
+        open = openElement.ValueKind == JsonValueKind.True;
+        // The surface picks the direction from its own screen space so the lyrics can be
+        // pinned before the host resizes the window.
+        if (payload.TryGetProperty("direction", out var directionElement) &&
+            directionElement.ValueKind == JsonValueKind.String)
+        {
+            above = string.Equals(directionElement.GetString(), "up", StringComparison.Ordinal);
+        }
+
+        return true;
+    }
+
+    public static bool TryGetFloatingPanelAction(WebViewMessage? message, out string action)
+    {
+        action = string.Empty;
+        if (message?.Type != "floatingPanelAction" ||
+            message.Payload is not { ValueKind: JsonValueKind.Object } payload ||
+            !payload.TryGetProperty("action", out var element) ||
+            element.ValueKind != JsonValueKind.String)
+        {
+            return false;
+        }
+
+        action = element.GetString() ?? string.Empty;
+        return action is "previous" or "next" or "playPause" or "seek";
+    }
+
+    public static bool TryGetFloatingPanelSeek(WebViewMessage? message, out TimeSpan position)
+    {
+        position = TimeSpan.Zero;
+        if (message?.Type != "floatingPanelSeek" ||
+            message.Payload is not { ValueKind: JsonValueKind.Object } payload ||
+            !TryReadNumber(payload, "position", out var seconds) ||
+            seconds < 0)
+        {
+            return false;
+        }
+
+        position = TimeSpan.FromSeconds(Math.Min(seconds, TimeSpan.MaxValue.TotalSeconds));
+        return true;
+    }
+
     private static bool TryReadNumber(JsonElement payload, string name, out double value)
     {
         value = 0;

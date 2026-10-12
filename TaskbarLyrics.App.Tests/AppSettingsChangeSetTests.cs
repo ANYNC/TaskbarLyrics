@@ -21,6 +21,22 @@ public sealed class AppSettingsChangeSetTests
     }
 
     [Fact]
+    public void FloatingPanelSwitchReappliesStyleAndCollapsesTheOpenPanel()
+    {
+        var current = new AppSettings();
+        var next = current.Clone();
+        next.FloatingWindowControlPanel = false;
+
+        var changes = AppSettingsChangeSet.Create(current, next);
+
+        Assert.True(changes.VisualStyleChanged);
+        // The window layout group re-anchors the surface, which also closes an open panel.
+        Assert.True(changes.WindowLayoutChanged);
+        Assert.True(changes.RequiresLyricsWindowApply);
+        Assert.False(changes.LyricSyncServiceChanged);
+    }
+
+    [Fact]
     public void CreateWhenOnlyVisualStyleChangesDoesNotRebuildLyricsOrHotkeys()
     {
         var current = new AppSettings();

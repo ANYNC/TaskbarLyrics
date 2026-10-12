@@ -1269,6 +1269,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             FloatingWindowBackgroundBorder = _settings.FloatingWindowBackground.ShowBorder,
             FloatingWindowFreeDrag = _settings.FloatingWindowFreeDrag,
             FloatingWindowClickThrough = _settings.FloatingWindowClickThrough,
+            FloatingWindowControlPanel = _settings.FloatingWindowControlPanel,
             FallbackToFloatingWhenTaskbarHidden = _settings.FallbackToFloatingWhenTaskbarHidden,
             WindowWidth = _settings.WindowWidth,
             HorizontalAnchor = _settings.HorizontalAnchor,
@@ -1551,6 +1552,9 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 break;
             case "floatingWindowClickThrough":
                 _settings.FloatingWindowClickThrough = ReadBool(element, _settings.FloatingWindowClickThrough);
+                break;
+            case "floatingWindowControlPanel":
+                _settings.FloatingWindowControlPanel = ReadBool(element, _settings.FloatingWindowControlPanel);
                 break;
             case "fallbackToFloatingWhenTaskbarHidden":
                 _settings.FallbackToFloatingWhenTaskbarHidden = ReadBool(
@@ -2131,6 +2135,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         target.ShowTextShadow = source.ShowTextShadow;
         target.FloatingWindowBackground = (source.FloatingWindowBackground ?? new FloatingWindowBackgroundSettings()).Clone();
         target.FloatingWindowFreeDrag = source.FloatingWindowFreeDrag;
+        target.FloatingWindowControlPanel = source.FloatingWindowControlPanel;
         target.FloatingWindowClickThrough = source.FloatingWindowClickThrough;
         target.FallbackToFloatingWhenTaskbarHidden = source.FallbackToFloatingWhenTaskbarHidden;
         target.FloatingWindowPlacement = (source.FloatingWindowPlacement ?? new FloatingWindowPlacementSettings()).Clone();
@@ -2279,6 +2284,8 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         public double FloatingWindowBackgroundTone { get; set; }
         public bool FloatingWindowBackgroundBorder { get; set; }
         public bool FloatingWindowFreeDrag { get; set; }
+
+        public bool FloatingWindowControlPanel { get; set; }
         public bool FloatingWindowClickThrough { get; set; }
         public bool FallbackToFloatingWhenTaskbarHidden { get; set; }
         public double WindowWidth { get; set; }

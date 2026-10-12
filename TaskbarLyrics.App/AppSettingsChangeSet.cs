@@ -71,6 +71,7 @@ internal readonly record struct AppSettingsChangeSet(
             current.UseFloatingWindow != next.UseFloatingWindow ||
             current.FloatingWindowFreeDrag != next.FloatingWindowFreeDrag ||
             current.FloatingWindowClickThrough != next.FloatingWindowClickThrough ||
+            current.FloatingWindowControlPanel != next.FloatingWindowControlPanel ||
             current.FontSize != next.FontSize ||
             current.ShowCover != next.ShowCover ||
             current.EnableControlPanel != next.EnableControlPanel ||
@@ -107,6 +108,7 @@ internal readonly record struct AppSettingsChangeSet(
             current.ForceAlwaysOnTop != next.ForceAlwaysOnTop ||
             current.FloatingWindowFreeDrag != next.FloatingWindowFreeDrag ||
             current.FloatingWindowClickThrough != next.FloatingWindowClickThrough ||
+            current.FloatingWindowControlPanel != next.FloatingWindowControlPanel ||
             current.FallbackToFloatingWhenTaskbarHidden != next.FallbackToFloatingWhenTaskbarHidden ||
             current.UseFloatingWindow != next.UseFloatingWindow ||
             current.LyricsDisplayMode != next.LyricsDisplayMode ||

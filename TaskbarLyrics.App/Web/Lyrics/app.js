@@ -94,6 +94,7 @@ let freeDragEnabled = false;
 // the native window keeps a smooth, OS-driven drag.
 root.addEventListener("mousedown", event => {
   if (!freeDragEnabled || event.button !== 0) return;
+  if (event.target instanceof Element && event.target.closest("#floatingPanel")) return;
   window.taskbarLyricsBridge?.post("windowDrag", null);
 });
 
@@ -2425,6 +2426,8 @@ const lyricsApi = {
     if (payload.textShadow && CSS.supports("text-shadow", payload.textShadow)) {
       root.style.setProperty("--text-shadow", payload.textShadow);
     }
+
+    window.taskbarLyricsFloatingPanel?.applyStyle(payload);
   }
 };
 
@@ -2468,6 +2471,15 @@ window.taskbarLyrics = {
         break;
       case "controlPanelState":
         setControlPanelOpen(payload?.open);
+        break;
+      case "panelTrack":
+        window.taskbarLyricsFloatingPanel?.applyTrack(payload);
+        break;
+      case "panelTimeline":
+        window.taskbarLyricsFloatingPanel?.applyTimeline(payload);
+        break;
+      case "floatingPanelLayout":
+        window.taskbarLyricsFloatingPanel?.applyLayout(payload);
         break;
     }
   }

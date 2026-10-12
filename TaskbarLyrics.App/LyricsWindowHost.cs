@@ -192,11 +192,29 @@ internal sealed class LyricsWindowHost : IDisposable
             cancellationToken).Task;
     }
 
-    public Task ExecuteMediaHotkeyAsync(MediaHotkeyAction action, CancellationToken cancellationToken)
+    internal Task ExecuteMediaHotkeyAsync(MediaHotkeyAction action, CancellationToken cancellationToken)
     {
         return InvokeAsync(
             () => _window?.ExecuteMediaHotkeyAsync(action, cancellationToken) ?? Task.CompletedTask,
             cancellationToken);
+    }
+
+    /// <summary>
+    /// Routes a floating control-panel request raised on any lyrics surface — including
+    /// mirror displays — to the primary window that owns playback control.
+    /// </summary>
+    internal void ExecuteFloatingPanelAction(string action, TimeSpan? position)
+    {
+        InvokeAsync(() =>
+        {
+            if (position is { } seekPosition)
+            {
+                _window?.ExecuteFloatingPanelSeek(seekPosition);
+                return;
+            }
+
+            _window?.ExecuteFloatingPanelAction(action);
+        });
     }
 
     public void Close()
@@ -286,6 +304,11 @@ internal sealed class LyricsWindowHost : IDisposable
     private void OnFloatingWindowPositionChanged(object? sender, FloatingWindowPositionChangedEventArgs e)
     {
         _saveFloatingWindowPosition(e.DisplayId, e.Placement);
+    }
+
+    private void OnMirrorFloatingPanelActionRequested(object? sender, FloatingPanelActionRequestedEventArgs e)
+    {
+        ExecuteFloatingPanelAction(e.Action, e.Position);
     }
 
     private void OnLyricsWindowIsVisibleChanged(object? sender, DependencyPropertyChangedEventArgs e)
@@ -384,6 +407,7 @@ internal sealed class LyricsWindowHost : IDisposable
                 // composite as a top-level layered window; replace it with a fresh one.
                 _mirrorWindows.Remove(display.Id);
                 _window?.CloseControlPanel();
+                existingMirror.FloatingPanelActionRequested -= OnMirrorFloatingPanelActionRequested;
                 existingMirror.Close();
             }
 
@@ -392,6 +416,7 @@ internal sealed class LyricsWindowHost : IDisposable
                 mirrorWindow = new LyricsMirrorWindow(display, (bounds, monitor, setExpanded) =>
                     _window?.ToggleControlPanelNear(bounds, monitor, setExpanded));
                 mirrorWindow.FloatingWindowPositionChanged += OnFloatingWindowPositionChanged;
+                mirrorWindow.FloatingPanelActionRequested += OnMirrorFloatingPanelActionRequested;
                 _mirrorWindows.Add(display.Id, mirrorWindow);
             }
             else

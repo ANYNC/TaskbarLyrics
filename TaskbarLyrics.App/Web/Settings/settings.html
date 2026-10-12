@@ -168,9 +168,9 @@
                         <label class="window-mode-setting-copy" for="floatingTopmostToggle"><strong>强制置顶</strong><small id="floatingTopmostDescription">全屏时也尽量保持可见</small></label>
                         <label class="switch small"><input id="floatingTopmostToggle" type="checkbox" data-setting="forceAlwaysOnTop" aria-label="强制歌词置顶" aria-describedby="floatingTopmostDescription" disabled><span class="switch-track"></span></label>
                       </div>
-                      <div id="floatingControlPanelRow" class="window-mode-setting-row is-disabled" data-depends="useFloatingWindow">
-                        <label class="window-mode-setting-copy" for="floatingControlPanelToggle"><strong>控制面板</strong><small id="floatingControlPanelDescription">与「任务栏嵌入」共用同一开关；悬浮窗面板界面待接入。</small></label>
-                        <label class="switch small"><input id="floatingControlPanelToggle" type="checkbox" data-setting="enableControlPanel" aria-label="悬浮窗控制面板" aria-describedby="floatingControlPanelDescription" disabled><span class="switch-track"></span></label>
+                      <div id="floatingControlPanelRow" class="window-mode-setting-row is-disabled" data-depends="useFloatingWindow" data-depends-not="floatingWindowClickThrough">
+                        <label class="window-mode-setting-copy" for="floatingControlPanelToggle"><strong>控制面板</strong><small id="floatingControlPanelDescription">鼠标悬停浮窗时展开播放控制面板，移出 1.5 秒后收起；与「任务栏嵌入」的面板开关互不影响。</small></label>
+                        <label class="switch small"><input id="floatingControlPanelToggle" type="checkbox" data-setting="floatingWindowControlPanel" aria-label="悬浮窗控制面板" aria-describedby="floatingControlPanelDescription" disabled><span class="switch-track"></span></label>
                       </div>
                       <div id="floatingFreeDragRow" class="window-mode-setting-row is-disabled" data-depends="useFloatingWindow" data-depends-not="floatingWindowClickThrough">
                         <label class="window-mode-setting-copy" for="floatingFreeDragToggle"><strong>自由拖拽</strong><small id="floatingFreeDragDescription">开启后可直接拖动悬浮窗调整位置，位置按显示器记住。</small></label>

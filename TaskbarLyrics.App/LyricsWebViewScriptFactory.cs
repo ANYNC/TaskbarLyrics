@@ -63,6 +63,41 @@ internal static class LyricsWebViewScriptFactory
     public static string SetControlPanelOpen(bool open) =>
         WebViewMessageScriptFactory.Dispatch("taskbarLyrics", "controlPanelState", new { open });
 
+    public static string SetFloatingPanelTrack(
+        string? title,
+        string? artist,
+        bool hasTrack,
+        bool isPlaying,
+        bool translationEnabled) =>
+        WebViewMessageScriptFactory.Dispatch("taskbarLyrics", "panelTrack", new
+        {
+            title = title ?? string.Empty,
+            artist = artist ?? string.Empty,
+            hasTrack,
+            isPlaying,
+            translationEnabled
+        });
+
+    public static string SetFloatingPanelTimeline(
+        double positionSeconds,
+        double durationSeconds,
+        bool isPlaying,
+        bool canSeek) =>
+        WebViewMessageScriptFactory.Dispatch("taskbarLyrics", "panelTimeline", new
+        {
+            position = double.IsFinite(positionSeconds) ? Math.Max(0, positionSeconds) : 0,
+            duration = double.IsFinite(durationSeconds) ? Math.Max(0, durationSeconds) : 0,
+            isPlaying,
+            canSeek
+        });
+
+    public static string SetFloatingPanelLayout(bool open, bool above) =>
+        WebViewMessageScriptFactory.Dispatch("taskbarLyrics", "floatingPanelLayout", new
+        {
+            open,
+            direction = above ? "up" : "down"
+        });
+
     public static string SetSpectrumTuning(SpectrumTuningSettings settings)
     {
         var payload = new
