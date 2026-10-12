@@ -104,6 +104,161 @@ public sealed class AppSettingsTests
     }
 
     [Fact]
+    public void NewSettingsKeepFreeDragOnAndClickThroughOffByDefault()
+    {
+        var settings = new AppSettings();
+
+        Assert.True(settings.FloatingWindowFreeDrag);
+        Assert.False(settings.FloatingWindowClickThrough);
+        Assert.False(settings.FallbackToFloatingWhenTaskbarHidden);
+    }
+
+    [Fact]
+    public void EnablingFreeDragClearsClickThrough()
+    {
+        var settings = new AppSettings
+        {
+            FloatingWindowFreeDrag = false,
+            FloatingWindowClickThrough = true
+        };
+
+        settings.SetFloatingWindowFreeDrag(true);
+
+        Assert.True(settings.FloatingWindowFreeDrag);
+        Assert.False(settings.FloatingWindowClickThrough);
+    }
+
+    [Fact]
+    public void EnablingClickThroughClearsFreeDrag()
+    {
+        var settings = new AppSettings
+        {
+            FloatingWindowFreeDrag = true,
+            FloatingWindowClickThrough = false
+        };
+
+        settings.SetFloatingWindowClickThrough(true);
+
+        Assert.True(settings.FloatingWindowClickThrough);
+        Assert.False(settings.FloatingWindowFreeDrag);
+    }
+
+    [Fact]
+    public void DisablingAnInputModeLeavesTheOtherModeAlone()
+    {
+        var dragOff = new AppSettings
+        {
+            FloatingWindowFreeDrag = true,
+            FloatingWindowClickThrough = false
+        };
+
+        dragOff.SetFloatingWindowFreeDrag(false);
+        Assert.False(dragOff.FloatingWindowFreeDrag);
+        Assert.False(dragOff.FloatingWindowClickThrough);
+
+        var clickThroughOff = new AppSettings
+        {
+            FloatingWindowFreeDrag = false,
+            FloatingWindowClickThrough = true
+        };
+
+        clickThroughOff.SetFloatingWindowClickThrough(false);
+        Assert.False(clickThroughOff.FloatingWindowClickThrough);
+        Assert.False(clickThroughOff.FloatingWindowFreeDrag);
+    }
+
+    [Fact]
+    public void NewSettingsStartWithAnEmptyFloatingWindowSurface()
+    {
+        var background = new AppSettings().FloatingWindowBackground;
+
+        Assert.False(background.ShowBackground);
+        Assert.False(background.ShowBorder);
+        Assert.Equal(AppSettings.DefaultBackgroundTone, background.Tone);
+        Assert.Empty(new AppSettings().FloatingWindowPlacement.Displays);
+    }
+
+    [Fact]
+    public void CloneKeepsFloatingWindowSurfaceAndPlacementIndependentFromSource()
+    {
+        var source = new AppSettings();
+        source.FloatingWindowBackground.ShowBackground = true;
+        source.FloatingWindowBackground.Tone = -25;
+        source.FloatingWindowPlacement.Set("display-a", 120, -40);
+
+        var clone = source.Clone();
+        clone.FloatingWindowBackground.Tone = 90;
+        clone.FloatingWindowPlacement.Set("display-a", 0, 0);
+
+        Assert.True(source.FloatingWindowBackground.ShowBackground);
+        Assert.Equal(-25, source.FloatingWindowBackground.Tone);
+        Assert.True(source.FloatingWindowPlacement.TryGet("display-a", out var placement));
+        Assert.Equal(120, placement.OffsetX);
+        Assert.Equal(-40, placement.OffsetY);
+    }
+
+    [Fact]
+    public void NormalizeWindowLayoutClampsFloatingWindowSurfaceAndPlacement()
+    {
+        var settings = new AppSettings
+        {
+            FloatingWindowBackground = new FloatingWindowBackgroundSettings { Tone = 400 }
+        };
+        settings.FloatingWindowPlacement.Set("display-a", double.PositiveInfinity, -1e9);
+
+        settings.NormalizeWindowLayout();
+
+        Assert.Equal(AppSettings.MaximumBackgroundTone, settings.FloatingWindowBackground.Tone);
+        Assert.True(settings.FloatingWindowPlacement.TryGet("DISPLAY-A", out var placement));
+        Assert.Equal(0, placement.OffsetX);
+        Assert.Equal(AppSettings.MinimumFloatingWindowOffset, placement.OffsetY);
+    }
+
+    [Theory]
+    [InlineData(150, 100)]
+    [InlineData(55, 55)]
+    [InlineData(-40, -40)]
+    [InlineData(-500, -100)]
+    [InlineData(double.NaN, AppSettings.DefaultBackgroundTone)]
+    public void NormalizeLyricsLayoutKeepsBackgroundToneInsideItsRange(double tone, double expected)
+    {
+        var settings = new AppSettings { BackgroundTone = tone };
+
+        settings.NormalizeLyricsLayout();
+
+        Assert.Equal(expected, settings.BackgroundTone);
+    }
+
+    [Theory]
+    [InlineData(false, false, 60, "#FF102030")]
+    [InlineData(false, true, 60, "#FF102030")]
+    [InlineData(true, true, -60, AppSettings.DarkForegroundColor)]
+    [InlineData(true, true, -1, AppSettings.DarkForegroundColor)]
+    [InlineData(true, true, 1, AppSettings.LightForegroundColor)]
+    [InlineData(true, true, 60, AppSettings.LightForegroundColor)]
+    [InlineData(true, true, 0, "#FF102030")]
+    [InlineData(true, false, 60, "#FF102030")]
+    public void ResolveEffectiveForegroundColorFollowsTheFloatingWindowSurface(
+        bool floating,
+        bool showBackground,
+        double tone,
+        string expected)
+    {
+        var settings = new AppSettings
+        {
+            UseFloatingWindow = floating,
+            ForegroundColor = "#FF102030",
+            FloatingWindowBackground = new FloatingWindowBackgroundSettings
+            {
+                ShowBackground = showBackground,
+                Tone = tone
+            }
+        };
+
+        Assert.Equal(expected, settings.ResolveEffectiveForegroundColor());
+    }
+
+    [Fact]
     public void CloneKeepsDisplaySelectionIndependentFromSource()
     {
         var source = new AppSettings

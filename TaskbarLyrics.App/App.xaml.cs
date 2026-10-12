@@ -82,7 +82,8 @@ public partial class App : System.Windows.Application, IDisposable
         _lyricsWindowHost = new LyricsWindowHost(
             Settings, _trackLyricOffsetStore, _compositionRoot,
             () => Dispatcher.BeginInvoke(OpenSettingsWindow),
-            () => ToggleMediaHotkeyAction(MediaHotkeyAction.ToggleTranslation));
+            () => ToggleMediaHotkeyAction(MediaHotkeyAction.ToggleTranslation),
+            (displayId, placement) => Dispatcher.BeginInvoke(() => SaveFloatingWindowPlacement(displayId, placement)));
         _mediaHotkeyService = new GlobalMediaHotkeyService(ExecuteMediaHotkeyAsync);
         _mediaHotkeyService.Apply(Settings.GlobalMediaHotkeys);
 
@@ -112,7 +113,8 @@ public partial class App : System.Windows.Application, IDisposable
             OpenSettingsWindow,
             OpenSmtcTimelineMonitorWindow,
             OpenSpectrumTuningWindow,
-            ExitApplication);
+            ExitApplication,
+            CreateFloatingWindowMenuState);
         StartActivationServer();
         SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
         TaskObserver.Observe(RunAutomaticUpdateCheckAsync(), "automatic update check");
@@ -156,6 +158,9 @@ public partial class App : System.Windows.Application, IDisposable
 
         nextSettings.SpectrumTuning = Settings.SpectrumTuning.Clone();
         nextSettings.GlobalMediaHotkeys ??= new GlobalMediaHotkeySettings();
+        // The floating-window position is owned by dragging, not by the settings page,
+        // so a save from the settings window must not roll it back.
+        nextSettings.FloatingWindowPlacement = Settings.FloatingWindowPlacement.Clone();
         var changes = AppSettingsChangeSet.Create(currentSettings, nextSettings);
         NativeWindowTheme.SetMode(nextSettings.ToolWindowTheme);
         Settings = nextSettings;
@@ -183,6 +188,17 @@ public partial class App : System.Windows.Application, IDisposable
     {
         ArgumentNullException.ThrowIfNull(settings);
         _lyricsWindowHost?.PreviewSettings(settings);
+    }
+
+    private void SaveFloatingWindowPlacement(string displayId, FloatingWindowPlacement placement)
+    {
+        if (IsExiting)
+        {
+            return;
+        }
+
+        Settings.FloatingWindowPlacement.Set(displayId, placement.OffsetX, placement.OffsetY);
+        _settingsStore?.Save(Settings);
     }
 
     public IReadOnlyDictionary<string, string> GetMediaHotkeyStatuses()
@@ -335,6 +351,29 @@ public partial class App : System.Windows.Application, IDisposable
         {
             UserWantsLyricsVisible = true;
             _lyricsWindowHost.Show();
+        }
+    }
+
+    private TrayMenuFloatingWindowState CreateFloatingWindowMenuState() =>
+        new(
+            Settings.UseFloatingWindow,
+            Settings.FloatingWindowFreeDrag,
+            Settings.FloatingWindowClickThrough,
+            enabled => ApplyFloatingWindowPresentationChange(
+                settings => settings.SetFloatingWindowFreeDrag(enabled)),
+            enabled => ApplyFloatingWindowPresentationChange(
+                settings => settings.SetFloatingWindowClickThrough(enabled)));
+
+    private void ApplyFloatingWindowPresentationChange(Action<AppSettings> change)
+    {
+        change(Settings);
+        _settingsStore?.Save(Settings);
+        _lyricsWindowHost?.ApplySettings(Settings);
+        if (_settingsWindow is not null)
+        {
+            TaskObserver.Observe(
+                _settingsWindow.ApplyExternalSettingsAsync(Settings.Clone()),
+                "settings window state update");
         }
     }
 

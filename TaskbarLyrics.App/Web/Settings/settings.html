@@ -152,6 +152,10 @@
                         <label class="window-mode-setting-copy" for="embeddedControlPanelToggle"><strong>封面控制面板</strong><small id="embeddedControlPanelDescription">点击封面打开播放控制与进度面板。</small></label>
                         <label class="switch small"><input id="embeddedControlPanelToggle" type="checkbox" data-setting="enableControlPanel" aria-label="封面控制面板" aria-describedby="embeddedControlPanelDescription" disabled><span class="switch-track"></span></label>
                       </div>
+                      <div id="embeddedTaskbarHiddenRow" class="window-mode-setting-row is-disabled" data-embedded-only>
+                        <label class="window-mode-setting-copy" for="embeddedTaskbarHiddenToggle"><strong>任务栏不可见时改用悬浮窗口</strong><small id="embeddedTaskbarHiddenDescription">任务栏被隐藏或收起时自动切换到悬浮窗口显示。开关已就绪，行为待接入。</small></label>
+                        <label class="switch small"><input id="embeddedTaskbarHiddenToggle" type="checkbox" data-setting="fallbackToFloatingWhenTaskbarHidden" aria-label="任务栏不可见时改用悬浮窗口" aria-describedby="embeddedTaskbarHiddenDescription" disabled><span class="switch-track"></span></label>
+                      </div>
                     </div>
                     <div class="window-mode-card floating-window-mode-card">
                       <label class="window-mode-choice">
@@ -163,6 +167,18 @@
                       <div id="floatingTopmostRow" class="window-mode-setting-row is-disabled" data-depends="useFloatingWindow">
                         <label class="window-mode-setting-copy" for="floatingTopmostToggle"><strong>强制置顶</strong><small id="floatingTopmostDescription">全屏时也尽量保持可见</small></label>
                         <label class="switch small"><input id="floatingTopmostToggle" type="checkbox" data-setting="forceAlwaysOnTop" aria-label="强制歌词置顶" aria-describedby="floatingTopmostDescription" disabled><span class="switch-track"></span></label>
+                      </div>
+                      <div id="floatingControlPanelRow" class="window-mode-setting-row is-disabled" data-depends="useFloatingWindow">
+                        <label class="window-mode-setting-copy" for="floatingControlPanelToggle"><strong>控制面板</strong><small id="floatingControlPanelDescription">与「任务栏嵌入」共用同一开关；悬浮窗面板界面待接入。</small></label>
+                        <label class="switch small"><input id="floatingControlPanelToggle" type="checkbox" data-setting="enableControlPanel" aria-label="悬浮窗控制面板" aria-describedby="floatingControlPanelDescription" disabled><span class="switch-track"></span></label>
+                      </div>
+                      <div id="floatingFreeDragRow" class="window-mode-setting-row is-disabled" data-depends="useFloatingWindow" data-depends-not="floatingWindowClickThrough">
+                        <label class="window-mode-setting-copy" for="floatingFreeDragToggle"><strong>自由拖拽</strong><small id="floatingFreeDragDescription">开启后可直接拖动悬浮窗调整位置，位置按显示器记住。</small></label>
+                        <label class="switch small"><input id="floatingFreeDragToggle" type="checkbox" data-setting="floatingWindowFreeDrag" aria-label="悬浮窗自由拖拽" aria-describedby="floatingFreeDragDescription" disabled><span class="switch-track"></span></label>
+                      </div>
+                      <div id="floatingClickThroughRow" class="window-mode-setting-row is-disabled" data-depends="useFloatingWindow">
+                        <label class="window-mode-setting-copy" for="floatingClickThroughToggle"><strong>鼠标穿透</strong><small id="floatingClickThroughDescription">开启后不再响应鼠标：点击穿透到下层窗口，也不抢占焦点。可在托盘菜单关闭。</small></label>
+                        <label class="switch small"><input id="floatingClickThroughToggle" type="checkbox" data-setting="floatingWindowClickThrough" aria-label="悬浮窗鼠标穿透" aria-describedby="floatingClickThroughDescription" disabled><span class="switch-track"></span></label>
                       </div>
                     </div>
                   </div>
@@ -207,15 +223,28 @@
               </div>
             </div>
             <div class="panel">
-              <div class="panel-head"><div><h2>窗口外观</h2><p>设置歌词窗口的背景与边框。</p></div></div>
-              <div class="settings">
-                <div class="setting-row compact"><div class="setting-label"><strong>显示背景</strong></div><label class="switch"><input type="checkbox" data-setting="showBackground" aria-label="显示背景"><span class="switch-track"></span></label></div>
-                <div class="setting-row child" data-depends="showBackground"><div class="setting-label"><strong>背景不透明度</strong><small>开启显示背景后可调整；数值越高，背景越实。</small></div><div class="slider-number-control"><input type="range" min="0" max="1" step="0.05" data-setting="backgroundOpacity" aria-label="背景不透明度滑块"><label class="unit-input compact-number-input percentage-input"><input type="number" min="0" max="100" step="5" data-setting="backgroundOpacity" data-value-scale="100" aria-label="背景不透明度百分比"><span>%</span></label></div></div>
-                <div class="setting-row compact"><div class="setting-label"><strong>显示边框</strong></div><label class="switch"><input type="checkbox" data-setting="showBorder" aria-label="显示边框"><span class="switch-track"></span></label></div>
+              <div class="panel-head"><div><h2>窗口外观</h2><p>任务栏嵌入与悬浮窗口各自独立保存背景与边框；窗口过窄时两个区域改为上下排列。</p></div></div>
+              <div class="appearance-modes">
+                <section class="appearance-mode" aria-labelledby="appearanceEmbeddedHeading">
+                  <div class="appearance-mode-head"><span id="appearanceEmbeddedHeading" class="appearance-mode-title">任务栏嵌入</span></div>
+                  <div class="settings">
+                    <div class="setting-row compact"><div class="setting-label"><strong>显示背景</strong></div><label class="switch"><input type="checkbox" data-setting="showBackground" aria-label="任务栏嵌入：显示背景"><span class="switch-track"></span></label></div>
+                    <div class="setting-row appearance-tone-row" data-depends="showBackground"><div class="setting-label"><strong>背景浓度</strong></div><div class="slider-number-control"><input type="range" min="-100" max="100" step="5" data-setting="backgroundTone" aria-label="任务栏嵌入背景浓度滑块"><label class="unit-input compact-number-input percentage-input"><input type="number" min="-100" max="100" step="5" data-setting="backgroundTone" aria-label="任务栏嵌入背景浓度百分比"><span>%</span></label></div><p class="setting-row-note">0 为完全透明；负值为白色浓度，正值为黑色浓度，范围 -100～100。</p></div>
+                    <div class="setting-row compact"><div class="setting-label"><strong>显示边框</strong></div><label class="switch"><input type="checkbox" data-setting="showBorder" aria-label="任务栏嵌入：显示边框"><span class="switch-track"></span></label></div>
+                  </div>
+                </section>
+                <section class="appearance-mode" aria-labelledby="appearanceFloatingHeading">
+                  <div class="appearance-mode-head"><span id="appearanceFloatingHeading" class="appearance-mode-title">悬浮窗口</span></div>
+                  <div class="settings">
+                    <div class="setting-row compact"><div class="setting-label"><strong>显示背景</strong></div><label class="switch"><input type="checkbox" data-setting="floatingWindowBackgroundShow" aria-label="悬浮窗口：显示背景"><span class="switch-track"></span></label></div>
+                    <div class="setting-row appearance-tone-row" data-depends="floatingWindowBackgroundShow"><div class="setting-label"><strong>背景浓度</strong></div><div class="slider-number-control"><input type="range" min="-100" max="100" step="5" data-setting="floatingWindowBackgroundTone" aria-label="悬浮窗口背景浓度滑块"><label class="unit-input compact-number-input percentage-input"><input type="number" min="-100" max="100" step="5" data-setting="floatingWindowBackgroundTone" aria-label="悬浮窗口背景浓度百分比"><span>%</span></label></div><p class="setting-row-note">0 为完全透明；负值为白色浓度，正值为黑色浓度，范围 -100～100。</p></div>
+                    <div class="setting-row compact"><div class="setting-label"><strong>显示边框</strong></div><label class="switch"><input type="checkbox" data-setting="floatingWindowBackgroundBorder" aria-label="悬浮窗口：显示边框"><span class="switch-track"></span></label></div>
+                  </div>
+                </section>
               </div>
             </div>
             <div class="panel">
-              <div class="panel-head"><div><h2>窗口位置</h2><p>调整歌词窗口的锚点与偏移。</p></div></div>
+              <div class="panel-head"><div><h2>嵌入任务栏位置</h2><p>仅在「任务栏嵌入」显示方式下生效；悬浮窗口的位置直接在窗口上拖动调整。</p></div></div>
               <div class="settings">
                 <div class="setting-row monitor-setting-row"><div class="setting-label"><strong>显示器</strong><small>选择歌词显示在哪些显示器的任务栏。</small></div><div class="monitor-selection"><div class="monitor-mode" role="radiogroup" aria-label="歌词显示器模式"><label><input type="radio" name="lyricsDisplayMode" value="All" data-display-mode><span>全部显示器</span></label><label><input type="radio" name="lyricsDisplayMode" value="Selected" data-display-mode><span>指定显示器</span></label></div><span id="displayMonitorListLabel" class="sr-only">选择显示歌词的显示器</span><div id="displayMonitorList" class="monitor-list" role="group" aria-labelledby="displayMonitorListLabel"></div><small id="displayMonitorHint" class="monitor-hint" role="status"></small></div></div>
                 <div class="setting-row compact"><div class="setting-label"><strong id="horizontalAnchorLabel">水平锚点</strong><small>决定歌词依附在任务栏的区域。</small></div><div class="monitor-mode layout-options" role="radiogroup" aria-labelledby="horizontalAnchorLabel"><label><input type="radio" name="horizontalAnchor" value="Left" data-setting="horizontalAnchor" aria-label="水平锚点左侧"><span>左侧</span></label><label><input type="radio" name="horizontalAnchor" value="Center" data-setting="horizontalAnchor" aria-label="水平锚点居中"><span>居中</span></label><label><input type="radio" name="horizontalAnchor" value="Right" data-setting="horizontalAnchor" aria-label="水平锚点右侧"><span>右侧</span></label></div></div>

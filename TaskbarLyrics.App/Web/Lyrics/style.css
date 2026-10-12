@@ -97,6 +97,10 @@ html, body {
   box-shadow: var(--surface-shadow);
 }
 
+.layout.free-drag {
+  cursor: move;
+}
+
 .shell {
   width: 100%;
   height: 100%;

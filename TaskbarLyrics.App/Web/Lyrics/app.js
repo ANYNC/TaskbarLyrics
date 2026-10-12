@@ -88,6 +88,21 @@ coverEl?.addEventListener("click", () => {
   });
 });
 
+let freeDragEnabled = false;
+
+// The floating window is moved by the host: the page only reports the intent so
+// the native window keeps a smooth, OS-driven drag.
+root.addEventListener("mousedown", event => {
+  if (!freeDragEnabled || event.button !== 0) return;
+  window.taskbarLyricsBridge?.post("windowDrag", null);
+});
+
+function setFreeDragEnabled(enabled) {
+  if (freeDragEnabled === enabled) return;
+  freeDragEnabled = enabled;
+  layoutEl?.classList.toggle("free-drag", enabled);
+}
+
 function setControlPanelOpen(open) {
   if (!coverEl) return;
   coverEl.classList.toggle("panel-open", open === true);
@@ -2323,6 +2338,7 @@ const lyricsApi = {
     root.style.setProperty("--font-size", `${requestedFontSize}px`);
     root.style.setProperty("--font-weight", window.taskbarLyricsState.normalizeWeight(payload.fontWeight));
     root.classList.toggle("cover-hidden", payload.showCover === false);
+    setFreeDragEnabled(payload.freeDrag === true);
     if (coverEl) {
       coverEl.disabled = payload.enableControlPanel === false;
       if (coverEl.disabled || payload.showCover === false) setControlPanelOpen(false);

@@ -10,12 +10,19 @@ internal static class LyricsStyleScriptFactory
         ArgumentNullException.ThrowIfNull(settings);
         settings.NormalizeLyricsTextAlignment();
         settings.NormalizeCoverPosition();
-        var foregroundColor = ParseColor(settings.ForegroundColor);
+        // The floating surface picks white or black from its own background density;
+        // both the lyric text and the word-scan/spectrum accents derive from this colour.
+        var foregroundColor = ParseColor(settings.ResolveEffectiveForegroundColor());
         var primaryColor = ForegroundColorPolicy.CreatePrimaryColor(foregroundColor);
         var secondaryColor = ForegroundColorPolicy.CreateSecondaryColor(foregroundColor);
         var translationColor = ForegroundColorPolicy.CreateTranslationColor(foregroundColor);
         var wordScanOverlayColor = ForegroundColorPolicy.CreateWordScanOverlayColor(foregroundColor);
         var metrics = LyricsLayoutMetrics.Create(settings, pixelsPerDip);
+        var floatingWindow = settings.UseFloatingWindow;
+        var floatingBackground = settings.FloatingWindowBackground ?? new FloatingWindowBackgroundSettings();
+        var showBackground = floatingWindow ? floatingBackground.ShowBackground : settings.ShowBackground;
+        var backgroundTone = floatingWindow ? floatingBackground.Tone : settings.BackgroundTone;
+        var showBorder = floatingWindow ? floatingBackground.ShowBorder : settings.ShowBorder;
         var stylePayload = new
         {
             fontFamily = AppSettings.NormalizeFontFamily(settings.FontFamily),
@@ -23,7 +30,8 @@ internal static class LyricsStyleScriptFactory
             fontSize = metrics.FontSize,
             showCover = settings.ShowCover,
             coverPosition = settings.CoverPosition,
-            enableControlPanel = settings.EnableControlPanel && !settings.UseFloatingWindow,
+            enableControlPanel = settings.EnableControlPanel && !floatingWindow,
+            freeDrag = floatingWindow && settings.FloatingWindowFreeDrag && !settings.FloatingWindowClickThrough,
             coverSize = metrics.CoverSize,
             coverGap = metrics.CoverGap,
             coverCornerRadius = metrics.CoverCornerRadius,
@@ -51,10 +59,8 @@ internal static class LyricsStyleScriptFactory
             secondaryColor = ToCssColor(secondaryColor),
             translationColor = ToCssColor(translationColor),
             wordScanOverlayColor = ToCssColor(wordScanOverlayColor),
-            surfaceColor = settings.ShowBackground
-                ? $"rgba(18, 18, 24, {Math.Clamp(settings.BackgroundOpacity, 0, 1).ToString("0.####", CultureInfo.InvariantCulture)})"
-                : "transparent",
-            surfaceShadow = settings.ShowBorder
+            surfaceColor = showBackground ? CreateSurfaceColor(backgroundTone) : "transparent",
+            surfaceShadow = showBorder
                 ? "inset 0 0 0 1px rgba(255, 255, 255, 0.16)"
                 : "none",
             textShadow = settings.ShowTextShadow
@@ -64,6 +70,19 @@ internal static class LyricsStyleScriptFactory
         };
 
         return WebViewMessageScriptFactory.Dispatch("taskbarLyrics", "style", stylePayload);
+    }
+
+    private static string CreateSurfaceColor(double tone)
+    {
+        var clamped = AppSettings.ClampBackgroundTone(tone);
+        if (clamped == 0)
+        {
+            return "transparent";
+        }
+
+        var channel = clamped < 0 ? "255, 255, 255" : "0, 0, 0";
+        var alpha = Math.Abs(clamped) / 100.0;
+        return $"rgba({channel}, {alpha.ToString("0.###", CultureInfo.InvariantCulture)})";
     }
 
     private static System.Windows.Media.Color ParseColor(string color)

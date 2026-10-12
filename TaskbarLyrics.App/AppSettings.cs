@@ -69,6 +69,10 @@ public sealed class AppSettings
     public const double MinimumLyricsLayoutScalePercent = 25;
     public const double MaximumLyricsLayoutScalePercent = 300;
 
+    public const double MinimumBackgroundTone = -100;
+    public const double MaximumBackgroundTone = 100;
+    public const double DefaultBackgroundTone = 55;
+
     public const double DefaultWindowWidth = 420;
     public const double MinimumWindowWidth = 100;
     public const double MaximumWindowWidth = 1400;
@@ -79,6 +83,12 @@ public sealed class AppSettings
 
     public const double MinimumWindowOffset = -2000;
     public const double MaximumWindowOffset = 2000;
+
+    // Floating-window placement is stored as an offset from the owning display
+    // origin, so it must span the whole virtual desktop instead of the taskbar
+    // micro-adjustment range above.
+    public const double MinimumFloatingWindowOffset = -65536;
+    public const double MaximumFloatingWindowOffset = 65536;
 
     public const string BundledFontFamily = "Source Han Sans SC";
 
@@ -171,7 +181,11 @@ public sealed class AppSettings
 
     public bool ShowBackground { get; set; }
 
-    public double BackgroundOpacity { get; set; } = 0.55;
+    /// <summary>
+    /// Background density in percent. Zero draws no background, negative values draw a
+    /// white surface and positive values a black surface with |value| percent opacity.
+    /// </summary>
+    public double BackgroundTone { get; set; } = DefaultBackgroundTone;
 
     public bool ShowBorder { get; set; }
 
@@ -190,6 +204,20 @@ public sealed class AppSettings
     public double YOffset { get; set; }
 
     public bool ForceAlwaysOnTop { get; set; } = true;
+
+    // Floating-window-only presentation. The embedded taskbar surface keeps using
+    // ShowBackground/BackgroundTone/ShowBorder, so both modes can be tuned apart.
+    public FloatingWindowBackgroundSettings FloatingWindowBackground { get; set; } = new();
+
+    public bool FloatingWindowFreeDrag { get; set; } = true;
+
+    public bool FloatingWindowClickThrough { get; set; }
+
+    // TODO(后续接入): 任务栏不可见时（被完全隐藏或收起）自动改用悬浮窗口显示。
+    // 目前仅保存开关状态，渲染路径尚未消费该值。
+    public bool FallbackToFloatingWhenTaskbarHidden { get; set; }
+
+    public FloatingWindowPlacementSettings FloatingWindowPlacement { get; set; } = new();
 
     public LyricsDisplayMode LyricsDisplayMode { get; set; } = LyricsDisplayMode.All;
 
@@ -234,6 +262,8 @@ public sealed class AppSettings
         cloned.SelectedDisplayIds = (SelectedDisplayIds ?? []).ToList();
         cloned.SpectrumTuning = SpectrumTuning.Clone();
         cloned.GlobalMediaHotkeys = (GlobalMediaHotkeys ?? new GlobalMediaHotkeySettings()).Clone();
+        cloned.FloatingWindowBackground = (FloatingWindowBackground ?? new FloatingWindowBackgroundSettings()).Clone();
+        cloned.FloatingWindowPlacement = (FloatingWindowPlacement ?? new FloatingWindowPlacementSettings()).Clone();
         return cloned;
     }
 
@@ -367,6 +397,7 @@ public sealed class AppSettings
         CoverGap = ClampCoverGap(CoverGap);
         CoverCornerRadius = ClampCoverCornerRadius(CoverCornerRadius, CoverSize);
         LyricsLayoutScalePercent = ClampLyricsLayoutScalePercent(LyricsLayoutScalePercent);
+        BackgroundTone = ClampBackgroundTone(BackgroundTone);
         NormalizeLyricsTextAlignment();
         NormalizeCoverPosition();
     }
@@ -412,6 +443,8 @@ public sealed class AppSettings
         YOffset = double.IsFinite(YOffset)
             ? Math.Clamp(YOffset, MinimumWindowOffset, MaximumWindowOffset)
             : 0;
+        FloatingWindowBackground = (FloatingWindowBackground ?? new FloatingWindowBackgroundSettings()).Normalize();
+        FloatingWindowPlacement = (FloatingWindowPlacement ?? new FloatingWindowPlacementSettings()).Normalize();
     }
 
     public int GetPlayerLyricOffsetMilliseconds(string? sourceApp)
@@ -550,6 +583,58 @@ public sealed class AppSettings
             MaximumLyricsLayoutScalePercent);
     }
 
+    public static double ClampBackgroundTone(double value) =>
+        double.IsFinite(value)
+            ? Math.Clamp(value, MinimumBackgroundTone, MaximumBackgroundTone)
+            : DefaultBackgroundTone;
+
+    /// <summary>
+    /// Resolves the colour the lyrics surface should draw with. The floating window
+    /// derives it from its own background density so the text and controls always
+    /// contrast with the surface; every other case follows the text-style colour.
+    /// </summary>
+    public string ResolveEffectiveForegroundColor()
+    {
+        if (!UseFloatingWindow)
+        {
+            return ForegroundColor;
+        }
+
+        var background = FloatingWindowBackground ?? new FloatingWindowBackgroundSettings();
+        if (!background.ShowBackground || background.Tone == 0)
+        {
+            return ForegroundColor;
+        }
+
+        return background.Tone > 0 ? LightForegroundColor : DarkForegroundColor;
+    }
+
+    /// <summary>
+    /// Free dragging and click-through are mutually exclusive floating-window input
+    /// modes, so enabling one clears the other.
+    /// </summary>
+    public void SetFloatingWindowFreeDrag(bool enabled)
+    {
+        FloatingWindowFreeDrag = enabled;
+        if (enabled)
+        {
+            FloatingWindowClickThrough = false;
+        }
+    }
+
+    /// <summary>
+    /// Free dragging and click-through are mutually exclusive floating-window input
+    /// modes, so enabling one clears the other.
+    /// </summary>
+    public void SetFloatingWindowClickThrough(bool enabled)
+    {
+        FloatingWindowClickThrough = enabled;
+        if (enabled)
+        {
+            FloatingWindowFreeDrag = false;
+        }
+    }
+
     public static double ClampEffectiveWindowWidth(double baseWindowWidth, double scalePercent, double maxWidth)
     {
         var scale = double.IsFinite(scalePercent)
@@ -616,6 +701,115 @@ public sealed class PlayerSourceSettings
 }
 
 public sealed record LyricProviderPreference(string ProviderId, bool Enabled);
+
+public sealed class FloatingWindowBackgroundSettings
+{
+    public bool ShowBackground { get; set; }
+
+    /// <summary>
+    /// Background density in percent; see <see cref="AppSettings.BackgroundTone"/>.
+    /// </summary>
+    public double Tone { get; set; } = AppSettings.DefaultBackgroundTone;
+
+    public bool ShowBorder { get; set; }
+
+    public FloatingWindowBackgroundSettings Clone() => (FloatingWindowBackgroundSettings)MemberwiseClone();
+
+    public FloatingWindowBackgroundSettings Normalize()
+    {
+        Tone = AppSettings.ClampBackgroundTone(Tone);
+        return this;
+    }
+}
+
+public sealed class FloatingWindowPlacementSettings
+{
+    public Dictionary<string, FloatingWindowPlacement> Displays { get; set; } =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    public FloatingWindowPlacementSettings Clone()
+    {
+        var cloned = new FloatingWindowPlacementSettings();
+        foreach (var (displayId, placement) in Displays)
+        {
+            cloned.Displays[displayId] = placement.Clone();
+        }
+
+        return cloned;
+    }
+
+    public FloatingWindowPlacementSettings Normalize()
+    {
+        var normalized = new Dictionary<string, FloatingWindowPlacement>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (displayId, placement) in Displays ?? [])
+        {
+            if (string.IsNullOrWhiteSpace(displayId) || placement is null)
+            {
+                continue;
+            }
+
+            var key = displayId.Trim();
+            if (key.Length > 256)
+            {
+                continue;
+            }
+
+            normalized[key] = placement.Normalize();
+        }
+
+        Displays = normalized;
+        return this;
+    }
+
+    public bool TryGet(string? displayId, out FloatingWindowPlacement placement)
+    {
+        placement = null!;
+        return !string.IsNullOrWhiteSpace(displayId) &&
+            Displays is not null &&
+            Displays.TryGetValue(displayId.Trim(), out placement!) &&
+            placement is not null;
+    }
+
+    public void Set(string? displayId, double offsetX, double offsetY)
+    {
+        if (string.IsNullOrWhiteSpace(displayId))
+        {
+            return;
+        }
+
+        Displays ??= new Dictionary<string, FloatingWindowPlacement>(StringComparer.OrdinalIgnoreCase);
+        if (Displays.Comparer != StringComparer.OrdinalIgnoreCase)
+        {
+            Displays = new Dictionary<string, FloatingWindowPlacement>(Displays, StringComparer.OrdinalIgnoreCase);
+        }
+
+        Displays[displayId.Trim()] = new FloatingWindowPlacement
+        {
+            OffsetX = offsetX,
+            OffsetY = offsetY
+        }.Normalize();
+    }
+}
+
+public sealed class FloatingWindowPlacement
+{
+    public double OffsetX { get; set; }
+
+    public double OffsetY { get; set; }
+
+    public FloatingWindowPlacement Clone() => (FloatingWindowPlacement)MemberwiseClone();
+
+    public FloatingWindowPlacement Normalize()
+    {
+        OffsetX = double.IsFinite(OffsetX)
+            ? Math.Clamp(OffsetX, AppSettings.MinimumFloatingWindowOffset, AppSettings.MaximumFloatingWindowOffset)
+            : 0;
+        OffsetY = double.IsFinite(OffsetY)
+            ? Math.Clamp(OffsetY, AppSettings.MinimumFloatingWindowOffset, AppSettings.MaximumFloatingWindowOffset)
+            : 0;
+        return this;
+    }
+}
 
 public sealed record CustomPlayerSource(string SourceAppUserModelId, string DisplayName, bool Enabled)
 {

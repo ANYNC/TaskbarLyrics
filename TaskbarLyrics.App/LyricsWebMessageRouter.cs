@@ -42,6 +42,9 @@ internal static class LyricsWebMessageRouter
         return true;
     }
 
+    public static bool IsWindowDragRequest(WebViewMessage? message) =>
+        string.Equals(message?.Type, "windowDrag", StringComparison.Ordinal);
+
     private static bool TryReadNumber(JsonElement payload, string name, out double value)
     {
         value = 0;

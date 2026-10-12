@@ -268,6 +268,38 @@ public sealed class AppSettingsChangeSetTests
     }
 
     [Fact]
+    public void CreateWhenFloatingWindowInteractionChangesReappliesLyricsWindow()
+    {
+        var current = new AppSettings();
+        var next = current.Clone();
+        next.FloatingWindowFreeDrag = false;
+        next.FloatingWindowClickThrough = true;
+
+        var changes = AppSettingsChangeSet.Create(current, next);
+
+        Assert.True(changes.WindowLayoutChanged);
+        Assert.True(changes.VisualStyleChanged);
+        Assert.True(changes.RequiresLyricsWindowApply);
+        Assert.False(changes.LyricsLayoutChanged);
+        Assert.False(changes.TaskbarEmbeddingChanged);
+    }
+
+    [Fact]
+    public void CreateWhenFloatingWindowSurfaceChangesReappliesVisualStyleOnly()
+    {
+        var current = new AppSettings();
+        var next = current.Clone();
+        next.FloatingWindowBackground.ShowBackground = true;
+        next.FloatingWindowBackground.Tone = 40;
+
+        var changes = AppSettingsChangeSet.Create(current, next);
+
+        Assert.True(changes.VisualStyleChanged);
+        Assert.True(changes.RequiresLyricsWindowApply);
+        Assert.False(changes.WindowLayoutChanged);
+    }
+
+    [Fact]
     public void CreateWhenSharedWindowLayoutChangesReappliesLyricsWindow()
     {
         var current = new AppSettings();

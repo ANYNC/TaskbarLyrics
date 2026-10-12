@@ -560,6 +560,147 @@ public sealed class SettingsStoreTests
     }
 
     [Fact]
+    public void SaveAndLoadRoundTripsFloatingWindowPresentation()
+    {
+        var directory = Path.Combine(AppContext.BaseDirectory, $"settings-store-{Guid.NewGuid():N}");
+        var filePath = Path.Combine(directory, "settings.json");
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            File.WriteAllText(
+                filePath,
+                "{\"UseFloatingWindow\":true,\"FloatingWindowFreeDrag\":false,\"FloatingWindowClickThrough\":true," +
+                "\"FallbackToFloatingWhenTaskbarHidden\":true," +
+                "\"FloatingWindowBackground\":{\"ShowBackground\":true,\"Tone\":-80,\"ShowBorder\":true}," +
+                "\"FloatingWindowPlacement\":{\"Displays\":{\"display-a\":{\"OffsetX\":12,\"OffsetY\":-8}}}}");
+
+            var loaded = new SettingsStore(filePath).Load();
+
+            Assert.True(loaded.UseFloatingWindow);
+            Assert.False(loaded.FloatingWindowFreeDrag);
+            Assert.True(loaded.FloatingWindowClickThrough);
+            Assert.True(loaded.FallbackToFloatingWhenTaskbarHidden);
+            Assert.True(loaded.FloatingWindowBackground.ShowBackground);
+            Assert.Equal(-80, loaded.FloatingWindowBackground.Tone);
+            Assert.True(loaded.FloatingWindowBackground.ShowBorder);
+            Assert.True(loaded.FloatingWindowPlacement.TryGet("DISPLAY-A", out var placement));
+            Assert.Equal(12, placement.OffsetX);
+            Assert.Equal(-8, placement.OffsetY);
+
+            Assert.True(new SettingsStore(filePath).Save(loaded));
+            var roundTripped = new SettingsStore(filePath).Load();
+
+            Assert.False(roundTripped.FloatingWindowFreeDrag);
+            Assert.True(roundTripped.FloatingWindowClickThrough);
+            Assert.True(roundTripped.FloatingWindowPlacement.TryGet("display-a", out var roundTrippedPlacement));
+            Assert.Equal(12, roundTrippedPlacement.OffsetX);
+            Assert.Equal(-8, roundTrippedPlacement.OffsetY);
+        }
+        finally
+        {
+            if (Directory.Exists(directory))
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void LoadSeedsFloatingWindowSurfaceFromTheSharedSurfaceForLegacyFiles()
+    {
+        var directory = Path.Combine(AppContext.BaseDirectory, $"settings-store-{Guid.NewGuid():N}");
+        var filePath = Path.Combine(directory, "settings.json");
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            File.WriteAllText(
+                filePath,
+                "{\"UseFloatingWindow\":true,\"ShowBackground\":true,\"BackgroundTone\":-30,\"ShowBorder\":true}");
+
+            var loaded = new SettingsStore(filePath).Load();
+
+            Assert.True(loaded.ShowBackground);
+            Assert.Equal(-30, loaded.BackgroundTone);
+            Assert.True(loaded.ShowBorder);
+            Assert.True(loaded.FloatingWindowBackground.ShowBackground);
+            Assert.Equal(-30, loaded.FloatingWindowBackground.Tone);
+            Assert.True(loaded.FloatingWindowBackground.ShowBorder);
+        }
+        finally
+        {
+            if (Directory.Exists(directory))
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void LoadMigratesLegacyBackgroundOpacityOntoTheSignedTone()
+    {
+        var directory = Path.Combine(AppContext.BaseDirectory, $"settings-store-{Guid.NewGuid():N}");
+        var filePath = Path.Combine(directory, "settings.json");
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            File.WriteAllText(
+                filePath,
+                "{\"UseFloatingWindow\":true,\"ShowBackground\":true,\"BackgroundOpacity\":0.75,\"ShowBorder\":true}");
+
+            var loaded = new SettingsStore(filePath).Load();
+
+            Assert.Equal(75, loaded.BackgroundTone);
+            Assert.Equal(75, loaded.FloatingWindowBackground.Tone);
+            Assert.True(loaded.ShowBackground);
+            Assert.True(loaded.ShowBorder);
+
+            Assert.True(new SettingsStore(filePath).Save(loaded));
+            var saved = File.ReadAllText(filePath);
+            Assert.Contains("\"BackgroundTone\": 75", saved, StringComparison.Ordinal);
+            Assert.DoesNotContain("BackgroundOpacity", saved, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(directory))
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void LoadKeepsAnExplicitFloatingWindowSurfaceInsteadOfMigrating()
+    {
+        var directory = Path.Combine(AppContext.BaseDirectory, $"settings-store-{Guid.NewGuid():N}");
+        var filePath = Path.Combine(directory, "settings.json");
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            File.WriteAllText(
+                filePath,
+                "{\"ShowBackground\":true,\"BackgroundTone\":75,\"FloatingWindowBackground\":{\"Tone\":20}}");
+
+            var loaded = new SettingsStore(filePath).Load();
+
+            Assert.True(loaded.ShowBackground);
+            Assert.Equal(75, loaded.BackgroundTone);
+            Assert.False(loaded.FloatingWindowBackground.ShowBackground);
+            Assert.Equal(20, loaded.FloatingWindowBackground.Tone);
+        }
+        finally
+        {
+            if (Directory.Exists(directory))
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public void LoadDefaultsToEmbeddedWhenNoPresentationFieldExists()
     {
         var directory = Path.Combine(AppContext.BaseDirectory, $"settings-store-{Guid.NewGuid():N}");

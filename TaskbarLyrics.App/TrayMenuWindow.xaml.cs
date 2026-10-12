@@ -31,6 +31,9 @@ public partial class TrayMenuWindow : Window
     private const uint SetWindowPositionNoActivate = 0x0010;
     private const uint SetWindowPositionNoOwnerZOrder = 0x0200;
     private static readonly IntPtr TopMostWindow = new(-1);
+    private const double EmbeddedMenuHeight = 290;
+    private const double FloatingRowHeight = 32;
+    private const double FloatingWindowMenuHeight = EmbeddedMenuHeight + FloatingRowHeight;
 
     private readonly Action _toggleLyricsWindow;
     private readonly Action _toggleTranslation;
@@ -42,6 +45,7 @@ public partial class TrayMenuWindow : Window
     private readonly Action _openSmtcMonitor;
     private readonly Action _openSpectrumTuning;
     private readonly Action _exitApp;
+    private readonly TrayMenuFloatingWindowState _floatingWindow;
     private readonly DispatcherTimer _spectrumPopupCloseTimer;
     private readonly LowLevelMouseProc _mouseHookCallback;
     private IntPtr _mouseHook;
@@ -61,7 +65,8 @@ public partial class TrayMenuWindow : Window
         Action openSettings,
         Action openSmtcMonitor,
         Action openSpectrumTuning,
-        Action exitApp)
+        Action exitApp,
+        TrayMenuFloatingWindowState floatingWindow)
     {
         InitializeComponent();
         AppIconProvider.ApplyWindowIcon(this);
@@ -89,6 +94,8 @@ public partial class TrayMenuWindow : Window
         _openSpectrumTuning = openSpectrumTuning;
         _exitApp = exitApp;
         _mouseHookCallback = OnLowLevelMouseEvent;
+        _floatingWindow = floatingWindow;
+        ApplyFloatingWindowRows(floatingWindow);
         SyncSpectrumModeChecks(spectrumDisplayMode);
         SourceInitialized += OnSourceInitialized;
         NativeWindowTheme.ThemeChanged += OnWindowThemeChanged;
@@ -104,6 +111,55 @@ public partial class TrayMenuWindow : Window
             _spectrumPopupCloseTimer.Stop();
             SpectrumModePopup.IsOpen = false;
         };
+    }
+
+    private static void SetSwitchState(Controls.Border track, System.Windows.Shapes.Ellipse knob, bool isOn)
+    {
+        if (track.TryFindResource(isOn ? "TrayMenuSwitchOnBrush" : "TrayMenuSwitchOffBrush") is Media.Brush brush)
+        {
+            track.Background = brush;
+        }
+
+        knob.HorizontalAlignment = isOn
+            ? System.Windows.HorizontalAlignment.Right
+            : System.Windows.HorizontalAlignment.Left;
+        knob.Margin = isOn ? new Thickness(0, 0, 2, 0) : new Thickness(2, 0, 0, 0);
+    }
+
+    private void FloatingFreeDragButton_Click(object sender, RoutedEventArgs e)
+    {
+        var dragActive = _floatingWindow.FreeDragActive;
+        InvokeCommand(() => _floatingWindow.SetFreeDrag(!dragActive));
+    }
+
+    private void FloatingClickThroughButton_Click(object sender, RoutedEventArgs e)
+    {
+        InvokeCommand(() => _floatingWindow.SetClickThrough(!_floatingWindow.ClickThrough));
+    }
+
+    private void ApplyFloatingWindowRows(TrayMenuFloatingWindowState floatingWindow)
+    {
+        // The floating-window input switch only makes sense while the lyrics render as a
+        // floating window, so the row collapses entirely in taskbar-embedded mode.
+        var visible = floatingWindow.IsFloatingWindow;
+        FloatingInputModeRowDefinition.Height = new GridLength(visible ? FloatingRowHeight : 0);
+        FloatingInputModeSwitch.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+        Height = visible ? FloatingWindowMenuHeight : EmbeddedMenuHeight;
+
+        // Click-through and free dragging cannot be active together, so the row is one
+        // two-way switch; click-through wins whenever both flags are set elsewhere.
+        SetSegmentState(FloatingClickThroughSegment, FloatingClickThroughLabel, floatingWindow.ClickThrough);
+        SetSegmentState(FloatingFreeDragSegment, FloatingFreeDragLabel, floatingWindow.FreeDragActive);
+    }
+
+    private static void SetSegmentState(Controls.Button segment, Controls.TextBlock label, bool isActive)
+    {
+        segment.Background = isActive
+            ? segment.TryFindResource("TrayMenuSwitchOnBrush") as Media.Brush ?? Media.Brushes.Transparent
+            : Media.Brushes.Transparent;
+        label.Foreground = segment.TryFindResource(
+            isActive ? "TrayMenuSwitchOnTextBrush" : "TrayMenuMutedTextBrush") as Media.Brush
+            ?? Media.Brushes.White;
     }
 
     private void ApplyTheme()
@@ -127,6 +183,14 @@ public partial class TrayMenuWindow : Window
         Resources["TrayMenuSeparatorBrush"] = new Media.SolidColorBrush(light
             ? Media.Color.FromRgb(218, 226, 237)
             : Media.Color.FromRgb(74, 74, 74));
+        Resources["TrayMenuSwitchOnBrush"] = new Media.SolidColorBrush(light
+            ? Media.Color.FromRgb(37, 99, 235)
+            : Media.Color.FromRgb(59, 130, 246));
+        Resources["TrayMenuSwitchOffBrush"] = new Media.SolidColorBrush(light
+            ? Media.Color.FromRgb(203, 213, 225)
+            : Media.Color.FromRgb(90, 90, 90));
+        Resources["TrayMenuSwitchKnobBrush"] = new Media.SolidColorBrush(Media.Colors.White);
+        Resources["TrayMenuSwitchOnTextBrush"] = new Media.SolidColorBrush(Media.Colors.White);
         if (!SystemParameters.ClientAreaAnimation || SystemParameters.HighContrast)
         {
             SpectrumModePopup.PopupAnimation = PopupAnimation.None;
@@ -733,4 +797,22 @@ public partial class TrayMenuWindow : Window
         Right,
         Bottom
     }
+}
+
+/// <summary>
+/// Floating-window state the tray menu renders as switches; the callbacks persist
+/// the new value through the app.
+/// </summary>
+public readonly record struct TrayMenuFloatingWindowState(
+    bool IsFloatingWindow,
+    bool FreeDrag,
+    bool ClickThrough,
+    Action<bool> SetFreeDrag,
+    Action<bool> SetClickThrough)
+{
+    /// <summary>
+    /// Free dragging is only effective while click-through is off; both flags may be
+    /// set from the settings page, where click-through takes precedence.
+    /// </summary>
+    public bool FreeDragActive => !ClickThrough && FreeDrag;
 }

@@ -1261,9 +1261,15 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             ForegroundColorMode = _settings.ForegroundColorMode,
             ForegroundColor = _settings.ForegroundColor,
             ShowBackground = _settings.ShowBackground,
-            BackgroundOpacity = _settings.BackgroundOpacity,
+            BackgroundTone = _settings.BackgroundTone,
             ShowBorder = _settings.ShowBorder,
             ShowTextShadow = _settings.ShowTextShadow,
+            FloatingWindowBackgroundShow = _settings.FloatingWindowBackground.ShowBackground,
+            FloatingWindowBackgroundTone = _settings.FloatingWindowBackground.Tone,
+            FloatingWindowBackgroundBorder = _settings.FloatingWindowBackground.ShowBorder,
+            FloatingWindowFreeDrag = _settings.FloatingWindowFreeDrag,
+            FloatingWindowClickThrough = _settings.FloatingWindowClickThrough,
+            FallbackToFloatingWhenTaskbarHidden = _settings.FallbackToFloatingWhenTaskbarHidden,
             WindowWidth = _settings.WindowWidth,
             HorizontalAnchor = _settings.HorizontalAnchor,
             LyricsTextAlignment = _settings.LyricsTextAlignment,
@@ -1530,6 +1536,27 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             case "showBackground":
                 _settings.ShowBackground = ReadBool(element, _settings.ShowBackground);
                 break;
+            case "floatingWindowBackgroundShow":
+                _settings.FloatingWindowBackground.ShowBackground = ReadBool(
+                    element,
+                    _settings.FloatingWindowBackground.ShowBackground);
+                break;
+            case "floatingWindowBackgroundBorder":
+                _settings.FloatingWindowBackground.ShowBorder = ReadBool(
+                    element,
+                    _settings.FloatingWindowBackground.ShowBorder);
+                break;
+            case "floatingWindowFreeDrag":
+                _settings.FloatingWindowFreeDrag = ReadBool(element, _settings.FloatingWindowFreeDrag);
+                break;
+            case "floatingWindowClickThrough":
+                _settings.FloatingWindowClickThrough = ReadBool(element, _settings.FloatingWindowClickThrough);
+                break;
+            case "fallbackToFloatingWhenTaskbarHidden":
+                _settings.FallbackToFloatingWhenTaskbarHidden = ReadBool(
+                    element,
+                    _settings.FallbackToFloatingWhenTaskbarHidden);
+                break;
             case "showBorder":
                 _settings.ShowBorder = ReadBool(element, _settings.ShowBorder);
                 break;
@@ -1586,8 +1613,13 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 _settings.ForegroundColorMode = ReadForegroundColorMode(element, _settings.ForegroundColorMode);
                 ApplyForegroundColorMode();
                 break;
-            case "backgroundOpacity":
-                _settings.BackgroundOpacity = Math.Clamp(ReadDouble(element, _settings.BackgroundOpacity), 0, 1);
+            case "backgroundTone":
+                _settings.BackgroundTone = AppSettings.ClampBackgroundTone(
+                    ReadDouble(element, _settings.BackgroundTone));
+                break;
+            case "floatingWindowBackgroundTone":
+                _settings.FloatingWindowBackground.Tone = AppSettings.ClampBackgroundTone(
+                    ReadDouble(element, _settings.FloatingWindowBackground.Tone));
                 break;
             case "windowWidth":
                 _settings.WindowWidth = Math.Clamp(
@@ -1740,7 +1772,8 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
     private static bool IsPreviewableSetting(string? key)
     {
         return key is
-            "backgroundOpacity" or
+            "backgroundTone" or
+            "floatingWindowBackgroundTone" or
             "coverGap" or
             "coverCornerRadius" or
             "lyricsLayoutScalePercent" or
@@ -2093,9 +2126,14 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         target.ForegroundColorMode = source.ForegroundColorMode;
         target.ForegroundColor = source.ForegroundColor;
         target.ShowBackground = source.ShowBackground;
-        target.BackgroundOpacity = source.BackgroundOpacity;
+        target.BackgroundTone = source.BackgroundTone;
         target.ShowBorder = source.ShowBorder;
         target.ShowTextShadow = source.ShowTextShadow;
+        target.FloatingWindowBackground = (source.FloatingWindowBackground ?? new FloatingWindowBackgroundSettings()).Clone();
+        target.FloatingWindowFreeDrag = source.FloatingWindowFreeDrag;
+        target.FloatingWindowClickThrough = source.FloatingWindowClickThrough;
+        target.FallbackToFloatingWhenTaskbarHidden = source.FallbackToFloatingWhenTaskbarHidden;
+        target.FloatingWindowPlacement = (source.FloatingWindowPlacement ?? new FloatingWindowPlacementSettings()).Clone();
         target.WindowWidth = source.WindowWidth;
         target.HorizontalAnchor = source.HorizontalAnchor;
         target.LyricsTextAlignment = source.LyricsTextAlignment;
@@ -2234,9 +2272,15 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         public ForegroundColorMode ForegroundColorMode { get; set; }
         public string ForegroundColor { get; set; } = "";
         public bool ShowBackground { get; set; }
-        public double BackgroundOpacity { get; set; }
+        public double BackgroundTone { get; set; }
         public bool ShowBorder { get; set; }
         public bool ShowTextShadow { get; set; }
+        public bool FloatingWindowBackgroundShow { get; set; }
+        public double FloatingWindowBackgroundTone { get; set; }
+        public bool FloatingWindowBackgroundBorder { get; set; }
+        public bool FloatingWindowFreeDrag { get; set; }
+        public bool FloatingWindowClickThrough { get; set; }
+        public bool FallbackToFloatingWhenTaskbarHidden { get; set; }
         public double WindowWidth { get; set; }
         public LyricsHorizontalAnchor HorizontalAnchor { get; set; }
         public LyricsTextAlignment LyricsTextAlignment { get; set; }

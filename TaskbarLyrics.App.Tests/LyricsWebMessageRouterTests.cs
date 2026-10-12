@@ -25,4 +25,21 @@ public sealed class LyricsWebMessageRouterTests
     {
         Assert.False(LyricsWebMessageRouter.TryGetCoverClick(LyricsWebMessageRouter.Parse(json), out _));
     }
+
+    [Fact]
+    public void WindowDragRequestIsRecognizedInsideTheV1Envelope()
+    {
+        var message = LyricsWebMessageRouter.Parse("{\"version\":1,\"type\":\"windowDrag\",\"payload\":null}");
+
+        Assert.True(LyricsWebMessageRouter.IsWindowDragRequest(message));
+    }
+
+    [Theory]
+    [InlineData("{\"version\":2,\"type\":\"windowDrag\",\"payload\":null}")]
+    [InlineData("{\"version\":1,\"type\":\"windowDragStart\",\"payload\":null}")]
+    [InlineData("{\"version\":1,\"type\":\"coverClick\",\"payload\":null}")]
+    public void WindowDragRequestRejectsUnknownEnvelopes(string json)
+    {
+        Assert.False(LyricsWebMessageRouter.IsWindowDragRequest(LyricsWebMessageRouter.Parse(json)));
+    }
 }

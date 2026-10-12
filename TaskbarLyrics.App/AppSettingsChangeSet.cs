@@ -69,6 +69,8 @@ internal readonly record struct AppSettingsChangeSet(
 
         var visualStyleChanged = isInitialApplication ||
             current.UseFloatingWindow != next.UseFloatingWindow ||
+            current.FloatingWindowFreeDrag != next.FloatingWindowFreeDrag ||
+            current.FloatingWindowClickThrough != next.FloatingWindowClickThrough ||
             current.FontSize != next.FontSize ||
             current.ShowCover != next.ShowCover ||
             current.EnableControlPanel != next.EnableControlPanel ||
@@ -82,9 +84,10 @@ internal readonly record struct AppSettingsChangeSet(
             current.ForegroundColorMode != next.ForegroundColorMode ||
             !string.Equals(current.ForegroundColor, next.ForegroundColor, StringComparison.Ordinal) ||
             current.ShowBackground != next.ShowBackground ||
-            current.BackgroundOpacity != next.BackgroundOpacity ||
+            current.BackgroundTone != next.BackgroundTone ||
             current.ShowBorder != next.ShowBorder ||
             current.ShowTextShadow != next.ShowTextShadow ||
+            !AreSameFloatingWindowBackground(current.FloatingWindowBackground, next.FloatingWindowBackground) ||
             current.LyricsTextAlignment != next.LyricsTextAlignment;
 
         var lyricsLayoutChanged = isInitialApplication ||
@@ -102,6 +105,9 @@ internal readonly record struct AppSettingsChangeSet(
             current.XOffset != next.XOffset ||
             current.YOffset != next.YOffset ||
             current.ForceAlwaysOnTop != next.ForceAlwaysOnTop ||
+            current.FloatingWindowFreeDrag != next.FloatingWindowFreeDrag ||
+            current.FloatingWindowClickThrough != next.FloatingWindowClickThrough ||
+            current.FallbackToFloatingWhenTaskbarHidden != next.FallbackToFloatingWhenTaskbarHidden ||
             current.UseFloatingWindow != next.UseFloatingWindow ||
             current.LyricsDisplayMode != next.LyricsDisplayMode ||
             !AreSameStrings(current.SelectedDisplayIds, next.SelectedDisplayIds);
@@ -177,6 +183,17 @@ internal readonly record struct AppSettingsChangeSet(
         }
 
         return true;
+    }
+
+    private static bool AreSameFloatingWindowBackground(
+        FloatingWindowBackgroundSettings? current,
+        FloatingWindowBackgroundSettings? next)
+    {
+        var currentSettings = current ?? new FloatingWindowBackgroundSettings();
+        var nextSettings = next ?? new FloatingWindowBackgroundSettings();
+        return currentSettings.ShowBackground == nextSettings.ShowBackground &&
+            currentSettings.Tone == nextSettings.Tone &&
+            currentSettings.ShowBorder == nextSettings.ShowBorder;
     }
 
     private static bool AreSameGlobalMediaHotkeys(

@@ -28,6 +28,22 @@ internal sealed class TaskbarPlacementService
         var metrics = LyricsLayoutMetrics.Create(settings, pixelsPerDip);
         window.Height = Math.Min(metrics.DesiredWindowHeight, display.Height);
 
+        if (settings.UseFloatingWindow &&
+            settings.FloatingWindowPlacement.TryGet(targetDisplay?.Id, out var floatingPlacement))
+        {
+            // A dragged floating window keeps the position the user left it at.
+            var (floatingLeft, floatingTop) = ClampFloatingPosition(
+                display,
+                display.Left + floatingPlacement.OffsetX,
+                display.Top + floatingPlacement.OffsetY,
+                window.Width,
+                window.Height);
+            window.Left = floatingLeft;
+            window.Top = floatingTop;
+            CommitNativeBounds(window, pixelsPerDip);
+            return;
+        }
+
         var requestedLeft = settings.HorizontalAnchor switch
         {
             LyricsHorizontalAnchor.Left => display.Left + settings.XOffset,
@@ -44,6 +60,43 @@ internal sealed class TaskbarPlacementService
             settings.YOffset);
 
         CommitNativeBounds(window, pixelsPerDip);
+    }
+
+    /// <summary>
+    /// Captures the current floating-window position as an offset from its display
+    /// origin, clamped so the window cannot be dragged out of the display.
+    /// </summary>
+    internal static FloatingWindowPlacement? TryCaptureFloatingPlacement(
+        Window window,
+        DisplayMonitor? targetDisplay,
+        double pixelsPerDip)
+    {
+        if (targetDisplay is null || !double.IsFinite(window.Left) || !double.IsFinite(window.Top))
+        {
+            return null;
+        }
+
+        var display = ConvertPhysicalDisplayMetrics(targetDisplay.Bounds, targetDisplay.WorkArea, pixelsPerDip);
+        var (left, top) = ClampFloatingPosition(display, window.Left, window.Top, window.Width, window.Height);
+        return new FloatingWindowPlacement
+        {
+            OffsetX = left - display.Left,
+            OffsetY = top - display.Top
+        };
+    }
+
+    internal static (double Left, double Top) ClampFloatingPosition(
+        TaskbarDisplayMetrics display,
+        double requestedLeft,
+        double requestedTop,
+        double windowWidth,
+        double windowHeight)
+    {
+        var maximumLeft = Math.Max(display.Left, display.Right - windowWidth);
+        var maximumTop = Math.Max(display.Top, display.Bottom - windowHeight);
+        return (
+            Math.Clamp(requestedLeft, display.Left, maximumLeft),
+            Math.Clamp(requestedTop, display.Top, maximumTop));
     }
 
     internal static double GetPixelsPerDip(Window window)

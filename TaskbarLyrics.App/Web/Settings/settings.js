@@ -1651,8 +1651,11 @@
     }
 
     function applyDependencies() {
-      $$('[data-depends]').forEach(row => {
-        const enabled = Boolean(state[row.dataset.depends]) &&
+      $$('[data-depends], [data-embedded-only]').forEach(row => {
+        const depends = row.dataset.depends;
+        const dependsNot = row.dataset.dependsNot;
+        const enabled = (depends === undefined || Boolean(state[depends])) &&
+          (dependsNot === undefined || !Boolean(state[dependsNot])) &&
           (!row.hasAttribute("data-embedded-only") || state.useFloatingWindow !== true);
         row.classList.toggle("is-disabled", !enabled);
         row.querySelectorAll("input, select, textarea, button").forEach(control => { control.disabled = !enabled; });

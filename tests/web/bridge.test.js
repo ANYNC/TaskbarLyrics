@@ -9,8 +9,10 @@ const persistedSettings = [
   "enableLocalLyrics", "localMusicFolders", "enableGlobalMediaHotkeys", "showLyricsOnStartup", "autoHideWhenNoPlayback",
   "showLyricTranslation", "enableWordScanning", "spectrumDisplayMode", "lyricsLayoutScalePercent", "fontSize", "showCover",
   "enableControlPanel", "coverPosition", "coverSize", "coverGap", "coverCornerRadius", "fontFamily", "fontWeight", "lyricsTextAlignment", "foregroundColorMode",
-  "showTextShadow", "toolWindowTheme", "showBackground", "backgroundOpacity", "showBorder", "windowWidth", "horizontalAnchor",
-  "xOffset", "yOffset", "forceAlwaysOnTop", "startWithWindows", "autoCheckUpdates"
+  "showTextShadow", "toolWindowTheme", "showBackground", "backgroundTone", "showBorder", "windowWidth", "horizontalAnchor",
+  "xOffset", "yOffset", "forceAlwaysOnTop", "startWithWindows", "autoCheckUpdates",
+  "floatingWindowFreeDrag", "floatingWindowClickThrough", "fallbackToFloatingWhenTaskbarHidden",
+  "floatingWindowBackgroundShow", "floatingWindowBackgroundTone", "floatingWindowBackgroundBorder"
 ];
 
 async function createSettingsDom({ deferAnimationFrames = false, reducedMotion = false } = {}) {
@@ -1246,7 +1248,7 @@ describe("settings WebView bridge", () => {
           fontWeight: "Bold",
           foregroundColorMode: "Light",
           foregroundColor: "#FFFFFFFF",
-          backgroundOpacity: 0.55,
+          backgroundTone: 55,
           lyricsLayoutScalePercent: 100,
           fontSize: 14,
           coverSize: 34,
@@ -1316,7 +1318,7 @@ describe("settings WebView bridge", () => {
           mediaHotkeyStatuses: {},
           foregroundColorMode: "Light",
           foregroundColor: "#FFFFFFFF",
-          backgroundOpacity: 0.55,
+          backgroundTone: 55,
           showCover: true,
           enableControlPanel: true,
           coverSize: 34,
@@ -1379,7 +1381,7 @@ describe("settings WebView bridge", () => {
     const document = dom.window.document;
     const toggle = document.querySelector('input[data-setting="enableControlPanel"]');
     const row = document.querySelector("#embeddedControlPanelRow");
-    expect(document.querySelectorAll('input[data-setting="enableControlPanel"]')).toHaveLength(1);
+    expect(document.querySelectorAll('input[data-setting="enableControlPanel"]')).toHaveLength(2);
     expect(row.closest(".embedded-window-mode-card")).not.toBeNull();
     expect(row.closest(".window-mode-choice")).toBeNull();
     expect(toggle.disabled).toBe(disabled);
@@ -1445,7 +1447,7 @@ describe("settings WebView bridge", () => {
           mediaHotkeyStatuses: {},
           foregroundColorMode: "Light",
           foregroundColor: "#FFFFFFFF",
-          backgroundOpacity: 0.55,
+          backgroundTone: 55,
           xOffset: 30,
           yOffset: -20
         },
@@ -1576,7 +1578,7 @@ describe("settings WebView bridge", () => {
           mediaHotkeyStatuses: {},
           foregroundColorMode: "Light",
           foregroundColor: "#FFFFFFFF",
-          backgroundOpacity: 0.55,
+          backgroundTone: 55,
           xOffset: 0,
           yOffset: 0
         },
@@ -1616,7 +1618,7 @@ describe("settings WebView bridge", () => {
           mediaHotkeyStatuses: {},
           foregroundColorMode: "Light",
           foregroundColor: "#FFFFFFFF",
-          backgroundOpacity: 0.55,
+          backgroundTone: 55,
           useFloatingWindow: false,
           lyricsLayoutScalePercent: 100,
           fontSize: 14,
@@ -1672,7 +1674,10 @@ describe("settings WebView bridge", () => {
     const document = dom.window.document;
     const sliders = Array.from(document.querySelectorAll('input[type="range"][data-setting]'));
 
-    expect(sliders).toHaveLength(7);
+    expect(sliders.map(slider => slider.dataset.setting)).toEqual([
+      "lyricsLayoutScalePercent", "coverGap", "coverCornerRadius", "windowWidth",
+      "backgroundTone", "floatingWindowBackgroundTone", "xOffset", "yOffset"
+    ]);
     sliders.forEach(slider => {
       const control = slider.closest(".slider-number-control");
       expect(control).not.toBeNull();
@@ -1797,6 +1802,102 @@ describe("settings WebView bridge", () => {
     });
   });
 
+  it("gates the floating window switches on display mode and on click-through", async () => {
+    const { dom, sent, script } = await createSettingsDom();
+    dom.window.eval(script);
+    dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: {
+      settings: {
+        useFloatingWindow: true,
+        enableControlPanel: true,
+        floatingWindowFreeDrag: true,
+        floatingWindowClickThrough: false
+      }
+    } });
+    const document = dom.window.document;
+    const freeDrag = document.querySelector("#floatingFreeDragToggle");
+    const freeDragRow = document.querySelector("#floatingFreeDragRow");
+    const clickThrough = document.querySelector("#floatingClickThroughToggle");
+    const controlPanel = document.querySelector("#floatingControlPanelToggle");
+    const taskbarHidden = document.querySelector("#embeddedTaskbarHiddenToggle");
+
+    expect(freeDrag.disabled).toBe(false);
+    expect(clickThrough.disabled).toBe(false);
+    expect(controlPanel.disabled).toBe(false);
+    expect(freeDrag.checked).toBe(true);
+    expect(clickThrough.checked).toBe(false);
+    expect(controlPanel.checked).toBe(true);
+    expect(taskbarHidden.disabled).toBe(true);
+
+    clickThrough.checked = true;
+    clickThrough.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+
+    expect(sent.at(-1).payload).toEqual({ key: "floatingWindowClickThrough", value: true });
+    expect(freeDrag.disabled).toBe(true);
+    expect(freeDragRow.classList.contains("is-disabled")).toBe(true);
+    expect(clickThrough.disabled).toBe(false);
+
+    document.querySelector('[data-window-mode="embedded"]').click();
+    expect(clickThrough.disabled).toBe(true);
+    expect(controlPanel.disabled).toBe(true);
+    expect(taskbarHidden.disabled).toBe(false);
+
+    document.querySelector('[data-window-mode="floating"]').click();
+    expect(taskbarHidden.disabled).toBe(true);
+    expect(clickThrough.disabled).toBe(false);
+  });
+
+  it("keeps the two window appearance areas independent", async () => {
+    const { dom, sent, script } = await createSettingsDom();
+    dom.window.eval(script);
+    dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: {
+      settings: {
+        showBackground: true,
+        backgroundTone: 50,
+        floatingWindowBackgroundShow: false,
+        floatingWindowBackgroundTone: -70
+      }
+    } });
+    const document = dom.window.document;
+    const modes = [...document.querySelectorAll(".appearance-mode")];
+
+    expect(modes.map(mode => mode.querySelector(".appearance-mode-title").textContent))
+      .toEqual(["任务栏嵌入", "悬浮窗口"]);
+    expect(modes.map(mode => [...mode.querySelectorAll(".setting-row strong")].map(label => label.textContent)))
+      .toEqual([
+        ["显示背景", "背景浓度", "显示边框"],
+        ["显示背景", "背景浓度", "显示边框"]
+      ]);
+    expect(modes.map(mode => [...mode.querySelectorAll("[data-setting]")].map(control => control.dataset.setting)))
+      .toEqual([
+        ["showBackground", "backgroundTone", "backgroundTone", "showBorder"],
+        ["floatingWindowBackgroundShow", "floatingWindowBackgroundTone", "floatingWindowBackgroundTone", "floatingWindowBackgroundBorder"]
+      ]);
+
+    const floatingShow = document.querySelector('[data-setting="floatingWindowBackgroundShow"]');
+    const floatingToneRow = floatingShow.closest(".setting-row").nextElementSibling;
+    const embeddedToneRow = document.querySelector('[data-setting="showBackground"]').closest(".setting-row").nextElementSibling;
+    expect(document.querySelector('[data-setting="showBackground"]').checked).toBe(true);
+    expect(floatingShow.checked).toBe(false);
+    expect(embeddedToneRow.classList.contains("is-disabled")).toBe(false);
+    expect(floatingToneRow.classList.contains("is-disabled")).toBe(true);
+
+    const embeddedTone = embeddedToneRow.querySelector('input[type="number"]');
+    const floatingTone = floatingToneRow.querySelector('input[type="number"]');
+    expect(embeddedTone.min).toBe("-100");
+    expect(embeddedTone.max).toBe("100");
+    expect(embeddedTone.value).toBe("50");
+    expect(floatingTone.value).toBe("-70");
+    expect(embeddedToneRow.querySelector('input[type="range"]').min).toBe("-100");
+    expect(embeddedToneRow.querySelector('input[type="range"]').max).toBe("100");
+
+    floatingShow.checked = true;
+    floatingShow.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+
+    expect(sent.at(-1).payload).toEqual({ key: "floatingWindowBackgroundShow", value: true });
+    expect(floatingToneRow.classList.contains("is-disabled")).toBe(false);
+    expect(embeddedToneRow.classList.contains("is-disabled")).toBe(false);
+  });
+
   it("previews scaled numeric input and commits the canonical setting value", async () => {
     const { dom, sent, script } = await createSettingsDom();
     const document = dom.window.document;
@@ -1814,12 +1915,12 @@ describe("settings WebView bridge", () => {
           foregroundColorMode: "Light",
           foregroundColor: "#FFFFFFFF",
           showBackground: true,
-          backgroundOpacity: 0.55
+          backgroundTone: 55
         },
         fonts: []
       }
     });
-    const input = document.querySelector('input[type="number"][data-setting="backgroundOpacity"]');
+    const input = document.querySelector('input[type="number"][data-setting="backgroundTone"]');
 
     expect(input.value).toBe("55");
     input.value = "70";
@@ -1827,14 +1928,14 @@ describe("settings WebView bridge", () => {
     expect(sent.at(-1)).toEqual({
       version: 1,
       type: "previewUpdate",
-      payload: { key: "backgroundOpacity", value: 0.7 }
+      payload: { key: "backgroundTone", value: 70 }
     });
 
     input.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
     expect(sent.at(-1)).toEqual({
       version: 1,
       type: "update",
-      payload: { key: "backgroundOpacity", value: 0.7 }
+      payload: { key: "backgroundTone", value: 70 }
     });
   });
 

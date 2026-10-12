@@ -23,7 +23,8 @@ public sealed class TrayService : IDisposable
         Action openSettings,
         Action openSmtcMonitor,
         Action openSpectrumTuning,
-        Action exitApp)
+        Action exitApp,
+        Func<TrayMenuFloatingWindowState> getFloatingWindowState)
     {
         _icon = AppIconProvider.LoadTrayIcon();
         _notifyIcon = new Forms.NotifyIcon
@@ -54,6 +55,7 @@ public sealed class TrayService : IDisposable
                         openSmtcMonitor,
                         openSpectrumTuning,
                         exitApp,
+                        getFloatingWindowState(),
                         invocationPoint));
             }
         };
@@ -94,6 +96,7 @@ public sealed class TrayService : IDisposable
         Action openSmtcMonitor,
         Action openSpectrumTuning,
         Action exitApp,
+        TrayMenuFloatingWindowState floatingWindowState,
         System.Drawing.Point invocationPoint)
     {
         _menuWindow?.Close();
@@ -110,7 +113,8 @@ public sealed class TrayService : IDisposable
             openSettings,
             openSmtcMonitor,
             openSpectrumTuning,
-            exitApp);
+            exitApp,
+            floatingWindowState);
         _menuWindow.Closed += (_, _) => _menuWindow = null;
         _menuWindow.ShowAt(invocationPoint);
     }

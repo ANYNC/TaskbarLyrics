@@ -34,6 +34,8 @@ public sealed class SettingsStore
             MigrateLegacySpectrumSettings(document.RootElement, settings);
             MigrateSpectrumAudioAccess(document.RootElement, settings);
             MigrateTaskbarPresentation(document.RootElement, settings);
+            MigrateBackgroundTone(document.RootElement, settings);
+            MigrateFloatingWindowBackground(document.RootElement, settings);
             settings.NormalizePlayerSources();
             settings.NormalizeLyricsLayout();
             settings.NormalizeDisplaySelection();
@@ -166,6 +168,42 @@ public sealed class SettingsStore
         {
             settings.YOffset = verticalOffset;
         }
+    }
+
+    private static void MigrateBackgroundTone(JsonElement root, AppSettings settings)
+    {
+        if (root.TryGetProperty(nameof(AppSettings.BackgroundTone), out _))
+        {
+            return;
+        }
+
+        if (!TryReadDouble(root, "BackgroundOpacity", out var legacyOpacity))
+        {
+            return;
+        }
+
+        // The background used to be a 0..1 alpha over a near-black surface. It is now a
+        // signed density where positive values are black, so the legacy alpha maps onto
+        // the same look once it is expressed as a black percentage.
+        settings.BackgroundTone = AppSettings.ClampBackgroundTone(legacyOpacity * 100);
+    }
+
+    private static void MigrateFloatingWindowBackground(JsonElement root, AppSettings settings)
+    {
+        if (root.TryGetProperty(nameof(AppSettings.FloatingWindowBackground), out _))
+        {
+            return;
+        }
+
+        // Older files only carried one shared surface configuration. Seed the
+        // floating-window surface from it so an upgraded installation keeps
+        // rendering the floating window the way it did before the split.
+        settings.FloatingWindowBackground = new FloatingWindowBackgroundSettings
+        {
+            ShowBackground = settings.ShowBackground,
+            Tone = settings.BackgroundTone,
+            ShowBorder = settings.ShowBorder
+        };
     }
 
     private static double ConvertLegacyEmbeddedWidthToBaseWidth(

@@ -51,4 +51,33 @@ public sealed class TaskbarPlacementServiceTests
         Assert.Equal(expectedWidth, result.Width);
         Assert.Equal(expectedHeight, result.Height);
     }
+
+    [Fact]
+    public void ClampFloatingPositionKeepsTheWindowInsideItsDisplay()
+    {
+        var display = new TaskbarDisplayMetrics(-1920, 0, 1920, 1080, -1920, 0, 1920, 1040);
+
+        var inside = TaskbarPlacementService.ClampFloatingPosition(display, -1500, 400, 420, 40);
+        Assert.Equal(-1500, inside.Left);
+        Assert.Equal(400, inside.Top);
+
+        var beyondRight = TaskbarPlacementService.ClampFloatingPosition(display, -100, -50, 420, 40);
+        Assert.Equal(-420, beyondRight.Left);
+        Assert.Equal(0, beyondRight.Top);
+
+        var beyondLeft = TaskbarPlacementService.ClampFloatingPosition(display, -4000, 5000, 420, 40);
+        Assert.Equal(-1920, beyondLeft.Left);
+        Assert.Equal(1040, beyondLeft.Top);
+    }
+
+    [Fact]
+    public void ClampFloatingPositionKeepsOversizedWindowsAtTheDisplayOrigin()
+    {
+        var display = new TaskbarDisplayMetrics(0, 0, 300, 200, 0, 0, 300, 200);
+
+        var result = TaskbarPlacementService.ClampFloatingPosition(display, 120, 80, 420, 260);
+
+        Assert.Equal(0, result.Left);
+        Assert.Equal(0, result.Top);
+    }
 }

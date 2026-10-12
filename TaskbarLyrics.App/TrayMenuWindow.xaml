@@ -21,6 +21,63 @@
         <SolidColorBrush x:Key="TrayMenuTextBrush" Color="#FFFFFF" />
         <SolidColorBrush x:Key="TrayMenuMutedTextBrush" Color="#B4B4B4" />
         <SolidColorBrush x:Key="TrayMenuSeparatorBrush" Color="#4A4A4A" />
+        <SolidColorBrush x:Key="TrayMenuSwitchOnBrush" Color="#2F6FEB" />
+        <SolidColorBrush x:Key="TrayMenuSwitchOnTextBrush" Color="#FFFFFF" />
+        <SolidColorBrush x:Key="TrayMenuSwitchOffBrush" Color="#5A5A5A" />
+        <SolidColorBrush x:Key="TrayMenuSwitchKnobBrush" Color="#FFFFFF" />
+
+        <Style x:Key="TrayMenuSegmentButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="OverridesDefaultStyle" Value="True" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type Button}">
+                        <Border x:Name="Segment"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="10,0,0,10">
+                            <Grid>
+                                <Border x:Name="HoverOverlay"
+                                        Background="{DynamicResource TrayMenuHoverBrush}"
+                                        CornerRadius="10,0,0,10"
+                                        IsHitTestVisible="False"
+                                        Opacity="0" />
+                                <ContentPresenter HorizontalAlignment="Center"
+                                                  VerticalAlignment="Center" />
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <EventTrigger RoutedEvent="MouseEnter">
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="HoverOverlay"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         To="0.5"
+                                                         Duration="0:0:0.08" />
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </EventTrigger>
+                            <EventTrigger RoutedEvent="MouseLeave">
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="HoverOverlay"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         To="0"
+                                                         Duration="0:0:0.12" />
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </EventTrigger>
+                            <Trigger Property="Tag" Value="Right">
+                                <Setter TargetName="Segment" Property="CornerRadius" Value="0,10,10,0" />
+                                <Setter TargetName="HoverOverlay" Property="CornerRadius" Value="0,10,10,0" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
 
         <Style x:Key="TrayMenuButtonStyle" TargetType="Button">
             <Setter Property="Height" Value="32" />
@@ -105,6 +162,7 @@
                     <RowDefinition Height="32" />
                     <RowDefinition Height="32" />
                     <RowDefinition Height="32" />
+                    <RowDefinition x:Name="FloatingInputModeRowDefinition" Height="32" />
                     <RowDefinition Height="32" />
                     <RowDefinition Height="32" />
                     <RowDefinition Height="1" />
@@ -230,7 +288,47 @@
                                FontSize="12.5" />
                 </Button>
 
-                <Button Grid.Row="7"
+                <Border x:Name="FloatingInputModeSwitch"
+                        Grid.Row="7"
+                        Height="24"
+                        Margin="16,0"
+                        Padding="2"
+                        VerticalAlignment="Center"
+                        CornerRadius="12"
+                        Background="{DynamicResource TrayMenuSwitchOffBrush}"
+                        Visibility="Collapsed">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Button x:Name="FloatingClickThroughSegment"
+                                Grid.Column="0"
+                                Style="{StaticResource TrayMenuSegmentButtonStyle}"
+                                ToolTip="开启后悬浮窗不响应鼠标操作，直接穿透到下层窗口"
+                                Click="FloatingClickThroughButton_Click">
+                            <TextBlock x:Name="FloatingClickThroughLabel"
+                                       Text="鼠标穿透"
+                                       Foreground="{DynamicResource TrayMenuMutedTextBrush}"
+                                       FontFamily="Microsoft YaHei UI"
+                                       FontSize="11.5" />
+                        </Button>
+                        <Button x:Name="FloatingFreeDragSegment"
+                                Grid.Column="1"
+                                Tag="Right"
+                                Style="{StaticResource TrayMenuSegmentButtonStyle}"
+                                ToolTip="开启后可直接拖动悬浮窗调整位置"
+                                Click="FloatingFreeDragButton_Click">
+                            <TextBlock x:Name="FloatingFreeDragLabel"
+                                       Text="调整位置"
+                                       Foreground="{DynamicResource TrayMenuMutedTextBrush}"
+                                       FontFamily="Microsoft YaHei UI"
+                                       FontSize="11.5" />
+                        </Button>
+                    </Grid>
+                </Border>
+
+                <Button Grid.Row="8"
                         Style="{StaticResource TrayMenuButtonStyle}"
                         Click="TrackOffsetButton_Click">
                     <TextBlock Text="调整当前歌曲偏移"
@@ -240,7 +338,7 @@
                                FontSize="12.5" />
                 </Button>
 
-                <Button Grid.Row="8"
+                <Button Grid.Row="9"
                         Style="{StaticResource TrayMenuButtonStyle}"
                         Click="SettingsButton_Click">
                     <TextBlock Text="设置"
@@ -250,12 +348,12 @@
                                FontSize="12.5" />
                 </Button>
 
-                <Border Grid.Row="9"
+                <Border Grid.Row="10"
                         Height="1"
                         VerticalAlignment="Center"
                         Background="{DynamicResource TrayMenuSeparatorBrush}" />
 
-                <Button Grid.Row="10"
+                <Button Grid.Row="11"
                         Style="{StaticResource TrayMenuButtonStyle}"
                         Tag="Bottom"
                         Click="ExitButton_Click">

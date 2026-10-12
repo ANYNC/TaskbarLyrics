@@ -104,11 +104,16 @@ public partial class MainWindow : Window, IDisposable
     private bool _isClosingForRecreation;
     private DisplayMonitor? _displayMonitor;
 
+
+    private readonly WindowClickThroughController _clickThroughController;
+
     internal event Action<LyricsPresentationCommand>? PresentationCommandCreated;
 
     internal event EventHandler<LyricsContentVisibilityChangedEventArgs>? LyricsContentVisibilityChanged;
 
     internal event EventHandler? RecreateWindowRequested;
+
+    internal event EventHandler<FloatingWindowPositionChangedEventArgs>? FloatingWindowPositionChanged;
 
     internal DisplayMonitor? DisplayMonitor => _displayMonitor;
 
@@ -120,6 +125,7 @@ public partial class MainWindow : Window, IDisposable
         InitializeComponent();
 
         _smartTopmostController = new SmartTopmostController(this);
+        _clickThroughController = new WindowClickThroughController(this);
 
         _trackLyricOffsetStore = trackLyricOffsetStore;
         _openSettings = openSettings;
@@ -406,6 +412,8 @@ public partial class MainWindow : Window, IDisposable
 
     internal void ToggleControlPanelNear(Rect coverBoundsPx, DisplayMonitor targetDisplay, Action<bool> setExpanded)
     {
+        // TODO(悬浮窗控制面板): 悬浮窗口暂不提供控制面板。设置页的「控制面板」开关
+        // 已复用 EnableControlPanel 并可配置，后续实现悬浮窗面板时再放开这里的短路。
         if (_currentSettings.UseFloatingWindow || !_currentSettings.EnableControlPanel || !_currentSettings.ShowCover)
         {
             CloseControlPanel();
@@ -478,6 +486,45 @@ public partial class MainWindow : Window, IDisposable
         ToggleControlPanelNear(new Rect(topLeft, bottomRight), _displayMonitor, SetPrimaryControlPanelOpen);
     }
 
+    private void TryBeginFloatingWindowDrag()
+    {
+        if (!_currentSettings.UseFloatingWindow ||
+            !_currentSettings.FloatingWindowFreeDrag ||
+            _currentSettings.FloatingWindowClickThrough)
+        {
+            return;
+        }
+
+        NativeWindowInteraction.BeginDrag(this);
+    }
+
+    private void OnFloatingWindowDragCompleted()
+    {
+        if (!_currentSettings.UseFloatingWindow ||
+            !_currentSettings.FloatingWindowFreeDrag ||
+            _displayMonitor is null)
+        {
+            return;
+        }
+
+        var placement = TaskbarPlacementService.TryCaptureFloatingPlacement(
+            this,
+            _displayMonitor,
+            GetTargetPixelsPerDip());
+        if (placement is not null)
+        {
+            FloatingWindowPositionChanged?.Invoke(
+                this,
+                new FloatingWindowPositionChangedEventArgs(_displayMonitor.Id, placement));
+        }
+    }
+
+    private void ApplyWindowInputMode()
+    {
+        _clickThroughController.Apply(
+            _currentSettings.UseFloatingWindow && _currentSettings.FloatingWindowClickThrough);
+    }
+
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
         TaskObserver.Observe(InitializeLyricsWindowAsync(), "lyrics window initialization");
@@ -488,6 +535,7 @@ public partial class MainWindow : Window, IDisposable
         AnchorToTaskbar();
         AttachToTaskbarHost();
         await EnsureLyricsWebViewReadyAsync();
+        ApplyWindowInputMode();
         ApplySpectrumTuning(_spectrumTuningSettings);
         PushCurrentLyricsToWebView();
         _timer.Start();
@@ -1440,6 +1488,10 @@ public partial class MainWindow : Window, IDisposable
             _lyricsWebViewElement.Visibility = Visibility.Visible;
         }
 
+        // The WebView creates its child HWND while loading, so re-apply the
+        // click-through styles to the freshly created window tree.
+        ApplyWindowInputMode();
+
         if (_isShowingWebErrorPage)
         {
             return;
@@ -1570,6 +1622,11 @@ public partial class MainWindow : Window, IDisposable
             if (LyricsWebMessageRouter.TryGetCoverClick(message, out var click))
             {
                 OnCoverClick(click);
+                return;
+            }
+            if (LyricsWebMessageRouter.IsWindowDragRequest(message))
+            {
+                TryBeginFloatingWindowDrag();
                 return;
             }
             if (message?.Payload is not { ValueKind: JsonValueKind.Object } payload ||
@@ -1941,10 +1998,16 @@ public partial class MainWindow : Window, IDisposable
             _currentSettings.UseFloatingWindow,
             _forceAlwaysOnTop,
             _displayMonitor?.Bounds);
+        ApplyWindowInputMode();
     }
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
+        if (msg == NativeWindowInteraction.WindowMessageExitSizeMove)
+        {
+            OnFloatingWindowDragCompleted();
+        }
+
         if (_taskbarPlacementService.RequiresReattach(msg))
         {
             Dispatcher.BeginInvoke(new Action(() =>
@@ -2034,4 +2097,11 @@ public partial class MainWindow : Window, IDisposable
 internal sealed class LyricsContentVisibilityChangedEventArgs(bool isVisible) : EventArgs
 {
     public bool IsVisible { get; } = isVisible;
+}
+
+internal sealed class FloatingWindowPositionChangedEventArgs(string displayId, FloatingWindowPlacement placement) : EventArgs
+{
+    public string DisplayId { get; } = displayId;
+
+    public FloatingWindowPlacement Placement { get; } = placement;
 }

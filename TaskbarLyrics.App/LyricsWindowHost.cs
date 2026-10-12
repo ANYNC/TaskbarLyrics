@@ -15,6 +15,7 @@ internal sealed class LyricsWindowHost : IDisposable
     private readonly Thread _thread;
     private readonly Action _openSettings;
     private readonly Action _toggleTranslation;
+    private readonly Action<string, FloatingWindowPlacement> _saveFloatingWindowPosition;
     private Dispatcher? _dispatcher;
     private MainWindow? _window;
     private TrackLyricOffsetStore? _trackLyricOffsetStore;
@@ -34,10 +35,12 @@ internal sealed class LyricsWindowHost : IDisposable
         TrackLyricOffsetStore trackLyricOffsetStore,
         IAppCompositionRoot compositionRoot,
         Action openSettings,
-        Action toggleTranslation)
+        Action toggleTranslation,
+        Action<string, FloatingWindowPlacement> saveFloatingWindowPosition)
     {
         _openSettings = openSettings;
         _toggleTranslation = toggleTranslation;
+        _saveFloatingWindowPosition = saveFloatingWindowPosition;
         var settings = initialSettings.Clone();
         _thread = new Thread(() => Run(settings, trackLyricOffsetStore, compositionRoot))
         {
@@ -265,6 +268,7 @@ internal sealed class LyricsWindowHost : IDisposable
         window.RecreateWindowRequested += OnLyricsWindowRecreateRequested;
         window.IsVisibleChanged += OnLyricsWindowIsVisibleChanged;
         window.Closed += OnLyricsWindowClosed;
+        window.FloatingWindowPositionChanged += OnFloatingWindowPositionChanged;
         _isLyricsContentVisible = window.IsLyricsContentVisible;
         return window;
     }
@@ -276,6 +280,12 @@ internal sealed class LyricsWindowHost : IDisposable
         window.RecreateWindowRequested -= OnLyricsWindowRecreateRequested;
         window.IsVisibleChanged -= OnLyricsWindowIsVisibleChanged;
         window.Closed -= OnLyricsWindowClosed;
+        window.FloatingWindowPositionChanged -= OnFloatingWindowPositionChanged;
+    }
+
+    private void OnFloatingWindowPositionChanged(object? sender, FloatingWindowPositionChangedEventArgs e)
+    {
+        _saveFloatingWindowPosition(e.DisplayId, e.Placement);
     }
 
     private void OnLyricsWindowIsVisibleChanged(object? sender, DependencyPropertyChangedEventArgs e)
@@ -381,6 +391,7 @@ internal sealed class LyricsWindowHost : IDisposable
             {
                 mirrorWindow = new LyricsMirrorWindow(display, (bounds, monitor, setExpanded) =>
                     _window?.ToggleControlPanelNear(bounds, monitor, setExpanded));
+                mirrorWindow.FloatingWindowPositionChanged += OnFloatingWindowPositionChanged;
                 _mirrorWindows.Add(display.Id, mirrorWindow);
             }
             else
