@@ -73,6 +73,20 @@ async function createHarness() {
 }
 
 describe("lyrics cover fallback", () => {
+  it("keeps the cover position while exposing floating controls and restoring the lyric surface", async () => {
+    const { dom } = await createHarness();
+    const recv = (type, payload) => dom.window.taskbarLyrics.receive({ version: 1, type, payload });
+    recv("style", { floatingControlPanel: true, enableControlPanel: true, coverPosition: "Right" });
+    expect(dom.window.document.documentElement.classList.contains("floating-controls-enabled")).toBe(true);
+    expect(dom.window.document.querySelector("#cover").disabled).toBe(false);
+    recv("floatingControlSurface", { open: true, light: true });
+    expect(dom.window.document.documentElement.classList.contains("floating-controls-open")).toBe(true);
+    expect(dom.window.document.documentElement.style.getPropertyValue("--floating-control-surface")).toBe("#f8f9fb");
+    expect(dom.window.document.documentElement.dataset.coverPosition).toBe("Right");
+    recv("floatingControlSurface", { open: false });
+    expect(dom.window.document.documentElement.classList.contains("floating-controls-open")).toBe(false);
+    dom.window.close();
+  });
   it("shows an accessible expand affordance and sends a bounded cover click", async () => {
     const { dom } = await createHarness();
     const cover = dom.window.document.querySelector("#cover");

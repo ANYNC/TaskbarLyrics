@@ -5,6 +5,19 @@ namespace TaskbarLyrics.App.Tests;
 public sealed class SettingsWebMessageRouterTests
 {
     [Theory]
+    [InlineData("floatingPanelBrightness")]
+    [InlineData("floatingPanelTintOpacity")]
+    public void ParsesFloatingAppearancePreviewAndCommit(string key)
+    {
+        foreach (var type in new[] { "previewUpdate", "update" })
+        {
+            var message = SettingsWebMessageRouter.Parse($"{{\"version\":1,\"type\":\"{type}\",\"payload\":{{\"key\":\"{key}\",\"value\":0.7}}}}");
+            Assert.NotNull(message);
+            Assert.Equal(key, message.Key);
+            Assert.Equal(0.7, message.Value!.Value.GetDouble());
+        }
+    }
+    [Theory]
     [InlineData(true)]
     [InlineData(false)]
     public void ParseControlPanelSwitchThroughTheV1Envelope(bool enabled)

@@ -2315,6 +2315,7 @@ const lyricsApi = {
     root.style.setProperty("--font-family", payload.fontFamily || "\"SF Pro Display\", \"Segoe UI Variable Display\", \"Segoe UI Variable Text\", \"Microsoft YaHei UI\", sans-serif");
     applyLyricsTextAlignment(payload.textAlignment);
     root.dataset.coverPosition = payload.coverPosition === "Right" ? "Right" : "Left";
+    root.classList.toggle("floating-controls-enabled", payload.floatingControlPanel === true && payload.enableControlPanel !== false);
     const layoutScalePercent = Number(payload.layoutScalePercent);
     if (Number.isFinite(layoutScalePercent) && layoutScalePercent > 0) {
       layoutScaleFactor = layoutScalePercent / 100;
@@ -2452,6 +2453,10 @@ window.taskbarLyrics = {
         break;
       case "controlPanelState":
         setControlPanelOpen(payload?.open);
+        break;
+      case "floatingControlSurface":
+        root.classList.toggle("floating-controls-open", payload?.open === true);
+        root.style.setProperty("--floating-control-surface", payload?.light === true ? "#f8f9fb" : "#202124");
         break;
     }
   }

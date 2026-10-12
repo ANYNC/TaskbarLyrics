@@ -106,6 +106,12 @@ html, body {
   align-items: center;
 }
 
+.floating-controls-enabled .layout {
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+}
+
 .cover-hidden .shell {
   grid-template-columns: minmax(0, 1fr);
   grid-template-areas: "lyrics";
@@ -204,6 +210,10 @@ html, body {
     transition: none;
   }
 }
+
+.cover-floating-icon { display: none; width: min(22px, 70%); height: min(22px, 70%); }
+.floating-controls-enabled .cover-action-icon { display: none; }
+.floating-controls-enabled .cover-floating-icon { display: block; }
 
 .cover-fallback {
   position: absolute;

@@ -40,6 +40,19 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
     }
 
     internal bool IsEmbeddedInTaskbar => _embeddedTaskbarAnchor.IsAttached;
+    internal DisplayMonitor DisplayMonitor => _displayMonitor;
+    internal bool IsContentVisible => _isContentVisible && _isWebReady;
+
+    internal void SetFloatingControlSurface(bool open, bool above, bool light)
+    {
+        if (_isDisposed) return;
+        RootBorder.Background = _settings.UseFloatingWindow && _settings.EnableControlPanel
+            ? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(1, 0, 0, 0)) : System.Windows.Media.Brushes.Transparent;
+        RootBorder.CornerRadius = new CornerRadius(8);
+        if (_isWebReady) TaskObserver.Observe(LyricsWebView.ExecuteScriptAsync(
+            LyricsWebViewScriptFactory.SetFloatingControlSurface(open, light)), "floating mirror surface");
+        SetControlPanelOpen(open);
+    }
 
     public void SetDisplayMonitor(DisplayMonitor displayMonitor)
     {
@@ -49,6 +62,7 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
     public void ApplySettings(AppSettings settings)
     {
         _settings = settings.Clone();
+        SetFloatingControlSurface(false, false, false);
         _smartTopmostController.ApplySettings(
             _settings.UseFloatingWindow,
             _settings.ForceAlwaysOnTop,
@@ -182,7 +196,7 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
 
     private void OnWebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
     {
-        if (_isDisposed || !_isContentVisible || _settings.UseFloatingWindow || !_settings.EnableControlPanel || !_settings.ShowCover)
+        if (_isDisposed || !_isContentVisible || !_settings.EnableControlPanel || !_settings.ShowCover)
         {
             return;
         }

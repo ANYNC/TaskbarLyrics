@@ -341,6 +341,7 @@
     .window-mode-setting-copy strong { font-size: 11px; font-weight: 600; }
     .window-mode-setting-copy small { color: var(--muted-foreground); font-size: 10px; line-height: 1.4; }
     .window-mode-setting-row .switch input:disabled { cursor: not-allowed; }
+    .floating-material-setting .slider-number-control { width: 180px; max-width: 100%; }
     .setting-row.monitor-setting-row { grid-template-columns: minmax(0, 1fr) minmax(360px, 560px); align-items: start; gap: 32px; padding-block: 14px; }
     .monitor-selection { width: 100%; max-width: 560px; justify-self: end; display: grid; gap: 10px; }
     .monitor-mode { width: max-content; max-width: 100%; justify-self: end; display: inline-flex; gap: 3px; padding: 3px; border: 1px solid var(--input); border-radius: var(--radius-sm); background: var(--muted); }

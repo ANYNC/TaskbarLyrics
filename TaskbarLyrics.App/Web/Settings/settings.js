@@ -1381,6 +1381,8 @@
     function applySettingLocally(key, value) {
       const previousCornerRadius = state.coverCornerRadius;
       state[key] = value;
+      if (["floatingPanelBrightness", "floatingPanelTintOpacity"].includes(key))
+        state[key] = Number.isFinite(Number(value)) ? Math.min(1, Math.max(0, Number(value))) : (key === "floatingPanelBrightness" ? 0.45 : 0.55);
       if (key === "foregroundColor") {
         state.foregroundColor = fromArgb(value);
         state.customForegroundColor = state.foregroundColor;
@@ -1653,7 +1655,8 @@
     function applyDependencies() {
       $$('[data-depends]').forEach(row => {
         const enabled = Boolean(state[row.dataset.depends]) &&
-          (!row.hasAttribute("data-embedded-only") || state.useFloatingWindow !== true);
+          (!row.hasAttribute("data-embedded-only") || state.useFloatingWindow !== true) &&
+          (!row.hasAttribute("data-floating-only") || state.useFloatingWindow === true);
         row.classList.toggle("is-disabled", !enabled);
         row.querySelectorAll("input, select, textarea, button").forEach(control => { control.disabled = !enabled; });
       });

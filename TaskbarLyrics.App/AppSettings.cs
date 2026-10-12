@@ -159,6 +159,19 @@ public sealed class AppSettings
 
     public bool EnableControlPanel { get; set; } = true;
 
+    private double _floatingPanelBrightness = 0.45;
+    private double _floatingPanelTintOpacity = 0.55;
+    public double FloatingPanelBrightness
+    {
+        get => _floatingPanelBrightness;
+        set => _floatingPanelBrightness = double.IsFinite(value) ? Math.Clamp(value, 0, 1) : 0.45;
+    }
+    public double FloatingPanelTintOpacity
+    {
+        get => _floatingPanelTintOpacity;
+        set => _floatingPanelTintOpacity = double.IsFinite(value) ? Math.Clamp(value, 0, 1) : 0.55;
+    }
+
     public double LyricsLayoutScalePercent { get; set; } = DefaultLyricsLayoutScalePercent;
 
     public string FontFamily { get; set; } = DefaultFontFamily;

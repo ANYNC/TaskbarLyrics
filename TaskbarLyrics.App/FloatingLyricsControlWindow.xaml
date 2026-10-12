@@ -1,0 +1,79 @@
+<Window x:Class="TaskbarLyrics.App.FloatingLyricsControlWindow" x:ClassModifier="internal"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="浮窗播放控制" WindowStyle="None" ResizeMode="NoResize"
+        ShowInTaskbar="False" ShowActivated="False" AllowsTransparency="True" Background="Transparent"
+        Width="420" Height="104" UseLayoutRounding="True">
+    <Window.Resources>
+        <SolidColorBrush x:Key="PanelForeground" Color="#F6F7F8" />
+        <SolidColorBrush x:Key="PanelSubtle" Color="#A9ADB5" />
+        <SolidColorBrush x:Key="PanelLine" Color="#62656A" />
+        <SolidColorBrush x:Key="PanelButton" Color="#EEF1F5" />
+        <SolidColorBrush x:Key="PanelButtonText" Color="#202124" />
+        <Style x:Key="MediaButton" TargetType="Button">
+            <Setter Property="Width" Value="32"/><Setter Property="Height" Value="32"/>
+            <Setter Property="Foreground" Value="{DynamicResource PanelForeground}"/>
+            <Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
+                <Border x:Name="ButtonSurface" Background="{TemplateBinding Background}" CornerRadius="8">
+                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Border>
+                <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="ButtonSurface" Property="Opacity" Value="0.7"/></Trigger>
+                    <Trigger Property="Tag" Value="round"><Setter TargetName="ButtonSurface" Property="CornerRadius" Value="18"/></Trigger>
+                    <Trigger Property="IsPressed" Value="True"><Setter TargetName="ButtonSurface" Property="Opacity" Value="0.5"/></Trigger>
+                    <Trigger Property="IsEnabled" Value="False"><Setter TargetName="ButtonSurface" Property="Opacity" Value="0.4"/></Trigger>
+                    <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="ButtonSurface" Property="BorderBrush" Value="{DynamicResource PanelForeground}"/><Setter TargetName="ButtonSurface" Property="BorderThickness" Value="1"/></Trigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate></Setter.Value></Setter>
+        </Style>
+        <Style x:Key="ProgressButton" TargetType="RepeatButton">
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="RepeatButton">
+                <Border Height="4" CornerRadius="2" Background="{TemplateBinding Background}"/>
+            </ControlTemplate></Setter.Value></Setter>
+        </Style>
+        <Style TargetType="Slider">
+            <Setter Property="Height" Value="16"/><Setter Property="IsMoveToPointEnabled" Value="True"/>
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Slider">
+                <Grid><Track x:Name="PART_Track">
+                    <Track.DecreaseRepeatButton><RepeatButton Command="Slider.DecreaseLarge" Style="{StaticResource ProgressButton}" Background="{DynamicResource PanelForeground}"/></Track.DecreaseRepeatButton>
+                    <Track.IncreaseRepeatButton><RepeatButton Command="Slider.IncreaseLarge" Style="{StaticResource ProgressButton}" Background="{DynamicResource PanelLine}"/></Track.IncreaseRepeatButton>
+                    <Track.Thumb><Thumb Width="12" Height="12"><Thumb.Template><ControlTemplate TargetType="Thumb"><Ellipse Fill="{DynamicResource PanelForeground}"/></ControlTemplate></Thumb.Template></Thumb></Track.Thumb>
+                </Track></Grid>
+                <ControlTemplate.Triggers>
+                    <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.4"/></Trigger>
+                    <Trigger Property="IsKeyboardFocused" Value="True"><Setter Property="Background" Value="{DynamicResource PanelLine}"/></Trigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate></Setter.Value></Setter>
+        </Style>
+    </Window.Resources>
+    <Grid x:Name="VisualRoot">
+        <Border x:Name="Surface" Background="Transparent" BorderThickness="0" Padding="12,10,12,8">
+            <Grid>
+                <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition x:Name="TransportRow" Height="0"/><RowDefinition Height="16"/><RowDefinition Height="14"/></Grid.RowDefinitions>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel x:Name="Metadata" VerticalAlignment="Center" Margin="0,0,8,6">
+                    <TextBlock x:Name="TitleText" Text="暂无播放" FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource PanelForeground}" TextTrimming="CharacterEllipsis"/>
+                    <TextBlock x:Name="ArtistText" Text="当前没有播放内容" FontSize="11" Foreground="{DynamicResource PanelSubtle}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"/>
+                </StackPanel>
+                <StackPanel x:Name="Actions" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,6">
+                    <Button x:Name="PreviousButton" Style="{StaticResource MediaButton}" Click="OnPrevious" AutomationProperties.Name="上一首" IsEnabled="False">
+                        <Path Data="M5,5 L5,19 M18,5 L9,12 L18,19 Z" Width="20" Height="20" Stretch="Uniform" Stroke="{DynamicResource PanelForeground}" StrokeThickness="1.8" Fill="{DynamicResource PanelForeground}"/>
+                    </Button>
+                    <Button x:Name="PlayButton" Tag="round" Style="{StaticResource MediaButton}" Width="36" Height="36" Margin="6,0" Background="{DynamicResource PanelButton}" Click="OnPlay" AutomationProperties.Name="播放" IsEnabled="False">
+                        <Path x:Name="PlayGlyph" Data="M8,5 L19,12 L8,19 Z" Width="20" Height="20" Stretch="Uniform" Stroke="{DynamicResource PanelButtonText}" Fill="{DynamicResource PanelButtonText}" StrokeThickness="2.5"/>
+                    </Button>
+                    <Button x:Name="NextButton" Style="{StaticResource MediaButton}" Click="OnNext" AutomationProperties.Name="下一首" IsEnabled="False">
+                        <Path Data="M19,5 L19,19 M6,5 L15,12 L6,19 Z" Width="20" Height="20" Stretch="Uniform" Stroke="{DynamicResource PanelForeground}" StrokeThickness="1.8" Fill="{DynamicResource PanelForeground}"/>
+                    </Button>
+                </StackPanel>
+                <Slider x:Name="SeekSlider" Grid.Row="2" Grid.ColumnSpan="2" Minimum="0" Maximum="1000" SmallChange="5" LargeChange="50" IsEnabled="False" AutomationProperties.Name="播放位置"
+                        PreviewMouseLeftButtonDown="OnSeekStarted" PreviewMouseLeftButtonUp="OnSeekFinished" PreviewKeyDown="OnSeekKeyDown" KeyUp="OnSeekKeyUp" ValueChanged="OnSeekValueChanged"/>
+                <TextBlock x:Name="ElapsedText" Grid.Row="3" Text="0:00" FontSize="11" Foreground="{DynamicResource PanelSubtle}"/>
+                <TextBlock x:Name="DurationText" Grid.Row="3" Grid.Column="1" Text="0:00" FontSize="11" HorizontalAlignment="Right" Foreground="{DynamicResource PanelSubtle}"/>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

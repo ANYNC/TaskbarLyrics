@@ -8,7 +8,7 @@ const settingsPages = ["sources", "shortcuts", "lyrics", "trackOffsets", "displa
 const persistedSettings = [
   "enableLocalLyrics", "localMusicFolders", "enableGlobalMediaHotkeys", "showLyricsOnStartup", "autoHideWhenNoPlayback",
   "showLyricTranslation", "enableWordScanning", "spectrumDisplayMode", "lyricsLayoutScalePercent", "fontSize", "showCover",
-  "enableControlPanel", "coverPosition", "coverSize", "coverGap", "coverCornerRadius", "fontFamily", "fontWeight", "lyricsTextAlignment", "foregroundColorMode",
+  "enableControlPanel", "floatingPanelBrightness", "floatingPanelTintOpacity", "coverPosition", "coverSize", "coverGap", "coverCornerRadius", "fontFamily", "fontWeight", "lyricsTextAlignment", "foregroundColorMode",
   "showTextShadow", "toolWindowTheme", "showBackground", "backgroundOpacity", "showBorder", "windowWidth", "horizontalAnchor",
   "xOffset", "yOffset", "forceAlwaysOnTop", "startWithWindows", "autoCheckUpdates"
 ];
@@ -59,6 +59,48 @@ function enableDialogDomSupport(dom) {
 }
 
 describe("settings WebView bridge", () => {
+  it.each(["floatingPanelBrightness", "floatingPanelTintOpacity"])("previews and commits bounded floating appearance %s", async key => {
+    const { dom, sent, script } = await createSettingsDom();
+    dom.window.eval(script);
+    dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings: {
+      useFloatingWindow: true, enableControlPanel: true, [key]: 0.65
+    } } });
+    const slider = dom.window.document.querySelector(`input[type="range"][data-setting="${key}"]`);
+    const number = dom.window.document.querySelector(`input[type="number"][data-setting="${key}"]`);
+    expect(slider.disabled).toBe(false);
+    expect(number.value).toBe("65");
+    slider.value = "80";
+    slider.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+    expect(sent.at(-1)).toEqual({ version: 1, type: "previewUpdate", payload: { key, value: 0.8 } });
+    expect(number.value).toBe("80");
+    slider.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+    expect(sent.at(-1).payload).toEqual({ key, value: 0.8 });
+    number.value = "150";
+    number.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+    expect(number.value).toBe("100");
+    expect(sent.at(-1).payload).toEqual({ key, value: 1 });
+    dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings: {
+      useFloatingWindow: false, enableControlPanel: true, [key]: 0.3
+    } } });
+    expect(slider.disabled).toBe(true);
+    expect(number.value).toBe("30");
+    dom.window.close();
+  });
+  it("shares the control panel preference with the floating hover switch without requiring a cover", async () => {
+    const { dom, script, sent } = await createSettingsDom();
+    dom.window.eval(script);
+    dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings: {
+      useFloatingWindow: true, showCover: false, enableControlPanel: true
+    } } });
+    const toggle = dom.window.document.querySelector("#floatingControlPanelToggle");
+    expect(toggle.disabled).toBe(false);
+    expect(toggle.checked).toBe(true);
+    expect(dom.window.document.querySelector("#embeddedControlPanelToggle").disabled).toBe(true);
+    toggle.click();
+    expect(sent.at(-1).payload).toEqual({ key: "enableControlPanel", value: false });
+    expect(dom.window.document.querySelector("#embeddedControlPanelToggle").checked).toBe(false);
+    dom.window.close();
+  });
   it("keeps saved player card order and gear settings separate", async () => {
     const { dom, sent, script } = await createSettingsDom();
     enableDialogDomSupport(dom);
@@ -1379,7 +1421,7 @@ describe("settings WebView bridge", () => {
     const document = dom.window.document;
     const toggle = document.querySelector('input[data-setting="enableControlPanel"]');
     const row = document.querySelector("#embeddedControlPanelRow");
-    expect(document.querySelectorAll('input[data-setting="enableControlPanel"]')).toHaveLength(1);
+    expect(document.querySelectorAll('input[data-setting="enableControlPanel"]')).toHaveLength(2);
     expect(row.closest(".embedded-window-mode-card")).not.toBeNull();
     expect(row.closest(".window-mode-choice")).toBeNull();
     expect(toggle.disabled).toBe(disabled);
@@ -1672,7 +1714,7 @@ describe("settings WebView bridge", () => {
     const document = dom.window.document;
     const sliders = Array.from(document.querySelectorAll('input[type="range"][data-setting]'));
 
-    expect(sliders).toHaveLength(7);
+    expect(sliders).toHaveLength(9);
     sliders.forEach(slider => {
       const control = slider.closest(".slider-number-control");
       expect(control).not.toBeNull();

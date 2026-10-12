@@ -7,15 +7,16 @@ public sealed class LyricsStyleScriptFactoryTests
     [Theory]
     [InlineData(true, false, true)]
     [InlineData(false, false, false)]
-    [InlineData(true, true, false)]
+    [InlineData(true, true, true)]
     [InlineData(false, true, false)]
-    public void CreateEmitsControlPanelAvailabilityForEmbeddedModeOnly(bool enabled, bool floating, bool expected)
+    public void CreateEmitsControlPanelAvailabilityAndFloatingMode(bool enabled, bool floating, bool expected)
     {
         var settings = new AppSettings { EnableControlPanel = enabled, UseFloatingWindow = floating };
         var script = LyricsStyleScriptFactory.Create(settings, 1);
 
         Assert.Contains($"\"enableControlPanel\":{expected.ToString().ToLowerInvariant()}", script);
         Assert.Equal(enabled, settings.EnableControlPanel);
+        Assert.Contains($"\"floatingControlPanel\":{floating.ToString().ToLowerInvariant()}", script);
     }
 
     [Fact]

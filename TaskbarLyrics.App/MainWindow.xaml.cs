@@ -120,6 +120,7 @@ public partial class MainWindow : Window, IDisposable
         InitializeComponent();
 
         _smartTopmostController = new SmartTopmostController(this);
+        InitializeFloatingControls();
 
         _trackLyricOffsetStore = trackLyricOffsetStore;
         _openSettings = openSettings;
@@ -344,6 +345,10 @@ public partial class MainWindow : Window, IDisposable
         RootBorder.Background = Media.Brushes.Transparent;
         RootBorder.BorderBrush = Media.Brushes.Transparent;
         RootBorder.BorderThickness = new Thickness(0);
+        _floatingControls?.Close();
+        _floatingControls?.Configure(FloatingControlsLight, settings.FloatingPanelBrightness, settings.FloatingPanelTintOpacity);
+        _floatingControls!.Enabled = settings.UseFloatingWindow && settings.EnableControlPanel;
+        SetFloatingControlSurface(false, false);
     }
 
     private void ApplyHostLayout(LyricsLayoutMetrics metrics)
@@ -406,7 +411,12 @@ public partial class MainWindow : Window, IDisposable
 
     internal void ToggleControlPanelNear(Rect coverBoundsPx, DisplayMonitor targetDisplay, Action<bool> setExpanded)
     {
-        if (_currentSettings.UseFloatingWindow || !_currentSettings.EnableControlPanel || !_currentSettings.ShowCover)
+        if (_currentSettings.UseFloatingWindow && _currentSettings.EnableControlPanel)
+        {
+            _floatingControls?.Open(targetDisplay.Id);
+            return;
+        }
+        if (!_currentSettings.EnableControlPanel || !_currentSettings.ShowCover)
         {
             CloseControlPanel();
             return;
@@ -435,7 +445,11 @@ public partial class MainWindow : Window, IDisposable
         setExpanded(true);
     }
 
-    internal void CloseControlPanel(bool animate = false) => _controlPanelWindow?.HidePanel(immediate: !animate);
+    internal void CloseControlPanel(bool animate = false)
+    {
+        _controlPanelWindow?.HidePanel(immediate: !animate);
+        _floatingControls?.Close();
+    }
 
     private LyricsControlPanelWindow CreateControlPanelWindow()
     {
@@ -558,6 +572,8 @@ public partial class MainWindow : Window, IDisposable
         {
             return;
         }
+
+        _floatingControls?.Dispose();
 
         if (_controlPanelWindow is not null)
         {
@@ -806,6 +822,8 @@ public partial class MainWindow : Window, IDisposable
             _controlPanelWindow?.UpdateTimeline(
                 _currentPlaybackPosition, _currentTrack?.Duration ?? TimeSpan.Zero,
                 _isCurrentPlaybackPlaying, _canSeek);
+            if (_floatingControls is not null)
+                foreach (var panel in _floatingControls.Panels) UpdateFloatingControls(panel);
             _isTimerTickRunning = false;
         }
     }

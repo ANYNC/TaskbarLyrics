@@ -2,6 +2,8 @@ namespace TaskbarLyrics.App;
 
 internal static class LyricsWebViewScriptFactory
 {
+    public static string SetFloatingControlSurface(bool open, bool light) =>
+        WebViewMessageScriptFactory.Dispatch("taskbarLyrics", "floatingControlSurface", new { open, light });
     public static string SetLyrics(
         string current,
         string next,
