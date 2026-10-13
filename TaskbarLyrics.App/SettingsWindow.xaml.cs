@@ -1244,6 +1244,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             EnableControlPanel = _settings.EnableControlPanel,
             FloatingPanelBrightness = _settings.FloatingPanelBrightness,
             FloatingPanelTintOpacity = _settings.FloatingPanelTintOpacity,
+            FloatingPanelBlurAmount = _settings.FloatingPanelBlurAmount,
             CoverSize = _settings.CoverSize,
             CoverGap = _settings.CoverGap,
             CoverCornerRadius = _settings.CoverCornerRadius,
@@ -1565,6 +1566,9 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 break;
             case "floatingPanelTintOpacity":
                 _settings.FloatingPanelTintOpacity = ReadDouble(element, _settings.FloatingPanelTintOpacity);
+                break;
+            case "floatingPanelBlurAmount":
+                _settings.FloatingPanelBlurAmount = ReadDouble(element, _settings.FloatingPanelBlurAmount);
                 break;
             case "coverSize":
                 _settings.CoverSize = AppSettings.ClampCoverSize(ReadDouble(element, _settings.CoverSize));
@@ -2096,6 +2100,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         target.EnableControlPanel = source.EnableControlPanel;
         target.FloatingPanelBrightness = source.FloatingPanelBrightness;
         target.FloatingPanelTintOpacity = source.FloatingPanelTintOpacity;
+        target.FloatingPanelBlurAmount = source.FloatingPanelBlurAmount;
         target.CoverSize = source.CoverSize;
         target.CoverGap = source.CoverGap;
         target.CoverCornerRadius = source.CoverCornerRadius;
@@ -2234,6 +2239,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         public bool EnableControlPanel { get; set; }
         public double FloatingPanelBrightness { get; set; }
         public double FloatingPanelTintOpacity { get; set; }
+        public double FloatingPanelBlurAmount { get; set; }
         public double CoverSize { get; set; }
         public double CoverGap { get; set; }
         public double CoverCornerRadius { get; set; }

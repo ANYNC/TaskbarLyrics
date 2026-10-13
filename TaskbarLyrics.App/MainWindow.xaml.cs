@@ -346,7 +346,7 @@ public partial class MainWindow : Window, IDisposable
         RootBorder.BorderBrush = Media.Brushes.Transparent;
         RootBorder.BorderThickness = new Thickness(0);
         _floatingControls?.Close();
-        _floatingControls?.Configure(FloatingControlsLight, settings.FloatingPanelBrightness, settings.FloatingPanelTintOpacity);
+        _floatingControls?.Configure(FloatingControlsLight, settings.FloatingPanelBrightness, settings.FloatingPanelTintOpacity, settings.FloatingPanelBlurAmount);
         _floatingControls!.Enabled = settings.UseFloatingWindow && settings.EnableControlPanel;
         SetFloatingControlSurface(false, false);
     }

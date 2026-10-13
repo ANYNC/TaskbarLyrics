@@ -161,6 +161,12 @@ public sealed class AppSettings
 
     private double _floatingPanelBrightness = 0.45;
     private double _floatingPanelTintOpacity = 0.55;
+    private double _floatingPanelBlurAmount = 24;
+    public double FloatingPanelBlurAmount
+    {
+        get => _floatingPanelBlurAmount;
+        set => _floatingPanelBlurAmount = double.IsFinite(value) ? Math.Clamp(value, 0, 64) : 24;
+    }
     public double FloatingPanelBrightness
     {
         get => _floatingPanelBrightness;

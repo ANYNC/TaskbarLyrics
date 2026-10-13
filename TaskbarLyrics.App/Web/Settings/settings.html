@@ -169,6 +169,10 @@
                         <label class="switch small"><input id="floatingControlPanelToggle" type="checkbox" data-setting="enableControlPanel" aria-label="悬停播放控制" aria-describedby="floatingControlPanelDescription" disabled><span class="switch-track"></span></label>
                       </div>
                       <div class="window-mode-setting-row floating-material-setting is-disabled" data-depends="enableControlPanel" data-floating-only>
+                        <label class="window-mode-setting-copy" for="floatingPanelBlurAmount"><strong>高斯模糊</strong></label>
+                        <div class="slider-number-control"><input type="range" min="0" max="64" step="1" data-setting="floatingPanelBlurAmount" aria-label="浮窗卡片高斯模糊"><label class="unit-input compact-number-input"><input id="floatingPanelBlurAmount" type="number" min="0" max="64" step="1" data-setting="floatingPanelBlurAmount" aria-label="浮窗卡片高斯模糊数值"><span>px</span></label></div>
+                      </div>
+                      <div class="window-mode-setting-row floating-material-setting is-disabled" data-depends="enableControlPanel" data-floating-only>
                         <label class="window-mode-setting-copy" for="floatingPanelBrightness"><strong>底色明暗</strong></label>
                         <div class="slider-number-control"><input type="range" min="0" max="100" step="1" data-setting="floatingPanelBrightness" data-value-scale="100" aria-label="浮窗卡片底色明暗"><label class="unit-input compact-number-input percentage-input"><input id="floatingPanelBrightness" type="number" min="0" max="100" step="1" data-setting="floatingPanelBrightness" data-value-scale="100" aria-label="浮窗卡片底色明暗百分比"><span>%</span></label></div>
                       </div>

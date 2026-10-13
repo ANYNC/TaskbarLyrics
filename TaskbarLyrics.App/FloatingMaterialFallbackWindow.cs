@@ -3,13 +3,13 @@ using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
-using System.Windows.Media.Effects;
 
 namespace TaskbarLyrics.App;
 
 internal sealed class FloatingMaterialFallbackWindow : Window, IFloatingPanelMaterial
 {
-    private readonly Border _surface = new() { CornerRadius = new CornerRadius(8), Opacity = 0 };
+    private const int ShadowPaddingDip = 36;
+    private readonly Border _surface = new() { CornerRadius = new CornerRadius(12), Opacity = 0 };
     private readonly Border _hitRegion = new() { Background = new SolidColorBrush(System.Windows.Media.Color.FromArgb(1, 0, 0, 0)) };
     private HwndSource? _source;
     private Rect _bounds;
@@ -24,10 +24,9 @@ internal sealed class FloatingMaterialFallbackWindow : Window, IFloatingPanelMat
         ShowActivated = false;
         AllowsTransparency = true;
         Background = System.Windows.Media.Brushes.Transparent;
-        var grid = new Grid { Margin = new Thickness(20) };
+        var grid = new Grid { Margin = new Thickness(ShadowPaddingDip) };
         grid.Children.Add(_hitRegion);
         grid.Children.Add(_surface);
-        _surface.Effect = new DropShadowEffect { BlurRadius = 24, ShadowDepth = 4, Opacity = 0.22, Color = System.Windows.Media.Colors.Black };
         _surface.CacheMode = new BitmapCache();
         Content = grid;
         SourceInitialized += OnSourceInitialized;
@@ -36,17 +35,17 @@ internal sealed class FloatingMaterialFallbackWindow : Window, IFloatingPanelMat
     public void Position(Rect cardBounds, double scale, IntPtr lyricsHandle)
     {
         _bounds = cardBounds;
-        Width = cardBounds.Width / scale + 40;
-        Height = cardBounds.Height / scale + 40;
-        Left = cardBounds.Left / scale - 20;
-        Top = cardBounds.Top / scale - 20;
+        Width = cardBounds.Width / scale + ShadowPaddingDip * 2;
+        Height = cardBounds.Height / scale + ShadowPaddingDip * 2;
+        Left = cardBounds.Left / scale - ShadowPaddingDip;
+        Top = cardBounds.Top / scale - ShadowPaddingDip;
         Show();
-        var padding = (int)Math.Round(20 * scale);
+        var padding = (int)Math.Round(ShadowPaddingDip * scale);
         TaskbarNativeMethods.SetWindowPos(Handle, lyricsHandle, (int)Math.Round(cardBounds.Left) - padding,
             (int)Math.Round(cardBounds.Top) - padding, (int)Math.Round(cardBounds.Width) + padding * 2,
             (int)Math.Round(cardBounds.Height) + padding * 2, TaskbarNativeMethods.SWP_NOACTIVATE);
     }
-    public void Configure(bool light, double brightness, double tintOpacity)
+    public void Configure(bool light, double brightness, double tintOpacity, double blurAmount)
     {
         var level = (byte)Math.Round(light ? 180 + 75 * Math.Clamp(brightness, 0, 1) : 24 + 140 * Math.Clamp(brightness, 0, 1));
         _surface.Background = SystemParameters.HighContrast ? System.Windows.SystemColors.WindowBrush

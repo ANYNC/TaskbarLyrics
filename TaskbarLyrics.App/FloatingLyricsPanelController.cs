@@ -38,6 +38,7 @@ internal sealed class FloatingLyricsPanelController : IDisposable
     private bool _light;
     private double _brightness = 0.45;
     private double _tintOpacity = 0.55;
+    private double _blurAmount = 24;
     private bool _compositionUnavailable;
     private Target? _fadingTarget;
     private long _fadeStartedAt;
@@ -63,12 +64,13 @@ internal sealed class FloatingLyricsPanelController : IDisposable
     }
     internal FloatingLyricsControlWindow? Panel => _active?.Panel;
     internal IEnumerable<FloatingLyricsControlWindow> Panels => _targets.Select(target => target.Panel).OfType<FloatingLyricsControlWindow>();
-    internal void Configure(bool light, double brightness, double opacity)
+    internal void Configure(bool light, double brightness, double opacity, double blurAmount)
     {
         _light = light;
         _brightness = brightness;
         _tintOpacity = opacity;
-        foreach (var target in _targets) target.Material?.Configure(light, brightness, opacity);
+        _blurAmount = blurAmount;
+        foreach (var target in _targets) target.Material?.Configure(light, brightness, opacity, blurAmount);
     }
     internal void Register(Window window, Func<DisplayMonitor?> display, Func<bool> contentVisible, Action<bool, bool> surface)
     {
@@ -119,7 +121,7 @@ internal sealed class FloatingLyricsPanelController : IDisposable
                     target.Material.Position(target.CardBounds, scale, new WindowInteropHelper(target.Window).Handle);
                     target.Topmost = target.Window.Topmost;
                 }
-                return true;
+                return FloatingPanelWindowOrder.EnsureBelow(target.Material.Handle, new WindowInteropHelper(target.Window).Handle);
             }
             if (_active == target) Close(immediate: true);
             if (target.Material is not null && target.HighContrast != SystemParameters.HighContrast) Release(target);
@@ -137,8 +139,10 @@ internal sealed class FloatingLyricsPanelController : IDisposable
             target.Scale = scale;
             target.HighContrast = SystemParameters.HighContrast;
             target.Topmost = target.Window.Topmost;
-            target.Material.Configure(_light, _brightness, _tintOpacity);
+            target.Material.Configure(_light, _brightness, _tintOpacity, _blurAmount);
             target.Material.Position(target.CardBounds, scale, new WindowInteropHelper(target.Window).Handle);
+            if (!FloatingPanelWindowOrder.EnsureBelow(target.Material.Handle, new WindowInteropHelper(target.Window).Handle))
+            { Release(target); return false; }
             target.Material.SetVisible(false, immediate: true);
             return true;
         }

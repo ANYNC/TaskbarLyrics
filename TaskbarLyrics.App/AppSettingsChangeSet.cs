@@ -74,6 +74,7 @@ internal readonly record struct AppSettingsChangeSet(
             current.EnableControlPanel != next.EnableControlPanel ||
             current.FloatingPanelBrightness != next.FloatingPanelBrightness ||
             current.FloatingPanelTintOpacity != next.FloatingPanelTintOpacity ||
+            current.FloatingPanelBlurAmount != next.FloatingPanelBlurAmount ||
             current.CoverPosition != next.CoverPosition ||
             current.CoverSize != next.CoverSize ||
             current.CoverGap != next.CoverGap ||

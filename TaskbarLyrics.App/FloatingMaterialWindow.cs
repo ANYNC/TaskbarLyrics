@@ -5,22 +5,27 @@ using System.Windows.Interop;
 using Windows.UI.Composition;
 using Windows.UI.Composition.Desktop;
 using WinRT;
+using TaskbarLyrics.Core.Utilities;
 
 namespace TaskbarLyrics.App;
 
 internal sealed class FloatingMaterialWindow : IFloatingPanelMaterial
 {
-    private const int ShadowPaddingDip = 20;
+    private const int ShadowPaddingDip = 36;
+    private double _blurAmount = 24;
+    private double _scale = 1;
     private readonly HwndSource _source;
     private readonly DesktopWindowTarget _target;
     private readonly ContainerVisual _root;
+    private readonly LayerVisual _surfaceLayer;
     private readonly SpriteVisual _blur;
     private readonly SpriteVisual _tint;
     private readonly CompositionBrush _backdrop;
+    private CompositionEffectFactory? _blurFactory;
+    private CompositionEffectBrush? _blurBrush;
     private readonly CompositionColorBrush _tintBrush;
     private readonly CompositionRoundedRectangleGeometry _geometry;
     private readonly CompositionGeometricClip _clip;
-    private readonly DropShadow _shadow;
     private readonly ScalarKeyFrameAnimation _fade;
     private readonly Compositor _compositor;
     private Rect _bounds;
@@ -53,10 +58,26 @@ internal sealed class FloatingMaterialWindow : IFloatingPanelMaterial
             _root = _compositor.CreateContainerVisual();
             _root.Opacity = 0;
             _target.Root = _root;
+            _surfaceLayer = _compositor.CreateLayerVisual();
             _blur = _compositor.CreateSpriteVisual();
             _backdrop = UsesBackdrop ? _compositor.CreateHostBackdropBrush() : _compositor.CreateColorBrush(Windows.UI.Color.FromArgb(255, 32, 33, 36));
             _blur.Brush = _backdrop;
-            _blur.Opacity = 0.9f;
+            if (UsesBackdrop)
+            {
+                try
+                {
+                    _blurFactory = new CompositionGaussianBlurEffect().CreateFactory(_compositor);
+                    _blurBrush = _blurFactory.CreateBrush();
+                    _blurBrush.SetSourceParameter(CompositionGaussianBlurEffect.SourceParameter, _backdrop);
+                    UpdateBlurAmount();
+                    _blur.Brush = _blurBrush;
+                }
+                catch (Exception ex) when (ex is COMException or InvalidOperationException or NotSupportedException)
+                {
+                    DisableEnhancedBlur(ex);
+                }
+            }
+            _blur.Opacity = 1;
             _tintBrush = _compositor.CreateColorBrush();
             _tint = _compositor.CreateSpriteVisual();
             _tint.Brush = _tintBrush;
@@ -64,12 +85,9 @@ internal sealed class FloatingMaterialWindow : IFloatingPanelMaterial
             _clip = _compositor.CreateGeometricClip(_geometry);
             _blur.Clip = _clip;
             _tint.Clip = _clip;
-            _shadow = _compositor.CreateDropShadow();
-            _shadow.Color = Windows.UI.Color.FromArgb(255, 0, 0, 0);
-            _shadow.Opacity = 0.22f;
-            _blur.Shadow = _shadow;
-            _root.Children.InsertAtTop(_blur);
-            _root.Children.InsertAtTop(_tint);
+            _surfaceLayer.Children.InsertAtTop(_blur);
+            _surfaceLayer.Children.InsertAtTop(_tint);
+            _root.Children.InsertAtTop(_surfaceLayer);
             _fade = _compositor.CreateScalarKeyFrameAnimation();
             _fade.Duration = TimeSpan.FromMilliseconds(180);
         }
@@ -82,11 +100,12 @@ internal sealed class FloatingMaterialWindow : IFloatingPanelMaterial
         var padding = (int)Math.Round(ShadowPaddingDip * scale);
         var size = new Vector2((float)cardBounds.Width, (float)cardBounds.Height);
         _root.Size = size + new Vector2(padding * 2);
-        _blur.Offset = _tint.Offset = new Vector3(padding, padding, 0);
+        _surfaceLayer.Size = size;
+        _surfaceLayer.Offset = new Vector3(padding, padding, 0);
         _blur.Size = _tint.Size = _geometry.Size = size;
-        _geometry.CornerRadius = new Vector2((float)(8 * scale));
-        _shadow.BlurRadius = (float)(24 * scale);
-        _shadow.Offset = new Vector3(0, (float)(4 * scale), 0);
+        _geometry.CornerRadius = new Vector2((float)(12 * scale));
+        _scale = scale;
+        UpdateBlurAmount();
         // Keep the material below the unchanged lyrics and its owned media-control window.
         TaskbarNativeMethods.SetWindowPos(Handle, lyricsHandle,
             (int)Math.Round(cardBounds.Left) - padding, (int)Math.Round(cardBounds.Top) - padding,
@@ -94,8 +113,10 @@ internal sealed class FloatingMaterialWindow : IFloatingPanelMaterial
             TaskbarNativeMethods.SWP_NOACTIVATE | 0x0040);
     }
 
-    public void Configure(bool light, double brightness, double tintOpacity)
+    public void Configure(bool light, double brightness, double tintOpacity, double blurAmount)
     {
+        _blurAmount = double.IsFinite(blurAmount) ? Math.Clamp(blurAmount, 0, 64) : 24;
+        UpdateBlurAmount();
         brightness = Math.Clamp(brightness, 0, 1);
         tintOpacity = Math.Clamp(tintOpacity, 0, 1);
         var level = (byte)Math.Round(light ? 180 + 75 * brightness : 24 + 140 * brightness);
@@ -105,8 +126,16 @@ internal sealed class FloatingMaterialWindow : IFloatingPanelMaterial
             : Windows.UI.Color.FromArgb(alpha, level, level, level);
     }
 
+    private void UpdateBlurAmount()
+    {
+        // Direct2D limits Gaussian standard deviation to 250 physical pixels.
+        _blurBrush?.Properties.InsertScalar(CompositionGaussianBlurEffect.AmountProperty, (float)Math.Min(250, _blurAmount * _scale));
+    }
+
     public void SetVisible(bool visible, bool immediate = false)
     {
+        if (_blurFactory?.LoadStatus is CompositionEffectFactoryLoadStatus.Other or CompositionEffectFactoryLoadStatus.EffectTooComplex)
+            DisableEnhancedBlur(_blurFactory.ExtendedError);
         if (immediate || !SystemParameters.ClientAreaAnimation || SystemParameters.HighContrast)
         {
             _root.StopAnimation("Opacity");
@@ -130,6 +159,14 @@ internal sealed class FloatingMaterialWindow : IFloatingPanelMaterial
         return IntPtr.Zero;
     }
 
+    private void DisableEnhancedBlur(Exception? error)
+    {
+        _blur.Brush = _backdrop;
+        _blurBrush?.Dispose(); _blurBrush = null;
+        _blurFactory?.Dispose(); _blurFactory = null;
+        Log.Diagnostic("FLOATING_MATERIAL", $"Enhanced blur unavailable; retaining host backdrop: {error?.GetType().Name}");
+    }
+
     public void Dispose()
     {
         if (_disposed) return;
@@ -137,9 +174,12 @@ internal sealed class FloatingMaterialWindow : IFloatingPanelMaterial
         _source?.RemoveHook(WndProc);
         if (_target is not null) _target.Root = null;
         _root?.Children.RemoveAll();
-        _fade?.Dispose(); _shadow?.Dispose(); _clip?.Dispose(); _geometry?.Dispose();
-        _tint?.Dispose(); _blur?.Dispose(); _tintBrush?.Dispose(); _backdrop?.Dispose();
-        _root?.Dispose(); _target?.Dispose(); _source?.Dispose();
+        _surfaceLayer?.Children.RemoveAll();
+        _fade?.Dispose(); _clip?.Dispose(); _geometry?.Dispose();
+        _tint?.Dispose(); _blur?.Dispose(); _tintBrush?.Dispose();
+        _blurBrush?.Dispose(); _blurFactory?.Dispose();
+        _backdrop?.Dispose();
+        _surfaceLayer?.Dispose(); _root?.Dispose(); _target?.Dispose(); _source?.Dispose();
     }
 
     [DllImport("dwmapi.dll")]
