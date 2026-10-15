@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1600" height="520" viewBox="0 0 1600 520" role="img" aria-labelledby="title description">
   <title id="title">TaskbarLyrics：斜陽播放控制与任务栏歌词</title>
-  <desc id="description">左侧按实际截图统一比例展示播放面板与双行歌词，右侧为项目名及功能说明。歌曲斜陽，ヨルシカ，网易云音乐，进度1:09，总时长3:20。</desc>
+  <desc id="description">蓝紫色流动曲面的桌面背景向右渐隐至黑色。左侧按实际截图统一比例展示播放面板与双行歌词，右侧为项目名及功能说明。歌曲斜陽，ヨルシカ，网易云音乐，进度1:09，总时长3:20。</desc>
   <defs>
     <style>
       text { font-family: "Source Han Sans SC", "Microsoft YaHei", "Yu Gothic UI", "Segoe UI", sans-serif; }
@@ -23,11 +23,78 @@
       <image x="-7" y="-7" width="14" height="14" xlink:href="data:image/png;base64,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"/>
     </g>
     <clipPath id="card-clip"><rect width="1600" height="520" rx="24"/></clipPath>
+    <clipPath id="desktop-clip"><rect width="1600" height="400"/></clipPath>
+    <linearGradient id="desktop-base" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="1450" y2="400">
+      <stop stop-color="#071b51"/>
+      <stop offset=".4" stop-color="#122780"/>
+      <stop offset=".65" stop-color="#241756"/>
+      <stop offset="1" stop-color="#090e25"/>
+    </linearGradient>
+    <radialGradient id="desktop-violet-glow" gradientUnits="userSpaceOnUse" cx="650" cy="0" r="580">
+      <stop stop-color="#5725d9" stop-opacity=".8"/>
+      <stop offset=".55" stop-color="#3421a3" stop-opacity=".4"/>
+      <stop offset="1" stop-color="#21145b" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="desktop-rear-fold" gradientUnits="userSpaceOnUse" x1="210" y1="0" x2="780" y2="320">
+      <stop stop-color="#153aab"/>
+      <stop offset=".3" stop-color="#2456de"/>
+      <stop offset=".55" stop-color="#414de0"/>
+      <stop offset="1" stop-color="#0e286b"/>
+    </linearGradient>
+    <linearGradient id="desktop-blue-fold" gradientUnits="userSpaceOnUse" x1="40" y1="-10" x2="550" y2="400">
+      <stop stop-color="#0d286e"/>
+      <stop offset=".35" stop-color="#0e3bab"/>
+      <stop offset=".7" stop-color="#1053e0"/>
+      <stop offset="1" stop-color="#1766fa"/>
+    </linearGradient>
+    <linearGradient id="desktop-violet-fold" gradientUnits="userSpaceOnUse" x1="420" y1="-70" x2="830" y2="300">
+      <stop stop-color="#22216f"/>
+      <stop offset=".32" stop-color="#4326c4"/>
+      <stop offset=".52" stop-color="#6238f0"/>
+      <stop offset=".68" stop-color="#4a2db3"/>
+      <stop offset="1" stop-color="#151b49"/>
+    </linearGradient>
+    <linearGradient id="desktop-front-fold" gradientUnits="userSpaceOnUse" x1="70" y1="210" x2="950" y2="410">
+      <stop stop-color="#1044bb"/>
+      <stop offset=".55" stop-color="#0d5bf2"/>
+      <stop offset="1" stop-color="#35268a"/>
+    </linearGradient>
+    <radialGradient id="desktop-surface-light" gradientUnits="userSpaceOnUse" cx="610" cy="10" r="340">
+      <stop stop-color="#7452ff" stop-opacity=".4"/>
+      <stop offset=".5" stop-color="#5c38f0" stop-opacity=".16"/>
+      <stop offset="1" stop-color="#4e26c8" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="desktop-fold-edge" gradientUnits="userSpaceOnUse" x1="420" y1="0" x2="760" y2="170">
+      <stop stop-color="#6a81ff" stop-opacity=".5"/>
+      <stop offset=".8" stop-color="#7350ff" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="desktop-soft-edge" x="-10%" y="-20%" width="120%" height="140%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="5"/>
+    </filter>
+    <linearGradient id="desktop-right-fade">
+      <stop stop-color="#000" stop-opacity="0"/>
+      <stop offset=".48" stop-color="#000" stop-opacity="0"/>
+      <stop offset=".65" stop-color="#000" stop-opacity=".28"/>
+      <stop offset=".82" stop-color="#000" stop-opacity=".78"/>
+      <stop offset=".94" stop-color="#000" stop-opacity=".97"/>
+      <stop offset="1" stop-color="#000"/>
+    </linearGradient>
   </defs>
   <g id="rounded-card" clip-path="url(#card-clip)">
 
   <!-- Rounded card with transparent corners; no outside white border. -->
-  <rect id="desktop-background" width="1600" height="400" fill="#2c3036"/>
+  <!-- Vector wallpaper: broad flowing folds, with the fade below all UI content. -->
+  <g id="desktop-background" clip-path="url(#desktop-clip)">
+    <rect width="1600" height="400" fill="url(#desktop-base)"/>
+    <rect width="1600" height="400" fill="url(#desktop-violet-glow)"/>
+    <path d="M122-80C258 44 290 202 448 300S803 405 1030 460H-80V-80Z" fill="url(#desktop-blue-fold)"/>
+    <path d="M180-90C354-70 502-12 570 75S660 228 830 306L1059 460H832C693 334 502 350 397 242S281 49 155-80Z" fill="url(#desktop-rear-fold)"/>
+    <path d="M340-80C528-82 712-31 765 45S754 158 832 230S1020 337 1164 445H975C825 338 724 307 638 196S452 36 290-80Z" fill="url(#desktop-violet-fold)"/>
+    <path d="M-80 253C147 150 327 215 509 310S821 429 1120 460H-80Z" fill="url(#desktop-front-fold)"/>
+    <path d="M390-65C554-50 714-20 765 45S754 158 832 230" fill="none" stroke="url(#desktop-fold-edge)" stroke-width="12" filter="url(#desktop-soft-edge)"/>
+    <rect width="1600" height="400" fill="url(#desktop-surface-light)"/>
+    <rect width="1600" height="400" fill="url(#desktop-right-fade)"/>
+  </g>
   <rect id="taskbar-background" y="400" width="1600" height="120" fill="#1B1E23"/>
   <path d="M0 400H1600" stroke="#414a53"/>
 
