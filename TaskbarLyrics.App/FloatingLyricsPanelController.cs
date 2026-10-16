@@ -121,7 +121,7 @@ internal sealed class FloatingLyricsPanelController : IDisposable
                     target.Material.Position(target.CardBounds, scale, new WindowInteropHelper(target.Window).Handle);
                     target.Topmost = target.Window.Topmost;
                 }
-                return FloatingPanelWindowOrder.EnsureBelow(target.Material.Handle, new WindowInteropHelper(target.Window).Handle);
+                return target.Material.EnsureBelow(new WindowInteropHelper(target.Window).Handle);
             }
             if (_active == target) Close(immediate: true);
             if (target.Material is not null && target.HighContrast != SystemParameters.HighContrast) Release(target);
@@ -141,7 +141,7 @@ internal sealed class FloatingLyricsPanelController : IDisposable
             target.Topmost = target.Window.Topmost;
             target.Material.Configure(_light, _brightness, _tintOpacity, _blurAmount);
             target.Material.Position(target.CardBounds, scale, new WindowInteropHelper(target.Window).Handle);
-            if (!FloatingPanelWindowOrder.EnsureBelow(target.Material.Handle, new WindowInteropHelper(target.Window).Handle))
+            if (!target.Material.EnsureBelow(new WindowInteropHelper(target.Window).Handle))
             { Release(target); return false; }
             target.Material.SetVisible(false, immediate: true);
             return true;

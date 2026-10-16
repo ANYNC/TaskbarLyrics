@@ -17,6 +17,15 @@ internal static class NativeWindowInteraction
     private const int HitTestBottomLeft = 16;
     private const int HitTestBottomRight = 17;
 
+    internal static void SetClickThrough(IntPtr hwnd, bool enabled)
+    {
+        // Layered WPF windows need WS_EX_TRANSPARENT for cross-thread input passthrough.
+        const long transparent = 0x00000020;
+        var style = TaskbarNativeMethods.GetWindowLongPtr(hwnd, TaskbarNativeMethods.GWL_EXSTYLE).ToInt64();
+        var next = enabled ? style | transparent : style & ~transparent;
+        if (next != style) TaskbarNativeMethods.SetWindowLongPtr(hwnd, TaskbarNativeMethods.GWL_EXSTYLE, new IntPtr(next));
+    }
+
     public static void BeginDrag(Window window)
     {
         BeginNonClientInteraction(window, HitTestCaption);

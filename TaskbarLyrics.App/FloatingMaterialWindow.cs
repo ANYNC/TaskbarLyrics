@@ -2,6 +2,7 @@ using System.Numerics;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
+using System.Windows.Threading;
 using Windows.UI.Composition;
 using Windows.UI.Composition.Desktop;
 using WinRT;
@@ -11,13 +12,14 @@ namespace TaskbarLyrics.App;
 
 internal sealed class FloatingMaterialWindow : IFloatingPanelMaterial
 {
-    private const int ShadowPaddingDip = 36;
     private double _blurAmount = 24;
     private double _scale = 1;
     private readonly HwndSource _source;
     private readonly DesktopWindowTarget _target;
     private readonly ContainerVisual _root;
     private readonly LayerVisual _surfaceLayer;
+    private readonly FloatingMaterialFallbackWindow _shadowWindow;
+    private readonly DispatcherTimer _hideTimer;
     private readonly SpriteVisual _blur;
     private readonly SpriteVisual _tint;
     private readonly CompositionBrush _backdrop;
@@ -28,7 +30,7 @@ internal sealed class FloatingMaterialWindow : IFloatingPanelMaterial
     private readonly CompositionGeometricClip _clip;
     private readonly ScalarKeyFrameAnimation _fade;
     private readonly Compositor _compositor;
-    private Rect _bounds;
+    private bool _visible;
     private bool _disposed;
     public IntPtr Handle => _source.Handle;
     internal bool UsesBackdrop { get; }
@@ -38,7 +40,8 @@ internal sealed class FloatingMaterialWindow : IFloatingPanelMaterial
         _compositor = context.Compositor;
         try
         {
-            // A non-layered composition surface can sample the desktop independently of the lyrics HWND.
+            // Backdrop sampling requires a non-layered HWND. Restrict it to the card;
+            // a separate, input-transparent layered window draws the outer shadow.
             _source = new HwndSource(new HwndSourceParameters("TaskbarLyrics floating material")
             {
                 PositionX = -32000,
@@ -46,10 +49,13 @@ internal sealed class FloatingMaterialWindow : IFloatingPanelMaterial
                 Width = 1,
                 Height = 1,
                 WindowStyle = unchecked((int)0x80000000),
-                ExtendedWindowStyle = 0x00200080 | 0x08000000
+                ExtendedWindowStyle = 0x08200080
             });
             _source.AddHook(WndProc);
             _source.CompositionTarget.BackgroundColor = System.Windows.Media.Colors.Transparent;
+            _shadowWindow = new FloatingMaterialFallbackWindow(shadowOnly: true);
+            _hideTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(180) };
+            _hideTimer.Tick += HideAfterFade;
             var enabled = 1;
             UsesBackdrop = !SystemParameters.HighContrast && DwmSetWindowAttribute(Handle, 17, ref enabled, 4) >= 0;
             _compositor.As<IDesktopInterop>().CreateDesktopWindowTarget(Handle, true, out var pointer);
@@ -96,22 +102,34 @@ internal sealed class FloatingMaterialWindow : IFloatingPanelMaterial
 
     public void Position(Rect cardBounds, double scale, IntPtr lyricsHandle)
     {
-        _bounds = cardBounds;
-        var padding = (int)Math.Round(ShadowPaddingDip * scale);
         var size = new Vector2((float)cardBounds.Width, (float)cardBounds.Height);
-        _root.Size = size + new Vector2(padding * 2);
+        _root.Size = size;
         _surfaceLayer.Size = size;
-        _surfaceLayer.Offset = new Vector3(padding, padding, 0);
         _blur.Size = _tint.Size = _geometry.Size = size;
         _geometry.CornerRadius = new Vector2((float)(12 * scale));
         _scale = scale;
         UpdateBlurAmount();
         // Keep the material below the unchanged lyrics and its owned media-control window.
         TaskbarNativeMethods.SetWindowPos(Handle, lyricsHandle,
-            (int)Math.Round(cardBounds.Left) - padding, (int)Math.Round(cardBounds.Top) - padding,
-            (int)Math.Round(cardBounds.Width) + padding * 2, (int)Math.Round(cardBounds.Height) + padding * 2,
-            TaskbarNativeMethods.SWP_NOACTIVATE | 0x0040);
+            (int)Math.Round(cardBounds.Left), (int)Math.Round(cardBounds.Top),
+            (int)Math.Round(cardBounds.Width), (int)Math.Round(cardBounds.Height),
+            TaskbarNativeMethods.SWP_NOACTIVATE);
+        // Leave a small guard around the antialiased 12-DIP visual corner.
+        var diameter = (int)Math.Round(20 * scale);
+        var region = CreateRoundRectRgn(0, 0, (int)Math.Round(cardBounds.Width) + 1,
+            (int)Math.Round(cardBounds.Height) + 1, diameter, diameter);
+        if (region == IntPtr.Zero) throw new InvalidOperationException("Cannot create floating card input region.");
+        // USER32 owns the region after a successful SetWindowRgn call.
+        if (SetWindowRgn(Handle, region, true) == 0)
+        {
+            DeleteObject(region);
+            throw new InvalidOperationException("Cannot apply floating card input region.");
+        }
+        _shadowWindow.Position(cardBounds, scale, Handle);
     }
+
+    public bool EnsureBelow(IntPtr lyricsHandle) => FloatingPanelWindowOrder.EnsureBelow(Handle, lyricsHandle)
+        && _shadowWindow.EnsureBelow(Handle);
 
     public void Configure(bool light, double brightness, double tintOpacity, double blurAmount)
     {
@@ -124,6 +142,7 @@ internal sealed class FloatingMaterialWindow : IFloatingPanelMaterial
         _tintBrush.Color = SystemParameters.HighContrast
             ? Windows.UI.Color.FromArgb(255, System.Windows.SystemColors.WindowColor.R, System.Windows.SystemColors.WindowColor.G, System.Windows.SystemColors.WindowColor.B)
             : Windows.UI.Color.FromArgb(alpha, level, level, level);
+        _shadowWindow.Configure(light, brightness, tintOpacity, blurAmount);
     }
 
     private void UpdateBlurAmount()
@@ -134,27 +153,40 @@ internal sealed class FloatingMaterialWindow : IFloatingPanelMaterial
 
     public void SetVisible(bool visible, bool immediate = false)
     {
+        _visible = visible;
+        _hideTimer.Stop();
+        _shadowWindow.SetVisible(visible, immediate);
+        if (visible)
+            TaskbarNativeMethods.SetWindowPos(Handle, IntPtr.Zero, 0, 0, 0, 0,
+                TaskbarNativeMethods.SWP_NOMOVE | TaskbarNativeMethods.SWP_NOSIZE |
+                TaskbarNativeMethods.SWP_NOZORDER | TaskbarNativeMethods.SWP_NOACTIVATE | 0x0040);
         if (_blurFactory?.LoadStatus is CompositionEffectFactoryLoadStatus.Other or CompositionEffectFactoryLoadStatus.EffectTooComplex)
             DisableEnhancedBlur(_blurFactory.ExtendedError);
         if (immediate || !SystemParameters.ClientAreaAnimation || SystemParameters.HighContrast)
         {
             _root.StopAnimation("Opacity");
             _root.Opacity = visible ? 1 : 0;
+            if (!visible) TaskbarNativeMethods.ShowWindow(Handle, 0);
             return;
         }
         _fade.InsertExpressionKeyFrame(0, "this.StartingValue");
         _fade.InsertKeyFrame(1, visible ? 1 : 0);
         _root.StartAnimation("Opacity", _fade);
+        if (!visible) _hideTimer.Start();
+    }
+
+    private void HideAfterFade(object? sender, EventArgs e)
+    {
+        _hideTimer.Stop();
+        if (!_visible) TaskbarNativeMethods.ShowWindow(Handle, 0);
     }
 
     private IntPtr WndProc(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
         if (message == 0x0084)
         {
-            var x = (short)(lParam.ToInt64() & 0xffff);
-            var y = (short)((lParam.ToInt64() >> 16) & 0xffff);
             handled = true;
-            return _bounds.Contains(x, y) ? new IntPtr(1) : new IntPtr(-1);
+            return new IntPtr(1);
         }
         return IntPtr.Zero;
     }
@@ -171,6 +203,8 @@ internal sealed class FloatingMaterialWindow : IFloatingPanelMaterial
     {
         if (_disposed) return;
         _disposed = true;
+        if (_hideTimer is not null) { _hideTimer.Stop(); _hideTimer.Tick -= HideAfterFade; }
+        _shadowWindow?.Dispose();
         _source?.RemoveHook(WndProc);
         if (_target is not null) _target.Root = null;
         _root?.Children.RemoveAll();
@@ -189,4 +223,8 @@ internal sealed class FloatingMaterialWindow : IFloatingPanelMaterial
     {
         void CreateDesktopWindowTarget(IntPtr hwnd, [MarshalAs(UnmanagedType.Bool)] bool topmost, out IntPtr target);
     }
+
+    [DllImport("gdi32.dll")] private static extern IntPtr CreateRoundRectRgn(int left, int top, int right, int bottom, int width, int height);
+    [DllImport("gdi32.dll")] private static extern bool DeleteObject(IntPtr handle);
+    [DllImport("user32.dll")] private static extern int SetWindowRgn(IntPtr hwnd, IntPtr region, bool redraw);
 }

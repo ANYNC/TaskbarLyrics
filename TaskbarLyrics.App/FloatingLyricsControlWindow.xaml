@@ -15,6 +15,7 @@
             <Setter Property="Foreground" Value="{DynamicResource PanelForeground}"/>
             <Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
             <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
                 <Border x:Name="ButtonSurface" Background="{TemplateBinding Background}" CornerRadius="8">
                     <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
@@ -24,7 +25,14 @@
                     <Trigger Property="Tag" Value="round"><Setter TargetName="ButtonSurface" Property="CornerRadius" Value="18"/></Trigger>
                     <Trigger Property="IsPressed" Value="True"><Setter TargetName="ButtonSurface" Property="Opacity" Value="0.5"/></Trigger>
                     <Trigger Property="IsEnabled" Value="False"><Setter TargetName="ButtonSurface" Property="Opacity" Value="0.4"/></Trigger>
-                    <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="ButtonSurface" Property="BorderBrush" Value="{DynamicResource PanelForeground}"/><Setter TargetName="ButtonSurface" Property="BorderThickness" Value="1"/></Trigger>
+                    <MultiDataTrigger>
+                        <MultiDataTrigger.Conditions>
+                            <Condition Binding="{Binding IsKeyboardFocused, RelativeSource={RelativeSource Self}}" Value="True"/>
+                            <Condition Binding="{Binding ShowKeyboardFocus, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="True"/>
+                        </MultiDataTrigger.Conditions>
+                        <Setter TargetName="ButtonSurface" Property="BorderBrush" Value="{DynamicResource PanelForeground}"/>
+                        <Setter TargetName="ButtonSurface" Property="BorderThickness" Value="1"/>
+                    </MultiDataTrigger>
                 </ControlTemplate.Triggers>
             </ControlTemplate></Setter.Value></Setter>
         </Style>

@@ -14,6 +14,15 @@ namespace TaskbarLyrics.App;
 
 internal partial class FloatingLyricsControlWindow : Window
 {
+    public static readonly DependencyProperty ShowKeyboardFocusProperty = DependencyProperty.Register(
+        nameof(ShowKeyboardFocus), typeof(bool), typeof(FloatingLyricsControlWindow), new PropertyMetadata(false));
+
+    public bool ShowKeyboardFocus
+    {
+        get => (bool)GetValue(ShowKeyboardFocusProperty);
+        private set => SetValue(ShowKeyboardFocusProperty, value);
+    }
+
     private readonly Action<MediaHotkeyAction> _execute;
     private readonly Action<TimeSpan> _seek;
     private string _trackIdentity = string.Empty;
@@ -35,9 +44,11 @@ internal partial class FloatingLyricsControlWindow : Window
         _seek = seek;
         SourceInitialized += OnSourceInitialized;
         PreviewKeyDown += OnPreviewKeyDown;
+        PreviewMouseDown += OnPreviewMouseDown;
         MouseMove += OnMouseMove;
         VisualRoot.Opacity = 0;
-        Surface.Background = System.Windows.Media.Brushes.Transparent;
+        // Keep the visible control viewport hittable even between buttons, independent of the material HWND.
+        Surface.Background = new SolidColorBrush(Color.FromArgb(1, 0, 0, 0));
         Surface.BorderThickness = new Thickness(0);
     }
 
@@ -116,10 +127,13 @@ internal partial class FloatingLyricsControlWindow : Window
     {
         if (IsClosed) return;
         IsPanelVisible = visible;
+        var handle = new WindowInteropHelper(this).Handle;
+        if (handle != IntPtr.Zero) NativeWindowInteraction.SetClickThrough(handle, enabled: !visible);
         VisualRoot.IsHitTestVisible = visible;
         foreach (var control in new System.Windows.Controls.Control[] { PlayButton, PreviousButton, NextButton, SeekSlider }) control.IsTabStop = visible;
         if (!visible)
         {
+            ShowKeyboardFocus = false;
             _seeking = false; KeepOpenForKeyboard = false;
             if (IsKeyboardFocusWithin) Keyboard.ClearFocus();
             if (SeekSlider.IsMouseCaptureWithin) System.Windows.Input.Mouse.Capture(null);
@@ -135,6 +149,7 @@ internal partial class FloatingLyricsControlWindow : Window
     {
         if (!IsPanelVisible || IsClosed) return;
         Activate();
+        ShowKeyboardFocus = true;
         KeepOpenForKeyboard = true;
         PlayButton.Focus();
     }
@@ -179,18 +194,26 @@ internal partial class FloatingLyricsControlWindow : Window
     private void OnPreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
         if (!IsPanelVisible) return;
+        ShowKeyboardFocus = true;
         KeepOpenForKeyboard = true;
         if (e.Key != Key.Escape) return;
         e.Handled = true;
         Dismissed?.Invoke(this, EventArgs.Empty);
     }
     private void OnMouseMove(object sender, System.Windows.Input.MouseEventArgs e) => KeepOpenForKeyboard = false;
-    private void OnSourceInitialized(object? sender, EventArgs e) => TaskbarPlacementService.ApplyToolWindowStyle(new WindowInteropHelper(this).Handle);
+    private void OnPreviewMouseDown(object sender, MouseButtonEventArgs e) => ShowKeyboardFocus = false;
+    private void OnSourceInitialized(object? sender, EventArgs e)
+    {
+        var handle = new WindowInteropHelper(this).Handle;
+        TaskbarPlacementService.ApplyToolWindowStyle(handle);
+        NativeWindowInteraction.SetClickThrough(handle, enabled: !IsPanelVisible);
+    }
     protected override void OnClosed(EventArgs e)
     {
         IsClosed = true;
         SourceInitialized -= OnSourceInitialized;
         PreviewKeyDown -= OnPreviewKeyDown;
+        PreviewMouseDown -= OnPreviewMouseDown;
         MouseMove -= OnMouseMove;
         base.OnClosed(e);
     }
