@@ -5,6 +5,40 @@ namespace TaskbarLyrics.App.Tests;
 public sealed class TaskbarEmbeddingLayoutPolicyTests
 {
     [Theory]
+    [InlineData(25)]
+    [InlineData(100)]
+    [InlineData(300)]
+    public void WidthLimitsAndHorizontalOffsetsAreIndependentOfContentScale(double scale)
+    {
+        var settings = new AppSettings { WindowWidth = 420, LyricsLayoutScalePercent = scale, HorizontalAnchor = LyricsHorizontalAnchor.Center };
+        var constraints = new TaskbarEmbeddingConstraints(500, 1000);
+        var bounds = TaskbarEmbeddingLayoutPolicy.GetInputBounds(settings, constraints, 420);
+        Assert.Equal(500, bounds.MaxWindowWidth);
+        Assert.Equal(-40, bounds.MinXOffset);
+        Assert.Equal(40, bounds.MaxXOffset);
+        Assert.True(TaskbarEmbeddingLayoutPolicy.CanFit(settings, constraints));
+    }
+
+    [Fact]
+    public void WidthOverflowDoesNotForceContentScaleDownWhenHeightFits()
+    {
+        var settings = new AppSettings { WindowWidth = 1400, LyricsLayoutScalePercent = 200 };
+        TaskbarEmbeddingLayoutPolicy.ClampToConstraints(settings, new TaskbarEmbeddingConstraints(500, 1000));
+        Assert.Equal(500, settings.WindowWidth);
+        Assert.Equal(200, settings.LyricsLayoutScalePercent);
+    }
+
+    [Fact]
+    public void SafeLayoutForNarrowTaskbarDoesNotUseZoomToReduceWidth()
+    {
+        var settings = new AppSettings { WindowWidth = 1400 };
+        var result = TaskbarEmbeddingLayoutPolicy.NormalizeForEmbedding(settings, new TaskbarEmbeddingConstraints(180, 48));
+        Assert.True(result.CanEmbed);
+        Assert.Equal(180, settings.WindowWidth);
+        Assert.InRange(settings.LyricsLayoutScalePercent, 100, 110);
+    }
+
+    [Theory]
     [InlineData(LyricsHorizontalAnchor.Left, 0, 80)]
     [InlineData(LyricsHorizontalAnchor.Center, -40, 40)]
     [InlineData(LyricsHorizontalAnchor.Right, -80, 0)]

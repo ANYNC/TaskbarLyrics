@@ -43,6 +43,7 @@
   --cover-size: 34px;
   --cover-gap: 8px;
   --cover-radius: 6px;
+  --viewport-descender-buffer: 2px;
   --layout-padding-inline: 0px;
   --lyrics-pane-padding-top: 3px;
   --lyrics-pane-padding-right: 4px;
@@ -110,6 +111,11 @@ html, body {
   background: transparent;
   border-radius: 0;
   box-shadow: none;
+}
+
+/* The host extends WebView for text descenders; keep artwork centered in the native content area. */
+.floating-controls-enabled .cover {
+  margin-bottom: var(--viewport-descender-buffer);
 }
 
 .cover-hidden .shell {
@@ -197,7 +203,7 @@ html, body {
 
 .cover:focus-visible {
   outline: 2px solid white;
-  outline-offset: 2px;
+  outline-offset: -2px;
 }
 
 .cover:disabled {
@@ -211,9 +217,17 @@ html, body {
   }
 }
 
-.cover-floating-icon { display: none; width: min(22px, 70%); height: min(22px, 70%); }
+.cover-floating-icon, .cover-locked-icon { display: none; width: min(17px, 54%); height: min(17px, 54%); opacity: 0.8; }
 .floating-controls-enabled .cover-action-icon { display: none; }
-.floating-controls-enabled .cover-floating-icon { display: block; }
+/* Show the available action: lock while unlocked, unlock while locked. */
+.floating-controls-enabled .cover-locked-icon { display: block; }
+.floating-controls-enabled.floating-locked .cover-locked-icon { display: none; }
+.floating-controls-enabled.floating-locked .cover-floating-icon { display: block; }
+.floating-controls-enabled .cover:not(:disabled) .cover-interaction { opacity: 0; background: rgba(0, 0, 0, 0.38); }
+.floating-controls-enabled .cover:not(:disabled):is(:hover, :focus-visible) .cover-interaction { opacity: 1; }
+/* The separate native unlock window owns mouse hover while the lyrics HWND passes through. */
+.floating-controls-enabled.floating-locked .cover:not(:disabled) .cover-interaction { opacity: 0; }
+.floating-controls-enabled.floating-locked.floating-lock-hovered .cover:not(:disabled) .cover-interaction { opacity: 1; }
 
 .cover-fallback {
   position: absolute;
@@ -235,6 +249,8 @@ html, body {
 }
 
 .cover-image {
+  -webkit-user-drag: none;
+  pointer-events: none;
   position: absolute;
   inset: 0;
   width: 100%;

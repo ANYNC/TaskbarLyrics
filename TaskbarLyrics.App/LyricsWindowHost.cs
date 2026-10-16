@@ -15,6 +15,8 @@ internal sealed class LyricsWindowHost : IDisposable
     private readonly Thread _thread;
     private readonly Action _openSettings;
     private readonly Action _toggleTranslation;
+    private readonly Action<FloatingWindowSize> _saveFloatingSize;
+    private FloatingWindowSize? _pendingSizeCommit;
     private Dispatcher? _dispatcher;
     private MainWindow? _window;
     private TrackLyricOffsetStore? _trackLyricOffsetStore;
@@ -34,10 +36,12 @@ internal sealed class LyricsWindowHost : IDisposable
         TrackLyricOffsetStore trackLyricOffsetStore,
         IAppCompositionRoot compositionRoot,
         Action openSettings,
-        Action toggleTranslation)
+        Action toggleTranslation,
+        Action<FloatingWindowSize> saveFloatingSize)
     {
         _openSettings = openSettings;
         _toggleTranslation = toggleTranslation;
+        _saveFloatingSize = saveFloatingSize;
         var settings = initialSettings.Clone();
         _thread = new Thread(() => Run(settings, trackLyricOffsetStore, compositionRoot))
         {
@@ -263,6 +267,8 @@ internal sealed class LyricsWindowHost : IDisposable
         window.PresentationCommandCreated += OnPresentationCommandCreated;
         window.LyricsContentVisibilityChanged += OnLyricsContentVisibilityChanged;
         window.RecreateWindowRequested += OnLyricsWindowRecreateRequested;
+        window.FloatingSizePreviewRequested += OnFloatingSizePreviewRequested;
+        window.FloatingSizeCommitted += OnFloatingSizeCommitted;
         window.IsVisibleChanged += OnLyricsWindowIsVisibleChanged;
         window.Closed += OnLyricsWindowClosed;
         _isLyricsContentVisible = window.IsLyricsContentVisible;
@@ -274,6 +280,8 @@ internal sealed class LyricsWindowHost : IDisposable
         window.PresentationCommandCreated -= OnPresentationCommandCreated;
         window.LyricsContentVisibilityChanged -= OnLyricsContentVisibilityChanged;
         window.RecreateWindowRequested -= OnLyricsWindowRecreateRequested;
+        window.FloatingSizePreviewRequested -= OnFloatingSizePreviewRequested;
+        window.FloatingSizeCommitted -= OnFloatingSizeCommitted;
         window.IsVisibleChanged -= OnLyricsWindowIsVisibleChanged;
         window.Closed -= OnLyricsWindowClosed;
     }
@@ -319,13 +327,36 @@ internal sealed class LyricsWindowHost : IDisposable
         }
     }
 
-    private void ApplySettingsOnWindowThread(AppSettings settings)
+    private void OnFloatingSizePreviewRequested(FloatingWindowSize size)
+    {
+        // Preview only the existing hosts. Restoring saved placement or replaying content here
+        // fights the gesture's positioning and needlessly reconfigures WebView on every move.
+        _currentSettings = size.ApplyTo(_currentSettings);
+        _window?.ApplySettings(_currentSettings, keepControlPanelOpen: true, preserveFloatingPosition: true);
+        foreach (var mirror in _mirrorWindows.Values)
+            mirror.ApplySettings(_currentSettings, keepControlPanelOpen: true, preserveFloatingPosition: true);
+    }
+
+    private void OnFloatingSizeCommitted(FloatingWindowSize size)
+    {
+        _pendingSizeCommit = size;
+        _saveFloatingSize(size);
+    }
+
+    private void ApplySettingsOnWindowThread(AppSettings settings, bool keepControlPanelOpen = false)
     {
         if (_window is null)
         {
             return;
         }
 
+        if (!keepControlPanelOpen)
+        {
+            _window.CancelFloatingSizeAdjustment();
+            keepControlPanelOpen = settings.UseFloatingWindow && settings.EnableControlPanel &&
+                _pendingSizeCommit == FloatingWindowSize.FromSettings(settings);
+            _pendingSizeCommit = null;
+        }
         _currentSettings = settings.Clone();
         _currentSettings.NormalizeDisplaySelection();
         var targets = LyricsDisplayTargetSelector.Select(
@@ -343,15 +374,15 @@ internal sealed class LyricsWindowHost : IDisposable
             sourceDisplay.Id,
             StringComparison.OrdinalIgnoreCase);
         _window.SetDisplayMonitor(sourceDisplay);
-        _window.ApplySettings(_currentSettings);
-        ReconcileMirrorWindows(targets, sourceDisplay.Id);
+        _window.ApplySettings(_currentSettings, keepControlPanelOpen);
+        ReconcileMirrorWindows(targets, sourceDisplay.Id, keepControlPanelOpen);
         if (sourceDisplayChanged || _isVisible)
         {
             _window.ReplayPresentationState();
         }
     }
 
-    private void ReconcileMirrorWindows(IReadOnlyList<DisplayMonitor> targets, string sourceDisplayId)
+    private void ReconcileMirrorWindows(IReadOnlyList<DisplayMonitor> targets, string sourceDisplayId, bool keepControlPanelOpen = false)
     {
         var mirrorDisplays = targets
             .Where(display => !string.Equals(display.Id, sourceDisplayId, StringComparison.OrdinalIgnoreCase))
@@ -379,8 +410,8 @@ internal sealed class LyricsWindowHost : IDisposable
 
             if (!_mirrorWindows.TryGetValue(display.Id, out var mirrorWindow))
             {
-                mirrorWindow = new LyricsMirrorWindow(display, (bounds, monitor, setExpanded) =>
-                    _window?.ToggleControlPanelNear(bounds, monitor, setExpanded));
+                mirrorWindow = new LyricsMirrorWindow(display, (owner, bounds, monitor, setExpanded) =>
+                    _window?.ToggleControlPanelNear(bounds, monitor, setExpanded, owner), _compositionRoot!);
                 _mirrorWindows.Add(display.Id, mirrorWindow);
                 _window?.RegisterFloatingLyricsHost(mirrorWindow);
             }
@@ -389,7 +420,7 @@ internal sealed class LyricsWindowHost : IDisposable
                 mirrorWindow.SetDisplayMonitor(display);
             }
 
-            mirrorWindow.ApplySettings(_currentSettings);
+            mirrorWindow.ApplySettings(_currentSettings, keepControlPanelOpen);
             mirrorWindow.SetContentVisibility(_isLyricsContentVisible);
             if (_isVisible)
             {

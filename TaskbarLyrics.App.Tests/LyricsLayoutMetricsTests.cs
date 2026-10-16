@@ -4,6 +4,29 @@ namespace TaskbarLyrics.App.Tests;
 
 public sealed class LyricsLayoutMetricsTests
 {
+    [Theory]
+    [InlineData(100, 1)]
+    [InlineData(100, 1.25)]
+    [InlineData(125, 1)]
+    [InlineData(150, 1.5)]
+    [InlineData(200, 2)]
+    public void FloatingCardCoverHasMatchingHorizontalAndVerticalInsets(double scale, double pixelsPerDip)
+    {
+        var settings = new AppSettings { UseFloatingWindow = true, EnableControlPanel = true, LyricsLayoutScalePercent = scale };
+        var metrics = LyricsLayoutMetrics.Create(settings, pixelsPerDip);
+        Assert.Equal(metrics.HostHorizontalPadding, (metrics.DesiredWindowHeight - metrics.CoverSize) / 2, 6);
+        if (scale == 100) Assert.Equal(8, metrics.HostHorizontalPadding);
+    }
+
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public void EqualCardInsetsDoNotChangeOtherWindowPresentations(bool floating, bool controls)
+    {
+        var metrics = LyricsLayoutMetrics.Create(new AppSettings { UseFloatingWindow = floating, EnableControlPanel = controls });
+        Assert.Equal(44, metrics.DesiredWindowHeight);
+    }
+
     [Fact]
     public void CreateScalesContinuousFontAndPixelAlignsLayoutGeometry()
     {

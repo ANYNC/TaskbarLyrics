@@ -16,6 +16,384 @@ public sealed class FloatingPanelInputTestGroup;
 public sealed class FloatingPanelInputTests
 {
     [Fact]
+    public void FloatingMirrorSizePreviewDoesNotRestoreItsSavedOrDefaultPosition()
+    {
+        RunSta(() =>
+        {
+            using var composition = new AppCompositionRoot();
+            var display = DisplayMonitorService.GetDisplays().First(item => item.IsPrimary);
+            var mirror = new LyricsMirrorWindow(display, (_, _, _, _) => { }, composition);
+            try
+            {
+                var settings = new AppSettings { UseFloatingWindow = true, WindowWidth = 420 };
+                mirror.ApplySettings(settings);
+                _ = new WindowInteropHelper(mirror).EnsureHandle();
+                mirror.Left = display.WorkArea.Left / display.PixelsPerDip + 180;
+                mirror.Top = display.WorkArea.Top / display.PixelsPerDip + 180;
+                var original = FloatingLyricsPanelController.GetBounds(mirror);
+                settings.WindowWidth = 520;
+                settings.LyricsLayoutScalePercent = 125;
+                mirror.ApplySettings(settings, keepControlPanelOpen: true, preserveFloatingPosition: true);
+                mirror.UpdateLayout();
+                var preview = FloatingLyricsPanelController.GetBounds(mirror);
+                Assert.Equal(original.TopLeft, preview.TopLeft);
+                Assert.True(preview.Width > original.Width);
+                Assert.True(preview.Height > original.Height);
+                mirror.ApplySettings(settings);
+                Assert.NotEqual(preview.TopLeft, FloatingLyricsPanelController.GetBounds(mirror).TopLeft);
+            }
+            finally { mirror.Close(); }
+        });
+    }
+
+    [Fact]
+    public void LockedLyricsPassThroughOutsideTheCoverAndTheCoverCanUnlockThem()
+    {
+        RunSta(() =>
+        {
+            using var receiver = new ReceiverWindow();
+            var owner = CreateOwner(layered: true);
+            var changed = new List<bool>();
+            var coverHovered = false;
+            using var controller = new FloatingLyricsPanelController(owner.Dispatcher,
+                () => new FloatingLyricsControlWindow(_ => { }, _ => { }));
+            try
+            {
+                var display = DisplayMonitorService.GetDisplays().First(item => item.IsPrimary);
+                var bounds = FloatingLyricsPanelController.GetBounds(owner);
+                var cover = new Rect(bounds.Left + 8, bounds.Top + 4, 34, 34);
+                controller.Register(owner, () => display, () => true, (_, _) => { },
+                    coverBounds: () => cover, lockChanged: (locked, hovered) =>
+                    {
+                        coverHovered = hovered;
+                        if (changed.Count == 0 || changed[^1] != locked) changed.Add(locked);
+                    });
+                controller.RegisterSizeAdjustment(owner, () => new FloatingWindowSize(420, 100), _ => { }, _ => { });
+                controller.Enabled = true;
+                controller.Open(display.Id, owner);
+                Assert.NotNull(controller.Panel);
+                PumpMessages();
+                var corner = Point(bounds.Right - 10, bounds.Top + 10);
+                Assert.IsType<FloatingResizeGripWindow>(HwndSource.FromHwnd(WindowFromPoint(corner)).RootVisual);
+                controller.ToggleLock(owner);
+                PumpMessages();
+                Assert.True(controller.IsLocked(owner));
+                Assert.Null(controller.Panel);
+                Assert.Equal(receiver.Handle, WindowFromPoint(corner));
+                Assert.Equal(receiver.Handle, WindowFromPoint(Point(bounds.Right - 40, bounds.Top + 20)));
+                var unlockHandle = WindowFromPoint(Point(cover.Left + 10, cover.Top + 10));
+                Assert.NotEqual(receiver.Handle, unlockHandle);
+                var unlockWindow = Assert.IsType<FloatingCoverUnlockWindow>(HwndSource.FromHwnd(unlockHandle).RootVisual);
+                unlockWindow.RaiseEvent(new System.Windows.Input.MouseEventArgs(Mouse.PrimaryDevice, 0)
+                { RoutedEvent = UIElement.MouseEnterEvent });
+                Assert.True(coverHovered);
+                unlockWindow.RaiseEvent(new System.Windows.Input.MouseEventArgs(Mouse.PrimaryDevice, 0)
+                { RoutedEvent = UIElement.MouseLeaveEvent });
+                Assert.False(coverHovered);
+                Assert.Null(((System.Windows.Controls.Border)unlockWindow.Content).ToolTip);
+                controller.Open(display.Id, owner);
+                Assert.Null(controller.Panel);
+                unlockWindow.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
+                { RoutedEvent = UIElement.MouseLeftButtonUpEvent });
+                Assert.False(controller.IsLocked(owner));
+                Assert.Collection(changed, value => Assert.True(value), value => Assert.False(value));
+                controller.Open(display.Id, owner);
+                Assert.NotNull(controller.Panel);
+                controller.ToggleLock(owner);
+                controller.Enabled = false;
+                Assert.False(controller.IsLocked(owner));
+                Assert.Equal(new WindowInteropHelper(owner).Handle,
+                    WindowFromPoint(Point(bounds.Right - 40, bounds.Top + 20)));
+            }
+            finally { controller.Enabled = false; owner.Close(); }
+        });
+    }
+
+    [Fact]
+    public void FloatingLocksAreIndependentAndCannotLeaveAHiddenCoverAsTheOnlyUnlockEntry()
+    {
+        RunSta(() =>
+        {
+            var first = CreateOwner();
+            var second = CreateOwner();
+            second.Left += 450;
+            var coverVisible = true;
+            using var controller = new FloatingLyricsPanelController(first.Dispatcher,
+                () => new FloatingLyricsControlWindow(_ => { }, _ => { }));
+            try
+            {
+                var display = DisplayMonitorService.GetDisplays().First(item => item.IsPrimary);
+                var bounds = FloatingLyricsPanelController.GetBounds(first);
+                var cover = new Rect(bounds.Left + 8, bounds.Top + 4, 34, 34);
+                controller.Register(first, () => display, () => true, (_, _) => { },
+                    coverBounds: () => coverVisible ? cover : Rect.Empty);
+                controller.Register(second, () => display, () => true, (_, _) => { });
+                controller.Enabled = true;
+                controller.ToggleLock(first);
+                Assert.True(controller.IsLocked(first));
+                Assert.False(controller.IsLocked(second));
+                coverVisible = false;
+                PumpMessages(TimeSpan.FromMilliseconds(100));
+                Assert.False(controller.IsLocked(first));
+                controller.ToggleLock(first);
+                Assert.False(controller.IsLocked(first));
+            }
+            finally { controller.Enabled = false; first.Close(); second.Close(); }
+        });
+    }
+
+    [Fact]
+    public void CoverClickTargetsItsOwnWindowEvenWhenTwoCardsShareADisplay()
+    {
+        RunSta(() =>
+        {
+            var first = CreateOwner();
+            var second = CreateOwner();
+            second.Left += 450;
+            using var controller = new FloatingLyricsPanelController(first.Dispatcher,
+                () => new FloatingLyricsControlWindow(_ => { }, _ => { }));
+            try
+            {
+                var display = DisplayMonitorService.GetDisplays().First(item => item.IsPrimary);
+                controller.Register(first, () => display, () => true, (_, _) => { });
+                controller.Register(second, () => display, () => true, (_, _) => { });
+                controller.Enabled = true;
+                controller.Open(display.Id, second);
+                Assert.Same(second, controller.Panel!.Owner);
+                controller.Open(display.Id, first);
+                Assert.Same(first, controller.Panel!.Owner);
+            }
+            finally { controller.Enabled = false; first.Close(); second.Close(); }
+        });
+    }
+
+    [Fact]
+    public void DragMovesTheCompleteCardWithoutClosingOrRecreatingControls()
+    {
+        RunSta(() =>
+        {
+            var owner = CreateOwner();
+            FloatingLyricsPanelController? controller = null;
+            var surfaces = new List<bool>();
+            var created = 0;
+            var display = DisplayMonitorService.GetDisplays().First(item => item.IsPrimary);
+            var scale = TaskbarNativeMethods.GetDpiForWindow(new WindowInteropHelper(owner).Handle) / 96.0;
+            try
+            {
+                controller = new FloatingLyricsPanelController(owner.Dispatcher, () =>
+                {
+                    created++;
+                    return new FloatingLyricsControlWindow(_ => { }, _ => { });
+                });
+                controller.Register(owner, () => display, () => true, (open, _) => surfaces.Add(open), () =>
+                {
+                    var panel = controller.Panel!;
+                    surfaces.Clear();
+                    var initialLyrics = FloatingLyricsPanelController.GetBounds(owner);
+                    var initialControls = FloatingLyricsPanelController.GetBounds(panel);
+                    var above = initialControls.Top < initialLyrics.Top;
+                    var y = above ? display.WorkArea.Top + 8 : display.WorkArea.Bottom - (int)initialLyrics.Height - 8;
+                    Assert.True(TaskbarNativeMethods.SetWindowPos(new WindowInteropHelper(owner).Handle, IntPtr.Zero,
+                        (int)initialLyrics.Left + 80, y, 0, 0,
+                        TaskbarNativeMethods.SWP_NOSIZE | TaskbarNativeMethods.SWP_NOZORDER | TaskbarNativeMethods.SWP_NOACTIVATE));
+                    PumpMessages();
+                    var movedLyrics = FloatingLyricsPanelController.GetBounds(owner);
+                    var movedControls = FloatingLyricsPanelController.GetBounds(panel);
+                    Assert.Equal(movedLyrics.Left, movedControls.Left);
+                    Assert.Equal(above ? movedLyrics.Top : movedLyrics.Bottom, above ? movedControls.Bottom : movedControls.Top);
+                    Assert.True(panel.IsPanelVisible);
+                    Assert.DoesNotContain(false, surfaces);
+                });
+                controller.Enabled = true;
+                controller.Open(display.Id);
+                var panel = controller.Panel!;
+                PumpMessages();
+                var grip = (System.Windows.Controls.Border)panel.FindName("DragGrip");
+                var metadata = (FrameworkElement)panel.FindName("MetadataText");
+                Assert.Equal(metadata.ActualHeight, grip.ActualHeight);
+                var icon = Assert.IsType<System.Windows.Controls.Viewbox>(grip.Child);
+                Assert.Equal(Stretch.Uniform, icon.Stretch);
+                var glyph = Assert.IsType<System.Windows.Shapes.Path>(icon.Child);
+                Assert.Equal(10, Assert.IsType<GeometryGroup>(glyph.Data).Children.Count);
+                var ink = glyph.Data.GetRenderBounds(new Pen(glyph.Stroke, glyph.StrokeThickness));
+                var inkLeft = glyph.TranslatePoint(ink.TopLeft, panel).X;
+                var inkRight = glyph.TranslatePoint(ink.TopRight, panel).X;
+                var seek = (FrameworkElement)panel.FindName("SeekSlider");
+                Assert.Equal(seek.TranslatePoint(new System.Windows.Point(), panel).X, inkLeft, 1);
+                Assert.Equal(8, metadata.TranslatePoint(new System.Windows.Point(), panel).X - inkRight, 1);
+                var play = (FrameworkElement)panel.FindName("PlayButton");
+                var playTop = play.TranslatePoint(new System.Windows.Point(), panel).Y;
+                var inkTop = glyph.TranslatePoint(ink.TopLeft, panel).Y;
+                var inkBottom = glyph.TranslatePoint(ink.BottomLeft, panel).Y;
+                Assert.Equal(33, ink.Height);
+                Assert.InRange((inkTop + inkBottom) / 2 - playTop - play.ActualHeight / 2, -1, 1);
+                panel.RequestDrag();
+                Assert.Same(panel, controller.Panel);
+                Assert.True(panel.IsPanelVisible);
+                Assert.Equal(1, created);
+                var final = FloatingLyricsPanelController.GetBounds(panel);
+                Assert.InRange(final.Top, display.WorkArea.Top - scale, display.WorkArea.Bottom);
+                Assert.InRange(final.Bottom, display.WorkArea.Top, display.WorkArea.Bottom + scale);
+            }
+            finally { controller?.Dispose(); owner.Close(); }
+        });
+    }
+
+    [Fact]
+    public void SavedPlacementSurvivesVisualSettingsAndResetsOnlyWhenFloatingOffsetsChange()
+    {
+        RunSta(() =>
+        {
+            var path = System.IO.Path.Combine(AppContext.BaseDirectory, $"floating-position-{Guid.NewGuid():N}.json");
+            var owner = CreateOwner();
+            try
+            {
+                var display = DisplayMonitorService.GetDisplays().First(item => item.IsPrimary);
+                var store = new FloatingWindowPositionStore(path);
+                store.Remember(display.Id, new FloatingWindowPosition(display.Id, 0.7, 0.3));
+                var placement = new FloatingWindowPlacement(owner, store);
+                var settings = new AppSettings { UseFloatingWindow = true };
+                placement.Configure(settings);
+                placement.Refresh(display);
+                Assert.True(placement.TryRestore());
+                var restored = FloatingLyricsPanelController.GetBounds(owner);
+                settings.FontFamily = "Segoe UI";
+                placement.Configure(settings);
+                Assert.True(placement.TryRestore());
+                Assert.Equal(restored, FloatingLyricsPanelController.GetBounds(owner));
+                settings.XOffset = 100;
+                placement.Configure(settings);
+                Assert.False(placement.TryRestore());
+                Assert.Null(new FloatingWindowPositionStore(path).Get(display.Id));
+            }
+            finally { owner.Close(); System.IO.File.Delete(path); }
+        });
+    }
+
+    [Theory]
+    [InlineData(Key.Right, 1)]
+    [InlineData(Key.Left, -1)]
+    public void RepeatedKeyboardSeeksHoldTheLatestTargetUntilThePlayerCatchesUp(Key key, int direction)
+    {
+        RunSta(() =>
+        {
+            var owner = CreateOwner();
+            var clock = new SeekTestClock();
+            var seeks = new List<TimeSpan>();
+            var panel = CreateSeekPanel(owner, seeks.Add, clock);
+            try
+            {
+                var slider = (System.Windows.Controls.Slider)panel.FindName("SeekSlider");
+                for (var step = 1; step <= 2; step++)
+                {
+                    RaiseSeekKey(panel, slider, key, Keyboard.PreviewKeyDownEvent);
+                    slider.Value += direction * 5; // A SmallChange is one second of a 200-second track.
+                    UpdateSeekPanel(panel, 60);
+                    Assert.Equal((60 + direction * step) * 5, slider.Value);
+                    RaiseSeekKey(panel, slider, key, Keyboard.KeyUpEvent);
+                    clock.Advance(TimeSpan.FromMilliseconds(100));
+                    UpdateSeekPanel(panel, 60);
+                    Assert.Equal((60 + direction * step) * 5, slider.Value);
+                }
+                Assert.Equal(new[] { TimeSpan.FromSeconds(60 + direction), TimeSpan.FromSeconds(60 + 2 * direction) }, seeks);
+                // An acknowledgment of the older command must not override the newest target.
+                UpdateSeekPanel(panel, 60 + direction);
+                Assert.Equal((60 + 2 * direction) * 5, slider.Value);
+                UpdateSeekPanel(panel, 60 + 2 * direction + 0.1);
+                Assert.Equal((60 + 2 * direction + 0.1) * 5, slider.Value, 6);
+                UpdateSeekPanel(panel, 60 + 2 * direction + 1);
+                Assert.Equal((60 + 2 * direction + 1) * 5, slider.Value, 6);
+            }
+            finally { panel.Close(); owner.Close(); }
+        });
+    }
+
+    [Fact]
+    public void KeyboardSeekIgnoresOtherKeyReleasesAndRecoversIfThePlayerRejectsTheSeek()
+    {
+        RunSta(() =>
+        {
+            var owner = CreateOwner();
+            var clock = new SeekTestClock();
+            var seeks = new List<TimeSpan>();
+            var panel = CreateSeekPanel(owner, seeks.Add, clock);
+            try
+            {
+                var slider = (System.Windows.Controls.Slider)panel.FindName("SeekSlider");
+                RaiseSeekKey(panel, slider, Key.Right, Keyboard.PreviewKeyDownEvent);
+                slider.Value += 5;
+                RaiseSeekKey(panel, slider, Key.LeftShift, Keyboard.KeyUpEvent);
+                Assert.Empty(seeks);
+                UpdateSeekPanel(panel, 60);
+                Assert.Equal(305, slider.Value);
+                RaiseSeekKey(panel, slider, Key.Right, Keyboard.KeyUpEvent);
+                Assert.Single(seeks);
+                clock.Advance(TimeSpan.FromSeconds(3));
+                UpdateSeekPanel(panel, 60);
+                Assert.Equal(300, slider.Value);
+            }
+            finally { panel.Close(); owner.Close(); }
+        });
+    }
+
+    [Theory]
+    [InlineData("track")]
+    [InlineData("disabled")]
+    [InlineData("hidden")]
+    public void PendingSeekDoesNotLeakAcrossTrackCapabilityOrVisibilityChanges(string change)
+    {
+        RunSta(() =>
+        {
+            var owner = CreateOwner();
+            var panel = CreateSeekPanel(owner, _ => { }, new SeekTestClock());
+            try
+            {
+                var slider = (System.Windows.Controls.Slider)panel.FindName("SeekSlider");
+                RaiseSeekKey(panel, slider, Key.Right, Keyboard.PreviewKeyDownEvent);
+                slider.Value += 5;
+                RaiseSeekKey(panel, slider, Key.Right, Keyboard.KeyUpEvent);
+                if (change == "hidden")
+                {
+                    panel.SetPanelVisible(false, immediate: true);
+                    panel.SetPanelVisible(true, immediate: true);
+                }
+                UpdateSeekPanel(panel, 20, canSeek: change != "disabled", trackId: change == "track" ? "other" : "seek-test");
+                Assert.Equal(100, slider.Value);
+            }
+            finally { panel.Close(); owner.Close(); }
+        });
+    }
+
+    private static FloatingLyricsControlWindow CreateSeekPanel(Window owner, Action<TimeSpan> seek, TimeProvider clock)
+    {
+        var panel = new FloatingLyricsControlWindow(_ => { }, seek, clock);
+        var lyrics = FloatingLyricsPanelController.GetBounds(owner);
+        var scale = TaskbarNativeMethods.GetDpiForWindow(new WindowInteropHelper(owner).Handle) / 96.0;
+        panel.Prepare(owner, new FloatingLyricsPanelPlacement(
+            new Rect(lyrics.Left, lyrics.Bottom, lyrics.Width, 96 * scale), false), scale);
+        UpdateSeekPanel(panel, 60);
+        panel.SetPanelVisible(true, immediate: true);
+        return panel;
+    }
+
+    private static void UpdateSeekPanel(FloatingLyricsControlWindow panel, double seconds,
+        bool canSeek = true, string trackId = "seek-test") => panel.Update(
+        new TaskbarLyrics.Core.Models.TrackInfo(trackId, trackId, "Artist", "", "test", TimeSpan.FromSeconds(200)),
+        true, TimeSpan.FromSeconds(seconds), canSeek, new PlayerSourceBadge("test", "", false), false);
+
+    private static void RaiseSeekKey(FloatingLyricsControlWindow panel, UIElement slider, Key key, RoutedEvent routedEvent) =>
+        slider.RaiseEvent(new KeyEventArgs(Keyboard.PrimaryDevice, PresentationSource.FromVisual(panel)!, 0, key)
+        { RoutedEvent = routedEvent });
+
+    private sealed class SeekTestClock : TimeProvider
+    {
+        private long _ticks;
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+        public override long GetTimestamp() => _ticks;
+        internal void Advance(TimeSpan elapsed) => _ticks += elapsed.Ticks;
+    }
+
+    [Fact]
     public void MediaButtonFocusHintFollowsKeyboardAndMouseInputWithoutClearingFocus()
     {
         RunSta(() =>
@@ -27,9 +405,11 @@ public sealed class FloatingPanelInputTests
                 var lyrics = FloatingLyricsPanelController.GetBounds(owner);
                 var scale = TaskbarNativeMethods.GetDpiForWindow(new WindowInteropHelper(owner).Handle) / 96.0;
                 panel.Prepare(owner, new FloatingLyricsPanelPlacement(
-                    new Rect(lyrics.Left, lyrics.Bottom, lyrics.Width, 104 * scale), false), scale);
+                    new Rect(lyrics.Left, lyrics.Bottom, lyrics.Width, 96 * scale), false), scale);
                 panel.Update(new TaskbarLyrics.Core.Models.TrackInfo("test", "Title", "Artist", "", "test", TimeSpan.FromMinutes(3)),
                     true, TimeSpan.Zero, true, new PlayerSourceBadge("test", "", false), false);
+                Assert.Null(((System.Windows.Controls.TextBlock)panel.FindName("TitleText")).ToolTip);
+                Assert.Null(((System.Windows.Controls.TextBlock)panel.FindName("ArtistText")).ToolTip);
                 panel.SetPanelVisible(true, immediate: true);
                 var play = (System.Windows.Controls.Button)panel.FindName("PlayButton");
                 panel.Activate();
@@ -124,7 +504,7 @@ public sealed class FloatingPanelInputTests
             {
                 var lyrics = FloatingLyricsPanelController.GetBounds(owner);
                 var scale = TaskbarNativeMethods.GetDpiForWindow(new WindowInteropHelper(owner).Handle) / 96.0;
-                var bounds = new Rect(lyrics.Left, lyrics.Bottom, lyrics.Width, 104 * scale);
+                var bounds = new Rect(lyrics.Left, lyrics.Bottom, lyrics.Width, 96 * scale);
                 panel.Prepare(owner, new FloatingLyricsPanelPlacement(bounds, false), scale);
                 var blank = Point(bounds.Left + 2 * scale, bounds.Top + 2 * scale);
                 var button = (System.Windows.Controls.Button)panel.FindName("PlayButton");
@@ -151,11 +531,12 @@ public sealed class FloatingPanelInputTests
         });
     }
 
-    private static Window CreateOwner()
+    private static Window CreateOwner(bool layered = false)
     {
         var window = new Window
         {
             WindowStyle = WindowStyle.None,
+            AllowsTransparency = layered,
             ResizeMode = ResizeMode.NoResize,
             Left = 180,
             Top = 180,

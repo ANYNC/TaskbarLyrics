@@ -82,7 +82,8 @@ public partial class App : System.Windows.Application, IDisposable
         _lyricsWindowHost = new LyricsWindowHost(
             Settings, _trackLyricOffsetStore, _compositionRoot,
             () => Dispatcher.BeginInvoke(OpenSettingsWindow),
-            () => ToggleMediaHotkeyAction(MediaHotkeyAction.ToggleTranslation));
+            () => ToggleMediaHotkeyAction(MediaHotkeyAction.ToggleTranslation),
+            SaveFloatingSize);
         _mediaHotkeyService = new GlobalMediaHotkeyService(ExecuteMediaHotkeyAsync);
         _mediaHotkeyService.Apply(Settings.GlobalMediaHotkeys);
 
@@ -177,6 +178,16 @@ public partial class App : System.Windows.Application, IDisposable
         }
 
         return saved;
+    }
+
+    private void SaveFloatingSize(FloatingWindowSize size)
+    {
+        // Resize originates on the lyrics STA; merge only its two fields on the application dispatcher.
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            if (IsExiting || !Settings.UseFloatingWindow) return;
+            if (!SaveSettings(size.ApplyTo(Settings))) Log.Warn("Floating window size could not be saved.");
+        }));
     }
 
     public void PreviewSettings(AppSettings settings)

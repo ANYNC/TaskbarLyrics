@@ -1270,7 +1270,7 @@ describe("settings WebView bridge", () => {
     });
   });
 
-  it("posts layout scale updates and renders host-calculated effective metrics", async () => {
+  it.each([false, true])("keeps window width when previewing layout scale in floating mode %s", async (useFloatingWindow) => {
     const { dom, sent, script } = await createSettingsDom();
     const document = dom.window.document;
     dom.window.eval(script);
@@ -1289,6 +1289,9 @@ describe("settings WebView bridge", () => {
           foregroundColorMode: "Light",
           foregroundColor: "#FFFFFFFF",
           backgroundOpacity: 0.55,
+          useFloatingWindow,
+          windowWidth: 420,
+          effectiveWindowWidth: 420,
           lyricsLayoutScalePercent: 100,
           fontSize: 14,
           coverSize: 34,
@@ -1333,12 +1336,17 @@ describe("settings WebView bridge", () => {
         effectiveFontSize: 17.5,
         effectiveCoverSize: 43,
         effectiveCoverGap: 10,
-        effectiveCoverCornerRadius: 8
+        effectiveCoverCornerRadius: 8,
+        effectiveWindowWidth: 420
       }
     });
 
     expect(document.querySelector("[data-effective-font-size]").textContent).toBe("17.5 px");
     expect(document.querySelector("[data-effective-cover-size]").textContent).toBe("43 px");
+    expect(document.querySelector("[data-effective-window-width]").textContent).toBe("420 px");
+    expect(document.querySelector('input[type="number"][data-setting="windowWidth"]').value).toBe("420");
+    expect(sent.filter(message => message.payload?.key === "windowWidth")).toHaveLength(0);
+    expect(document.querySelector(".layout-scale-row small").textContent).toContain("窗口宽度和 X/Y 偏移保持不变");
     expect(document.querySelector("#layoutScaleAnnouncement").textContent).toContain("缩放已设为 125%");
   });
 

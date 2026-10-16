@@ -73,6 +73,132 @@ async function createHarness() {
 }
 
 describe("lyrics cover fallback", () => {
+  it("clears pointer focus for floating cover clicks while keeping keyboard activation focused", async () => {
+    const { dom, style } = await createHarness();
+    const document = dom.window.document;
+    const cover = document.querySelector("#cover");
+    const receive = (type, payload) => dom.window.taskbarLyrics.receive({ version: 1, type, payload });
+    receive("style", { floatingControlPanel: true, enableControlPanel: true });
+    cover.focus();
+    expect(document.activeElement).toBe(cover);
+    const pointer = new dom.window.MouseEvent("mousedown", { button: 0, bubbles: true, cancelable: true });
+    cover.dispatchEvent(pointer);
+    expect(pointer.defaultPrevented).toBe(true);
+    expect(document.activeElement).not.toBe(cover);
+    receive("floatingLockState", { locked: true, hovered: true });
+    receive("floatingLockState", { locked: false });
+    expect(document.activeElement).not.toBe(cover);
+    cover.focus();
+    cover.click();
+    expect(document.activeElement).toBe(cover);
+    expect(style).toMatch(/\.cover:focus-visible\s*\{[^}]*outline-offset:\s*-2px/s);
+    receive("style", { floatingControlPanel: false, enableControlPanel: true });
+    const embeddedPointer = new dom.window.MouseEvent("mousedown", { button: 0, bubbles: true, cancelable: true });
+    cover.dispatchEvent(embeddedPointer);
+    expect(embeddedPointer.defaultPrevented).toBe(false);
+    expect(document.activeElement).toBe(cover);
+    dom.window.close();
+  });
+
+  it("aligns floating artwork with the native cover region while retaining the text descender buffer", async () => {
+    const { dom, style } = await createHarness();
+    const document = dom.window.document;
+    const root = document.documentElement;
+    const receiveStyle = payload => dom.window.taskbarLyrics.receive({ version: 1, type: "style", payload });
+    receiveStyle({ floatingControlPanel: true, enableControlPanel: true, viewportDescenderBuffer: 3 });
+    expect(root.style.getPropertyValue("--viewport-descender-buffer")).toBe("3px");
+    expect(root.classList.contains("floating-controls-enabled")).toBe(true);
+    expect(style).toMatch(/\.floating-controls-enabled \.cover\s*\{[^}]*margin-bottom:\s*var\(--viewport-descender-buffer\)/s);
+    receiveStyle({ floatingControlPanel: false, viewportDescenderBuffer: 2 });
+    expect(root.classList.contains("floating-controls-enabled")).toBe(false);
+    expect(root.style.getPropertyValue("--viewport-descender-buffer")).toBe("2px");
+  });
+
+  it("shows subtle floating lock icons only during cover hover without tooltip text", async () => {
+    const { dom, style } = await createHarness();
+    const doc = dom.window.document;
+    const recv = (type, payload) => dom.window.taskbarLyrics.receive({ version: 1, type, payload });
+    const cover = doc.querySelector("#cover");
+    const interaction = cover.querySelector(".cover-interaction");
+    const css = doc.createElement("style");
+    css.textContent = style;
+    doc.head.append(css);
+    try {
+      recv("style", { floatingControlPanel: true, enableControlPanel: true });
+      recv("controlPanelState", { open: true });
+      expect(dom.window.getComputedStyle(cover.querySelector(".cover-locked-icon")).display).toBe("block");
+      expect(dom.window.getComputedStyle(cover.querySelector(".cover-floating-icon")).display).toBe("none");
+      expect(cover.hasAttribute("title")).toBe(false);
+      expect(dom.window.getComputedStyle(interaction).opacity).toBe("0");
+      recv("floatingLockState", { locked: true, hovered: true });
+      expect(dom.window.getComputedStyle(cover.querySelector(".cover-locked-icon")).display).toBe("none");
+      expect(dom.window.getComputedStyle(cover.querySelector(".cover-floating-icon")).display).toBe("block");
+      expect(doc.documentElement.classList.contains("floating-lock-hovered")).toBe(true);
+      expect(dom.window.getComputedStyle(interaction).opacity).toBe("1");
+      recv("floatingLockState", { locked: true, hovered: false });
+      expect(dom.window.getComputedStyle(interaction).opacity).toBe("0");
+      expect(cover.hasAttribute("title")).toBe(false);
+      expect(cover.getAttribute("aria-label")).toBe("解锁浮窗");
+      recv("floatingLockState", { locked: false, hovered: true });
+      expect(doc.documentElement.classList.contains("floating-lock-hovered")).toBe(false);
+      expect(cover.hasAttribute("title")).toBe(false);
+    } finally { dom.window.close(); }
+  });
+
+  it("shows Lucide lock states only in floating mode and keeps lock feedback accessible", async () => {
+    const { dom, style } = await createHarness();
+    const document = dom.window.document;
+    const cover = document.querySelector("#cover");
+    const recv = (type, payload) => dom.window.taskbarLyrics.receive({ version: 1, type, payload });
+    try {
+      recv("style", { floatingControlPanel: true, enableControlPanel: true });
+      expect(cover.getAttribute("aria-label")).toBe("锁定浮窗");
+      expect(cover.getAttribute("aria-pressed")).toBe("false");
+      expect(cover.querySelector(".cover-locked-icon path")).not.toBeNull();
+      recv("controlPanelState", { open: true });
+      recv("floatingLockState", { locked: true });
+      expect(document.documentElement.classList.contains("floating-locked")).toBe(true);
+      expect(cover.getAttribute("aria-label")).toBe("解锁浮窗");
+      expect(cover.getAttribute("aria-pressed")).toBe("true");
+      expect(cover.getAttribute("aria-expanded")).toBe("false");
+      recv("floatingLockState", { locked: "false" });
+      expect(cover.getAttribute("aria-pressed")).toBe("true");
+      recv("style", { floatingControlPanel: true, enableControlPanel: true, coverPosition: "Right" });
+      expect(cover.getAttribute("aria-pressed")).toBe("true");
+      recv("floatingLockState", { locked: false });
+      expect(cover.getAttribute("aria-label")).toBe("锁定浮窗");
+      recv("style", { floatingControlPanel: false, enableControlPanel: true });
+      recv("floatingLockState", { locked: true });
+      expect(document.documentElement.classList.contains("floating-locked")).toBe(false);
+      expect(cover.hasAttribute("aria-pressed")).toBe(false);
+      expect(cover.getAttribute("aria-label")).toBe("展开播放控制");
+      expect(style).toContain(".floating-controls-enabled.floating-locked .cover-floating-icon { display: block; }");
+    } finally { dom.window.close(); }
+  });
+
+  it.each(["dragstart", "copy", "contextmenu"])("blocks cover %s without changing lyric interactions", async eventName => {
+    const { dom, showCover } = await createHarness();
+    const document = dom.window.document;
+    const cover = document.querySelector("#cover");
+    try {
+      showCover({ dataUri: artworkUri, trackId: "non-exportable-cover" });
+      expect(cover.draggable).toBe(false);
+      for (const image of cover.querySelectorAll("img")) {
+        expect(image.draggable).toBe(false);
+      }
+      for (const target of [cover, ...cover.querySelectorAll("img, .cover-fallback, .cover-floating-icon")]) {
+        const event = new dom.window.Event(eventName, { bubbles: true, cancelable: true });
+        target.dispatchEvent(event);
+        expect(event.defaultPrevented).toBe(true);
+      }
+      const lyricEvent = new dom.window.Event(eventName, { bubbles: true, cancelable: true });
+      document.querySelector("#currentLineText").dispatchEvent(lyricEvent);
+      expect(lyricEvent.defaultPrevented).toBe(false);
+    } finally {
+      dom.window.close();
+    }
+  });
+
   it("keeps the cover position while exposing floating controls and restoring the lyric surface", async () => {
     const { dom } = await createHarness();
     const recv = (type, payload) => dom.window.taskbarLyrics.receive({ version: 1, type, payload });

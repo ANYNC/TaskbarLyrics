@@ -9,6 +9,7 @@ using TaskbarLyrics.Core.Models;
 using TaskbarLyrics.Core.Services;
 using Color = System.Windows.Media.Color;
 using SystemColors = System.Windows.SystemColors;
+using Point = System.Windows.Point;
 
 namespace TaskbarLyrics.App;
 
@@ -25,23 +26,61 @@ internal partial class FloatingLyricsControlWindow : Window
 
     private readonly Action<MediaHotkeyAction> _execute;
     private readonly Action<TimeSpan> _seek;
+    private readonly TimeProvider _timeProvider;
     private string _trackIdentity = string.Empty;
     private string _seekIdentity = string.Empty;
     private TimeSpan _duration;
     private bool _seeking;
     private bool _playing;
+    private TimeSpan? _pendingSeek;
+    private long _pendingSeekStarted;
     internal bool IsClosed { get; private set; }
     internal bool KeepOpenForKeyboard { get; private set; }
     internal bool IsPanelVisible { get; private set; }
     internal event EventHandler? Dismissed;
+    internal event EventHandler? DragRequested;
+    private Point? _gripPress;
 
-    internal FloatingLyricsControlWindow(Action<MediaHotkeyAction> execute, Action<TimeSpan> seek)
+    private void OnGripPressed(object sender, MouseButtonEventArgs e)
+    {
+        if (!IsPanelVisible) return;
+        _gripPress = e.GetPosition(this);
+        DragGrip.CaptureMouse();
+        e.Handled = true;
+    }
+
+    private void OnGripMoved(object sender, System.Windows.Input.MouseEventArgs e)
+    {
+        if (_gripPress is not { } start || e.LeftButton != MouseButtonState.Pressed || !IsPanelVisible) return;
+        var delta = e.GetPosition(this) - start;
+        if (Math.Abs(delta.X) < SystemParameters.MinimumHorizontalDragDistance &&
+            Math.Abs(delta.Y) < SystemParameters.MinimumVerticalDragDistance) return;
+        _gripPress = null;
+        DragGrip.ReleaseMouseCapture();
+        e.Handled = true;
+        RequestDrag();
+    }
+
+    internal void RequestDrag()
+    {
+        if (IsPanelVisible && !IsClosed) DragRequested?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void OnGripReleased(object sender, System.Windows.Input.MouseEventArgs e)
+    {
+        _gripPress = null;
+        if (DragGrip.IsMouseCaptured) DragGrip.ReleaseMouseCapture();
+    }
+
+    internal FloatingLyricsControlWindow(Action<MediaHotkeyAction> execute, Action<TimeSpan> seek,
+        TimeProvider? timeProvider = null)
     {
         InitializeComponent();
         var fontFolder = new Uri(Path.Combine(AppContext.BaseDirectory, "Assets", "Fonts") + Path.DirectorySeparatorChar);
         FontFamily = new System.Windows.Media.FontFamily(fontFolder, $"./#{AppSettings.BundledFontFamily}");
         _execute = execute;
         _seek = seek;
+        _timeProvider = timeProvider ?? TimeProvider.System;
         SourceInitialized += OnSourceInitialized;
         PreviewKeyDown += OnPreviewKeyDown;
         PreviewMouseDown += OnPreviewMouseDown;
@@ -61,14 +100,18 @@ internal partial class FloatingLyricsControlWindow : Window
         {
             _trackIdentity = identity;
             _seeking = false;
+            _pendingSeek = null;
         }
         _duration = track?.Duration ?? TimeSpan.Zero;
         TitleText.Text = track?.Title ?? "暂无播放";
         ArtistText.Text = track is null ? "当前没有播放内容" : $"{track.Artist} · {source.DisplayName}";
-        TitleText.ToolTip = TitleText.Text;
-        ArtistText.ToolTip = ArtistText.Text;
         PreviousButton.IsEnabled = PlayButton.IsEnabled = NextButton.IsEnabled = track is not null;
         SeekSlider.IsEnabled = track is not null && canSeek && _duration > TimeSpan.Zero;
+        if (!SeekSlider.IsEnabled)
+        {
+            _seeking = false;
+            _pendingSeek = null;
+        }
         if (playing != _playing)
         {
             _playing = playing;
@@ -77,7 +120,7 @@ internal partial class FloatingLyricsControlWindow : Window
             AutomationProperties.SetName(PlayButton, playing ? "暂停" : "播放");
         }
         SetPalette(light);
-        if (!_seeking) SeekSlider.Value = _duration > TimeSpan.Zero
+        if (!_seeking && CanApplyTimeline(position)) SeekSlider.Value = _duration > TimeSpan.Zero
             ? Math.Clamp(position.TotalMilliseconds / _duration.TotalMilliseconds * 1000, 0, 1000) : 0;
         PaintTime();
     }
@@ -133,8 +176,11 @@ internal partial class FloatingLyricsControlWindow : Window
         foreach (var control in new System.Windows.Controls.Control[] { PlayButton, PreviousButton, NextButton, SeekSlider }) control.IsTabStop = visible;
         if (!visible)
         {
+            _gripPress = null;
+            if (DragGrip.IsMouseCaptured) DragGrip.ReleaseMouseCapture();
             ShowKeyboardFocus = false;
             _seeking = false; KeepOpenForKeyboard = false;
+            _pendingSeek = null;
             if (IsKeyboardFocusWithin) Keyboard.ClearFocus();
             if (SeekSlider.IsMouseCaptureWithin) System.Windows.Input.Mouse.Capture(null);
         }
@@ -168,24 +214,46 @@ internal partial class FloatingLyricsControlWindow : Window
     private void OnSeekFinished(object sender, MouseButtonEventArgs e) => CommitSeek();
     private void OnSeekKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
-        if (e.Key is Key.Left or Key.Right or Key.Up or Key.Down or Key.Home or Key.End or Key.PageUp or Key.PageDown)
+        if (IsSeekKey(e.Key))
         { _seeking = true; _seekIdentity = _trackIdentity; }
     }
     private void OnSeekKeyUp(object sender, System.Windows.Input.KeyEventArgs e)
     {
-        if (_seeking) CommitSeek();
+        if (_seeking && IsSeekKey(e.Key)) CommitSeek();
     }
+    private static bool IsSeekKey(Key key) => key is Key.Left or Key.Right or Key.Up or Key.Down
+        or Key.Home or Key.End or Key.PageUp or Key.PageDown;
+
     private void CommitSeek()
     {
         if (IsPanelVisible && _seeking && SeekSlider.IsEnabled && _seekIdentity == _trackIdentity)
-            _seek(TimeSpan.FromMilliseconds(SeekSlider.Value / 1000 * _duration.TotalMilliseconds));
+        {
+            var target = SliderPosition;
+            // Hold the local value while SMTC still reports the position before this seek.
+            // Publish the pending target before calling out, including for synchronous updates.
+            _pendingSeek = target;
+            _pendingSeekStarted = _timeProvider.GetTimestamp();
+            _seek(target);
+        }
         _seeking = false;
     }
+
+    private bool CanApplyTimeline(TimeSpan position)
+    {
+        if (_pendingSeek is not { } target) return true;
+        var elapsed = _timeProvider.GetElapsedTime(_pendingSeekStarted);
+        var expected = Math.Min(_duration.TotalSeconds, target.TotalSeconds + (_playing ? elapsed.TotalSeconds : 0));
+        if (elapsed < TimeSpan.FromSeconds(2) && Math.Abs(position.TotalSeconds - expected) > 0.5)
+            return false;
+        _pendingSeek = null;
+        return true;
+    }
     private void OnSeekValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e) => PaintTime();
+    private TimeSpan SliderPosition => TimeSpan.FromMilliseconds(Math.Round(SeekSlider.Value / 1000 * _duration.TotalMilliseconds));
     private void PaintTime()
     {
         if (ElapsedText is null) return;
-        var position = TimeSpan.FromMilliseconds(SeekSlider.Value / 1000 * _duration.TotalMilliseconds);
+        var position = SliderPosition;
         ElapsedText.Text = FormatTime(position);
         DurationText.Text = FormatTime(_duration);
         AutomationProperties.SetHelpText(SeekSlider, $"{ElapsedText.Text} / {DurationText.Text}");

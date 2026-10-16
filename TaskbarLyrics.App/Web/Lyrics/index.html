@@ -10,17 +10,24 @@
 <body>
   <div id="layout" class="layout">
     <div class="shell">
-      <button id="cover" class="cover" type="button" aria-label="展开播放控制" aria-expanded="false">
+      <button id="cover" class="cover" type="button" draggable="false" aria-label="展开播放控制" aria-expanded="false">
         <span id="coverFallback" class="cover-fallback">N</span>
-        <img id="coverImage" class="cover-image" alt="" />
-        <img id="coverImageNext" class="cover-image" alt="" />
+        <img id="coverImage" class="cover-image" alt="" draggable="false" />
+        <img id="coverImageNext" class="cover-image" alt="" draggable="false" />
         <span class="cover-interaction" aria-hidden="true">
           <svg class="cover-action-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="m5 11 7-6 7 6M5 19l7-6 7 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
           </svg>
-          <svg class="cover-floating-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.7" />
-            <path d="m10 7 7 5-7 5Z" fill="currentColor" />
+          <!-- Lucide lock-keyhole-open / lock-keyhole (ISC), bundled in Assets/Icons/Lucide. -->
+          <svg class="cover-floating-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="12" cy="16" r="1" />
+            <rect width="18" height="12" x="3" y="10" rx="2" />
+            <path d="M7 10V7a5 5 0 0 1 9.33-2.5" />
+          </svg>
+          <svg class="cover-locked-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="12" cy="16" r="1" />
+            <rect x="3" y="10" width="18" height="12" rx="2" />
+            <path d="M7 10V7a5 5 0 0 1 10 0v3" />
           </svg>
         </span>
       </button>

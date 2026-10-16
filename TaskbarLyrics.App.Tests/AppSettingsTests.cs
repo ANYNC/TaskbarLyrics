@@ -119,46 +119,32 @@ public sealed class AppSettingsTests
         Assert.Equal(["display-a"], source.SelectedDisplayIds);
     }
 
-    [Fact]
-    public void ClampEffectiveWindowWidthReturnsBaseWidthAtFullScale()
+    [Theory]
+    [InlineData(420, 1920, 420)]
+    [InlineData(100, 1920, 100)]
+    [InlineData(1400, 1000, 1000)]
+    [InlineData(5000, 1920, 1400)]
+    [InlineData(420, 50, 50)]
+    [InlineData(420, 0, 420)]
+    [InlineData(double.NaN, 1920, AppSettings.DefaultWindowWidth)]
+    public void ClampEffectiveWindowWidthUsesTheIndependentWidthAndAvailableSpace(double width, double available, double expected)
     {
-        Assert.Equal(420, AppSettings.ClampEffectiveWindowWidth(420, 100, 1920));
+        Assert.Equal(expected, AppSettings.ClampEffectiveWindowWidth(width, available));
     }
 
-    [Fact]
-    public void ClampEffectiveWindowWidthScalesProportionallyAboveOneHundred()
+    [Theory]
+    [InlineData(false, 25)]
+    [InlineData(false, 150)]
+    [InlineData(false, 300)]
+    [InlineData(true, 25)]
+    [InlineData(true, 150)]
+    [InlineData(true, 300)]
+    public void BothPresentationModesKeepTheSameWidthAtEveryLayoutScale(bool floating, double scale)
     {
-        Assert.Equal(840, AppSettings.ClampEffectiveWindowWidth(420, 200, 1920));
-    }
-
-    [Fact]
-    public void ClampEffectiveWindowWidthClampsToMinimumWhenScaledBelowIt()
-    {
-        Assert.Equal(100, AppSettings.ClampEffectiveWindowWidth(100, 25, 1920));
-    }
-
-    [Fact]
-    public void ClampEffectiveWindowWidthClampsToMaxWidthWhenScaleExceedsIt()
-    {
-        Assert.Equal(1000, AppSettings.ClampEffectiveWindowWidth(1400, 300, 1000));
-    }
-
-    [Fact]
-    public void ClampEffectiveWindowWidthClampsBaseWidthToBounds()
-    {
-        Assert.Equal(AppSettings.MaximumWindowWidth, AppSettings.ClampEffectiveWindowWidth(5000, 100, 1920));
-    }
-
-    [Fact]
-    public void ClampEffectiveWindowWidthClampsScalePercentToBounds()
-    {
-        Assert.Equal(1260, AppSettings.ClampEffectiveWindowWidth(420, 500, 1920));
-    }
-
-    [Fact]
-    public void CalculateEffectiveWindowWidthUsesSharedBaseWidthAndScale()
-    {
-        Assert.Equal(630, AppSettings.CalculateEffectiveWindowWidth(420, 150));
+        var settings = new AppSettings { UseFloatingWindow = floating, WindowWidth = 420, LyricsLayoutScalePercent = scale };
+        Assert.Equal(420, AppSettings.CalculateEffectiveWindowWidth(settings.WindowWidth));
+        Assert.Equal(420, AppSettings.ClampEffectiveWindowWidth(settings.WindowWidth, 1920));
+        Assert.Equal(scale, LyricsLayoutMetrics.Create(settings).ScalePercent);
     }
 
     [Fact]

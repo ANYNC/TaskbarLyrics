@@ -26,6 +26,17 @@ internal static class NativeWindowInteraction
         if (next != style) TaskbarNativeMethods.SetWindowLongPtr(hwnd, TaskbarNativeMethods.GWL_EXSTYLE, new IntPtr(next));
     }
 
+    internal static Rect GetScreenBounds(FrameworkElement element)
+    {
+        if (!element.IsVisible || element.ActualWidth <= 0 || element.ActualHeight <= 0 ||
+            PresentationSource.FromVisual(element) is null) return Rect.Empty;
+        return new Rect(element.PointToScreen(new System.Windows.Point()),
+            element.PointToScreen(new System.Windows.Point(element.ActualWidth, element.ActualHeight)));
+    }
+
+    internal static System.Windows.Point? GetCursorPosition() => GetCursorPos(out var point)
+        ? new System.Windows.Point(point.X, point.Y) : null;
+
     public static void BeginDrag(Window window)
     {
         BeginNonClientInteraction(window, HitTestCaption);
@@ -66,11 +77,15 @@ internal static class NativeWindowInteraction
         }
 
         _ = ReleaseCapture();
-        _ = SendMessage(hwnd, WindowMessageNonClientLeftButtonDown, hitTest, 0);
+        var position = GetCursorPos(out var cursor) ? (cursor.Y << 16) | (cursor.X & 0xffff) : 0;
+        _ = SendMessage(hwnd, WindowMessageNonClientLeftButtonDown, hitTest, position);
     }
 
     [DllImport("user32.dll", PreserveSig = true)]
     private static extern bool ReleaseCapture();
+
+    [DllImport("user32.dll")]
+    private static extern bool GetCursorPos(out TaskbarNativeMethods.NativePoint point);
 
     [DllImport("user32.dll", PreserveSig = true)]
     private static extern IntPtr SendMessage(IntPtr hwnd, int message, int wParam, int lParam);

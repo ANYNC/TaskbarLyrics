@@ -1,0 +1,14 @@
+<!-- Adapted from Lucide grip-vertical (ISC): five rows, 7.25-unit row pitch, cropped viewport. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="10" height="33" viewBox="7 3 10 33"
+     fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <circle cx="9" cy="5" r="1" />
+  <circle cx="15" cy="5" r="1" />
+  <circle cx="9" cy="12.25" r="1" />
+  <circle cx="15" cy="12.25" r="1" />
+  <circle cx="9" cy="19.5" r="1" />
+  <circle cx="15" cy="19.5" r="1" />
+  <circle cx="9" cy="26.75" r="1" />
+  <circle cx="15" cy="26.75" r="1" />
+  <circle cx="9" cy="34" r="1" />
+  <circle cx="15" cy="34" r="1" />
+</svg>

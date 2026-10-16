@@ -122,8 +122,7 @@ internal static class TaskbarEmbeddingLayoutPolicy
         }
 
         var effectiveWidth = AppSettings.CalculateEffectiveWindowWidth(
-            settings.WindowWidth,
-            settings.LyricsLayoutScalePercent);
+            settings.WindowWidth);
         var displayConstraints = GetDisplayConstraints(constraints);
         foreach (var display in displayConstraints)
         {
@@ -176,13 +175,11 @@ internal static class TaskbarEmbeddingLayoutPolicy
                 "当前任务栏空间不足，无法嵌入显示。请切换到悬浮窗口。");
         }
 
+        safeSettings.WindowWidth = FindSafeWindowWidth(constraints.MaxWidth);
         safeSettings.LyricsLayoutScalePercent = FindMaximumScalePercent(
             safeSettings,
             constraints,
             DefaultSafeScalePercent);
-        safeSettings.WindowWidth = FindSafeBaseWindowWidth(
-            safeSettings.LyricsLayoutScalePercent,
-            constraints.MaxWidth);
         if (!CanFit(safeSettings, constraints))
         {
             return new TaskbarEmbeddingLayoutResult(
@@ -215,16 +212,11 @@ internal static class TaskbarEmbeddingLayoutPolicy
             return;
         }
 
+        settings.WindowWidth = AppSettings.ClampEffectiveWindowWidth(settings.WindowWidth, constraints.MaxWidth);
         settings.LyricsLayoutScalePercent = FindMaximumScalePercent(
             settings,
             constraints,
             settings.LyricsLayoutScalePercent);
-        settings.WindowWidth = Math.Clamp(
-            Math.Min(
-                settings.WindowWidth,
-                constraints.MaxWidth / (settings.LyricsLayoutScalePercent / 100.0)),
-            AppSettings.MinimumWindowWidth,
-            AppSettings.MaximumWindowWidth);
         settings.FontSize = Math.Min(
             settings.FontSize,
             FindMaximumFontSize(settings, constraints));
@@ -239,8 +231,7 @@ internal static class TaskbarEmbeddingLayoutPolicy
             settings.CoverSize);
 
         var effectiveWidth = AppSettings.CalculateEffectiveWindowWidth(
-            settings.WindowWidth,
-            settings.LyricsLayoutScalePercent);
+            settings.WindowWidth);
         var horizontalRange = GetHorizontalOffsetRange(
             constraints.MaxWidth,
             effectiveWidth,
@@ -278,6 +269,7 @@ internal static class TaskbarEmbeddingLayoutPolicy
         var normalized = settings.Clone();
         normalized.NormalizeLyricsLayout();
         normalized.NormalizeWindowLayout();
+        normalized.WindowWidth = AppSettings.ClampEffectiveWindowWidth(normalized.WindowWidth, constraints.MaxWidth);
         var maxScale = FindMaximumScalePercent(
             normalized,
             constraints,
@@ -285,13 +277,12 @@ internal static class TaskbarEmbeddingLayoutPolicy
         var maxFontSize = FindMaximumFontSize(normalized, constraints);
         var maxCoverSize = FindMaximumCoverSize(normalized, constraints);
         var maxCoverGap = FindMaximumCoverGap(normalized, constraints);
-        var scale = normalized.LyricsLayoutScalePercent / 100.0;
         var maxWindowWidth = Math.Clamp(
-            constraints.MaxWidth / scale,
+            constraints.MaxWidth,
             AppSettings.MinimumWindowWidth,
             AppSettings.MaximumWindowWidth);
         var effectiveWidth = Math.Min(
-            AppSettings.CalculateEffectiveWindowWidth(normalized.WindowWidth, normalized.LyricsLayoutScalePercent),
+            AppSettings.CalculateEffectiveWindowWidth(normalized.WindowWidth),
             constraints.MaxWidth);
         var horizontalRange = GetHorizontalOffsetRange(
             constraints.MaxWidth,
@@ -434,14 +425,8 @@ internal static class TaskbarEmbeddingLayoutPolicy
         return CanFitCore(settings, constraints, includeOffsets: false);
     }
 
-    private static double FindSafeBaseWindowWidth(double scalePercent, double maxWidth)
-    {
-        var scale = AppSettings.ClampLyricsLayoutScalePercent(scalePercent) / 100.0;
-        return Math.Clamp(
-            Math.Min(AppSettings.DefaultWindowWidth, maxWidth / scale),
-            AppSettings.MinimumWindowWidth,
-            AppSettings.MaximumWindowWidth);
-    }
+    private static double FindSafeWindowWidth(double maxWidth) =>
+        AppSettings.ClampEffectiveWindowWidth(AppSettings.DefaultWindowWidth, maxWidth);
 
     private static OffsetRange GetHorizontalOffsetRange(
         double taskbarWidth,

@@ -75,6 +75,18 @@ let standbyCoverImageEl = coverImageNextEl;
 let currentCoverUri = "";
 let coverGeneration = 0;
 
+// The cover is a panel button, not an image export surface.
+for (const eventName of ["dragstart", "copy", "contextmenu"]) {
+  coverEl?.addEventListener(eventName, event => event.preventDefault());
+}
+
+coverEl?.addEventListener("mousedown", event => {
+  if (event.button !== 0 || !root.classList.contains("floating-controls-enabled")) return;
+  // The native unlock window restores WebView focus later; do not leave a pointer-focused cover behind.
+  event.preventDefault();
+  if (document.activeElement === coverEl) coverEl.blur();
+});
+
 coverEl?.addEventListener("click", () => {
   if (coverEl.disabled || root.classList.contains("cover-hidden")) return;
   const bounds = coverEl.getBoundingClientRect();
@@ -92,6 +104,19 @@ function setControlPanelOpen(open) {
   if (!coverEl) return;
   coverEl.classList.toggle("panel-open", open === true);
   coverEl.setAttribute("aria-expanded", String(open === true));
+}
+
+function setFloatingLockState(locked, hovered = false) {
+  const floating = root.classList.contains("floating-controls-enabled");
+  const active = floating && locked === true;
+  root.classList.toggle("floating-locked", active);
+  root.classList.toggle("floating-lock-hovered", active && hovered === true);
+  if (!coverEl) return;
+  coverEl.setAttribute("aria-label", floating ? (active ? "解锁浮窗" : "锁定浮窗") : "展开播放控制");
+  coverEl.removeAttribute("title");
+  if (floating) coverEl.setAttribute("aria-pressed", String(active));
+  else coverEl.removeAttribute("aria-pressed");
+  if (active) setControlPanelOpen(false);
 }
 let isSpectrumMode = false;
 let hasAudioDrivenSpectrum = false;
@@ -2316,6 +2341,7 @@ const lyricsApi = {
     applyLyricsTextAlignment(payload.textAlignment);
     root.dataset.coverPosition = payload.coverPosition === "Right" ? "Right" : "Left";
     root.classList.toggle("floating-controls-enabled", payload.floatingControlPanel === true && payload.enableControlPanel !== false);
+    setFloatingLockState(root.classList.contains("floating-locked"), root.classList.contains("floating-lock-hovered"));
     const layoutScalePercent = Number(payload.layoutScalePercent);
     if (Number.isFinite(layoutScalePercent) && layoutScalePercent > 0) {
       layoutScaleFactor = layoutScalePercent / 100;
@@ -2346,6 +2372,7 @@ const lyricsApi = {
     if (Number.isFinite(descenderBuffer) && descenderBuffer >= 0) {
       viewportDescenderBufferPx = descenderBuffer;
     }
+    root.style.setProperty("--viewport-descender-buffer", `${viewportDescenderBufferPx}px`);
 
     const pixelMetrics = {
       layoutHorizontalPadding: "--layout-padding-inline",
@@ -2457,6 +2484,9 @@ window.taskbarLyrics = {
       case "floatingControlSurface":
         root.classList.toggle("floating-controls-open", payload?.open === true);
         root.style.setProperty("--floating-control-surface", payload?.light === true ? "#f8f9fb" : "#202124");
+        break;
+      case "floatingLockState":
+        if (typeof payload?.locked === "boolean") setFloatingLockState(payload.locked, payload.hovered);
         break;
     }
   }

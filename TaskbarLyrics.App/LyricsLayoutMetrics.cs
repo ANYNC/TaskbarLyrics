@@ -100,7 +100,10 @@ internal sealed record LyricsLayoutMetrics
         var coverCornerRadius = Math.Min(
             AlignPixel(baseCornerRadius * scale, pixelsPerDip),
             AlignPixelDown(coverSize / 2, pixelsPerDip));
-        var coverVerticalSpacing = AlignPixel(BaseWindowVerticalSpacing * scale, pixelsPerDip);
+        var hostHorizontalPadding = AlignPixel(BaseHostHorizontalPadding * scale, pixelsPerDip);
+        var coverVerticalSpacing = settings.UseFloatingWindow && settings.EnableControlPanel
+            ? 2 * hostHorizontalPadding
+            : AlignPixel(BaseWindowVerticalSpacing * scale, pixelsPerDip);
         var minimumWindowHeight = AlignPixel(BaseWindowMinimumHeight * scale, pixelsPerDip);
         var textHeight = fontSize * 2.15 + (BaseTextVerticalSpacing * scale);
         var contentHeight = settings.ShowCover
@@ -117,7 +120,7 @@ internal sealed record LyricsLayoutMetrics
             CoverSize = coverSize,
             CoverGap = coverGap,
             CoverCornerRadius = coverCornerRadius,
-            HostHorizontalPadding = AlignPixel(BaseHostHorizontalPadding * scale, pixelsPerDip),
+            HostHorizontalPadding = hostHorizontalPadding,
             HostVerticalPadding = AlignPixel(BaseHostVerticalPadding * scale, pixelsPerDip),
             MinimumContentHeight = AlignPixel(BaseMinimumContentHeight * scale, pixelsPerDip),
             ViewportDescenderBuffer = AlignPixel(BaseViewportDescenderBuffer * scale, pixelsPerDip),
@@ -155,7 +158,7 @@ internal sealed record LyricsLayoutMetrics
 
     private static double AlignPixelUp(double value, double pixelsPerDip)
     {
-        return Math.Ceiling(value * pixelsPerDip) / pixelsPerDip;
+        return Math.Ceiling(Math.Round(value * pixelsPerDip, 8)) / pixelsPerDip;
     }
 
     private static double NormalizePixelsPerDip(double pixelsPerDip)

@@ -569,14 +569,9 @@ public sealed class AppSettings
             MaximumLyricsLayoutScalePercent);
     }
 
-    public static double ClampEffectiveWindowWidth(double baseWindowWidth, double scalePercent, double maxWidth)
+    public static double ClampEffectiveWindowWidth(double windowWidth, double maxWidth)
     {
-        var scale = double.IsFinite(scalePercent)
-            ? ClampLyricsLayoutScalePercent(scalePercent) / 100.0
-            : DefaultLyricsLayoutScalePercent / 100.0;
-        var baseWidth = double.IsFinite(baseWindowWidth)
-            ? Math.Clamp(baseWindowWidth, MinimumWindowWidth, MaximumWindowWidth)
-            : DefaultWindowWidth;
+        var width = CalculateEffectiveWindowWidth(windowWidth);
         if (!double.IsFinite(maxWidth) || maxWidth <= 0)
         {
             maxWidth = MaximumWindowWidth;
@@ -587,19 +582,11 @@ public sealed class AppSettings
             return maxWidth;
         }
 
-        return Math.Clamp(baseWidth * scale, MinimumWindowWidth, maxWidth);
+        return Math.Clamp(width, MinimumWindowWidth, maxWidth);
     }
 
-    public static double CalculateEffectiveWindowWidth(double baseWindowWidth, double scalePercent)
-    {
-        var scale = double.IsFinite(scalePercent)
-            ? ClampLyricsLayoutScalePercent(scalePercent) / 100.0
-            : DefaultLyricsLayoutScalePercent / 100.0;
-        var baseWidth = double.IsFinite(baseWindowWidth)
-            ? Math.Clamp(baseWindowWidth, MinimumWindowWidth, MaximumWindowWidth)
-            : DefaultWindowWidth;
-        return Math.Max(MinimumWindowWidth, baseWidth * scale);
-    }
+    public static double CalculateEffectiveWindowWidth(double windowWidth) => double.IsFinite(windowWidth)
+        ? Math.Clamp(windowWidth, MinimumWindowWidth, MaximumWindowWidth) : DefaultWindowWidth;
 
 }
 

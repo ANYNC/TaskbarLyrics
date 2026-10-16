@@ -4,6 +4,20 @@ namespace TaskbarLyrics.App.Tests;
 
 public sealed class LyricsWebViewScriptFactoryTests
 {
+    [Theory]
+    [InlineData(true, true)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(false, false)]
+    public void FloatingLockStateUsesTheV1Envelope(bool locked, bool hovered)
+    {
+        var script = LyricsWebViewScriptFactory.SetFloatingLockState(locked, hovered);
+        Assert.Contains("\"version\":1", script);
+        Assert.Contains("\"type\":\"floatingLockState\"", script);
+        Assert.Contains(locked ? "\"locked\":true" : "\"locked\":false", script);
+        Assert.Contains(hovered ? "\"hovered\":true" : "\"hovered\":false", script);
+    }
+
     [Fact]
     public void SetLyricsEmitsV1EnvelopeAndClampsProgress()
     {

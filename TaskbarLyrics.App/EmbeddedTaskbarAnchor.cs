@@ -278,7 +278,6 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
         var taskbarHeight = (parentRect.Bottom - parentRect.Top) / pixelsPerDip;
         var width = AppSettings.ClampEffectiveWindowWidth(
             settings.WindowWidth,
-            settings.LyricsLayoutScalePercent,
             taskbarWidth);
         var height = LyricsLayoutMetrics.Create(settings, pixelsPerDip).DesiredWindowHeight;
         height = Math.Min(height, taskbarHeight);
@@ -393,7 +392,6 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
         var reservedWidth = (int)Math.Round(
             (AppSettings.ClampEffectiveWindowWidth(
                 settings.WindowWidth,
-                settings.LyricsLayoutScalePercent,
                 (parentRect.Right - parentRect.Left) / pixelsPerDip) +
                 Math.Max(0, settings.XOffset)) * pixelsPerDip,
             MidpointRounding.AwayFromZero);

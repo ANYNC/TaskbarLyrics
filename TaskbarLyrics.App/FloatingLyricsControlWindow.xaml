@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="浮窗播放控制" WindowStyle="None" ResizeMode="NoResize"
         ShowInTaskbar="False" ShowActivated="False" AllowsTransparency="True" Background="Transparent"
-        Width="420" Height="104" UseLayoutRounding="True">
+        Width="420" Height="96" UseLayoutRounding="True">
     <Window.Resources>
         <SolidColorBrush x:Key="PanelForeground" Color="#F6F7F8" />
         <SolidColorBrush x:Key="PanelSubtle" Color="#A9ADB5" />
@@ -39,7 +39,9 @@
         <Style x:Key="ProgressButton" TargetType="RepeatButton">
             <Setter Property="Focusable" Value="False"/>
             <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="RepeatButton">
-                <Border Height="4" CornerRadius="2" Background="{TemplateBinding Background}"/>
+                <Border Background="Transparent">
+                    <Border Height="3" CornerRadius="1.5" VerticalAlignment="Center" Background="{TemplateBinding Background}"/>
+                </Border>
             </ControlTemplate></Setter.Value></Setter>
         </Style>
         <Style TargetType="Slider">
@@ -48,7 +50,9 @@
                 <Grid><Track x:Name="PART_Track">
                     <Track.DecreaseRepeatButton><RepeatButton Command="Slider.DecreaseLarge" Style="{StaticResource ProgressButton}" Background="{DynamicResource PanelForeground}"/></Track.DecreaseRepeatButton>
                     <Track.IncreaseRepeatButton><RepeatButton Command="Slider.IncreaseLarge" Style="{StaticResource ProgressButton}" Background="{DynamicResource PanelLine}"/></Track.IncreaseRepeatButton>
-                    <Track.Thumb><Thumb Width="12" Height="12"><Thumb.Template><ControlTemplate TargetType="Thumb"><Ellipse Fill="{DynamicResource PanelForeground}"/></ControlTemplate></Thumb.Template></Thumb></Track.Thumb>
+                    <Track.Thumb><Thumb Width="12" Height="12"><Thumb.Template><ControlTemplate TargetType="Thumb">
+                        <Grid Background="Transparent"><Ellipse Width="10" Height="10" HorizontalAlignment="Center" VerticalAlignment="Center" Fill="{DynamicResource PanelForeground}"/></Grid>
+                    </ControlTemplate></Thumb.Template></Thumb></Track.Thumb>
                 </Track></Grid>
                 <ControlTemplate.Triggers>
                     <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.4"/></Trigger>
@@ -58,14 +62,55 @@
         </Style>
     </Window.Resources>
     <Grid x:Name="VisualRoot">
-        <Border x:Name="Surface" Background="Transparent" BorderThickness="0" Padding="12,10,12,8">
+        <Border x:Name="Surface" Background="Transparent" BorderThickness="0" Padding="12,2,12,8">
             <Grid>
                 <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition x:Name="TransportRow" Height="0"/><RowDefinition Height="16"/><RowDefinition Height="14"/></Grid.RowDefinitions>
                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <StackPanel x:Name="Metadata" VerticalAlignment="Center" Margin="0,0,8,6">
+                <Grid x:Name="Metadata" VerticalAlignment="Center" Margin="0,0,8,6">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="18"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <Border x:Name="DragGrip" Width="24" Height="{Binding ActualHeight, ElementName=MetadataText}"
+                            Margin="-6,0,0,0" HorizontalAlignment="Left" Background="Transparent" Cursor="SizeAll"
+                            AutomationProperties.Name="拖动浮窗" MouseLeftButtonDown="OnGripPressed"
+                            MouseMove="OnGripMoved" MouseLeftButtonUp="OnGripReleased" LostMouseCapture="OnGripReleased">
+                        <!-- Lucide derivative: grip-vertical-10.svg (ISC), viewport origin (7,3).
+                             Crop SVG padding so visible dots align with the progress track. -->
+                        <Viewbox Width="10" Height="33" Margin="6,0,0,0" VerticalAlignment="Center"
+                                 HorizontalAlignment="Left" Stretch="Uniform" IsHitTestVisible="False">
+                            <Path Width="10" Height="33" StrokeThickness="2">
+                                <Path.Style>
+                                    <Style TargetType="Path">
+                                        <Setter Property="Stroke" Value="{DynamicResource PanelSubtle}"/>
+                                        <Setter Property="Opacity" Value="0.68"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType={x:Type Border}}}" Value="True">
+                                                <Setter Property="Stroke" Value="{DynamicResource PanelForeground}"/>
+                                                <Setter Property="Opacity" Value="1"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Path.Style>
+                                <Path.Data>
+                                    <GeometryGroup>
+                                        <EllipseGeometry Center="2,2" RadiusX="1" RadiusY="1"/>
+                                        <EllipseGeometry Center="8,2" RadiusX="1" RadiusY="1"/>
+                                        <EllipseGeometry Center="2,9.25" RadiusX="1" RadiusY="1"/>
+                                        <EllipseGeometry Center="8,9.25" RadiusX="1" RadiusY="1"/>
+                                        <EllipseGeometry Center="2,16.5" RadiusX="1" RadiusY="1"/>
+                                        <EllipseGeometry Center="8,16.5" RadiusX="1" RadiusY="1"/>
+                                        <EllipseGeometry Center="2,23.75" RadiusX="1" RadiusY="1"/>
+                                        <EllipseGeometry Center="8,23.75" RadiusX="1" RadiusY="1"/>
+                                        <EllipseGeometry Center="2,31" RadiusX="1" RadiusY="1"/>
+                                        <EllipseGeometry Center="8,31" RadiusX="1" RadiusY="1"/>
+                                    </GeometryGroup>
+                                </Path.Data>
+                            </Path>
+                        </Viewbox>
+                    </Border>
+                    <StackPanel x:Name="MetadataText" Grid.Column="1">
                     <TextBlock x:Name="TitleText" Text="暂无播放" FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource PanelForeground}" TextTrimming="CharacterEllipsis"/>
                     <TextBlock x:Name="ArtistText" Text="当前没有播放内容" FontSize="12" Foreground="{DynamicResource PanelSubtle}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"/>
-                </StackPanel>
+                    </StackPanel>
+                </Grid>
                 <StackPanel x:Name="Actions" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,6">
                     <Button x:Name="PreviousButton" Style="{StaticResource MediaButton}" Click="OnPrevious" AutomationProperties.Name="上一首" IsEnabled="False">
                         <Viewbox Width="22" Height="22"><Canvas Width="24" Height="24">

@@ -1255,7 +1255,6 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             EffectiveCoverCornerRadius = layoutMetrics.CoverCornerRadius,
             EffectiveWindowWidth = AppSettings.ClampEffectiveWindowWidth(
                 _settings.WindowWidth,
-                _settings.LyricsLayoutScalePercent,
                 _settings.UseFloatingWindow
                     ? SystemParameters.WorkArea.Width
                     : taskbarConstraints.MaxWidth),
@@ -1346,7 +1345,6 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             ["effectiveCoverCornerRadius"] = metrics.CoverCornerRadius,
             ["effectiveWindowWidth"] = AppSettings.ClampEffectiveWindowWidth(
                 settings.WindowWidth,
-                settings.LyricsLayoutScalePercent,
                 settings.UseFloatingWindow || !taskbarConstraints.IsSupported
                     ? fallbackWidth
                     : taskbarConstraints.MaxWidth)
