@@ -226,6 +226,8 @@ public partial class LyricsControlPanelWindow : Window
         var environment = await CoreWebView2Environment.CreateAsync(null, userDataFolder);
         await PanelWebView.EnsureCoreWebView2Async(environment);
         var core = PanelWebView.CoreWebView2;
+        core.SetVirtualHostNameToFolderMapping("fonts.taskbarlyrics.local",
+            Path.Combine(AppContext.BaseDirectory, "Assets", "Fonts"), CoreWebView2HostResourceAccessKind.Allow);
         core.Settings.IsStatusBarEnabled = false;
         core.Settings.AreDefaultContextMenusEnabled = false;
         core.Settings.AreDevToolsEnabled = false;

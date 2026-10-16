@@ -163,7 +163,8 @@ internal sealed class FloatingLyricsPanelController : IDisposable
         foreach (var target in _targets)
         {
             if (!Prepare(target)) continue;
-            if (target.CardBounds.Contains(point) && (hoveredRoot == target.Material!.Handle ||
+            var hoverBounds = _active == target ? target.CardBounds : target.LyricsBounds;
+            if (hoverBounds.Contains(point) && (hoveredRoot == target.Material!.Handle ||
                 hoveredRoot == new WindowInteropHelper(target.Window).Handle || hoveredRoot == new WindowInteropHelper(target.Panel!).Handle))
                 hovered = target;
         }

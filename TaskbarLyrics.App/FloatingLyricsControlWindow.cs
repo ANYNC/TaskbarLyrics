@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Input;
@@ -28,6 +29,8 @@ internal partial class FloatingLyricsControlWindow : Window
     internal FloatingLyricsControlWindow(Action<MediaHotkeyAction> execute, Action<TimeSpan> seek)
     {
         InitializeComponent();
+        var fontFolder = new Uri(Path.Combine(AppContext.BaseDirectory, "Assets", "Fonts") + Path.DirectorySeparatorChar);
+        FontFamily = new System.Windows.Media.FontFamily(fontFolder, $"./#{AppSettings.BundledFontFamily}");
         _execute = execute;
         _seek = seek;
         SourceInitialized += OnSourceInitialized;
@@ -58,7 +61,8 @@ internal partial class FloatingLyricsControlWindow : Window
         if (playing != _playing)
         {
             _playing = playing;
-            PlayGlyph.Data = Geometry.Parse(playing ? "M8,5 L8,19 M16,5 L16,19" : "M8,5 L19,12 L8,19 Z");
+            PlayGlyph.Visibility = playing ? Visibility.Collapsed : Visibility.Visible;
+            PauseGlyph.Visibility = playing ? Visibility.Visible : Visibility.Collapsed;
             AutomationProperties.SetName(PlayButton, playing ? "暂停" : "播放");
         }
         SetPalette(light);
