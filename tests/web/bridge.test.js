@@ -8,8 +8,8 @@ const settingsPages = ["sources", "shortcuts", "lyrics", "trackOffsets", "displa
 const persistedSettings = [
   "enableLocalLyrics", "localMusicFolders", "enableGlobalMediaHotkeys", "showLyricsOnStartup", "autoHideWhenNoPlayback",
   "showLyricTranslation", "enableWordScanning", "spectrumDisplayMode", "lyricsLayoutScalePercent", "fontSize", "showCover",
-  "enableControlPanel", "floatingPanelBrightness", "floatingPanelTintOpacity", "floatingPanelBlurAmount", "coverPosition", "coverSize", "coverGap", "coverCornerRadius", "fontFamily", "fontWeight", "lyricsTextAlignment", "foregroundColorMode",
-  "showTextShadow", "toolWindowTheme", "showBackground", "backgroundOpacity", "showBorder", "windowWidth", "horizontalAnchor",
+  "enableControlPanel", "controlPanelTriggerMethod", "controlPanelTriggerCover", "controlPanelTriggerLyrics", "enableFloatingControlPanel", "floatingPanelBrightness", "floatingPanelTintOpacity", "floatingPanelBlurAmount", "coverPosition", "coverSize", "coverGap", "coverCornerRadius", "fontFamily", "fontWeight", "lyricsTextAlignment", "foregroundColorMode",
+  "showTextShadow", "toolWindowTheme", "showBackground", "backgroundOpacity", "showBorder", "windowWidth",
   "xOffset", "yOffset", "forceAlwaysOnTop", "startWithWindows", "autoCheckUpdates"
 ];
 
@@ -59,6 +59,116 @@ function enableDialogDomSupport(dom) {
 }
 
 describe("settings WebView bridge", () => {
+  it("refreshes floating size readouts and collapsed embedded summaries without posting edits", async () => {
+    const { dom, sent, script } = await createSettingsDom();
+    dom.window.eval(script);
+    const document = dom.window.document;
+    const receive = settings => dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings } });
+    receive({ useFloatingWindow: true, windowWidth: 420, floatingWindowWidth: 680,
+      floatingLyricsLayoutScalePercent: 125, showBackground: false, showBorder: true, xOffset: 30, yOffset: -20 });
+    const initialCount = sent.length;
+    expect(document.querySelector("[data-floating-width]").textContent).toBe("680 px");
+    expect(document.querySelector("[data-floating-scale]").textContent).toBe("125%");
+    const summary = document.querySelector("[data-embedded-appearance-summary]");
+    expect(summary.closest("details").open).toBe(false);
+    expect(summary.textContent).toBe("背景关闭 · 边框开启");
+    const positionSummary = document.querySelector("[data-embedded-position-summary]");
+    expect(positionSummary.closest("details").open).toBe(false);
+    expect(positionSummary.textContent).toBe("X 30 · Y -20");
+    expect(positionSummary.title).toBe("X 30 · Y -20");
+    dom.window.settingsApp.receive({ version: 1, type: "lyricsLayoutPreview", payload: {
+      floatingWindowWidth: 720, floatingLyricsLayoutScalePercent: 150
+    } });
+    expect(document.querySelector("[data-floating-width]").textContent).toBe("720 px");
+    expect(document.querySelector('[data-setting="windowWidth"][type="number"]').value).toBe("420");
+    receive({ useFloatingWindow: false, showBackground: true, showBorder: false, xOffset: -100, yOffset: 0 });
+    expect(summary.textContent).toBe("背景开启 · 边框关闭");
+    expect(positionSummary.textContent).toBe("X -100 · Y 0");
+    expect(sent).toHaveLength(initialCount);
+    dom.window.close();
+  });
+
+  it("keeps embedded size readouts independent through floating resize updates and mode changes", async () => {
+    const { dom, sent, script } = await createSettingsDom();
+    dom.window.eval(script);
+    const document = dom.window.document;
+    const initial = {
+      useFloatingWindow: true, showCover: true, lyricsLayoutScalePercent: 100,
+      floatingLyricsLayoutScalePercent: 160, fontSize: 14, coverSize: 34, coverGap: 8,
+      coverCornerRadius: 6, effectiveFontSize: 14, effectiveCoverSize: 34, effectiveCoverGap: 8
+    };
+    const assertEmbeddedPreview = () => {
+      expect(document.querySelector('[data-setting="lyricsLayoutScalePercent"][type="number"]').value).toBe("100");
+      expect(document.querySelector("[data-effective-font-size]").textContent).toBe("14 px");
+      expect(document.querySelector("[data-effective-cover-size]").textContent).toBe("34 px");
+      expect(document.querySelector("[data-effective-cover-gap]").textContent).toBe("8 px");
+      expect(document.querySelector("#layoutScalePreview").hidden).toBe(false);
+    };
+    const receiveState = settings => dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings } });
+    receiveState(initial);
+    const before = sent.length;
+    for (const floatingScale of [210, 250]) {
+      receiveState({ ...initial, floatingLyricsLayoutScalePercent: floatingScale });
+      assertEmbeddedPreview();
+      expect(document.querySelector("[data-floating-scale]").textContent).toBe(`${floatingScale}%`);
+      dom.window.settingsApp.receive({ version: 1, type: "lyricsLayoutPreview", payload: {
+        scalePercent: 100, floatingLyricsLayoutScalePercent: floatingScale,
+        effectiveFontSize: 14, effectiveCoverSize: 34, effectiveCoverGap: 8
+      } });
+      assertEmbeddedPreview();
+    }
+    receiveState({ ...initial, useFloatingWindow: false, floatingLyricsLayoutScalePercent: 250 });
+    assertEmbeddedPreview();
+    expect(sent).toHaveLength(before);
+    dom.window.close();
+  });
+
+  it.each(["embedded", "floating"])("resets only the requested %s profile without selecting its mode", async mode => {
+    const { dom, sent, script } = await createSettingsDom();
+    dom.window.eval(script);
+    dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings: {
+      useFloatingWindow: mode === "embedded", lyricsLayoutScalePercent: 80,
+      floatingLyricsLayoutScalePercent: 160, showCover: true, enableControlPanel: false,
+      enableFloatingControlPanel: true
+    } } });
+    const document = dom.window.document;
+    const selected = document.querySelector("[data-window-mode]:checked").value;
+    const button = document.querySelector(`[data-reset-window-mode="${mode}"]`);
+    expect(button.closest("label")).toBeNull();
+    button.click();
+    expect(sent.at(-1)).toEqual({ version: 1, type: "resetWindowPresentation", payload: mode });
+    expect(document.querySelector("[data-window-mode]:checked").value).toBe(selected);
+    expect(document.querySelector("[data-floating-scale]").textContent).toBe("160%");
+    expect(document.querySelector("#embeddedControlPanelToggle").checked).toBe(false);
+    expect(document.querySelector("#floatingControlPanelToggle").checked).toBe(true);
+    dom.window.close();
+  });
+
+  it.each([false, true])("groups mode-specific controls and preserves shared controls for floating=%s", async floating => {
+    const { dom, script } = await createSettingsDom();
+    dom.window.eval(script);
+    dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings: {
+      useFloatingWindow: floating, showBackground: true, showCover: true,
+      enableControlPanel: true, enableFloatingControlPanel: false
+    } } });
+    const document = dom.window.document;
+    for (const key of ["windowWidth", "lyricsLayoutScalePercent", "xOffset", "yOffset", "showBackground", "backgroundOpacity", "showBorder"]) {
+      const control = document.querySelector(`[data-setting="${key}"]`);
+      expect(control.closest(".embedded-window-mode-card")).not.toBeNull();
+      expect(control.disabled).toBe(floating);
+    }
+    for (const key of ["floatingPanelBlurAmount", "floatingPanelBrightness", "floatingPanelTintOpacity"]) {
+      const control = document.querySelector(`[data-setting="${key}"]`);
+      expect(control.closest(".floating-window-mode-card")).not.toBeNull();
+      expect(control.disabled).toBe(!floating);
+    }
+    for (const key of ["fontFamily", "showCover", "lyricsTextAlignment"]) {
+      expect(document.querySelector(`[data-setting="${key}"]`).closest(".window-mode-card")).toBeNull();
+    }
+    expect(document.querySelector("#displayMonitorList")).not.toBeNull();
+    dom.window.close();
+  });
+
   it.each(["floatingPanelBrightness", "floatingPanelTintOpacity"])("previews and commits bounded floating appearance %s", async key => {
     const { dom, sent, script } = await createSettingsDom();
     dom.window.eval(script);
@@ -86,7 +196,7 @@ describe("settings WebView bridge", () => {
     expect(number.value).toBe("30");
     dom.window.close();
   });
-  it("shares the control panel preference with the floating hover switch without requiring a cover", async () => {
+  it("keeps the floating hover switch independent without requiring a cover", async () => {
     const { dom, script, sent } = await createSettingsDom();
     dom.window.eval(script);
     dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings: {
@@ -97,8 +207,8 @@ describe("settings WebView bridge", () => {
     expect(toggle.checked).toBe(true);
     expect(dom.window.document.querySelector("#embeddedControlPanelToggle").disabled).toBe(true);
     toggle.click();
-    expect(sent.at(-1).payload).toEqual({ key: "enableControlPanel", value: false });
-    expect(dom.window.document.querySelector("#embeddedControlPanelToggle").checked).toBe(false);
+    expect(sent.at(-1).payload).toEqual({ key: "enableFloatingControlPanel", value: false });
+    expect(dom.window.document.querySelector("#embeddedControlPanelToggle").checked).toBe(true);
     dom.window.close();
   });
   it("keeps saved player card order and gear settings separate", async () => {
@@ -714,7 +824,7 @@ describe("settings WebView bridge", () => {
     });
     expect(document.querySelector('input[data-display-id="display-a"]')).toBeNull();
     expect(document.querySelector('[data-display-id="display-a"] .is-enabled')).toBeNull();
-    expect(document.querySelector("#displayMonitorHint").textContent).toBe("已连接 2 台显示器，歌词将在全部任务栏显示。");
+    expect(document.querySelector("#displayMonitorHint").textContent).toBe("已连接 2 台显示器，歌词将在全部显示器显示。");
   });
 
   it("requires consent before changing an unauthorized spectrum mode", async () => {
@@ -1307,6 +1417,16 @@ describe("settings WebView bridge", () => {
     });
 
     const slider = document.querySelector('input[type="range"][data-setting="lyricsLayoutScalePercent"]');
+    if (useFloatingWindow) {
+      expect(slider.disabled).toBe(true);
+      const before = sent.length;
+      slider.value = "125";
+      slider.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+      slider.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+      expect(sent).toHaveLength(before);
+      dom.window.close();
+      return;
+    }
     slider.value = "125";
     slider.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
 
@@ -1343,10 +1463,10 @@ describe("settings WebView bridge", () => {
 
     expect(document.querySelector("[data-effective-font-size]").textContent).toBe("17.5 px");
     expect(document.querySelector("[data-effective-cover-size]").textContent).toBe("43 px");
-    expect(document.querySelector("[data-effective-window-width]").textContent).toBe("420 px");
+    expect(document.querySelector("[data-effective-window-width]")).toBeNull();
     expect(document.querySelector('input[type="number"][data-setting="windowWidth"]').value).toBe("420");
     expect(sent.filter(message => message.payload?.key === "windowWidth")).toHaveLength(0);
-    expect(document.querySelector(".layout-scale-row small").textContent).toContain("窗口宽度和 X/Y 偏移保持不变");
+    expect(document.querySelector("[data-reset-layout-scale]").closest(".mode-scale-footer").contains(document.querySelector("#layoutScalePreview"))).toBe(true);
     expect(document.querySelector("#layoutScaleAnnouncement").textContent).toContain("缩放已设为 125%");
   });
 
@@ -1396,6 +1516,66 @@ describe("settings WebView bridge", () => {
     });
   });
 
+  it("offers single method selection and independent regions without permitting an empty selection", async () => {
+    const { dom, sent, script } = await createSettingsDom();
+    dom.window.eval(script);
+    const document = dom.window.document;
+    const receive = settings => dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings } });
+    receive({ useFloatingWindow: false, showCover: true, enableControlPanel: true });
+    const cover = document.querySelector('[data-setting="controlPanelTriggerCover"]');
+    const lyrics = document.querySelector('[data-setting="controlPanelTriggerLyrics"]');
+    const method = document.querySelector('[data-setting="controlPanelTriggerMethod"][value="Hover"]');
+    expect(cover.checked).toBe(true);
+    expect(lyrics.checked).toBe(false);
+    expect(document.querySelector('[data-setting="controlPanelTriggerMethod"][value="Click"]').checked).toBe(true);
+    const before = sent.length;
+    cover.click();
+    expect(cover.checked).toBe(true);
+    expect(sent).toHaveLength(before);
+    lyrics.click();
+    expect(lyrics.checked && cover.checked).toBe(true);
+    expect(sent.at(-1).payload).toEqual({ key: "controlPanelTriggerLyrics", value: true });
+    cover.click();
+    expect(cover.checked).toBe(false);
+    expect(sent.at(-1).payload).toEqual({ key: "controlPanelTriggerCover", value: false });
+    method.click();
+    expect(sent.at(-1).payload).toEqual({ key: "controlPanelTriggerMethod", value: "Hover" });
+    document.querySelector('#embeddedControlPanelToggle').click();
+    expect(cover.disabled && lyrics.disabled && method.disabled).toBe(true);
+    expect(lyrics.checked && method.checked).toBe(true);
+    document.querySelector('#embeddedControlPanelToggle').click();
+    expect(lyrics.disabled || method.disabled).toBe(false);
+    lyrics.click();
+    expect(lyrics.checked).toBe(true);
+    receive({ useFloatingWindow: true, showCover: true, enableControlPanel: true,
+      controlPanelTriggerMethod: "Hover", controlPanelTriggerCover: false, controlPanelTriggerLyrics: true });
+    expect(cover.disabled && lyrics.disabled && method.disabled).toBe(true);
+    expect(method.checked && lyrics.checked).toBe(true);
+    dom.window.close();
+  });
+
+  it("retains keyboard segmented navigation and enables lyrics when the cover is hidden", async () => {
+    const { dom, sent, script } = await createSettingsDom();
+    dom.window.eval(script);
+    const document = dom.window.document;
+    dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings: {
+      useFloatingWindow: false, showCover: true, enableControlPanel: true
+    } } });
+    const click = document.querySelector('[data-setting="controlPanelTriggerMethod"][value="Click"]');
+    click.focus();
+    click.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true, cancelable: true }));
+    expect(sent.at(-1).payload).toEqual({ key: "controlPanelTriggerMethod", value: "Hover" });
+    document.querySelector('[data-setting="showCover"]').click();
+    expect(document.querySelector('[data-setting="controlPanelTriggerCover"]').disabled).toBe(true);
+    expect(document.querySelector('[data-setting="controlPanelTriggerLyrics"]').checked).toBe(true);
+    expect(document.querySelector('#embeddedControlPanelToggle').disabled).toBe(false);
+    const count = sent.length;
+    document.querySelector('[data-setting="controlPanelTriggerLyrics"]').click();
+    expect(sent).toHaveLength(count);
+    expect(document.querySelector('[data-setting="controlPanelTriggerLyrics"]').checked).toBe(true);
+    dom.window.close();
+  });
+
   it("loads and saves the cover control panel switch independently of cover visibility", async () => {
     const { dom, sent, script } = await createSettingsDom();
     dom.window.eval(script);
@@ -1416,7 +1596,7 @@ describe("settings WebView bridge", () => {
 
   it.each([
     [false, true, false],
-    [false, false, true],
+    [false, false, false],
     [true, true, true],
     [true, false, true]
   ])("gates the embedded control panel switch for floating=%s, cover=%s", async (floating, showCover, disabled) => {
@@ -1429,7 +1609,7 @@ describe("settings WebView bridge", () => {
     const document = dom.window.document;
     const toggle = document.querySelector('input[data-setting="enableControlPanel"]');
     const row = document.querySelector("#embeddedControlPanelRow");
-    expect(document.querySelectorAll('input[data-setting="enableControlPanel"]')).toHaveLength(2);
+    expect(document.querySelectorAll('input[data-setting="enableControlPanel"]')).toHaveLength(1);
     expect(row.closest(".embedded-window-mode-card")).not.toBeNull();
     expect(row.closest(".window-mode-choice")).toBeNull();
     expect(toggle.disabled).toBe(disabled);
@@ -1471,15 +1651,17 @@ describe("settings WebView bridge", () => {
     toggle.click();
     const cover = document.querySelector('input[data-setting="showCover"]');
     cover.click();
-    expect(toggle.disabled).toBe(true);
+    expect(toggle.disabled).toBe(false);
     expect(toggle.checked).toBe(true);
+    expect(document.querySelector('[data-setting="controlPanelTriggerCover"]').disabled).toBe(true);
+    expect(document.querySelector('[data-setting="controlPanelTriggerLyrics"]').checked).toBe(true);
     cover.click();
     expect(toggle.disabled).toBe(false);
     expect(toggle.checked).toBe(true);
     expect(sent.filter(message => message.type === "update" && message.payload.key === "enableControlPanel").map(message => message.payload.value)).toEqual([false, true]);
   });
 
-  it("keeps X and Y offset sliders synchronized with numeric inputs", async () => {
+  it("keeps each offset slider synchronized with its editable value above", async () => {
     const { dom, sent, script } = await createSettingsDom();
     const document = dom.window.document;
     dom.window.eval(script);
@@ -1503,20 +1685,19 @@ describe("settings WebView bridge", () => {
       }
     });
 
-    const xSlider = document.querySelector('input[type="range"][data-setting="xOffset"]');
     const xNumber = document.querySelector('input[type="number"][data-setting="xOffset"]');
-    const ySlider = document.querySelector('input[type="range"][data-setting="yOffset"]');
     const yNumber = document.querySelector('input[type="number"][data-setting="yOffset"]');
+    const xSlider = document.querySelector('input[type="range"][data-setting="xOffset"]');
+    const ySlider = document.querySelector('input[type="range"][data-setting="yOffset"]');
 
-    expect(xSlider.value).toBe("30");
     expect(xNumber.value).toBe("30");
-    expect(ySlider.value).toBe("-20");
     expect(yNumber.value).toBe("-20");
 
     xSlider.value = "120";
     xSlider.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
 
     expect(xNumber.value).toBe("120");
+    expect(document.querySelector("[data-embedded-position-summary]").textContent).toBe("X 120 · Y -20");
     expect(sent.at(-1)).toEqual({
       version: 1,
       type: "previewUpdate",
@@ -1533,8 +1714,10 @@ describe("settings WebView bridge", () => {
 
     yNumber.value = "-75";
     yNumber.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
-
     expect(ySlider.value).toBe("-75");
+    expect(xNumber.value).toBe("120");
+    expect(document.querySelector("[data-embedded-position-summary]").textContent).toBe("X 120 · Y -75");
+
     expect(sent.at(-1)).toEqual({
       version: 1,
       type: "previewUpdate",
@@ -1543,7 +1726,6 @@ describe("settings WebView bridge", () => {
 
     yNumber.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
 
-    expect(ySlider.value).toBe("-75");
     expect(sent.at(-1)).toEqual({
       version: 1,
       type: "update",
@@ -1585,11 +1767,20 @@ describe("settings WebView bridge", () => {
     for (const key of ["xOffset", "yOffset"]) {
       const number = document.querySelector(`input[type="number"][data-setting="${key}"]`);
       const slider = document.querySelector(`input[type="range"][data-setting="${key}"]`);
-      expect(number.value).toBe("0");
       expect(slider.value).toBe("0");
-      expect(Number(slider.min)).toBe(key === "xOffset" ? minX : minY);
-      expect(Number(slider.max)).toBe(key === "xOffset" ? maxX : maxY);
-
+      expect(slider.min).toBe(number.min);
+      expect(slider.max).toBe(number.max);
+      expect(number.value).toBe("0");
+      expect(Number(number.min)).toBe(key === "xOffset" ? minX : minY);
+      expect(Number(number.max)).toBe(key === "xOffset" ? maxX : maxY);
+      if (floating) {
+        expect(number.disabled).toBe(true);
+        expect(slider.disabled).toBe(true);
+        number.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+        number.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+        expect(sent).toHaveLength(initialCount);
+        continue;
+      }
       number.value = "-1";
       number.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
       number.value = "0";
@@ -1599,18 +1790,10 @@ describe("settings WebView bridge", () => {
       expect(sent.at(-1)).toEqual({ version: 1, type: "update", payload: { key, value: 0 } });
       expect(number.value).toBe("0");
       expect(slider.value).toBe("0");
-
-      slider.value = "-1";
-      slider.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
-      slider.value = "0";
-      slider.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
-      expect(sent.at(-1)).toEqual({ version: 1, type: "update", payload: { key, value: 0 } });
-      expect(number.value).toBe("0");
-      expect(slider.value).toBe("0");
     }
   });
 
-  it("coalesces repeated slider input into one preview per animation frame", async () => {
+  it("coalesces repeated offset numeric input into one preview per animation frame", async () => {
     const { dom, sent, script, runAnimationFrames } = await createSettingsDom({ deferAnimationFrames: true });
     const document = dom.window.document;
     dom.window.eval(script);
@@ -1633,7 +1816,7 @@ describe("settings WebView bridge", () => {
         fonts: []
       }
     });
-    const slider = document.querySelector('input[type="range"][data-setting="xOffset"]');
+    const slider = document.querySelector('input[type="number"][data-setting="xOffset"]');
     const beforeInputCount = sent.length;
 
     slider.value = "10";
@@ -1722,7 +1905,7 @@ describe("settings WebView bridge", () => {
     const document = dom.window.document;
     const sliders = Array.from(document.querySelectorAll('input[type="range"][data-setting]'));
 
-    expect(sliders).toHaveLength(10);
+    expect(sliders.length).toBe(10);
     sliders.forEach(slider => {
       const control = slider.closest(".slider-number-control");
       expect(control).not.toBeNull();
@@ -1772,6 +1955,12 @@ describe("settings WebView bridge", () => {
     const topmostRow = document.querySelector("#floatingTopmostRow");
     const topmostControl = topmostRow.querySelector('[data-setting="forceAlwaysOnTop"]');
     const embeddedNote = document.querySelector(".embedded-mode-note");
+    const widthRow = document.querySelector("#embeddedWindowWidthRow");
+    const widthControls = [...widthRow.querySelectorAll('[data-setting="windowWidth"]')];
+    expect(widthRow.closest(".embedded-window-mode-card")).not.toBeNull();
+    expect(widthRow.closest(".advanced-size-panel")).toBeNull();
+    expect(widthControls).toHaveLength(2);
+    expect(widthControls.every(control => !control.disabled)).toBe(true);
     const dependentControls = [...document.querySelectorAll('[data-depends="useFloatingWindow"] input, [data-depends="useFloatingWindow"] button')];
     expect(embeddedNote.closest(".embedded-window-mode-card")).not.toBeNull();
     expect(embeddedNote.closest(".window-mode-choice")).toBeNull();
@@ -1793,6 +1982,8 @@ describe("settings WebView bridge", () => {
     expect(floatingMode.tabIndex).toBe(0);
     expect(topmostRow.hidden).toBe(false);
     expect(dependentControls.every(control => !control.disabled)).toBe(true);
+    expect(widthControls.every(control => control.disabled)).toBe(true);
+    expect(widthRow.classList.contains("is-disabled")).toBe(true);
     expect(sent.at(-1)).toEqual({
       version: 1,
       type: "update",
@@ -1800,6 +1991,13 @@ describe("settings WebView bridge", () => {
     });
 
     topmostControl.checked = false;
+    const messagesBeforeDisabledWidth = sent.length;
+    widthControls.forEach(control => {
+      control.value = "350";
+      control.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+      control.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+    });
+    expect(sent).toHaveLength(messagesBeforeDisabledWidth);
     topmostControl.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
     expect(floatingMode.checked).toBe(true);
     expect(sent.at(-1)).toEqual({
@@ -1817,6 +2015,7 @@ describe("settings WebView bridge", () => {
     expect(topmostControl.disabled).toBe(true);
     expect(topmostControl.checked).toBe(false);
     expect(dependentControls.every(control => control.disabled)).toBe(true);
+    expect(widthControls.every(control => !control.disabled)).toBe(true);
     expect(sent.at(-1)).toEqual({
       version: 1,
       type: "update",
@@ -2052,18 +2251,13 @@ describe("settings WebView bridge", () => {
     key(alignmentLeft, "End");
     expect(sent.at(-1).payload).toEqual({ key: "lyricsTextAlignment", value: "Right" });
     expect(coverLeft.checked).toBe(true);
-    const anchorCenter = document.querySelector('input[data-setting="horizontalAnchor"][value="Center"]');
-    expect(anchorCenter.checked).toBe(true);
-    expect(document.querySelector('.select-trigger[data-setting="horizontalAnchor"]')).toBeNull();
-    document.querySelector('input[data-setting="horizontalAnchor"][value="Left"]').closest("label").click();
-    expect(sent.at(-1).payload).toEqual({ key: "horizontalAnchor", value: "Left" });
-    key(document.querySelector('input[data-setting="horizontalAnchor"][value="Left"]'), "End");
-    expect(sent.at(-1).payload).toEqual({ key: "horizontalAnchor", value: "Right" });
+    expect(document.querySelector('[data-setting="horizontalAnchor"]')).toBeNull();
+    expect(sent.filter(message => message.payload?.key === "horizontalAnchor")).toHaveLength(0);
     expect(coverLeft.checked).toBe(true);
     expect(document.querySelector('input[data-setting="lyricsTextAlignment"][value="Right"]').checked).toBe(true);
     const finalCount = sent.length;
     dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings: { showCover: true, coverPosition: "Left", lyricsTextAlignment: "Right", horizontalAnchor: "Center" }, fonts: [] } });
-    expect(anchorCenter.checked).toBe(true);
+    expect(document.querySelector('[data-setting="horizontalAnchor"]')).toBeNull();
     expect(sent).toHaveLength(finalCount);
   });
 

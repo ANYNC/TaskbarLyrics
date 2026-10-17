@@ -7,6 +7,20 @@ namespace TaskbarLyrics.App.Tests;
 public sealed class FloatingWindowPositionTests
 {
     [Fact]
+    public void ResetClearsAllMonitorPositionsAndPersistsTheEmptyProfile()
+    {
+        using var files = new PositionFiles();
+        var store = new FloatingWindowPositionStore(files.Path);
+        store.Remember("primary", new FloatingWindowPosition("a", 0.2, 0.5));
+        store.Remember("mirror", new FloatingWindowPosition("b", 0.8, 0.1));
+        store.Clear();
+        var loaded = new FloatingWindowPositionStore(files.Path);
+        Assert.Null(loaded.Get("primary"));
+        Assert.Null(loaded.Get("mirror"));
+        Assert.Single(Directory.GetFiles(files.Directory));
+    }
+
+    [Fact]
     public void MissingPositionFileKeepsExistingDefaultAndDoesNotCreateData()
     {
         using var files = new PositionFiles();
@@ -46,6 +60,7 @@ public sealed class FloatingWindowPositionTests
         var store = new FloatingWindowPositionStore(files.Path);
         Assert.Null(store.Get("a"));
         store.Remember("a", new FloatingWindowPosition("monitor", 0.5, 0.5));
+        store.Clear();
         Assert.Equal(json, File.ReadAllText(files.Path));
     }
 

@@ -55,6 +55,13 @@ internal sealed class FloatingWindowPositionStore
         if (_positions.Remove(key)) Save();
     }
 
+    internal void Clear()
+    {
+        if (_positions.Count == 0) return;
+        _positions.Clear();
+        Save();
+    }
+
     private void Save()
     {
         if (!_writable) return;

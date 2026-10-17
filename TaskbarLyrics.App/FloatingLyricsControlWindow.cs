@@ -139,7 +139,7 @@ internal partial class FloatingLyricsControlWindow : Window
         Resources["PanelButtonText"] = _highContrast ? SystemColors.HighlightTextBrush : new SolidColorBrush(light ? Colors.White : Color.FromRgb(32, 33, 36));
     }
 
-    internal void Prepare(Window owner, FloatingLyricsPanelPlacement placement, double scale)
+    internal void Prepare(Window owner, FloatingLyricsPanelPlacement placement, double scale, bool playbackControls = true)
     {
         if (IsClosed) return;
         Owner = owner;
@@ -147,11 +147,15 @@ internal partial class FloatingLyricsControlWindow : Window
         KeepOpenForKeyboard = false;
         Width = placement.Bounds.Width / scale;
         Height = placement.Bounds.Height / scale;
-        var narrow = Width < 220;
+        var narrow = playbackControls && Width < 220;
+        Actions.Visibility = SeekSlider.Visibility = ElapsedText.Visibility = DurationText.Visibility =
+            playbackControls ? Visibility.Visible : Visibility.Collapsed;
+        SeekRow.Height = new GridLength(playbackControls ? 16 : 0);
+        TimeRow.Height = new GridLength(playbackControls ? 14 : 0);
         System.Windows.Controls.Grid.SetRow(Actions, narrow ? 1 : 0);
         System.Windows.Controls.Grid.SetColumn(Actions, narrow ? 0 : 1);
         System.Windows.Controls.Grid.SetColumnSpan(Actions, narrow ? 2 : 1);
-        System.Windows.Controls.Grid.SetColumnSpan(Metadata, narrow ? 2 : 1);
+        System.Windows.Controls.Grid.SetColumnSpan(Metadata, narrow || !playbackControls ? 2 : 1);
         TransportRow.Height = new GridLength(narrow ? 34 : 0);
         PreviousButton.Width = NextButton.Width = narrow ? 20 : 32;
         PlayButton.Width = PlayButton.Height = narrow ? 28 : 36;

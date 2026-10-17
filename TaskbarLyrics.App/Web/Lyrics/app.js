@@ -18,6 +18,12 @@ const incomingTranslationOriginalScanTextEl = document.getElementById("incomingT
 const incomingTranslationLineEl = document.getElementById("incomingTranslationLine");
 const incomingTranslationTextEl = document.getElementById("incomingTranslationText");
 const coverEl = document.getElementById("cover");
+const panelLyricsEl = document.querySelector(".lyrics-pane");
+let panelTriggerMethod = "Click";
+let panelTriggerCover = true;
+let panelTriggerLyrics = false;
+let panelTriggerEnabled = true;
+let panelHoverTimer = 0;
 const coverImageEl = document.getElementById("coverImage");
 const coverImageNextEl = document.getElementById("coverImageNext");
 const coverFallbackEl = document.getElementById("coverFallback");
@@ -87,23 +93,60 @@ coverEl?.addEventListener("mousedown", event => {
   if (document.activeElement === coverEl) coverEl.blur();
 });
 
-coverEl?.addEventListener("click", () => {
-  if (coverEl.disabled || root.classList.contains("cover-hidden")) return;
-  const bounds = coverEl.getBoundingClientRect();
-  window.taskbarLyricsBridge?.post("coverClick", {
+function postPanelTrigger(element, area, activation) {
+  const bounds = element.getBoundingClientRect();
+  const payload = {
     x: bounds.x,
     y: bounds.y,
     width: bounds.width,
     height: bounds.height,
     viewportWidth: window.innerWidth,
     viewportHeight: window.innerHeight
-  });
+  };
+  // Keep the existing cover message for default activation and floating lock/unlock.
+  if (area === "Cover" && activation === "Click") window.taskbarLyricsBridge?.post("coverClick", payload);
+  else window.taskbarLyricsBridge?.post("controlPanelTrigger", { ...payload, area, activation });
+}
+
+function panelAreaEnabled(area) {
+  return panelTriggerEnabled && !root.classList.contains("floating-controls-enabled") &&
+    (area === "Cover" ? panelTriggerCover && !root.classList.contains("cover-hidden") : panelTriggerLyrics);
+}
+
+coverEl?.addEventListener("click", event => {
+  if (coverEl.disabled || root.classList.contains("cover-hidden")) return;
+  if (root.classList.contains("floating-controls-enabled")) postPanelTrigger(coverEl, "Cover", "Click");
+  else if (panelAreaEnabled("Cover") && (panelTriggerMethod === "Click" || event.detail === 0))
+    postPanelTrigger(coverEl, "Cover", event.detail === 0 && panelTriggerMethod === "Hover" ? "Keyboard" : "Click");
 });
+
+panelLyricsEl?.addEventListener("click", () => {
+  if (!panelAreaEnabled("Lyrics") || panelTriggerMethod !== "Click" || window.getSelection()?.toString()) return;
+  postPanelTrigger(panelLyricsEl, "Lyrics", "Click");
+});
+panelLyricsEl?.addEventListener("keydown", event => {
+  if (event.target !== panelLyricsEl || !panelAreaEnabled("Lyrics") || !["Enter", " "].includes(event.key) || event.repeat) return;
+  event.preventDefault();
+  postPanelTrigger(panelLyricsEl, "Lyrics", "Keyboard");
+});
+for (const [element, area] of [[coverEl, "Cover"], [panelLyricsEl, "Lyrics"]]) {
+  element?.addEventListener("mouseenter", () => {
+    clearTimeout(panelHoverTimer);
+    if (panelTriggerMethod !== "Hover" || !panelAreaEnabled(area)) return;
+    panelHoverTimer = setTimeout(() => {
+      panelHoverTimer = 0;
+      if (panelTriggerMethod === "Hover" && panelAreaEnabled(area)) postPanelTrigger(element, area, "Hover");
+    }, 250);
+  });
+  element?.addEventListener("mouseleave", () => clearTimeout(panelHoverTimer));
+}
+window.addEventListener("blur", () => clearTimeout(panelHoverTimer));
 
 function setControlPanelOpen(open) {
   if (!coverEl) return;
   coverEl.classList.toggle("panel-open", open === true);
   coverEl.setAttribute("aria-expanded", String(open === true));
+  if (panelLyricsEl?.getAttribute("role") === "button") panelLyricsEl.setAttribute("aria-expanded", String(open === true));
 }
 
 function setFloatingLockState(locked, hovered = false) {
@@ -2350,9 +2393,22 @@ const lyricsApi = {
     root.style.setProperty("--font-size", `${requestedFontSize}px`);
     root.style.setProperty("--font-weight", window.taskbarLyricsState.normalizeWeight(payload.fontWeight));
     root.classList.toggle("cover-hidden", payload.showCover === false);
+    clearTimeout(panelHoverTimer);
+    panelTriggerEnabled = payload.enableControlPanel !== false;
+    panelTriggerMethod = payload.controlPanelTriggerMethod === "Hover" ? "Hover" : "Click";
+    panelTriggerCover = payload.controlPanelTriggerCover !== false;
+    panelTriggerLyrics = payload.controlPanelTriggerLyrics === true;
+    if (panelLyricsEl) {
+      const enabled = panelAreaEnabled("Lyrics");
+      panelLyricsEl.classList.toggle("panel-trigger", enabled);
+      for (const [name, value] of [["role", "button"], ["tabindex", "0"], ["aria-label", "展开播放控制"], ["aria-expanded", coverEl?.getAttribute("aria-expanded") || "false"]]) {
+        if (enabled) panelLyricsEl.setAttribute(name, value);
+        else panelLyricsEl.removeAttribute(name);
+      }
+    }
     if (coverEl) {
-      coverEl.disabled = payload.enableControlPanel === false;
-      if (coverEl.disabled || payload.showCover === false) setControlPanelOpen(false);
+      coverEl.disabled = !panelTriggerEnabled || !root.classList.contains("floating-controls-enabled") && !panelTriggerCover;
+      if (!panelTriggerEnabled || payload.showCover === false && !panelAreaEnabled("Lyrics")) setControlPanelOpen(false);
     }
 
     const coverSize = Number(payload.coverSize);

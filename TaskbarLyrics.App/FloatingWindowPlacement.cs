@@ -10,7 +10,6 @@ internal sealed class FloatingWindowPlacement(Window window, FloatingWindowPosit
     private DisplayMonitor? _home;
     private DisplayMonitor? _display;
     private IReadOnlyList<DisplayMonitor> _displays = [];
-    private (double X, double Y, LyricsHorizontalAnchor Anchor)? _offsets;
     private bool _enabled;
     internal bool IsDragging { get; private set; }
     internal DisplayMonitor? Display => IsDragging
@@ -18,14 +17,13 @@ internal sealed class FloatingWindowPlacement(Window window, FloatingWindowPosit
 
     internal void Configure(AppSettings settings)
     {
-        var offsets = (settings.XOffset, settings.YOffset, settings.HorizontalAnchor);
-        if (_enabled && settings.UseFloatingWindow && _offsets is not null && _offsets != offsets && _home is not null)
-        {
-            store.Forget(_home.Id);
-            _display = _home;
-        }
-        _offsets = offsets;
         _enabled = settings.UseFloatingWindow;
+    }
+
+    internal void ResetPositions()
+    {
+        store.Clear();
+        _display = _home;
     }
 
     internal bool Refresh(DisplayMonitor home)

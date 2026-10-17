@@ -5,10 +5,25 @@
     return textAlignments.has(value) ? value : "Left";
   }
 
+  function normalizeControlPanelTriggers(state) {
+    state.controlPanelTriggerMethod = state.controlPanelTriggerMethod === "Hover" ? "Hover" : "Click";
+    state.controlPanelTriggerCover = state.controlPanelTriggerCover !== false;
+    state.controlPanelTriggerLyrics = state.controlPanelTriggerLyrics === true;
+    if (!state.controlPanelTriggerLyrics && (!state.controlPanelTriggerCover || state.showCover === false)) {
+      if (state.showCover === false) state.controlPanelTriggerLyrics = true;
+      else state.controlPanelTriggerCover = true;
+    }
+    return state;
+  }
+
   window.taskbarLyricsSettingsState = {
+    normalizeControlPanelTriggers,
     create(nextState, previousState, foregroundColor) {
-      return {
+      return normalizeControlPanelTriggers({
         ...nextState,
+        floatingWindowWidth: nextState?.floatingWindowWidth ?? nextState?.windowWidth ?? 420,
+        enableFloatingControlPanel: nextState?.enableFloatingControlPanel ?? nextState?.enableControlPanel ?? true,
+        floatingLyricsLayoutScalePercent: nextState?.floatingLyricsLayoutScalePercent ?? nextState?.lyricsLayoutScalePercent ?? 100,
         lyricsTextAlignment: normalizeLyricsTextAlignment(nextState?.lyricsTextAlignment),
         coverPosition: nextState?.coverPosition === "Right" ? "Right" : "Left",
         floatingPanelBrightness: Number.isFinite(Number(nextState?.floatingPanelBrightness)) ? Math.min(1, Math.max(0, Number(nextState.floatingPanelBrightness))) : 0.45,
@@ -18,7 +33,7 @@
         foregroundColor,
         trackOffsetSourceFilter: previousState?.trackOffsetSourceFilter ?? "All",
         trackOffsetSort: previousState?.trackOffsetSort ?? "updated"
-      };
+      });
     }
   };
 })();

@@ -1,9 +1,11 @@
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Threading;
 using Microsoft.Web.WebView2.Core;
 using TaskbarLyrics.Core.Models;
 using TaskbarLyrics.Core.Utilities;
@@ -27,6 +29,10 @@ public partial class LyricsControlPanelWindow : Window
     private bool _isWebReady;
     private bool _isDisposed;
     private bool _canDismissOnDeactivate;
+    private readonly DispatcherTimer _hoverTimer;
+    private Window? _hoverSource;
+    private Rect _hoverSourceBounds;
+    private long? _hoverLeftAt;
     private int _showVersion;
     private string _title = string.Empty;
     private string _artist = string.Empty;
@@ -51,6 +57,7 @@ public partial class LyricsControlPanelWindow : Window
     private int _slideLastY;
 
     internal event EventHandler? Hidden;
+    internal bool IsClosing => _isExitSlide;
 
     internal LyricsControlPanelWindow(Action<MediaHotkeyAction> executeAction,
         Action openSettings, Action toggleTranslation, Action<TimeSpan> seek)
@@ -60,6 +67,11 @@ public partial class LyricsControlPanelWindow : Window
         _openSettings = openSettings;
         _toggleTranslation = toggleTranslation;
         _seek = seek;
+        _hoverTimer = new DispatcherTimer(DispatcherPriority.Background, Dispatcher)
+        {
+            Interval = TimeSpan.FromMilliseconds(50)
+        };
+        _hoverTimer.Tick += OnHoverTick;
         SourceInitialized += OnSourceInitialized;
         NativeWindowTheme.ThemeChanged += OnThemeChanged;
     }
@@ -118,7 +130,40 @@ public partial class LyricsControlPanelWindow : Window
         PushTimeline();
     }
 
-    internal async Task ShowNearAsync(Rect coverBoundsPx, DisplayMonitor display, CoverPosition coverPosition)
+    internal void TrackHoverSource(Window source, Rect boundsPx)
+    {
+        _canDismissOnDeactivate = false;
+        _hoverSource = source;
+        _hoverSourceBounds = boundsPx;
+        _hoverLeftAt = null;
+        _hoverTimer.Start();
+    }
+
+    private void OnHoverTick(object? sender, EventArgs e)
+    {
+        if (_hoverSource is not { IsVisible: true } source)
+        {
+            HidePanel(immediate: true);
+            return;
+        }
+        if (!GetCursorPos(out var cursor)) return;
+        var point = new Point(cursor.X, cursor.Y);
+        var hoveredRoot = GetAncestor(WindowFromPoint(cursor), 2);
+        var sourceRoot = GetAncestor(new WindowInteropHelper(source).Handle, 2);
+        var panelRoot = new WindowInteropHelper(this).Handle;
+        var overSource = hoveredRoot == sourceRoot && _hoverSourceBounds.Contains(point);
+        var overPanel = hoveredRoot == panelRoot && NativeWindowInteraction.GetScreenBounds(this).Contains(point);
+        if (overSource || overPanel || IsActive && Mouse.LeftButton == MouseButtonState.Pressed)
+        {
+            _hoverLeftAt = null;
+            return;
+        }
+        _hoverLeftAt ??= Environment.TickCount64;
+        // The panel is a separate HWND, with a gap above the taskbar. Allow crossing it without collapsing.
+        if (Environment.TickCount64 - _hoverLeftAt >= 350) HidePanel();
+    }
+
+    internal async Task ShowNearAsync(Rect coverBoundsPx, DisplayMonitor display, CoverPosition coverPosition, bool activate = true)
     {
         if (_isDisposed)
         {
@@ -170,8 +215,8 @@ public partial class LyricsControlPanelWindow : Window
             Show();
             var (target, slideDistance) = PositionNear(coverBoundsPx, workAreaPx, displayScale, coverPosition);
             StartSlide(target, slideDistance);
-            _canDismissOnDeactivate = true;
-            Activate();
+            _canDismissOnDeactivate = activate;
+            if (activate) Activate();
             Log.Diagnostic("CONTROL_PANEL", "WebView panel shown");
         }
         catch
@@ -184,6 +229,9 @@ public partial class LyricsControlPanelWindow : Window
 
     internal void HidePanel(bool immediate = false)
     {
+        _hoverTimer.Stop();
+        _hoverSource = null;
+        _hoverLeftAt = null;
         if (_isExitSlide && !immediate)
         {
             return;
@@ -208,6 +256,9 @@ public partial class LyricsControlPanelWindow : Window
 
     private void FinishHidePanel()
     {
+        _hoverTimer.Stop();
+        _hoverSource = null;
+        _hoverLeftAt = null;
         if (!IsVisible)
         {
             return;
@@ -531,6 +582,9 @@ public partial class LyricsControlPanelWindow : Window
     protected override void OnClosed(EventArgs e)
     {
         _isDisposed = true;
+        _hoverTimer.Stop();
+        _hoverTimer.Tick -= OnHoverTick;
+        _hoverSource = null;
         StopSlide();
         SourceInitialized -= OnSourceInitialized;
         NativeWindowTheme.ThemeChanged -= OnThemeChanged;
@@ -541,4 +595,12 @@ public partial class LyricsControlPanelWindow : Window
         PanelWebView.Dispose();
         base.OnClosed(e);
     }
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetCursorPos(out TaskbarNativeMethods.NativePoint point);
+    [DllImport("user32.dll")]
+    private static extern IntPtr WindowFromPoint(TaskbarNativeMethods.NativePoint point);
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetAncestor(IntPtr window, uint flags);
 }

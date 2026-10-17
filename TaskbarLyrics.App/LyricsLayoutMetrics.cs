@@ -89,7 +89,7 @@ internal sealed record LyricsLayoutMetrics
         ArgumentNullException.ThrowIfNull(settings);
         pixelsPerDip = NormalizePixelsPerDip(pixelsPerDip);
 
-        var scalePercent = AppSettings.ClampLyricsLayoutScalePercent(settings.LyricsLayoutScalePercent);
+        var scalePercent = AppSettings.ClampLyricsLayoutScalePercent(settings.GetLyricsLayoutScalePercent());
         var scale = scalePercent / 100;
         var baseFontSize = AppSettings.ClampFontSize(settings.FontSize);
         var baseCoverSize = AppSettings.ClampCoverSize(settings.CoverSize);
@@ -101,7 +101,7 @@ internal sealed record LyricsLayoutMetrics
             AlignPixel(baseCornerRadius * scale, pixelsPerDip),
             AlignPixelDown(coverSize / 2, pixelsPerDip));
         var hostHorizontalPadding = AlignPixel(BaseHostHorizontalPadding * scale, pixelsPerDip);
-        var coverVerticalSpacing = settings.UseFloatingWindow && settings.EnableControlPanel
+        var coverVerticalSpacing = settings.UseFloatingWindow
             ? 2 * hostHorizontalPadding
             : AlignPixel(BaseWindowVerticalSpacing * scale, pixelsPerDip);
         var minimumWindowHeight = AlignPixel(BaseWindowMinimumHeight * scale, pixelsPerDip);

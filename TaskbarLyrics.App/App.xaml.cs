@@ -146,6 +146,8 @@ public partial class App : System.Windows.Application, IDisposable
         GC.SuppressFinalize(this);
     }
 
+    internal void ResetFloatingPositions() => _lyricsWindowHost?.ResetFloatingPositions();
+
     public bool SaveSettings(AppSettings settings)
     {
         var currentSettings = Settings;

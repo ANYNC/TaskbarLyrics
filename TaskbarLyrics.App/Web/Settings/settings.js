@@ -1179,7 +1179,7 @@
       $("#displayMonitorHint").textContent = displays.length === 0
         ? "连接显示器后，此列表将自动更新。"
         : mode === "All"
-          ? `已连接 ${displays.length} 台显示器，歌词将在全部任务栏显示。`
+          ? `已连接 ${displays.length} 台显示器，歌词将在全部显示器显示。`
           : connectedSelectedCount > 0
             ? `已选择 ${connectedSelectedCount}/${displays.length} 台显示器。`
             : "未选择显示器时，将临时显示在主显示器。";
@@ -1404,6 +1404,13 @@
         requestTrackOffsetPage(1);
         return;
       }
+      if (value === false &&
+          (key === "controlPanelTriggerLyrics" && !(state.showCover !== false && state.controlPanelTriggerCover) ||
+           key === "controlPanelTriggerCover" && !state.controlPanelTriggerLyrics)) {
+        syncControls();
+        showToast("至少选择一个可用触发区域。");
+        return;
+      }
       pendingRangePreviews.delete(key);
       const liveRangeValue = liveRangeValues.get(key);
       const previousCornerRadius = applySettingLocally(key, value);
@@ -1436,6 +1443,7 @@
       if (!state) return;
       state[key] = value;
       liveRangeValues.set(key, { value, editing: true });
+      updateOutputs();
       $$(`[data-setting="${key}"]`).forEach(control => {
         if (control !== source) setControlValue(control, value);
         if (control.type === "range") syncSliderProgress(control);
@@ -1655,16 +1663,31 @@
     }
 
     function applyDependencies() {
-      $$('[data-depends]').forEach(row => {
-        const enabled = Boolean(state[row.dataset.depends]) &&
+      window.taskbarLyricsSettingsState.normalizeControlPanelTriggers(state);
+      $$('[data-depends], [data-embedded-only], [data-floating-only]').forEach(row => {
+        const enabled = (!row.dataset.depends || Boolean(state[row.dataset.depends])) &&
           (!row.hasAttribute("data-embedded-only") || state.useFloatingWindow !== true) &&
           (!row.hasAttribute("data-floating-only") || state.useFloatingWindow === true);
         row.classList.toggle("is-disabled", !enabled);
         row.querySelectorAll("input, select, textarea, button").forEach(control => { control.disabled = !enabled; });
       });
+      const coverTrigger = $('[data-setting="controlPanelTriggerCover"]');
+      if (coverTrigger) coverTrigger.disabled ||= state.showCover === false;
     }
 
     function updateOutputs() {
+      if ($("[data-floating-width]")) $("[data-floating-width]").textContent = `${formatLayoutMetric(state.floatingWindowWidth)} px`;
+      const positionSummary = $("[data-embedded-position-summary]");
+      if (positionSummary) {
+        positionSummary.textContent = `X ${formatLayoutMetric(state.xOffset)} · Y ${formatLayoutMetric(state.yOffset)}`;
+        positionSummary.title = positionSummary.textContent;
+      }
+      const appearanceSummary = $("[data-embedded-appearance-summary]");
+      if (appearanceSummary) {
+        appearanceSummary.textContent = `背景${state.showBackground ? "开启" : "关闭"} · 边框${state.showBorder ? "开启" : "关闭"}`;
+        appearanceSummary.title = appearanceSummary.textContent;
+      }
+      if ($("[data-floating-scale]")) $("[data-floating-scale]").textContent = `${formatLayoutMetric(state.floatingLyricsLayoutScalePercent)}%`;
       if ($("[data-effective-font-size]")) {
         const showCover = state.showCover !== false;
         $("[data-effective-font-size]").textContent = `${formatLayoutMetric(state.effectiveFontSize)} px`;
@@ -1673,7 +1696,6 @@
           : "已隐藏";
         $("[data-effective-cover-gap]").textContent = `${formatLayoutMetric(state.effectiveCoverGap)} px`;
         $("[data-effective-cover-gap-item]").hidden = !showCover;
-        $("[data-effective-window-width]").textContent = `${formatLayoutMetric(state.effectiveWindowWidth)} px`;
       }
     }
 
@@ -1697,7 +1719,7 @@
 
     function updateLayoutPreview(payload = {}) {
       if (!state) return;
-      ["scalePercent", "fontSize", "coverSize", "coverGap", "coverCornerRadius", "effectiveFontSize", "effectiveCoverSize", "effectiveCoverGap", "effectiveCoverCornerRadius", "effectiveWindowWidth"].forEach(key => {
+      ["scalePercent", "floatingLyricsLayoutScalePercent", "floatingWindowWidth", "fontSize", "coverSize", "coverGap", "coverCornerRadius", "effectiveFontSize", "effectiveCoverSize", "effectiveCoverGap", "effectiveCoverCornerRadius", "effectiveWindowWidth"].forEach(key => {
         const value = Number(payload[key]);
         if (!Number.isFinite(value)) return;
         const stateKey = key === "scalePercent" ? "lyricsLayoutScalePercent" : key;
@@ -1824,6 +1846,15 @@
         const max = Number(input.max);
         const value = Math.min(max, Math.max(min, Number(state[key]) + Number(step.dataset.delta)));
         commitSetting(key, value); return;
+      }
+
+      const modeReset = event.target.closest("[data-reset-window-mode]");
+      if (modeReset && state) {
+        pendingRangePreviews.forEach((value, key) => bridge.post({ type: "update", key, value }));
+        pendingRangePreviews.clear();
+        liveRangeValues.clear();
+        bridge.post({ type: "resetWindowPresentation", value: modeReset.dataset.resetWindowMode });
+        return;
       }
 
       if (event.target.closest("[data-reset-layout-scale]")) {
@@ -2191,12 +2222,12 @@
         return;
       }
       const control = event.target.closest('input[type="range"][data-setting]');
-      if (control) {
+      if (control && !control.disabled) {
         scheduleSettingPreview(control.dataset.setting, readSettingControlValue(control), control);
         return;
       }
       const numberControl = event.target.closest('.slider-number-control input[type="number"][data-setting]');
-      if (!numberControl || numberControl.value === "" || !numberControl.validity.valid) return;
+      if (!numberControl || numberControl.disabled || numberControl.value === "" || !numberControl.validity.valid) return;
       scheduleSettingPreview(numberControl.dataset.setting, readSettingControlValue(numberControl), numberControl);
     });
 

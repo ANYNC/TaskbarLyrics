@@ -22,9 +22,10 @@ public sealed class TaskbarEmbeddingLayoutPolicyTests
     [Fact]
     public void WidthOverflowDoesNotForceContentScaleDownWhenHeightFits()
     {
-        var settings = new AppSettings { WindowWidth = 1400, LyricsLayoutScalePercent = 200 };
+        var settings = new AppSettings { WindowWidth = 1400, FloatingWindowWidth = 800, LyricsLayoutScalePercent = 200 };
         TaskbarEmbeddingLayoutPolicy.ClampToConstraints(settings, new TaskbarEmbeddingConstraints(500, 1000));
         Assert.Equal(500, settings.WindowWidth);
+        Assert.Equal(800, settings.FloatingWindowWidth);
         Assert.Equal(200, settings.LyricsLayoutScalePercent);
     }
 

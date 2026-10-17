@@ -64,7 +64,7 @@
     <Grid x:Name="VisualRoot">
         <Border x:Name="Surface" Background="Transparent" BorderThickness="0" Padding="12,2,12,8">
             <Grid>
-                <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition x:Name="TransportRow" Height="0"/><RowDefinition Height="16"/><RowDefinition Height="14"/></Grid.RowDefinitions>
+                <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition x:Name="TransportRow" Height="0"/><RowDefinition x:Name="SeekRow" Height="16"/><RowDefinition x:Name="TimeRow" Height="14"/></Grid.RowDefinitions>
                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                 <Grid x:Name="Metadata" VerticalAlignment="Center" Margin="0,0,8,6">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="18"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>

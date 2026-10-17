@@ -99,10 +99,15 @@ public sealed class FloatingWindowSizeTests
     [Fact]
     public void CommittingSizeMergesOnlyItsFieldsAndRoundTripsExistingSettings()
     {
-        var original = new AppSettings { WindowWidth = 420, LyricsLayoutScalePercent = 100, XOffset = 57, UseFloatingWindow = true };
+        var original = new AppSettings { WindowWidth = 700, FloatingWindowWidth = 420, LyricsLayoutScalePercent = 100, XOffset = 57, UseFloatingWindow = true };
         var changed = new FloatingWindowSize(520, 135).ApplyTo(original);
-        Assert.Equal(420, original.WindowWidth);
+        Assert.Equal(700, original.WindowWidth);
+        Assert.Equal(420, original.FloatingWindowWidth);
+        Assert.Equal(700, changed.WindowWidth);
+        Assert.Equal(520, changed.FloatingWindowWidth);
         Assert.Equal(100, original.LyricsLayoutScalePercent);
+        Assert.Equal(100, changed.LyricsLayoutScalePercent);
+        Assert.Equal(135, changed.FloatingLyricsLayoutScalePercent);
         Assert.Equal(57, changed.XOffset);
         Assert.True(changed.UseFloatingWindow);
         var directory = Path.Combine(AppContext.BaseDirectory, $"floating-size-{Guid.NewGuid():N}");
@@ -112,6 +117,7 @@ public sealed class FloatingWindowSizeTests
             Assert.True(store.Save(changed));
             var loaded = store.Load();
             Assert.Equal(new FloatingWindowSize(520, 135), FloatingWindowSize.FromSettings(loaded));
+            Assert.Equal(700, loaded.WindowWidth);
             Assert.Equal(57, loaded.XOffset);
         }
         finally { if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true); }

@@ -16,6 +16,27 @@ internal readonly record struct LyricsCoverClickBounds(
 
 internal static class LyricsWebMessageRouter
 {
+    public static bool TryGetControlPanelTrigger(WebViewMessage? message, out LyricsCoverClickBounds bounds,
+        out ControlPanelTriggerArea area, out ControlPanelActivation activation)
+    {
+        area = ControlPanelTriggerArea.Cover;
+        activation = ControlPanelActivation.Click;
+        if (TryGetCoverClick(message, out bounds)) return true;
+        return message?.Type == "controlPanelTrigger" &&
+            message.Payload is { ValueKind: JsonValueKind.Object } payload &&
+            TryReadEnum(payload, "area", out area) &&
+            TryReadEnum(payload, "activation", out activation) &&
+            TryReadBounds(payload, out bounds);
+    }
+
+    private static bool TryReadEnum<T>(JsonElement payload, string name, out T value) where T : struct, Enum
+    {
+        value = default;
+        return payload.TryGetProperty(name, out var element) && element.ValueKind == JsonValueKind.String &&
+            Enum.TryParse(element.GetString(), out value) && Enum.IsDefined(value) &&
+            element.GetString() == value.ToString();
+    }
+
     public static WebViewMessage? Parse(string? messageJson)
     {
         return WebViewMessageRouter.Parse(messageJson);
@@ -24,8 +45,14 @@ internal static class LyricsWebMessageRouter
     public static bool TryGetCoverClick(WebViewMessage? message, out LyricsCoverClickBounds bounds)
     {
         bounds = default;
-        if (message?.Type != "coverClick" || message.Payload is not { ValueKind: JsonValueKind.Object } payload ||
-            !TryReadNumber(payload, "x", out var x) ||
+        return message?.Type == "coverClick" && message.Payload is { ValueKind: JsonValueKind.Object } payload &&
+            TryReadBounds(payload, out bounds);
+    }
+
+    private static bool TryReadBounds(JsonElement payload, out LyricsCoverClickBounds bounds)
+    {
+        bounds = default;
+        if (!TryReadNumber(payload, "x", out var x) ||
             !TryReadNumber(payload, "y", out var y) ||
             !TryReadNumber(payload, "width", out var width) ||
             !TryReadNumber(payload, "height", out var height) ||

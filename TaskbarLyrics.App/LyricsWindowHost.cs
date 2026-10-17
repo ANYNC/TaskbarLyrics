@@ -93,6 +93,12 @@ internal sealed class LyricsWindowHost : IDisposable
         _isVisible = false;
     });
 
+    public void ResetFloatingPositions() => InvokeAsync(() =>
+    {
+        _window?.ResetFloatingPositions();
+        ApplySettingsOnWindowThread(_currentSettings);
+    });
+
     public void ApplySettings(AppSettings settings)
     {
         var snapshot = settings.Clone();
@@ -353,7 +359,7 @@ internal sealed class LyricsWindowHost : IDisposable
         if (!keepControlPanelOpen)
         {
             _window.CancelFloatingSizeAdjustment();
-            keepControlPanelOpen = settings.UseFloatingWindow && settings.EnableControlPanel &&
+            keepControlPanelOpen = settings.UseFloatingWindow &&
                 _pendingSizeCommit == FloatingWindowSize.FromSettings(settings);
             _pendingSizeCommit = null;
         }
@@ -410,8 +416,8 @@ internal sealed class LyricsWindowHost : IDisposable
 
             if (!_mirrorWindows.TryGetValue(display.Id, out var mirrorWindow))
             {
-                mirrorWindow = new LyricsMirrorWindow(display, (owner, bounds, monitor, setExpanded) =>
-                    _window?.ToggleControlPanelNear(bounds, monitor, setExpanded, owner), _compositionRoot!);
+                mirrorWindow = new LyricsMirrorWindow(display, (owner, bounds, monitor, setExpanded, area, activation) =>
+                    _window?.ToggleControlPanelNear(bounds, monitor, setExpanded, owner, area, activation), _compositionRoot!);
                 _mirrorWindows.Add(display.Id, mirrorWindow);
                 _window?.RegisterFloatingLyricsHost(mirrorWindow);
             }

@@ -22,6 +22,15 @@ public enum CoverPosition
     Right = 1
 }
 
+public enum ControlPanelTriggerMethod
+{
+    Click,
+    Hover
+}
+
+internal enum ControlPanelTriggerArea { Cover, Lyrics }
+internal enum ControlPanelActivation { Click, Hover, Keyboard }
+
 public enum ForegroundColorMode
 {
     Dark = 0,
@@ -159,6 +168,34 @@ public sealed class AppSettings
 
     public bool EnableControlPanel { get; set; } = true;
 
+    public ControlPanelTriggerMethod ControlPanelTriggerMethod { get; set; } = ControlPanelTriggerMethod.Click;
+    public bool ControlPanelTriggerCover { get; set; } = true;
+    public bool ControlPanelTriggerLyrics { get; set; }
+
+    public void NormalizeControlPanelTriggers()
+    {
+        if (!Enum.IsDefined(ControlPanelTriggerMethod)) ControlPanelTriggerMethod = ControlPanelTriggerMethod.Click;
+        if (!ControlPanelTriggerLyrics && (!ControlPanelTriggerCover || !ShowCover))
+        {
+            if (ShowCover) ControlPanelTriggerCover = true;
+            else ControlPanelTriggerLyrics = true;
+        }
+    }
+
+    internal bool CanTriggerControlPanel(ControlPanelTriggerArea area, ControlPanelActivation activation)
+    {
+        if (!Enum.IsDefined(area) || !Enum.IsDefined(activation)) return false;
+        if (UseFloatingWindow) return ShowCover && area == ControlPanelTriggerArea.Cover && activation == ControlPanelActivation.Click;
+        return EnableControlPanel &&
+            (area == ControlPanelTriggerArea.Cover ? ShowCover && ControlPanelTriggerCover : ControlPanelTriggerLyrics) &&
+            (activation == ControlPanelActivation.Keyboard ||
+                (activation == ControlPanelActivation.Hover) == (ControlPanelTriggerMethod == ControlPanelTriggerMethod.Hover));
+    }
+
+    public bool EnableFloatingControlPanel { get; set; } = true;
+
+    public bool GetEnableControlPanel() => UseFloatingWindow ? EnableFloatingControlPanel : EnableControlPanel;
+
     private double _floatingPanelBrightness = 0.45;
     private double _floatingPanelTintOpacity = 0.55;
     private double _floatingPanelBlurAmount = 24;
@@ -180,6 +217,10 @@ public sealed class AppSettings
 
     public double LyricsLayoutScalePercent { get; set; } = DefaultLyricsLayoutScalePercent;
 
+    public double FloatingLyricsLayoutScalePercent { get; set; } = DefaultLyricsLayoutScalePercent;
+
+    public double GetLyricsLayoutScalePercent() => UseFloatingWindow ? FloatingLyricsLayoutScalePercent : LyricsLayoutScalePercent;
+
     public string FontFamily { get; set; } = DefaultFontFamily;
 
     public string FontWeight { get; set; } = DefaultFontWeight;
@@ -196,7 +237,12 @@ public sealed class AppSettings
 
     public bool ShowTextShadow { get; set; }
 
+    // Keep the existing persisted name for the embedded presentation.
     public double WindowWidth { get; set; } = DefaultWindowWidth;
+
+    public double FloatingWindowWidth { get; set; } = DefaultWindowWidth;
+
+    public double GetWindowWidth() => UseFloatingWindow ? FloatingWindowWidth : WindowWidth;
 
     public LyricsHorizontalAnchor HorizontalAnchor { get; set; } = LyricsHorizontalAnchor.Left;
 
@@ -379,6 +425,44 @@ public sealed class AppSettings
             : sourceId;
     }
 
+    public void ResetWindowPresentation(bool floating)
+    {
+        var defaults = new AppSettings();
+        if (floating)
+        {
+            FloatingWindowWidth = defaults.FloatingWindowWidth;
+            FloatingLyricsLayoutScalePercent = defaults.FloatingLyricsLayoutScalePercent;
+            EnableFloatingControlPanel = defaults.EnableFloatingControlPanel;
+            ForceAlwaysOnTop = defaults.ForceAlwaysOnTop;
+            FloatingPanelBlurAmount = defaults.FloatingPanelBlurAmount;
+            FloatingPanelBrightness = defaults.FloatingPanelBrightness;
+            FloatingPanelTintOpacity = defaults.FloatingPanelTintOpacity;
+        }
+        else
+        {
+            WindowWidth = defaults.WindowWidth;
+            LyricsLayoutScalePercent = defaults.LyricsLayoutScalePercent;
+            EnableControlPanel = defaults.EnableControlPanel;
+            ControlPanelTriggerMethod = defaults.ControlPanelTriggerMethod;
+            ControlPanelTriggerCover = defaults.ControlPanelTriggerCover;
+            ControlPanelTriggerLyrics = defaults.ControlPanelTriggerLyrics;
+            HorizontalAnchor = defaults.HorizontalAnchor;
+            XOffset = defaults.XOffset;
+            YOffset = defaults.YOffset;
+            ShowBackground = defaults.ShowBackground;
+            BackgroundOpacity = defaults.BackgroundOpacity;
+            ShowBorder = defaults.ShowBorder;
+        }
+    }
+
+    public void ResetLyricsLayoutBase()
+    {
+        FontSize = DefaultFontSize;
+        CoverSize = DefaultCoverSize;
+        CoverGap = DefaultCoverGap;
+        CoverCornerRadius = DefaultCoverCornerRadius;
+    }
+
     public void NormalizeLyricsLayout()
     {
         FontSize = ClampFontSize(FontSize);
@@ -386,8 +470,10 @@ public sealed class AppSettings
         CoverGap = ClampCoverGap(CoverGap);
         CoverCornerRadius = ClampCoverCornerRadius(CoverCornerRadius, CoverSize);
         LyricsLayoutScalePercent = ClampLyricsLayoutScalePercent(LyricsLayoutScalePercent);
+        FloatingLyricsLayoutScalePercent = ClampLyricsLayoutScalePercent(FloatingLyricsLayoutScalePercent);
         NormalizeLyricsTextAlignment();
         NormalizeCoverPosition();
+        NormalizeControlPanelTriggers();
     }
 
     public void NormalizeCoverPosition()
@@ -425,6 +511,7 @@ public sealed class AppSettings
         WindowWidth = double.IsFinite(WindowWidth)
             ? Math.Clamp(WindowWidth, MinimumWindowWidth, MaximumWindowWidth)
             : DefaultWindowWidth;
+        FloatingWindowWidth = CalculateEffectiveWindowWidth(FloatingWindowWidth);
         XOffset = double.IsFinite(XOffset)
             ? Math.Clamp(XOffset, MinimumWindowOffset, MaximumWindowOffset)
             : 0;

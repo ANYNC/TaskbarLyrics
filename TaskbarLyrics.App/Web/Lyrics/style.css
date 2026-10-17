@@ -131,6 +131,8 @@ html, body {
 .cover { grid-area: cover; }
 .cover-gap { grid-area: gap; }
 .lyrics-pane { grid-area: lyrics; }
+.lyrics-pane.panel-trigger { cursor: pointer; }
+.lyrics-pane.panel-trigger:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; border-radius: 4px; }
 
 .cover-hidden :is(.cover, .cover-gap) {
   display: none;

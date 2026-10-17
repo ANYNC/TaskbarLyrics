@@ -23,8 +23,11 @@ internal static class LyricsStyleScriptFactory
             fontSize = metrics.FontSize,
             showCover = settings.ShowCover,
             coverPosition = settings.CoverPosition,
-            enableControlPanel = settings.EnableControlPanel,
+            enableControlPanel = settings.UseFloatingWindow || settings.GetEnableControlPanel(),
             floatingControlPanel = settings.UseFloatingWindow,
+            controlPanelTriggerMethod = settings.ControlPanelTriggerMethod,
+            controlPanelTriggerCover = settings.ControlPanelTriggerCover,
+            controlPanelTriggerLyrics = settings.ControlPanelTriggerLyrics,
             coverSize = metrics.CoverSize,
             coverGap = metrics.CoverGap,
             coverCornerRadius = metrics.CoverCornerRadius,
@@ -52,10 +55,10 @@ internal static class LyricsStyleScriptFactory
             secondaryColor = ToCssColor(secondaryColor),
             translationColor = ToCssColor(translationColor),
             wordScanOverlayColor = ToCssColor(wordScanOverlayColor),
-            surfaceColor = settings.ShowBackground
+            surfaceColor = !settings.UseFloatingWindow && settings.ShowBackground
                 ? $"rgba(18, 18, 24, {Math.Clamp(settings.BackgroundOpacity, 0, 1).ToString("0.####", CultureInfo.InvariantCulture)})"
                 : "transparent",
-            surfaceShadow = settings.ShowBorder
+            surfaceShadow = !settings.UseFloatingWindow && settings.ShowBorder
                 ? "inset 0 0 0 1px rgba(255, 255, 255, 0.16)"
                 : "none",
             textShadow = settings.ShowTextShadow

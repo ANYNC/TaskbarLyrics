@@ -72,6 +72,93 @@ async function createHarness() {
   return { dom, preloaders, receive, flushTimers, showCover, style };
 }
 
+describe("embedded control panel triggers", () => {
+  async function triggerHarness(style = {}) {
+    const harness = await createHarness();
+    const { dom } = harness;
+    const document = dom.window.document;
+    const sent = [];
+    dom.window.chrome = { webview: { postMessage: message => sent.push(JSON.parse(message)) } };
+    const cover = document.querySelector("#cover");
+    const lyrics = document.querySelector(".lyrics-pane");
+    cover.getBoundingClientRect = () => ({ x: 4, y: 3, width: 34, height: 34 });
+    lyrics.getBoundingClientRect = () => ({ x: 46, y: 3, width: 300, height: 34 });
+    const applyStyle = payload => dom.window.taskbarLyrics.receive({ version: 1, type: "style", payload });
+    applyStyle({ showCover: true, enableControlPanel: true, controlPanelTriggerCover: true,
+      controlPanelTriggerLyrics: true, ...style });
+    return { ...harness, sent, cover, lyrics, applyStyle };
+  }
+
+  it("sends selected region bounds and preserves keyboard activation and text selection", async () => {
+    const { dom, sent, lyrics, cover, applyStyle } = await triggerHarness({ controlPanelTriggerCover: false });
+    expect(cover.disabled).toBe(true);
+    expect(lyrics.getAttribute("role")).toBe("button");
+    expect(lyrics.tabIndex).toBe(0);
+    lyrics.click();
+    expect(sent.at(-1)).toMatchObject({ version: 1, type: "controlPanelTrigger", payload: {
+      area: "Lyrics", activation: "Click", x: 46, width: 300
+    } });
+    dom.window.taskbarLyrics.receive({ version: 1, type: "controlPanelState", payload: { open: true } });
+    expect(lyrics.getAttribute("aria-expanded")).toBe("true");
+    applyStyle({ enableControlPanel: true, controlPanelTriggerCover: false, controlPanelTriggerLyrics: true, fontSize: 16 });
+    expect(lyrics.getAttribute("aria-expanded")).toBe("true");
+    const count = sent.length;
+    dom.window.getSelection = () => ({ toString: () => "selected lyrics" });
+    lyrics.click();
+    expect(sent).toHaveLength(count);
+    lyrics.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+    expect(sent.at(-1).payload.activation).toBe("Keyboard");
+    applyStyle({ enableControlPanel: false, controlPanelTriggerLyrics: true });
+    expect(lyrics.hasAttribute("role")).toBe(false);
+    const disabledCount = sent.length;
+    lyrics.click();
+    expect(sent).toHaveLength(disabledCount);
+    dom.window.close();
+  });
+
+  it("waits before hover opening and cancels on exit, mode changes and disabling", async () => {
+    const { dom, sent, lyrics, cover, flushTimers, applyStyle } = await triggerHarness({ controlPanelTriggerMethod: "Hover" });
+    lyrics.dispatchEvent(new dom.window.MouseEvent("mouseenter"));
+    expect(sent).toHaveLength(0);
+    lyrics.dispatchEvent(new dom.window.MouseEvent("mouseleave"));
+    flushTimers();
+    expect(sent).toHaveLength(0);
+    lyrics.dispatchEvent(new dom.window.MouseEvent("mouseenter"));
+    flushTimers();
+    expect(sent.at(-1)).toMatchObject({ type: "controlPanelTrigger", payload: { area: "Lyrics", activation: "Hover" } });
+    lyrics.dispatchEvent(new dom.window.MouseEvent("click", { detail: 1 }));
+    expect(sent).toHaveLength(1);
+    cover.dispatchEvent(new dom.window.MouseEvent("mouseenter"));
+    cover.dispatchEvent(new dom.window.MouseEvent("mouseleave"));
+    lyrics.dispatchEvent(new dom.window.MouseEvent("mouseenter"));
+    applyStyle({ floatingControlPanel: true, controlPanelTriggerMethod: "Hover", controlPanelTriggerLyrics: true });
+    flushTimers();
+    expect(sent).toHaveLength(1);
+    expect(lyrics.hasAttribute("tabindex")).toBe(false);
+    cover.click();
+    expect(sent.at(-1).type).toBe("coverClick");
+    applyStyle({ enableControlPanel: true, controlPanelTriggerMethod: "Hover", controlPanelTriggerLyrics: true });
+    lyrics.dispatchEvent(new dom.window.MouseEvent("mouseenter"));
+    applyStyle({ enableControlPanel: false });
+    flushTimers();
+    expect(sent).toHaveLength(2);
+    dom.window.close();
+  });
+
+  it("keeps keyboard opening available in hover mode including with the cover hidden", async () => {
+    const { dom, sent, lyrics, cover } = await triggerHarness({ showCover: false, controlPanelTriggerMethod: "Hover" });
+    cover.click();
+    expect(sent).toHaveLength(0);
+    const event = new dom.window.KeyboardEvent("keydown", { key: " ", bubbles: true, cancelable: true });
+    lyrics.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+    expect(sent.at(-1).payload).toMatchObject({ area: "Lyrics", activation: "Keyboard" });
+    lyrics.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: " ", repeat: true, bubbles: true }));
+    expect(sent).toHaveLength(1);
+    dom.window.close();
+  });
+});
+
 describe("lyrics cover fallback", () => {
   it("clears pointer focus for floating cover clicks while keeping keyboard activation focused", async () => {
     const { dom, style } = await createHarness();

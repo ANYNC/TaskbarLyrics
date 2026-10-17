@@ -5,6 +5,29 @@ namespace TaskbarLyrics.App.Tests;
 public sealed class AppSettingsTests
 {
     [Fact]
+    public void ResetLyricsBaseSizePreservesBothPresentationWidthsAndScale()
+    {
+        var settings = new AppSettings
+        {
+            WindowWidth = 700,
+            FloatingWindowWidth = 800,
+            LyricsLayoutScalePercent = 125,
+            FontSize = 20,
+            CoverSize = 60,
+            CoverGap = 16,
+            CoverCornerRadius = 20
+        };
+        settings.ResetLyricsLayoutBase();
+        Assert.Equal(AppSettings.DefaultFontSize, settings.FontSize);
+        Assert.Equal(AppSettings.DefaultCoverSize, settings.CoverSize);
+        Assert.Equal(AppSettings.DefaultCoverGap, settings.CoverGap);
+        Assert.Equal(AppSettings.DefaultCoverCornerRadius, settings.CoverCornerRadius);
+        Assert.Equal(700, settings.WindowWidth);
+        Assert.Equal(800, settings.FloatingWindowWidth);
+        Assert.Equal(125, settings.LyricsLayoutScalePercent);
+    }
+
+    [Fact]
     public void ForegroundColorModesKeepTheirPersistedNumericValues()
     {
         Assert.Equal(0, (int)ForegroundColorMode.Dark);
@@ -141,7 +164,7 @@ public sealed class AppSettingsTests
     [InlineData(true, 300)]
     public void BothPresentationModesKeepTheSameWidthAtEveryLayoutScale(bool floating, double scale)
     {
-        var settings = new AppSettings { UseFloatingWindow = floating, WindowWidth = 420, LyricsLayoutScalePercent = scale };
+        var settings = new AppSettings { UseFloatingWindow = floating, WindowWidth = 420, LyricsLayoutScalePercent = scale, FloatingLyricsLayoutScalePercent = scale };
         Assert.Equal(420, AppSettings.CalculateEffectiveWindowWidth(settings.WindowWidth));
         Assert.Equal(420, AppSettings.ClampEffectiveWindowWidth(settings.WindowWidth, 1920));
         Assert.Equal(scale, LyricsLayoutMetrics.Create(settings).ScalePercent);

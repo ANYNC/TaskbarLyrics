@@ -38,6 +38,7 @@ internal sealed class FloatingLyricsPanelController : IDisposable
     private readonly List<Target> _targets = [];
     private readonly DispatcherTimer _timer;
     private readonly Func<FloatingLyricsControlWindow> _create;
+    private readonly Func<(System.Windows.Point Position, IntPtr Root)?> _readPointer;
     private FloatingMaterialCompositor? _context;
     private Target? _candidate;
     private Target? _active;
@@ -59,9 +60,11 @@ internal sealed class FloatingLyricsPanelController : IDisposable
     private FloatingWindowSize _sizePreview;
     private Rect _sizeOriginalBounds;
 
-    internal FloatingLyricsPanelController(Dispatcher dispatcher, Func<FloatingLyricsControlWindow> create)
+    internal FloatingLyricsPanelController(Dispatcher dispatcher, Func<FloatingLyricsControlWindow> create,
+        Func<(System.Windows.Point Position, IntPtr Root)?>? readPointer = null)
     {
         _create = create;
+        _readPointer = readPointer ?? ReadPointer;
         _timer = new DispatcherTimer(DispatcherPriority.Background, dispatcher) { Interval = TimeSpan.FromMilliseconds(50) };
         _timer.Tick += Tick;
     }
@@ -226,6 +229,12 @@ internal sealed class FloatingLyricsPanelController : IDisposable
         _suppressed = false;
         Show(target, focus: true);
     }
+    internal void ResetLocks()
+    {
+        Close(immediate: true);
+        foreach (var target in _targets) SetLocked(target, false);
+    }
+
     internal bool IsLocked(Window window) => _targets.Find(target => target.Window == window)?.Locked == true;
 
     internal void ToggleLock(Window window)
@@ -267,6 +276,20 @@ internal sealed class FloatingLyricsPanelController : IDisposable
         _suppressed = false;
     }
 
+    private bool _showPlaybackControls = true;
+    internal bool ShowPlaybackControls
+    {
+        get => _showPlaybackControls;
+        set
+        {
+            if (_showPlaybackControls == value) return;
+            Close(immediate: true);
+            _showPlaybackControls = value;
+            _candidate = null;
+            foreach (var target in _targets) target.LyricsBounds = Rect.Empty;
+        }
+    }
+
     private bool Prepare(Target target, bool keepOpen = false)
     {
         if (!target.Window.IsVisible || !target.ContentVisible() || target.Display() is not { } display)
@@ -298,9 +321,9 @@ internal sealed class FloatingLyricsPanelController : IDisposable
             if (_active == target && !remainVisible) Close(immediate: true);
             if (target.Material is not null && target.HighContrast != SystemParameters.HighContrast) Release(target);
             var placement = _dragging == target
-                ? FloatingLyricsPanelPlacement.Follow(bounds, target.Above, scale)
-                : FloatingLyricsPanelPlacement.Place(bounds, workArea, scale);
-            var requiredHeight = FloatingLyricsPanelPlacement.GetHeight(bounds.Width / scale) * scale;
+                ? FloatingLyricsPanelPlacement.Follow(bounds, target.Above, scale, ShowPlaybackControls)
+                : FloatingLyricsPanelPlacement.Place(bounds, workArea, scale, ShowPlaybackControls);
+            var requiredHeight = FloatingLyricsPanelPlacement.GetHeight(bounds.Width / scale, ShowPlaybackControls) * scale;
             if (placement.Bounds.Height < requiredHeight) { Release(target); return false; }
             target.Material ??= CreateMaterial();
             if (target.Panel is null || target.Panel.IsClosed)
@@ -308,7 +331,7 @@ internal sealed class FloatingLyricsPanelController : IDisposable
                 target.Panel = _create();
                 target.Panel.DragRequested += PanelDragRequested;
             }
-            target.Panel.Prepare(target.Window, placement, scale);
+            target.Panel.Prepare(target.Window, placement, scale, ShowPlaybackControls);
             target.Panel.SetPanelVisible(remainVisible, immediate: true);
             target.LyricsBounds = bounds;
             target.CardBounds = Rect.Union(bounds, placement.Bounds);
@@ -345,9 +368,8 @@ internal sealed class FloatingLyricsPanelController : IDisposable
     private void Tick(object? sender, EventArgs e)
     {
         if (_dragging is not null) return;
-        if (!GetCursorPos(out var cursor)) return;
-        var point = new System.Windows.Point(cursor.X, cursor.Y);
-        var hoveredRoot = GetAncestor(WindowFromPoint(cursor), 2);
+        if (_readPointer() is not { } pointer) return;
+        var (point, hoveredRoot) = pointer;
         Target? hovered = null;
         foreach (var target in _targets)
         {
@@ -379,6 +401,7 @@ internal sealed class FloatingLyricsPanelController : IDisposable
             if (Stopwatch.GetElapsedTime(_leftAt).TotalMilliseconds >= 300) Close(suppressUntilLeave: false);
             return;
         }
+        if (!ShowPlaybackControls) return;
         if (hovered is not null && hovered == _fadingTarget && !_suppressed &&
             Stopwatch.GetElapsedTime(_fadeStartedAt).TotalMilliseconds < 180)
         { Show(hovered); return; }
@@ -386,6 +409,12 @@ internal sealed class FloatingLyricsPanelController : IDisposable
         { _candidate = hovered; _enteredAt = Stopwatch.GetTimestamp(); _suppressed = false; }
         if (hovered is not null && !_suppressed && Stopwatch.GetElapsedTime(_enteredAt).TotalMilliseconds >= 200) Show(hovered);
     }
+    private static (System.Windows.Point Position, IntPtr Root)? ReadPointer()
+    {
+        if (!GetCursorPos(out var cursor)) return null;
+        return (new System.Windows.Point(cursor.X, cursor.Y), GetAncestor(WindowFromPoint(cursor), 2));
+    }
+
     private void Show(Target target, bool focus = false)
     {
         if (target.Locked) return;

@@ -48,7 +48,7 @@ public sealed class FloatingPanelMaterialSettingsTests
     [InlineData(false)]
     public void AppearanceReappliesWithoutMovingLyricsOrRebuildingServices(bool brightness)
     {
-        var old = new AppSettings();
+        var old = new AppSettings { UseFloatingWindow = true };
         var next = old.Clone();
         if (brightness) next.FloatingPanelBrightness = 0.8;
         else next.FloatingPanelTintOpacity = 0.8;

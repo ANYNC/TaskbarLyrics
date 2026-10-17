@@ -33,13 +33,20 @@ public partial class MainWindow
     {
         _floatingControls?.Register(mirror, () => mirror.DisplayMonitor, () => mirror.IsContentVisible,
             (open, above) => mirror.SetFloatingControlSurface(open, above, FloatingControlsLight), mirror.DragFloatingWindow,
-            mirror.GetFloatingCoverBounds, mirror.SetFloatingLockState);
+            mirror.GetCoverBounds, mirror.SetFloatingLockState);
         _floatingControls?.RegisterSizeAdjustment(mirror, mirror.GetFloatingSize,
             size => FloatingSizePreviewRequested?.Invoke(size), size =>
             {
                 mirror.RememberFloatingPosition();
                 FloatingSizeCommitted?.Invoke(size);
             });
+    }
+
+    internal void ResetFloatingPositions()
+    {
+        CloseControlPanel();
+        _floatingControls?.ResetLocks();
+        _floatingPlacement.ResetPositions();
     }
 
     internal void CancelFloatingSizeAdjustment()
@@ -79,7 +86,7 @@ public partial class MainWindow
     private void SetFloatingControlSurface(bool open, bool above)
     {
         if (Volatile.Read(ref _isDisposed) != 0) return;
-        RootBorder.Background = _currentSettings.UseFloatingWindow && _currentSettings.EnableControlPanel
+        RootBorder.Background = _currentSettings.UseFloatingWindow
             ? new SolidColorBrush(Color.FromArgb(1, 0, 0, 0)) : Brushes.Transparent;
         RootBorder.CornerRadius = new CornerRadius(8);
         if (_isWebDocumentReady) TaskObserver.Observe(ExecuteWebScriptAsync(

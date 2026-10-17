@@ -4,6 +4,22 @@ namespace TaskbarLyrics.App.Tests;
 
 public sealed class AppSettingsChangeSetTests
 {
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void OnlyTheActivePresentationWidthRequiresWindowLayout(bool floating, bool changeFloatingWidth)
+    {
+        var current = new AppSettings { UseFloatingWindow = floating, WindowWidth = 420, FloatingWindowWidth = 640 };
+        var next = current.Clone();
+        if (changeFloatingWidth) next.FloatingWindowWidth = 800;
+        else next.WindowWidth = 500;
+        var changes = AppSettingsChangeSet.Create(current, next);
+        Assert.Equal(floating == changeFloatingWidth, changes.WindowLayoutChanged);
+        Assert.Equal(floating == changeFloatingWidth, changes.RequiresLyricsWindowApply);
+    }
+
     [Fact]
     public void ControlPanelSwitchReappliesStyleWithoutChangingLayoutOrRebuildingServices()
     {

@@ -126,7 +126,7 @@ internal static class TaskbarEmbeddingLayoutPolicy
         var displayConstraints = GetDisplayConstraints(constraints);
         foreach (var display in displayConstraints)
         {
-            var metrics = LyricsLayoutMetrics.Create(settings, display.PixelsPerDip);
+            var metrics = CreateEmbeddedMetrics(settings, display.PixelsPerDip);
             if (effectiveWidth > display.MaxWidth + Epsilon ||
                 metrics.DesiredWindowHeight > display.MaxHeight + Epsilon)
             {
@@ -304,6 +304,13 @@ internal static class TaskbarEmbeddingLayoutPolicy
             verticalRange.Max);
     }
 
+    private static LyricsLayoutMetrics CreateEmbeddedMetrics(AppSettings settings, double pixelsPerDip)
+    {
+        var embedded = settings.Clone();
+        embedded.UseFloatingWindow = false;
+        return LyricsLayoutMetrics.Create(embedded, pixelsPerDip);
+    }
+
     private static void ResetLayoutValues(AppSettings settings)
     {
         settings.FontSize = AppSettings.DefaultFontSize;
@@ -401,7 +408,7 @@ internal static class TaskbarEmbeddingLayoutPolicy
         AppSettings settings,
         TaskbarEmbeddingConstraints constraints)
     {
-        var metrics = LyricsLayoutMetrics.Create(settings);
+        var metrics = CreateEmbeddedMetrics(settings, 1);
         var availableWidth = constraints.MaxWidth -
             (2 * metrics.HostHorizontalPadding) -
             (2 * metrics.LayoutHorizontalPadding) -
@@ -456,7 +463,7 @@ internal static class TaskbarEmbeddingLayoutPolicy
         var maximum = double.PositiveInfinity;
         foreach (var display in GetDisplayConstraints(constraints))
         {
-            var metrics = LyricsLayoutMetrics.Create(settings, display.PixelsPerDip);
+            var metrics = CreateEmbeddedMetrics(settings, display.PixelsPerDip);
             var range = GetVerticalOffsetRange(display.MaxHeight, metrics.DesiredWindowHeight);
             minimum = Math.Max(minimum, range.Min);
             maximum = Math.Min(maximum, range.Max);

@@ -15,7 +15,7 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
     private readonly Dictionary<string, string> _pendingScripts = new(StringComparer.Ordinal);
     private readonly EmbeddedTaskbarAnchor _embeddedTaskbarAnchor = new();
     private readonly SmartTopmostController _smartTopmostController;
-    private readonly Action<Window, Rect, DisplayMonitor, Action<bool>> _onCoverClicked;
+    private readonly Action<Window, Rect, DisplayMonitor, Action<bool>, ControlPanelTriggerArea, ControlPanelActivation> _onCoverClicked;
     private readonly FloatingWindowPlacement _floatingPlacement;
     private DisplayMonitor _displayMonitor;
     private AppSettings _settings = new();
@@ -25,7 +25,7 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
     private bool _isDisposed;
     private bool _isContentVisible = true;
 
-    public LyricsMirrorWindow(DisplayMonitor displayMonitor, Action<Window, Rect, DisplayMonitor, Action<bool>> onCoverClicked,
+    public LyricsMirrorWindow(DisplayMonitor displayMonitor, Action<Window, Rect, DisplayMonitor, Action<bool>, ControlPanelTriggerArea, ControlPanelActivation> onCoverClicked,
         IAppCompositionRoot compositionRoot)
     {
         InitializeComponent();
@@ -47,7 +47,7 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
     internal DisplayMonitor DisplayMonitor => _settings.UseFloatingWindow ? _floatingPlacement.Display ?? _displayMonitor : _displayMonitor;
     internal bool IsContentVisible => _isContentVisible && _isWebReady;
 
-    internal Rect GetFloatingCoverBounds() => NativeWindowInteraction.GetScreenBounds(CoverHitSurface);
+    internal Rect GetCoverBounds() => NativeWindowInteraction.GetScreenBounds(CoverHitSurface);
     internal FloatingWindowSize GetFloatingSize() => FloatingWindowSize.FromSettings(_settings);
     internal void RememberFloatingPosition() => _floatingPlacement.RememberCurrentPosition();
 
@@ -60,7 +60,7 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
     internal void SetFloatingControlSurface(bool open, bool above, bool light)
     {
         if (_isDisposed) return;
-        RootBorder.Background = _settings.UseFloatingWindow && _settings.EnableControlPanel
+        RootBorder.Background = _settings.UseFloatingWindow
             ? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(1, 0, 0, 0)) : System.Windows.Media.Brushes.Transparent;
         RootBorder.CornerRadius = new CornerRadius(8);
         if (_isWebReady) TaskObserver.Observe(LyricsWebView.ExecuteScriptAsync(
@@ -96,10 +96,10 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
         Height = Math.Min(metrics.DesiredWindowHeight, display.Height);
         Width = !_settings.UseFloatingWindow
             ? AppSettings.ClampEffectiveWindowWidth(
-                _settings.WindowWidth,
+                _settings.GetWindowWidth(),
                 TaskbarEmbeddingLayoutPolicy.FromDisplay(_displayMonitor).MaxWidth)
             : AppSettings.ClampEffectiveWindowWidth(
-                _settings.WindowWidth,
+                _settings.GetWindowWidth(),
                 display.WorkAreaWidth / pixelsPerDip);
         Height = metrics.DesiredWindowHeight;
         RootBorder.Padding = new Thickness(
@@ -118,6 +118,7 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
             ? new Thickness(0, 0, metrics.LayoutHorizontalPadding, 0)
             : new Thickness(metrics.LayoutHorizontalPadding, 0, 0, 0);
         CoverHitSurface.Visibility = _settings.ShowCover ? Visibility.Visible : Visibility.Collapsed;
+        LyricsControlPanelInputSurface.Apply(LyricsHitSurface, _settings, metrics);
         LyricsWebView.Margin = new Thickness(0, 0, 0, -metrics.ViewportDescenderBuffer);
         _pendingScripts["style"] = LyricsStyleScriptFactory.Create(_settings, pixelsPerDip);
         var attachResult = !_settings.UseFloatingWindow
@@ -220,15 +221,16 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
 
     private void OnWebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
     {
-        if (_isDisposed || !_isContentVisible || !_settings.EnableControlPanel || !_settings.ShowCover)
+        if (_isDisposed || !_isContentVisible || !(_settings.UseFloatingWindow || _settings.GetEnableControlPanel()))
         {
             return;
         }
 
         try
         {
-            if (!LyricsWebMessageRouter.TryGetCoverClick(
-                    LyricsWebMessageRouter.Parse(e.TryGetWebMessageAsString()), out var click))
+            if (!LyricsWebMessageRouter.TryGetControlPanelTrigger(
+                    LyricsWebMessageRouter.Parse(e.TryGetWebMessageAsString()), out var click, out var area, out var activation) ||
+                !_settings.CanTriggerControlPanel(area, activation))
             {
                 return;
             }
@@ -237,7 +239,7 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
             var topLeft = LyricsWebView.PointToScreen(inHost.TopLeft);
             var bottomRight = LyricsWebView.PointToScreen(inHost.BottomRight);
             Log.Diagnostic("CONTROL_PANEL", "Mirror cover click received by WebView");
-            _onCoverClicked(this, new Rect(topLeft, bottomRight), DisplayMonitor, SetControlPanelOpen);
+            _onCoverClicked(this, new Rect(topLeft, bottomRight), DisplayMonitor, SetControlPanelOpen, area, activation);
         }
         catch (Exception ex)
         {

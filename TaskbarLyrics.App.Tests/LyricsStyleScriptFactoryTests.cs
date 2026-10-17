@@ -8,7 +8,7 @@ public sealed class LyricsStyleScriptFactoryTests
     [InlineData(true, false, true)]
     [InlineData(false, false, false)]
     [InlineData(true, true, true)]
-    [InlineData(false, true, false)]
+    [InlineData(false, true, true)]
     public void CreateEmitsControlPanelAvailabilityAndFloatingMode(bool enabled, bool floating, bool expected)
     {
         var settings = new AppSettings { EnableControlPanel = enabled, UseFloatingWindow = floating };

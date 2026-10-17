@@ -28,7 +28,7 @@ internal sealed class TaskbarPlacementService
         var metrics = LyricsLayoutMetrics.Create(settings, pixelsPerDip);
         window.Height = Math.Min(metrics.DesiredWindowHeight, display.Height);
 
-        var requestedLeft = settings.HorizontalAnchor switch
+        var requestedLeft = settings.UseFloatingWindow ? display.Left : settings.HorizontalAnchor switch
         {
             LyricsHorizontalAnchor.Left => display.Left + settings.XOffset,
             LyricsHorizontalAnchor.Center => display.Left + ((display.Width - window.Width) / 2.0) + settings.XOffset,
@@ -41,7 +41,7 @@ internal sealed class TaskbarPlacementService
             taskbar.CenterY - display.Top,
             window.Height,
             display.Height,
-            settings.YOffset);
+            settings.UseFloatingWindow ? 0 : settings.YOffset);
 
         CommitNativeBounds(window, pixelsPerDip);
     }

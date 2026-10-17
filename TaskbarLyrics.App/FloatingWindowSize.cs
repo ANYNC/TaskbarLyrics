@@ -4,13 +4,13 @@ namespace TaskbarLyrics.App;
 
 internal readonly record struct FloatingWindowSize(double Width, double ScalePercent)
 {
-    internal static FloatingWindowSize FromSettings(AppSettings settings) => new(settings.WindowWidth, settings.LyricsLayoutScalePercent);
+    internal static FloatingWindowSize FromSettings(AppSettings settings) => new(settings.FloatingWindowWidth, settings.FloatingLyricsLayoutScalePercent);
 
     internal AppSettings ApplyTo(AppSettings settings)
     {
         var result = settings.Clone();
-        result.WindowWidth = Width;
-        result.LyricsLayoutScalePercent = ScalePercent;
+        result.FloatingWindowWidth = Width;
+        result.FloatingLyricsLayoutScalePercent = ScalePercent;
         return result;
     }
 }
