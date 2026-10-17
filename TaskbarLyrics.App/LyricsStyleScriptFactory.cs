@@ -5,7 +5,7 @@ namespace TaskbarLyrics.App;
 
 internal static class LyricsStyleScriptFactory
 {
-    public static string Create(AppSettings settings, double pixelsPerDip)
+    public static string Create(AppSettings settings, double pixelsPerDip, TaskbarBounds? taskbar = null)
     {
         ArgumentNullException.ThrowIfNull(settings);
         settings.NormalizeLyricsTextAlignment();
@@ -15,16 +15,19 @@ internal static class LyricsStyleScriptFactory
         var secondaryColor = ForegroundColorPolicy.CreateSecondaryColor(foregroundColor);
         var translationColor = ForegroundColorPolicy.CreateTranslationColor(foregroundColor);
         var wordScanOverlayColor = ForegroundColorPolicy.CreateWordScanOverlayColor(foregroundColor);
-        var metrics = LyricsLayoutMetrics.Create(settings, pixelsPerDip);
+        var metrics = LyricsLayoutMetrics.Create(settings, pixelsPerDip, taskbar);
         var stylePayload = new
         {
             fontFamily = AppSettings.NormalizeFontFamily(settings.FontFamily),
             layoutScalePercent = metrics.ScalePercent,
             fontSize = metrics.FontSize,
+            verticalTaskbar = metrics.IsVertical,
+            singleLine = metrics.IsSingleLine,
             showCover = settings.ShowCover,
             coverPosition = settings.CoverPosition,
             enableControlPanel = settings.UseFloatingWindow || settings.GetEnableControlPanel(),
             floatingControlPanel = settings.UseFloatingWindow,
+            floatingInputPassthrough = settings.UseFloatingWindow && !settings.EnableFloatingControlPanel,
             controlPanelTriggerMethod = settings.ControlPanelTriggerMethod,
             controlPanelTriggerCover = settings.ControlPanelTriggerCover,
             controlPanelTriggerLyrics = settings.ControlPanelTriggerLyrics,

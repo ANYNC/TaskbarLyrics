@@ -1180,13 +1180,16 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         _settings.NormalizeCoverPosition();
         _settings.NormalizeWindowLayout();
         var mediaHotkeys = _settings.GlobalMediaHotkeys ??= new GlobalMediaHotkeySettings();
-        var layoutMetrics = CreateEmbeddedLayoutPreviewMetrics(_settings, VisualTreeHelper.GetDpi(this).DpiScaleX);
         var availableDisplays = DisplayMonitorService.GetDisplays();
         var targetDisplays = LyricsDisplayTargetSelector.Select(
             availableDisplays,
             _settings.LyricsDisplayMode,
             _settings.SelectedDisplayIds);
         var taskbarConstraints = TaskbarEmbeddingLayoutPolicy.FromDisplays(targetDisplays);
+        var previewDisplay = targetDisplays.FirstOrDefault(display => display.IsPrimary) ?? (targetDisplays.Count > 0 ? targetDisplays[0] : null);
+        var previewDpi = previewDisplay?.PixelsPerDip ?? VisualTreeHelper.GetDpi(this).DpiScaleX;
+        var layoutMetrics = CreateEmbeddedLayoutPreviewMetrics(_settings, previewDpi,
+            previewDisplay is null ? null : TaskbarPlacementService.GetTaskbarBounds(previewDisplay, previewDpi));
         var inputBounds = TaskbarEmbeddingLayoutPolicy.GetInputBounds(
             _settings,
             taskbarConstraints,
@@ -1245,6 +1248,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             SpectrumAudioAccessGranted = _settings.SpectrumAudioAccessGranted,
             FontSize = _settings.FontSize,
             ShowCover = _settings.ShowCover,
+            SingleLineLyrics = _settings.SingleLineLyrics,
             EnableControlPanel = _settings.EnableControlPanel,
             ControlPanelTriggerMethod = _settings.ControlPanelTriggerMethod,
             ControlPanelTriggerCover = _settings.ControlPanelTriggerCover,
@@ -1318,13 +1322,16 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
 
     private Dictionary<string, object> CreateLyricsLayoutPreview(bool includeInputBounds)
     {
-        var metrics = CreateEmbeddedLayoutPreviewMetrics(_settings, VisualTreeHelper.GetDpi(this).DpiScaleX);
         var availableDisplays = DisplayMonitorService.GetDisplays();
         var targetDisplays = LyricsDisplayTargetSelector.Select(
             availableDisplays,
             _settings.LyricsDisplayMode,
             _settings.SelectedDisplayIds);
         var taskbarConstraints = TaskbarEmbeddingLayoutPolicy.FromDisplays(targetDisplays);
+        var previewDisplay = targetDisplays.FirstOrDefault(display => display.IsPrimary) ?? (targetDisplays.Count > 0 ? targetDisplays[0] : null);
+        var previewDpi = previewDisplay?.PixelsPerDip ?? VisualTreeHelper.GetDpi(this).DpiScaleX;
+        var metrics = CreateEmbeddedLayoutPreviewMetrics(_settings, previewDpi,
+            previewDisplay is null ? null : TaskbarPlacementService.GetTaskbarBounds(previewDisplay, previewDpi));
         return CreateLyricsLayoutPreviewPayload(
             _settings,
             metrics,
@@ -1386,12 +1393,12 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         return preview;
     }
 
-    internal static LyricsLayoutMetrics CreateEmbeddedLayoutPreviewMetrics(AppSettings settings, double pixelsPerDip)
+    internal static LyricsLayoutMetrics CreateEmbeddedLayoutPreviewMetrics(AppSettings settings, double pixelsPerDip, TaskbarBounds? taskbar = null)
     {
         // These readouts belong to the embedded settings card even while the floating window is active.
         var embeddedSettings = settings.Clone();
         embeddedSettings.UseFloatingWindow = false;
-        return LyricsLayoutMetrics.Create(embeddedSettings, pixelsPerDip);
+        return LyricsLayoutMetrics.Create(embeddedSettings, pixelsPerDip, taskbar);
     }
 
     private List<string> NormalizeSourceOrder(IEnumerable<string>? order)
@@ -1577,6 +1584,9 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             case "showCover":
                 _settings.ShowCover = ReadBool(element, _settings.ShowCover);
                 break;
+            case "singleLineLyrics":
+                _settings.SingleLineLyrics = ReadBool(element, _settings.SingleLineLyrics);
+                break;
             case "enableControlPanel":
                 _settings.EnableControlPanel = ReadBool(element, _settings.EnableControlPanel);
                 break;
@@ -1724,6 +1734,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
     private static bool IsTaskbarBoundedLayoutSetting(string? key)
     {
         return key is "fontSize" or
+            "singleLineLyrics" or
             "showCover" or
             "coverSize" or
             "coverGap" or
@@ -1769,6 +1780,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
     private static bool IsLyricsLayoutSetting(string? key)
     {
         return key is "showCover" or
+            "singleLineLyrics" or
             "fontSize" or
             "coverSize" or
             "coverGap" or
@@ -2131,6 +2143,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         target.FontSize = source.FontSize;
         target.UseSafeCoverSizeRange = source.UseSafeCoverSizeRange;
         target.ShowCover = source.ShowCover;
+        target.SingleLineLyrics = source.SingleLineLyrics;
         target.EnableControlPanel = source.EnableControlPanel;
         target.ControlPanelTriggerMethod = source.ControlPanelTriggerMethod;
         target.ControlPanelTriggerCover = source.ControlPanelTriggerCover;
@@ -2276,6 +2289,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         public bool SpectrumAudioAccessGranted { get; set; }
         public double FontSize { get; set; }
         public bool ShowCover { get; set; }
+        public bool SingleLineLyrics { get; set; }
         public bool EnableControlPanel { get; set; }
         public ControlPanelTriggerMethod ControlPanelTriggerMethod { get; set; }
         public bool ControlPanelTriggerCover { get; set; }

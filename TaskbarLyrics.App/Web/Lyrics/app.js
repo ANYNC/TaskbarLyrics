@@ -415,13 +415,14 @@ function resolveTranslationDisplay(line) {
 }
 
 function setTrackOffset(rowCount) {
-  const offset = snapToPhysicalPixel(-linePitchPx * rowCount);
+  const vertical = root.classList.contains("vertical-taskbar");
+  const offset = snapToPhysicalPixel((vertical ? 1 : -1) * linePitchPx * rowCount);
   if (offset === 0) {
     trackEl.style.removeProperty("transform");
     return;
   }
 
-  trackEl.style.transform = `translateY(${offset}px)`;
+  trackEl.style.transform = vertical ? `translateX(${offset}px)` : `translateY(${offset}px)`;
 }
 
 function snapToPhysicalPixel(value) {
@@ -474,8 +475,9 @@ function measureLineHorizontalScroll(lineElement) {
     return null;
   }
 
-  const viewportWidth = elements.textViewport.clientWidth;
-  const contentWidth = elements.baseText.scrollWidth;
+  const vertical = root.classList.contains("vertical-taskbar");
+  const viewportWidth = vertical ? elements.textViewport.clientHeight : elements.textViewport.clientWidth;
+  const contentWidth = vertical ? elements.baseText.scrollHeight : elements.baseText.scrollWidth;
   const metrics = {
     textStack: elements.textStack,
     viewportWidth,
@@ -1525,7 +1527,7 @@ function cancelActiveTransition() {
   presentationCoordinator.takeLatest();
   clearSpectrumExitStyles();
   trackEl.classList.add("no-anim");
-  trackEl.classList.remove("animating");
+  trackEl.classList.remove("animating", "vertical-roll", "single-line-roll");
   trackEl.classList.remove("translation-pair-animating");
   currentLineEl.classList.remove("leaving");
   nextLineEl.classList.remove("promoting");
@@ -1725,15 +1727,17 @@ function updateMetrics() {
 
   metricsUpdatePending = false;
   // Exclude the host-provided descender buffer from row metrics.
-  const measuredViewportHeight = viewportEl.clientHeight || 30;
-  const minimumHostHeight = Math.max(2, Math.round(26 * layoutScaleFactor));
-  const hostHeight = Math.max(minimumHostHeight, measuredViewportHeight - viewportDescenderBufferPx);
-  rowHeightPx = Math.max(1, Math.floor(hostHeight / 2));
-  rowGapPx = Math.max(0, hostHeight - (rowHeightPx * 2));
+  const vertical = root.classList.contains("vertical-taskbar");
+  const measuredViewportHeight = (vertical ? viewportEl.clientWidth : viewportEl.clientHeight) || 30;
+  const rows = root.classList.contains("single-line") ? 1 : 2;
+  const minimumHostHeight = rows;
+  const hostHeight = Math.max(minimumHostHeight, measuredViewportHeight - (vertical ? 0 : viewportDescenderBufferPx));
+  rowHeightPx = Math.max(1, Math.floor(hostHeight / rows));
+  rowGapPx = rows === 1 ? 0 : Math.max(0, hostHeight - (rowHeightPx * 2));
   linePitchPx = rowHeightPx + rowGapPx;
   const currentSizeMax = Math.max(11.2 * layoutScaleFactor, rowHeightPx * 0.92);
   currentSize = Math.min(requestedFontSize, currentSizeMax);
-  const nextSize = Math.max(9 * layoutScaleFactor, currentSize * 0.92);
+  const nextSize = Math.min(currentSize, Math.max(9 * layoutScaleFactor, currentSize * 0.92));
   root.style.setProperty("--row-height", `${rowHeightPx}px`);
   root.style.setProperty("--row-gap", `${rowGapPx}px`);
   root.style.setProperty("--line-pitch", `${linePitchPx}px`);
@@ -1764,7 +1768,7 @@ function finalizeTransition(
   setSecondaryLine(upcomingNext);
   setLineWordScanProgress(nextLineEl, null);
   setIncomingLine("");
-  trackEl.classList.remove("animating");
+  trackEl.classList.remove("animating", "vertical-roll", "single-line-roll");
   currentLineEl.classList.remove("leaving");
   nextLineEl.classList.remove("promoting");
   trackEl.classList.remove("word-scan-transition");
@@ -1830,7 +1834,8 @@ function startTransition(
   }
 
   setTranslationMode(Boolean(translationMode));
-  if (translationMode) {
+  const singleLine = root.classList.contains("single-line");
+  if (translationMode && !singleLine) {
     startTranslationPairTransition(
       newCurrent,
       currentTranslation,
@@ -1841,7 +1846,7 @@ function startTransition(
     return;
   }
 
-  startStandardTransition(newCurrent, newNext, progress, currentLineIndex, wordScanProgress, resolvedTargetFrame);
+  startStandardTransition(newCurrent, translationMode ? currentTranslation : newNext, progress, currentLineIndex, wordScanProgress, resolvedTargetFrame);
 }
 
 function finalizeTranslationPairTransition(
@@ -1858,7 +1863,7 @@ function finalizeTranslationPairTransition(
   setWordScanProgress(wordScanProgress, false);
   setSecondaryLine(promotedTranslation);
   setLineWordScanProgress(nextLineEl, null);
-  trackEl.classList.remove("translation-pair-animating", "animating", "word-scan-transition");
+  trackEl.classList.remove("translation-pair-animating", "animating", "word-scan-transition", "vertical-roll", "single-line-roll");
   currentLineEl.classList.remove("leaving");
   nextLineEl.classList.remove("promoting");
   transitionPromotedLine = "";
@@ -1903,6 +1908,7 @@ function startTranslationPairTransition(
   wordScanProgress,
   targetFrame = null) {
   transitionUsesTranslationPair = true;
+  trackEl.classList.toggle("vertical-roll", root.classList.contains("vertical-taskbar"));
   const promoted = toDisplayLine(newCurrent, SEARCHING_TEXT);
   const promotedTranslation = toDisplayLine(currentTranslation, " ");
   transitionPromotedLine = promoted;
@@ -1986,6 +1992,8 @@ function startStandardTransition(
   wordScanProgress = null,
   targetFrame = null) {
   transitionUsesTranslationPair = false;
+  trackEl.classList.toggle("vertical-roll", root.classList.contains("vertical-taskbar"));
+  trackEl.classList.toggle("single-line-roll", root.classList.contains("single-line"));
   const promoted = toDisplayLine(newCurrent, SEARCHING_TEXT);
   const upcoming = toDisplayLine(newNext, " ");
   transitionPromotedLine = promoted;
@@ -2380,10 +2388,16 @@ const lyricsApi = {
       return;
     }
 
+    if (root.classList.contains("single-line") !== (payload.singleLine === true) ||
+        root.classList.contains("vertical-taskbar") !== (payload.verticalTaskbar === true)) cancelActiveTransition();
+    root.classList.toggle("single-line", payload.singleLine === true);
+    root.classList.toggle("vertical-taskbar", payload.verticalTaskbar === true);
+
     root.style.setProperty("--font-family", payload.fontFamily || "\"SF Pro Display\", \"Segoe UI Variable Display\", \"Segoe UI Variable Text\", \"Microsoft YaHei UI\", sans-serif");
     applyLyricsTextAlignment(payload.textAlignment);
     root.dataset.coverPosition = payload.coverPosition === "Right" ? "Right" : "Left";
     root.classList.toggle("floating-controls-enabled", payload.floatingControlPanel === true && payload.enableControlPanel !== false);
+    root.classList.toggle("floating-input-passthrough", root.classList.contains("floating-controls-enabled") && payload.floatingInputPassthrough === true);
     setFloatingLockState(root.classList.contains("floating-locked"), root.classList.contains("floating-lock-hovered"));
     const layoutScalePercent = Number(payload.layoutScalePercent);
     if (Number.isFinite(layoutScalePercent) && layoutScalePercent > 0) {

@@ -132,7 +132,7 @@
                     </Button>
                 </StackPanel>
                 <Slider x:Name="SeekSlider" Grid.Row="2" Grid.ColumnSpan="2" Minimum="0" Maximum="1000" SmallChange="5" LargeChange="50" IsEnabled="False" AutomationProperties.Name="播放位置"
-                        PreviewMouseLeftButtonDown="OnSeekStarted" PreviewMouseLeftButtonUp="OnSeekFinished" PreviewKeyDown="OnSeekKeyDown" KeyUp="OnSeekKeyUp" ValueChanged="OnSeekValueChanged"/>
+                        PreviewKeyDown="OnSeekKeyDown" KeyUp="OnSeekKeyUp" ValueChanged="OnSeekValueChanged"/>
                 <TextBlock x:Name="ElapsedText" Grid.Row="3" Text="0:00" FontSize="11" Foreground="{DynamicResource PanelSubtle}"/>
                 <TextBlock x:Name="DurationText" Grid.Row="3" Grid.Column="1" Text="0:00" FontSize="11" HorizontalAlignment="Right" Foreground="{DynamicResource PanelSubtle}"/>
             </Grid>

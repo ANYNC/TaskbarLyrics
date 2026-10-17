@@ -1082,7 +1082,7 @@
           option.tabIndex = selected ? 0 : -1;
         });
       }
-      else if (control.type === "radio") control.checked = control.value === value;
+      else if (control.type === "radio") control.checked = control.value === String(value);
       else if (control.type === "checkbox") control.checked = Boolean(value);
       else if (control.tagName === "TEXTAREA" && Array.isArray(value)) control.value = value.join("\n");
       else if (Number.isFinite(Number(value)) && control.dataset.valueScale) {
@@ -1093,6 +1093,7 @@
 
     function readSettingControlValue(control) {
       if (control.type === "checkbox") return control.checked;
+      if (control.dataset.valueType === "boolean") return control.value === "true";
       if (control.type !== "number" && control.type !== "range") return control.value;
       const value = Number(control.value);
       const scale = Number(control.dataset.valueScale) || 1;

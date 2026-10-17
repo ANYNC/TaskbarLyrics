@@ -5,6 +5,24 @@ namespace TaskbarLyrics.App.Tests;
 public sealed class LyricsStyleScriptFactoryTests
 {
     [Theory]
+    [InlineData(false, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(true, false, true)]
+    [InlineData(true, true, false)]
+    public void FloatingInputPassthroughFollowsPlaybackControlWithoutDisablingCoverInteraction(bool floating, bool playback, bool expected)
+    {
+        var settings = new AppSettings
+        {
+            UseFloatingWindow = floating,
+            EnableFloatingControlPanel = playback
+        };
+        var script = LyricsStyleScriptFactory.Create(settings, 1);
+        Assert.Contains($"\"floatingInputPassthrough\":{expected.ToString().ToLowerInvariant()}", script);
+        if (floating) Assert.Contains("\"enableControlPanel\":true", script);
+        Assert.Equal(playback, settings.EnableFloatingControlPanel);
+    }
+
+    [Theory]
     [InlineData(true, false, true)]
     [InlineData(false, false, false)]
     [InlineData(true, true, true)]

@@ -7,7 +7,7 @@ const read = relativePath => readFile(new URL(relativePath, root), "utf8");
 const settingsPages = ["sources", "shortcuts", "lyrics", "trackOffsets", "displayArea", "general", "advanced", "lyricDiagnostics", "about"];
 const persistedSettings = [
   "enableLocalLyrics", "localMusicFolders", "enableGlobalMediaHotkeys", "showLyricsOnStartup", "autoHideWhenNoPlayback",
-  "showLyricTranslation", "enableWordScanning", "spectrumDisplayMode", "lyricsLayoutScalePercent", "fontSize", "showCover",
+  "showLyricTranslation", "enableWordScanning", "spectrumDisplayMode", "lyricsLayoutScalePercent", "fontSize", "showCover", "singleLineLyrics",
   "enableControlPanel", "controlPanelTriggerMethod", "controlPanelTriggerCover", "controlPanelTriggerLyrics", "enableFloatingControlPanel", "floatingPanelBrightness", "floatingPanelTintOpacity", "floatingPanelBlurAmount", "coverPosition", "coverSize", "coverGap", "coverCornerRadius", "fontFamily", "fontWeight", "lyricsTextAlignment", "foregroundColorMode",
   "showTextShadow", "toolWindowTheme", "showBackground", "backgroundOpacity", "showBorder", "windowWidth",
   "xOffset", "yOffset", "forceAlwaysOnTop", "startWithWindows", "autoCheckUpdates"
@@ -59,6 +59,26 @@ function enableDialogDomSupport(dom) {
 }
 
 describe("settings WebView bridge", () => {
+  it("refreshes single-line zoom and its upper bound in both taskbar resize directions without posting edits", async () => {
+    const { dom, sent, script } = await createSettingsDom();
+    dom.window.eval(script);
+    const count = sent.length;
+    for (const [height, scale, maximum] of [[32, 70, 72], [48, 105, 109], [32, 70, 72]]) {
+      dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: {
+        settings: { sourceRecognitionOrder: [], playerLyricOffsets: {}, defaultPlayerLyricOffsets: {}, mediaHotkeys: [],
+          mediaHotkeyStatuses: {}, useFloatingWindow: false, singleLineLyrics: true,
+          lyricsLayoutScalePercent: scale, fontSize: 14, coverSize: 34,
+          taskbarEmbeddingAvailable: true, taskbarMaxHeight: height, taskbarMaxScalePercent: maximum }, fonts: []
+      } });
+      const controls = [...dom.window.document.querySelectorAll('[data-setting="lyricsLayoutScalePercent"]')];
+      expect(controls.every(control => Number(control.value) === scale)).toBe(true);
+      expect(controls.every(control => Number(control.max) === maximum)).toBe(true);
+      expect(dom.window.document.querySelector('[data-setting="singleLineLyrics"][value="true"]').checked).toBe(true);
+    }
+    expect(sent).toHaveLength(count);
+    dom.window.close();
+  });
+
   it("refreshes floating size readouts and collapsed embedded summaries without posting edits", async () => {
     const { dom, sent, script } = await createSettingsDom();
     dom.window.eval(script);
@@ -1516,6 +1536,25 @@ describe("settings WebView bridge", () => {
     });
   });
 
+  it("defaults to double line and sends boolean values when switching lyric line count", async () => {
+    const { dom, sent, script } = await createSettingsDom();
+    dom.window.eval(script);
+    const receive = settings => dom.window.settingsApp.receive({ version: 1, type: "settingsState",
+      payload: { settings: { sourceRecognitionOrder: [], playerLyricOffsets: {}, defaultPlayerLyricOffsets: {},
+        mediaHotkeys: [], mediaHotkeyStatuses: {}, ...settings }, fonts: [] } });
+    receive({});
+    const controls = dom.window.document.querySelectorAll('[data-setting="singleLineLyrics"]');
+    expect(controls[0].checked).toBe(true);
+    for (const value of [true, false]) {
+      const selected = [...controls].find(control => control.value === String(value));
+      selected.checked = true;
+      selected.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+      expect(sent.at(-1)).toEqual({ version: 1, type: "update", payload: { key: "singleLineLyrics", value } });
+      receive({ singleLineLyrics: value });
+      expect(selected.checked).toBe(true);
+    }
+  });
+
   it("offers single method selection and independent regions without permitting an empty selection", async () => {
     const { dom, sent, script } = await createSettingsDom();
     dom.window.eval(script);
@@ -1913,6 +1952,24 @@ describe("settings WebView bridge", () => {
       expect(control.querySelector(".compact-number-input")).not.toBeNull();
     });
     expect(document.querySelector("#hueSlider").closest(".slider-number-control").querySelector("#hueNumberInput")).not.toBeNull();
+  });
+
+  it("caps both compact-taskbar zoom controls and clamps an oversized numeric commit", async () => {
+    const { dom, sent, script } = await createSettingsDom();
+    dom.window.eval(script);
+    dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: {
+      settings: { sourceRecognitionOrder: [], playerLyricOffsets: {}, defaultPlayerLyricOffsets: {}, mediaHotkeys: [],
+        mediaHotkeyStatuses: {}, useFloatingWindow: false, lyricsLayoutScalePercent: 100, fontSize: 14,
+        taskbarEmbeddingAvailable: true, taskbarMaxHeight: 32, taskbarMaxScalePercent: 72 }, fonts: []
+    } });
+    const controls = [...dom.window.document.querySelectorAll('[data-setting="lyricsLayoutScalePercent"]')];
+    expect(controls.every(control => control.max === "72")).toBe(true);
+    expect(controls.every(control => control.value === "72")).toBe(true);
+    const numeric = controls.find(control => control.type === "number");
+    numeric.value = "300";
+    numeric.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+    expect(sent.at(-1).payload).toEqual({ key: "lyricsLayoutScalePercent", value: 72 });
+    expect(controls.every(control => Number(control.value) <= 72)).toBe(true);
   });
 
   it("selects a window presentation card and mirrors embedded taskbar bounds", async () => {

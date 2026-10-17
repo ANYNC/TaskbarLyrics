@@ -222,6 +222,6 @@ public sealed class TaskbarEmbeddingLayoutPolicyTests
         Assert.Equal(128, constraints.MaxWidth);
         Assert.Equal(48, constraints.MaxHeight);
         Assert.Equal(2, constraints.Displays.Count);
-        Assert.False(TaskbarEmbeddingLayoutPolicy.CanFit(new AppSettings(), constraints));
+        Assert.True(TaskbarEmbeddingLayoutPolicy.CanFit(new AppSettings(), constraints));
     }
 }

@@ -11,6 +11,13 @@ internal static class LyricsControlPanelInputSurface
         surface.Visibility = !settings.UseFloatingWindow && settings.EnableControlPanel && settings.ControlPanelTriggerLyrics
             ? Visibility.Visible : Visibility.Collapsed;
         var coverInset = settings.ShowCover ? metrics.CoverSize + metrics.CoverGap : 0;
+        if (metrics.IsVertical)
+        {
+            var coverAtBottom = settings.CoverPosition == CoverPosition.Right;
+            surface.Margin = new Thickness(metrics.LayoutHorizontalPadding, coverAtBottom ? 0 : coverInset,
+                metrics.LayoutHorizontalPadding, (coverAtBottom ? coverInset : 0) - metrics.ViewportDescenderBuffer);
+            return;
+        }
         surface.Margin = new Thickness(
             metrics.LayoutHorizontalPadding + (settings.CoverPosition == CoverPosition.Left ? coverInset : 0),
             0,

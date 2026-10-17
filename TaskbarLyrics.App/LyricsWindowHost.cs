@@ -216,6 +216,7 @@ internal sealed class LyricsWindowHost : IDisposable
         InvokeAsync(() =>
         {
             SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
+            SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
             CloseMirrorWindows();
             _window?.Close();
             Dispatcher.CurrentDispatcher.BeginInvokeShutdown(DispatcherPriority.Normal);
@@ -249,6 +250,7 @@ internal sealed class LyricsWindowHost : IDisposable
             _compositionRoot = compositionRoot;
             _window = CreateAndWireLyricsWindow();
             SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
+            SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
             ApplySettingsOnWindowThread(initialSettings);
 
             if (Volatile.Read(ref _startupAbandoned) != 0)
@@ -303,6 +305,7 @@ internal sealed class LyricsWindowHost : IDisposable
     private void OnLyricsWindowClosed(object? sender, EventArgs e)
     {
         SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
+        SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
         CloseMirrorWindows();
         _isVisible = false;
         Dispatcher.CurrentDispatcher.BeginInvokeShutdown(DispatcherPriority.Normal);
@@ -457,6 +460,13 @@ internal sealed class LyricsWindowHost : IDisposable
     private void OnDisplaySettingsChanged(object? sender, EventArgs e)
     {
         InvokeAsync(() => ApplySettingsOnWindowThread(_currentSettings));
+    }
+
+    private void OnUserPreferenceChanged(object sender, UserPreferenceChangedEventArgs e)
+    {
+        // Taskbar size and edge changes update the work area without a resolution change.
+        if (e.Category is UserPreferenceCategory.Desktop or UserPreferenceCategory.Window or UserPreferenceCategory.General)
+            InvokeAsync(() => ApplySettingsOnWindowThread(_currentSettings));
     }
 
     private void CloseMirrorWindows()

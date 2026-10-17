@@ -92,7 +92,8 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
             _settings.ForceAlwaysOnTop,
             display.Bounds);
         var pixelsPerDip = display.PixelsPerDip;
-        var metrics = LyricsLayoutMetrics.Create(_settings, pixelsPerDip);
+        var taskbar = TaskbarPlacementService.GetTaskbarBounds(_displayMonitor, pixelsPerDip);
+        var metrics = LyricsLayoutMetrics.Create(_settings, pixelsPerDip, taskbar);
         Height = Math.Min(metrics.DesiredWindowHeight, display.Height);
         Width = !_settings.UseFloatingWindow
             ? AppSettings.ClampEffectiveWindowWidth(
@@ -111,16 +112,18 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
         CoverHitSurface.Width = metrics.CoverSize;
         CoverHitSurface.Height = metrics.CoverSize;
         var coverOnRight = _settings.CoverPosition == CoverPosition.Right;
-        CoverHitSurface.HorizontalAlignment = coverOnRight
+        CoverHitSurface.VerticalAlignment = metrics.IsVertical
+            ? coverOnRight ? VerticalAlignment.Bottom : VerticalAlignment.Top : VerticalAlignment.Center;
+        CoverHitSurface.HorizontalAlignment = metrics.IsVertical ? System.Windows.HorizontalAlignment.Center : coverOnRight
             ? System.Windows.HorizontalAlignment.Right
             : System.Windows.HorizontalAlignment.Left;
-        CoverHitSurface.Margin = coverOnRight
+        CoverHitSurface.Margin = metrics.IsVertical ? new Thickness(0) : coverOnRight
             ? new Thickness(0, 0, metrics.LayoutHorizontalPadding, 0)
             : new Thickness(metrics.LayoutHorizontalPadding, 0, 0, 0);
         CoverHitSurface.Visibility = _settings.ShowCover ? Visibility.Visible : Visibility.Collapsed;
         LyricsControlPanelInputSurface.Apply(LyricsHitSurface, _settings, metrics);
         LyricsWebView.Margin = new Thickness(0, 0, 0, -metrics.ViewportDescenderBuffer);
-        _pendingScripts["style"] = LyricsStyleScriptFactory.Create(_settings, pixelsPerDip);
+        _pendingScripts["style"] = LyricsStyleScriptFactory.Create(_settings, pixelsPerDip, taskbar);
         var attachResult = !_settings.UseFloatingWindow
             ? _embeddedTaskbarAnchor.Attach(this, _settings, _displayMonitor)
             : EmbeddedTaskbarAttachResult.Unavailable;
@@ -150,7 +153,8 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
     public void ApplyPresentationCommand(LyricsPresentationCommand command)
     {
         _pendingScripts[command.Slot] = command.Slot == "style"
-            ? LyricsStyleScriptFactory.Create(_settings, DisplayMonitor.PixelsPerDip)
+            ? LyricsStyleScriptFactory.Create(_settings, DisplayMonitor.PixelsPerDip,
+                TaskbarPlacementService.GetTaskbarBounds(_displayMonitor, DisplayMonitor.PixelsPerDip))
             : command.Script;
 
         ExecutePendingScript(command.Slot);

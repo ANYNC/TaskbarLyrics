@@ -166,6 +166,8 @@ public sealed class AppSettings
 
     public bool ShowCover { get; set; } = true;
 
+    public bool SingleLineLyrics { get; set; }
+
     public bool EnableControlPanel { get; set; } = true;
 
     public ControlPanelTriggerMethod ControlPanelTriggerMethod { get; set; } = ControlPanelTriggerMethod.Click;

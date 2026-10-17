@@ -24,6 +24,10 @@ public sealed class TaskbarPlacementServiceTests
     [InlineData(0, 48, 1920, 1032, 0, 0, 1920, 48)]
     [InlineData(48, 0, 1872, 1080, 0, 0, 48, 1080)]
     [InlineData(0, 0, 1872, 1080, 1872, 0, 48, 1080)]
+    [InlineData(0, 0, 1920, 1048, 0, 1048, 1920, 32)]
+    [InlineData(0, 32, 1920, 1048, 0, 0, 1920, 32)]
+    [InlineData(32, 0, 1888, 1080, 0, 0, 32, 1080)]
+    [InlineData(0, 0, 1888, 1080, 1888, 0, 32, 1080)]
     public void ResolveTaskbarBoundsSupportsEveryTaskbarEdge(
         double workLeft,
         double workTop,

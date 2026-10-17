@@ -26,6 +26,13 @@ internal static class DisplayMonitorService
         var monitor = TaskbarNativeMethods.MonitorFromPoint(
             center,
             TaskbarNativeMethods.MONITOR_DEFAULTTONEAREST);
+        var monitorInfo = new TaskbarNativeMethods.MonitorInfo { Size = Marshal.SizeOf<TaskbarNativeMethods.MonitorInfo>() };
+        if (monitor != IntPtr.Zero && TaskbarNativeMethods.GetMonitorInfo(monitor, ref monitorInfo))
+        {
+            // Screen.WorkingArea can still hold the previous taskbar size during a settings notification.
+            bounds = new NativeRect(monitorInfo.Monitor.Left, monitorInfo.Monitor.Top, monitorInfo.Monitor.Right, monitorInfo.Monitor.Bottom);
+            workArea = new NativeRect(monitorInfo.WorkArea.Left, monitorInfo.WorkArea.Top, monitorInfo.WorkArea.Right, monitorInfo.WorkArea.Bottom);
+        }
         var pixelsPerDip = GetPixelsPerDip(monitor);
         var device = GetDisplayDevice(screen.DeviceName);
         var displayName = $"显示器 {GetWindowsDisplayNumber(screen.DeviceName, displayNumber)}";

@@ -8,7 +8,7 @@ const read = relativePath => readFile(new URL(relativePath, root), "utf8");
 const appIconUri = "data:image/png;base64,iVBORw0KGgo=";
 const artworkUri = "data:image/jpeg;base64,BBBB";
 
-async function createHarness() {
+async function createHarness({ deferAnimationFrames = false } = {}) {
   const [html, bridge, state, presentation, script, style] = await Promise.all([
     read("TaskbarLyrics.App/Web/Lyrics/index.html"),
     read("TaskbarLyrics.App/Web/Lyrics/bridge.js"),
@@ -21,11 +21,23 @@ async function createHarness() {
     runScripts: "outside-only"
   });
   dom.window.CSS = { supports: () => true };
+  const frames = new Map();
+  let nextFrameId = 1;
   dom.window.requestAnimationFrame = callback => {
+    if (deferAnimationFrames) {
+      const id = nextFrameId++;
+      frames.set(id, callback);
+      return id;
+    }
     callback(0);
     return 1;
   };
-  dom.window.cancelAnimationFrame = () => {};
+  dom.window.cancelAnimationFrame = id => frames.delete(id);
+  const flushFrames = () => {
+    const pending = [...frames.values()];
+    frames.clear();
+    pending.forEach(callback => callback(0));
+  };
 
   const timers = new Map();
   let nextTimerId = 1;
@@ -69,8 +81,182 @@ async function createHarness() {
     flushTimers();
   };
 
-  return { dom, preloaders, receive, flushTimers, showCover, style };
+  return { dom, preloaders, receive, flushTimers, flushFrames, showCover, style };
 }
+
+describe("taskbar line layout", () => {
+  it.each([26, 42])("displays the larger single-line font within a %spx viewport", async height => {
+    const { dom } = await createHarness();
+    const document = dom.window.document;
+    Object.defineProperty(document.querySelector(".viewport"), "clientHeight", { configurable: true, value: height });
+    const receive = payload => dom.window.taskbarLyrics.receive({ version: 1, type: "style", payload });
+    receive({ singleLine: true, fontSize: 19.6, layoutScalePercent: 100, viewportDescenderBuffer: 2 });
+    const size = () => Number.parseFloat(document.documentElement.style.getPropertyValue("--current-size"));
+    expect(size()).toBe(19.6);
+    receive({ singleLine: true, fontSize: 40, layoutScalePercent: 100, viewportDescenderBuffer: 2 });
+    expect(size()).toBeLessThanOrEqual(height - 2);
+    receive({ singleLine: false, fontSize: 14, layoutScalePercent: 100, viewportDescenderBuffer: 2 });
+    expect(size()).toBeLessThanOrEqual(14);
+    dom.window.close();
+  });
+
+  it("uses one complete row and rolls current lyrics upward in single-line mode", async () => {
+    const { dom, flushFrames, flushTimers } = await createHarness({ deferAnimationFrames: true });
+    const document = dom.window.document;
+    const viewport = document.querySelector(".viewport");
+    Object.defineProperty(viewport, "clientHeight", { configurable: true, value: 26 });
+    Object.defineProperty(viewport, "clientWidth", { configurable: true, value: 24 });
+    const receive = (type, payload) => dom.window.taskbarLyrics.receive({ version: 1, type, payload });
+    receive("style", { singleLine: true, verticalTaskbar: false, fontSize: 14, viewportDescenderBuffer: 2 });
+    expect(document.documentElement.classList.contains("single-line")).toBe(true);
+    expect(document.documentElement.style.getPropertyValue("--row-height")).toBe("24px");
+    receive("lyrics", { current: "第一句", next: "第二句", currentLineIndex: 0, trackId: "one", isPlaying: true });
+    flushTimers();
+    receive("lyrics", { current: "第二句", next: "第三句", currentLineIndex: 1, trackId: "one", isPlaying: true, wordScanProgress: 0.2 });
+    flushFrames();
+    flushFrames();
+    const track = document.querySelector(".track");
+    expect(track.classList.contains("single-line-roll")).toBe(true);
+    expect(track.classList.contains("animating")).toBe(true);
+    expect(track.style.transform).toBe("translateY(-24px)");
+    flushTimers();
+    expect(document.querySelector(".current-line .line-text-base").textContent).toBe("第二句");
+    expect(track.classList.contains("single-line-roll")).toBe(false);
+    expect(track.classList.contains("animating")).toBe(false);
+    expect(track.style.transform).toBe("");
+    receive("lyrics", { current: "第二句", next: "第三句", currentLineIndex: 1, trackId: "one", isPlaying: true, wordScanProgress: 0.25 });
+    expect(document.querySelector(".current-line").classList.contains("word-scan-smoothing")).toBe(true);
+    receive("style", { singleLine: false, verticalTaskbar: true });
+    expect(document.documentElement.classList.contains("single-line")).toBe(false);
+    expect(document.documentElement.classList.contains("vertical-taskbar")).toBe(true);
+    expect(document.documentElement.style.getPropertyValue("--row-height")).toBe("12px");
+  });
+
+  it("rolls one lyric row with translation enabled and settles the latest queued line", async () => {
+    const { dom, flushFrames, flushTimers, style } = await createHarness({ deferAnimationFrames: true });
+    const document = dom.window.document;
+    const receive = (type, payload) => dom.window.taskbarLyrics.receive({ version: 1, type, payload });
+    receive("style", { singleLine: true, fontSize: 19.6 });
+    const frame = { current: "旧句", next: "新句", currentLineIndex: 0, trackId: "single-translation", isPlaying: true,
+      translationMode: true, currentTranslation: "旧译", nextTranslation: "新译", wordScanProgress: 0.2 };
+    receive("lyrics", { ...frame, animateTransition: false });
+    receive("lyrics", { ...frame, current: "新句", currentLineIndex: 1, currentTranslation: "新译" });
+    flushFrames();
+    flushFrames();
+    const track = document.querySelector(".track");
+    expect(track.classList.contains("single-line-roll")).toBe(true);
+    expect(track.classList.contains("translation-pair-animating")).toBe(false);
+    expect(document.querySelector("#nextLineText").textContent).toBe("新句");
+    receive("lyrics", { ...frame, current: "最新句", currentLineIndex: 2, currentTranslation: "最新译" });
+    flushTimers();
+    flushFrames();
+    flushFrames();
+    flushTimers();
+    expect(document.querySelector("#currentLineText").textContent).toBe("最新句");
+    expect(track.classList.contains("single-line-roll")).toBe(false);
+    expect(style).toContain(".single-line .track.single-line-roll > .next-line:not(.incoming-line)");
+    dom.window.close();
+  });
+
+  it("cancels single-line roll on a mode change and honors reduced motion", async () => {
+    const { dom, flushFrames } = await createHarness({ deferAnimationFrames: true });
+    const document = dom.window.document;
+    const receive = (type, payload) => dom.window.taskbarLyrics.receive({ version: 1, type, payload });
+    receive("style", { singleLine: true });
+    const frame = { current: "旧句", next: "新句", currentLineIndex: 0, trackId: "single-cancel", isPlaying: true };
+    receive("lyrics", { ...frame, animateTransition: false });
+    receive("lyrics", { ...frame, current: "新句", currentLineIndex: 1 });
+    flushFrames();
+    flushFrames();
+    const track = document.querySelector(".track");
+    expect(track.classList.contains("single-line-roll")).toBe(true);
+    receive("style", { singleLine: false });
+    expect(track.classList.contains("single-line-roll")).toBe(false);
+    expect(track.style.transform).toBe("");
+    dom.window.matchMedia = () => ({ matches: true });
+    receive("style", { singleLine: true });
+    receive("lyrics", { ...frame, current: "静态句", currentLineIndex: 2 });
+    expect(track.classList.contains("animating")).toBe(false);
+    expect(document.querySelector("#currentLineText").textContent).toBe("静态句");
+    dom.window.close();
+  });
+
+  it("lays out vertical columns by width and scrolls long lyrics along their height", async () => {
+    const { dom, style } = await createHarness();
+    const document = dom.window.document;
+    const viewport = document.querySelector(".viewport");
+    Object.defineProperty(viewport, "clientWidth", { configurable: true, value: 32 });
+    Object.defineProperty(viewport, "clientHeight", { configurable: true, value: 350 });
+    const line = document.querySelector(".current-line");
+    const textViewport = line.querySelector(".line-text-viewport");
+    const text = line.querySelector(".line-text-base");
+    Object.defineProperty(textViewport, "clientHeight", { configurable: true, value: 200 });
+    Object.defineProperty(textViewport, "clientWidth", { configurable: true, value: 12 });
+    Object.defineProperty(text, "scrollHeight", { configurable: true, value: 600 });
+    Object.defineProperty(text, "scrollWidth", { configurable: true, value: 12 });
+    const receive = (type, payload) => dom.window.taskbarLyrics.receive({ version: 1, type, payload });
+    receive("style", { verticalTaskbar: true, singleLine: false, fontSize: 8, layoutScalePercent: 300 });
+    expect(document.documentElement.style.getPropertyValue("--row-height")).toBe("16px");
+    expect(Number.parseFloat(document.documentElement.style.getPropertyValue("--next-size"))).toBeLessThanOrEqual(8);
+    receive("lyrics", { current: "竖排长句", next: "下一列", currentLineIndex: 0, trackId: "vertical", isPlaying: true, wordScanProgress: 0.5, animateTransition: false });
+    expect(line.classList.contains("horizontal-scrolling")).toBe(true);
+    expect(line.querySelector(".line-text-stack").style.getPropertyValue("--line-scroll-offset")).toBe("-170px");
+    expect(document.querySelector(".track").classList.contains("animating")).toBe(false);
+    expect(style).toContain("writing-mode: vertical-rl");
+    expect(style).toContain("--word-scan-direction: to bottom");
+    expect(style).toContain("transform: translateY(var(--line-scroll-offset))");
+    receive("style", { verticalTaskbar: false, singleLine: false });
+    expect(line.classList.contains("horizontal-scrolling")).toBe(false);
+  });
+
+  it.each([[false, false], [true, false], [false, true], [true, true]])(
+    "rolls vertical columns right and settles their text (single=%s, translation=%s)", async (singleLine, translationMode) => {
+      const { dom, flushFrames, flushTimers } = await createHarness({ deferAnimationFrames: true });
+      const document = dom.window.document;
+      Object.defineProperty(document.querySelector(".viewport"), "clientWidth", { configurable: true, value: 32 });
+      const receive = (type, payload) => dom.window.taskbarLyrics.receive({ version: 1, type, payload });
+      receive("style", { verticalTaskbar: true, singleLine });
+      const frame = { current: "旧句", next: "新句", currentLineIndex: 0, trackId: "roll", isPlaying: true,
+        translationMode, currentTranslation: "旧译", nextTranslation: "新译", wordScanProgress: 0.2 };
+      receive("lyrics", { ...frame, animateTransition: false });
+      receive("lyrics", { ...frame, current: "新句", next: "后句", currentLineIndex: 1, currentTranslation: "新译" });
+      flushFrames();
+      flushFrames();
+      const track = document.querySelector(".track");
+      expect(track.classList.contains("vertical-roll")).toBe(true);
+      expect(track.classList.contains("animating")).toBe(true);
+      const expectedDistance = singleLine || translationMode ? 32 : 16;
+      expect(track.style.transform).toBe(`translateX(${expectedDistance}px)`);
+      flushTimers();
+      expect(document.querySelector("#currentLineText").textContent).toBe("新句");
+      expect(document.querySelector("#nextLineText").textContent).toBe(translationMode ? "新译" : "后句");
+      expect(track.classList.contains("vertical-roll")).toBe(false);
+      expect(track.classList.contains("animating")).toBe(false);
+      expect(track.style.transform).toBe("");
+    });
+
+  it("cancels vertical roll state when orientation changes and honors reduced motion", async () => {
+    const { dom, flushFrames } = await createHarness({ deferAnimationFrames: true });
+    const document = dom.window.document;
+    const receive = (type, payload) => dom.window.taskbarLyrics.receive({ version: 1, type, payload });
+    receive("style", { verticalTaskbar: true, singleLine: true });
+    const frame = { current: "旧句", next: "新句", currentLineIndex: 0, trackId: "cancel", isPlaying: true };
+    receive("lyrics", { ...frame, animateTransition: false });
+    receive("lyrics", { ...frame, current: "新句", currentLineIndex: 1 });
+    flushFrames();
+    flushFrames();
+    const track = document.querySelector(".track");
+    expect(track.classList.contains("vertical-roll")).toBe(true);
+    receive("style", { verticalTaskbar: false, singleLine: true });
+    expect(track.classList.contains("vertical-roll")).toBe(false);
+    expect(track.style.transform).toBe("");
+    dom.window.matchMedia = () => ({ matches: true });
+    receive("style", { verticalTaskbar: true, singleLine: true });
+    receive("lyrics", { ...frame, current: "静态句", currentLineIndex: 2 });
+    expect(track.classList.contains("animating")).toBe(false);
+    expect(document.querySelector("#currentLineText").textContent).toBe("静态句");
+  });
+});
 
 describe("embedded control panel triggers", () => {
   async function triggerHarness(style = {}) {
@@ -160,6 +346,45 @@ describe("embedded control panel triggers", () => {
 });
 
 describe("lyrics cover fallback", () => {
+  it("makes floating cover and lyrics passive while retaining lock state and restoring interaction on enable", async () => {
+    const { dom, style } = await createHarness();
+    const sent = [];
+    dom.window.chrome = { webview: { postMessage: message => sent.push(JSON.parse(message)) } };
+    const document = dom.window.document;
+    const cover = document.querySelector("#cover");
+    const interaction = cover.querySelector(".cover-interaction");
+    const css = document.createElement("style");
+    css.textContent = style;
+    document.head.append(css);
+    const receive = (type, payload) => dom.window.taskbarLyrics.receive({ version: 1, type, payload });
+    const receiveStyle = enabled => receive("style", {
+      floatingControlPanel: true, enableControlPanel: true, floatingInputPassthrough: !enabled
+    });
+    try {
+      receiveStyle(false);
+      cover.focus();
+      expect(dom.window.getComputedStyle(document.querySelector(".layout")).pointerEvents).toBe("none");
+      expect(dom.window.getComputedStyle(interaction).visibility).toBe("hidden");
+      expect(cover.disabled).toBe(false);
+      cover.click();
+      expect(sent.at(-1).type).toBe("coverClick");
+      receive("floatingLockState", { locked: true, hovered: true });
+      expect(dom.window.getComputedStyle(interaction).visibility).toBe("hidden");
+      expect(cover.getAttribute("aria-label")).toBe("解锁浮窗");
+      receiveStyle(true);
+      expect(dom.window.getComputedStyle(document.querySelector(".layout")).pointerEvents).not.toBe("none");
+      expect(dom.window.getComputedStyle(interaction).visibility).not.toBe("hidden");
+      expect(dom.window.getComputedStyle(interaction).opacity).toBe("1");
+      expect(dom.window.getComputedStyle(cover.querySelector(".cover-floating-icon")).display).toBe("block");
+      receiveStyle(false);
+      receive("floatingLockState", { locked: false, hovered: true });
+      expect(dom.window.getComputedStyle(interaction).visibility).toBe("hidden");
+      receive("style", { floatingControlPanel: false, enableControlPanel: true, floatingInputPassthrough: true });
+      expect(dom.window.getComputedStyle(interaction).visibility).not.toBe("hidden");
+      expect(cover.getAttribute("aria-label")).toBe("展开播放控制");
+    } finally { dom.window.close(); }
+  });
+
   it("clears pointer focus for floating cover clicks while keeping keyboard activation focused", async () => {
     const { dom, style } = await createHarness();
     const document = dom.window.document;
@@ -195,7 +420,7 @@ describe("lyrics cover fallback", () => {
     receiveStyle({ floatingControlPanel: true, enableControlPanel: true, viewportDescenderBuffer: 3 });
     expect(root.style.getPropertyValue("--viewport-descender-buffer")).toBe("3px");
     expect(root.classList.contains("floating-controls-enabled")).toBe(true);
-    expect(style).toMatch(/\.floating-controls-enabled \.cover\s*\{[^}]*margin-bottom:\s*var\(--viewport-descender-buffer\)/s);
+    expect(style).toMatch(/:root:not\(\.vertical-taskbar\) \.cover\s*\{[^}]*margin-bottom:\s*var\(--viewport-descender-buffer\)/s);
     receiveStyle({ floatingControlPanel: false, viewportDescenderBuffer: 2 });
     expect(root.classList.contains("floating-controls-enabled")).toBe(false);
     expect(root.style.getPropertyValue("--viewport-descender-buffer")).toBe("2px");

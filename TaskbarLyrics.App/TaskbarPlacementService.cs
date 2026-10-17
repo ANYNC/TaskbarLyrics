@@ -25,8 +25,19 @@ internal sealed class TaskbarPlacementService
             ? GetPrimaryDisplayMetrics(pixelsPerDip)
             : ConvertPhysicalDisplayMetrics(targetDisplay.Bounds, targetDisplay.WorkArea, pixelsPerDip);
         var taskbar = ResolveTaskbarBounds(display);
-        var metrics = LyricsLayoutMetrics.Create(settings, pixelsPerDip);
+        var metrics = LyricsLayoutMetrics.Create(settings, pixelsPerDip, taskbar);
         window.Height = Math.Min(metrics.DesiredWindowHeight, display.Height);
+
+        if (metrics.IsVertical)
+        {
+            window.Width = taskbar.Width;
+            window.Left = taskbar.Left;
+            window.Top = taskbar.Top + EmbeddedTaskbarLayoutCalculator.ClampVerticalTop(
+                EmbeddedTaskbarLayoutCalculator.CalculateVerticalTop(taskbar.Height, window.Height, settings.YOffset, alignTop: true),
+                taskbar.Height, window.Height);
+            CommitNativeBounds(window, pixelsPerDip);
+            return;
+        }
 
         var requestedLeft = settings.UseFloatingWindow ? display.Left : settings.HorizontalAnchor switch
         {
@@ -61,6 +72,11 @@ internal sealed class TaskbarPlacementService
         var visualScale = VisualTreeHelper.GetDpi(window).DpiScaleY;
         return double.IsFinite(visualScale) && visualScale > 0 ? visualScale : 1;
     }
+
+    internal static TaskbarBounds GetTaskbarBounds(DisplayMonitor? display, double pixelsPerDip) =>
+        ResolveTaskbarBounds(display is null
+            ? GetPrimaryDisplayMetrics(pixelsPerDip)
+            : ConvertPhysicalDisplayMetrics(display.Bounds, display.WorkArea, pixelsPerDip));
 
     private static TaskbarDisplayMetrics GetPrimaryDisplayMetrics(double pixelsPerDip)
     {
@@ -188,7 +204,7 @@ internal sealed class TaskbarPlacementService
                 display.Left,
                 display.WorkAreaBottom,
                 display.Width,
-                Math.Max(defaultThickness, display.Bottom - display.WorkAreaBottom));
+                display.Bottom - display.WorkAreaBottom);
         }
 
         if (display.WorkAreaTop > display.Top + edgeTolerance)
@@ -197,7 +213,7 @@ internal sealed class TaskbarPlacementService
                 display.Left,
                 display.Top,
                 display.Width,
-                Math.Max(defaultThickness, display.WorkAreaTop - display.Top));
+                display.WorkAreaTop - display.Top);
         }
 
         if (display.WorkAreaLeft > display.Left + edgeTolerance)
@@ -205,7 +221,7 @@ internal sealed class TaskbarPlacementService
             return new TaskbarBounds(
                 display.Left,
                 display.Top,
-                Math.Max(defaultThickness, display.WorkAreaLeft - display.Left),
+                display.WorkAreaLeft - display.Left,
                 display.Height);
         }
 
@@ -214,7 +230,7 @@ internal sealed class TaskbarPlacementService
             return new TaskbarBounds(
                 display.WorkAreaRight,
                 display.Top,
-                Math.Max(defaultThickness, display.Right - display.WorkAreaRight),
+                display.Right - display.WorkAreaRight,
                 display.Height);
         }
 
@@ -306,6 +322,8 @@ internal readonly record struct TaskbarDisplayMetrics(
 
 internal readonly record struct TaskbarBounds(double Left, double Top, double Width, double Height)
 {
+    public bool IsVertical => Height > Width;
+
     public double CenterY => Top + (Height / 2);
 }
 

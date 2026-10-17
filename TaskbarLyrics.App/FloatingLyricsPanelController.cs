@@ -74,13 +74,18 @@ internal sealed class FloatingLyricsPanelController : IDisposable
         {
             if (!value) _resizing?.ResizeGrip?.CancelAdjustment();
             _enabled = value;
-            if (value) _timer.Start();
+            if (value)
+            {
+                foreach (var target in _targets) ApplyInputPolicy(target);
+                _timer.Start();
+            }
             else
             {
                 _timer.Stop(); Close(immediate: true);
                 foreach (var target in _targets)
                 {
                     SetLocked(target, false);
+                    ApplyInputPolicy(target);
                     Release(target);
                 }
             }
@@ -180,7 +185,28 @@ internal sealed class FloatingLyricsPanelController : IDisposable
         window.Closed += TargetClosed;
         window.LocationChanged += TargetMoved;
         window.SizeChanged += TargetResized;
+        window.SourceInitialized += TargetSourceInitialized;
+        ApplyInputPolicy(_targets[^1]);
     }
+    private void TargetSourceInitialized(object? sender, EventArgs e)
+    {
+        var target = _targets.Find(item => item.Window == sender);
+        if (target is not null) ApplyInputPolicy(target);
+    }
+
+    private void ApplyInputPolicy(Target target)
+    {
+        var handle = new WindowInteropHelper(target.Window).Handle;
+        if (handle == IntPtr.Zero) return;
+        var passive = _enabled && !ShowPlaybackControls;
+        NativeWindowInteraction.SetClickThrough(handle, passive || target.Locked);
+        if (!passive) return;
+        if (target.UnlockWindow is { IsVisible: true }) target.UnlockWindow.Hide();
+        if (!target.CoverHovered) return;
+        target.CoverHovered = false;
+        target.LockChanged?.Invoke(target.Locked, false);
+    }
+
     private void TargetMoved(object? sender, EventArgs e)
     {
         if (_dragging is not { } target || target.Window != sender || _updatingDrag) return;
@@ -212,6 +238,7 @@ internal sealed class FloatingLyricsPanelController : IDisposable
         window.Closed -= TargetClosed;
         window.LocationChanged -= TargetMoved;
         window.SizeChanged -= TargetResized;
+        window.SourceInitialized -= TargetSourceInitialized;
         var target = _targets.Find(item => item.Window == window);
         if (target is null) return;
         SetLocked(target, false);
@@ -261,15 +288,15 @@ internal sealed class FloatingLyricsPanelController : IDisposable
                 target.LockChanged?.Invoke(true, hovered);
             });
             var scale = TaskbarNativeMethods.GetDpiForWindow(new WindowInteropHelper(target.Window).Handle) / 96.0;
-            target.UnlockWindow.Position(bounds, scale);
+            if (ShowPlaybackControls) target.UnlockWindow.Position(bounds, scale);
         }
         else
         {
             target.UnlockWindow?.Close();
             target.UnlockWindow = null;
         }
-        NativeWindowInteraction.SetClickThrough(new WindowInteropHelper(target.Window).Handle, locked);
-        target.CoverHovered = locked && target.UnlockWindow?.IsMouseOver == true;
+        ApplyInputPolicy(target);
+        target.CoverHovered = ShowPlaybackControls && locked && target.UnlockWindow?.IsMouseOver == true;
         target.LockChanged?.Invoke(locked, target.CoverHovered);
         // Resume the usual hover delay after unlocking, including when the cursor stays on the cover.
         _candidate = null;
@@ -286,7 +313,11 @@ internal sealed class FloatingLyricsPanelController : IDisposable
             Close(immediate: true);
             _showPlaybackControls = value;
             _candidate = null;
-            foreach (var target in _targets) target.LyricsBounds = Rect.Empty;
+            foreach (var target in _targets)
+            {
+                target.LyricsBounds = Rect.Empty;
+                ApplyInputPolicy(target);
+            }
         }
     }
 
@@ -373,6 +404,7 @@ internal sealed class FloatingLyricsPanelController : IDisposable
         Target? hovered = null;
         foreach (var target in _targets)
         {
+            ApplyInputPolicy(target);
             if (target.Locked)
             {
                 var cover = target.CoverBounds?.Invoke() ?? Rect.Empty;
@@ -381,7 +413,7 @@ internal sealed class FloatingLyricsPanelController : IDisposable
                 else
                 {
                     var scale = TaskbarNativeMethods.GetDpiForWindow(new WindowInteropHelper(target.Window).Handle) / 96.0;
-                    target.UnlockWindow?.Position(cover, scale);
+                    if (ShowPlaybackControls) target.UnlockWindow?.Position(cover, scale);
                     continue;
                 }
             }
@@ -490,6 +522,7 @@ internal sealed class FloatingLyricsPanelController : IDisposable
             target.Window.Closed -= TargetClosed;
             target.Window.LocationChanged -= TargetMoved;
             target.Window.SizeChanged -= TargetResized;
+            target.Window.SourceInitialized -= TargetSourceInitialized;
             Release(target);
         }
         _targets.Clear(); _candidate = null;

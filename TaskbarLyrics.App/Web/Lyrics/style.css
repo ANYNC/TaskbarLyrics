@@ -114,7 +114,7 @@ html, body {
 }
 
 /* The host extends WebView for text descenders; keep artwork centered in the native content area. */
-.floating-controls-enabled .cover {
+:root:not(.vertical-taskbar) .cover {
   margin-bottom: var(--viewport-descender-buffer);
 }
 
@@ -131,6 +131,34 @@ html, body {
 .cover { grid-area: cover; }
 .cover-gap { grid-area: gap; }
 .lyrics-pane { grid-area: lyrics; }
+
+:root.vertical-taskbar:not(.cover-hidden) .shell {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: var(--cover-size) var(--cover-gap) minmax(0, 1fr);
+  grid-template-areas: "cover" "gap" "lyrics";
+  justify-items: center;
+}
+
+.vertical-taskbar .lyrics-pane { width: 100%; }
+
+:root.vertical-taskbar[data-cover-position="Right"]:not(.cover-hidden) .shell {
+  grid-template-rows: minmax(0, 1fr) var(--cover-gap) var(--cover-size);
+  grid-template-areas: "lyrics" "gap" "cover";
+}
+
+/* The extra WebView descender pixels belong to text, not to the native artwork bounds. */
+.vertical-taskbar[data-cover-position="Right"] .cover {
+  transform: translateY(calc(-1 * var(--viewport-descender-buffer)));
+}
+
+.single-line .track > .next-line,
+.single-line .incoming-translation-pair {
+  display: none !important;
+}
+
+.single-line .track.single-line-roll > .next-line:not(.incoming-line) {
+  display: flex !important;
+}
 .lyrics-pane.panel-trigger { cursor: pointer; }
 .lyrics-pane.panel-trigger:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; border-radius: 4px; }
 
@@ -230,6 +258,8 @@ html, body {
 /* The separate native unlock window owns mouse hover while the lyrics HWND passes through. */
 .floating-controls-enabled.floating-locked .cover:not(:disabled) .cover-interaction { opacity: 0; }
 .floating-controls-enabled.floating-locked.floating-lock-hovered .cover:not(:disabled) .cover-interaction { opacity: 1; }
+.floating-input-passthrough .layout { pointer-events: none; }
+.floating-input-passthrough .cover-interaction { visibility: hidden; }
 
 .cover-fallback {
   position: absolute;
@@ -524,19 +554,94 @@ html, body {
     clip-path: none;
     color: var(--word-scan-overlay);
     -webkit-mask-image: linear-gradient(
-      to right,
+      var(--word-scan-direction, to right),
       #000 0,
       #000 calc(var(--word-scan-progress) - var(--word-scan-effective-feather)),
       transparent calc(var(--word-scan-progress) + var(--word-scan-effective-feather)),
       transparent 100%);
     mask-image: linear-gradient(
-      to right,
+      var(--word-scan-direction, to right),
       #000 0,
       #000 calc(var(--word-scan-progress) - var(--word-scan-effective-feather)),
       transparent calc(var(--word-scan-progress) + var(--word-scan-effective-feather)),
       transparent 100%);
     -webkit-mask-repeat: no-repeat;
     mask-repeat: no-repeat;
+  }
+}
+
+.vertical-taskbar {
+  --word-scan-direction: to bottom;
+}
+
+.vertical-taskbar .track {
+  height: 100%;
+  flex-direction: row-reverse;
+}
+
+.vertical-taskbar .incoming-translation-pair {
+  width: calc(2 * var(--row-height) + var(--row-gap));
+  height: 100%;
+  flex: 0 0 calc(2 * var(--row-height) + var(--row-gap));
+  flex-direction: row-reverse;
+}
+
+.vertical-taskbar .line {
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+  width: var(--row-height);
+  min-width: var(--row-height);
+  height: 100%;
+  min-height: 0;
+  flex: 0 0 var(--row-height);
+  top: 0;
+  transform-origin: center top;
+}
+
+.vertical-taskbar .next-line.promoting {
+  transform: scale(var(--promotion-scale));
+}
+
+.vertical-taskbar .line-text-viewport {
+  height: 100%;
+  min-height: 0;
+}
+
+.vertical-taskbar .line-text-stack {
+  width: 100%;
+  max-width: 100%;
+  height: fit-content;
+  max-height: 100%;
+}
+
+.vertical-taskbar .line-text {
+  height: 100%;
+  padding: 0 0 0 var(--line-text-padding-bottom);
+}
+
+.vertical-taskbar .line.horizontal-scrolling .line-text-stack {
+  width: 100%;
+  max-width: 100%;
+  height: max-content;
+  max-height: none;
+  transform: translateY(var(--line-scroll-offset));
+}
+
+.vertical-taskbar .line.horizontal-scrolling .line-text {
+  width: 100%;
+  height: max-content;
+}
+
+@supports not ((mask-image: linear-gradient(to bottom, #000, transparent)) or
+  (-webkit-mask-image: linear-gradient(to bottom, #000, transparent))) {
+  .vertical-taskbar .current-line.word-scanning .line-text-base,
+  .vertical-taskbar .next-line.promoting.word-scanning .line-text-base {
+    clip-path: inset(var(--word-scan-progress) 0 0 0);
+  }
+
+  .vertical-taskbar .current-line.word-scanning .line-text-scan,
+  .vertical-taskbar .next-line.promoting.word-scanning .line-text-scan {
+    clip-path: inset(0 0 calc(100% - var(--word-scan-progress)) 0);
   }
 }
 
@@ -574,6 +679,18 @@ html, body {
 
 .layout.translation-mode .track > .next-line:not(.incoming-line) .line-text-scan {
   visibility: hidden;
+}
+
+.vertical-taskbar .layout.translation-mode .track > .next-line:not(.incoming-line) {
+  top: 0;
+}
+
+.single-line .layout.translation-mode .track > .next-line.promoting:not(.incoming-line) {
+  color: var(--primary);
+}
+
+.single-line .layout.translation-mode .track > .next-line.promoting.word-scanning .line-text-scan {
+  visibility: visible;
 }
 
 .incoming-translation-pair {

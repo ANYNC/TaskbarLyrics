@@ -16,6 +16,217 @@ public sealed class FloatingPanelInputTestGroup;
 public sealed class FloatingPanelInputTests
 {
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void DisabledFloatingPlaybackPassesThroughCoverAndLyricsAndRestoresLockedInput(bool locked)
+    {
+        RunSta(() =>
+        {
+            using var receiver = new ReceiverWindow();
+            var owner = CreateOwner(layered: true);
+            using var controller = new FloatingLyricsPanelController(owner.Dispatcher,
+                () => new FloatingLyricsControlWindow(_ => { }, _ => { }));
+            try
+            {
+                var display = DisplayMonitorService.GetDisplays().First(item => item.IsPrimary);
+                var bounds = FloatingLyricsPanelController.GetBounds(owner);
+                var cover = new Rect(bounds.Left, bounds.Top, 34, 34);
+                var coverPoint = Point(cover.Left + 10, cover.Top + 10);
+                var lyricsPoint = Point(bounds.Right - 40, bounds.Top + 20);
+                controller.Register(owner, () => display, () => true, (_, _) => { }, coverBounds: () => cover);
+                controller.Enabled = true;
+                if (locked) controller.ToggleLock(owner);
+                controller.ShowPlaybackControls = false;
+                PumpMessages();
+                Assert.Equal(receiver.Handle, WindowFromPoint(coverPoint));
+                Assert.Equal(receiver.Handle, WindowFromPoint(lyricsPoint));
+                Assert.Equal(locked, controller.IsLocked(owner));
+                Assert.Null(controller.Panel);
+                controller.ShowPlaybackControls = true;
+                PumpMessages();
+                if (locked)
+                {
+                    Assert.IsType<FloatingCoverUnlockWindow>(HwndSource.FromHwnd(WindowFromPoint(coverPoint)).RootVisual);
+                    Assert.Equal(receiver.Handle, WindowFromPoint(lyricsPoint));
+                }
+                else
+                {
+                    var handle = new WindowInteropHelper(owner).Handle;
+                    Assert.Equal(handle, WindowFromPoint(coverPoint));
+                    Assert.Equal(handle, WindowFromPoint(lyricsPoint));
+                }
+                controller.ShowPlaybackControls = false;
+                controller.Enabled = false;
+                Assert.Equal(new WindowInteropHelper(owner).Handle, WindowFromPoint(coverPoint));
+            }
+            finally { controller.Enabled = false; owner.Close(); }
+        });
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void SourceClickDuringPanelExitDoesNotRestartItsOpeningAnimation(bool deactivateBeforeClick)
+    {
+        RunSta(() =>
+        {
+            using var composition = new AppCompositionRoot();
+            using var offsets = new TaskbarLyrics.Core.Services.TrackLyricOffsetStore();
+            var main = new MainWindow(offsets, composition, () => { }, () => { });
+            const System.Reflection.BindingFlags flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+            var panel = (LyricsControlPanelWindow)typeof(MainWindow).GetMethod("CreateControlPanelWindow", flags)!.Invoke(main, null)!;
+            typeof(MainWindow).GetField("_controlPanelWindow", flags)!.SetValue(main, panel);
+            try
+            {
+                panel.Left = 100;
+                panel.Top = 100;
+                panel.Show();
+                typeof(LyricsControlPanelWindow).GetField("_isWebReady", flags)!.SetValue(panel, true);
+                var display = DisplayMonitorService.GetDisplays()[0];
+                // Deactivation starts the exit before the source WebView delivers its click.
+                if (deactivateBeforeClick) panel.HidePanel();
+                else main.ToggleControlPanelNear(new Rect(100, 100, 34, 34), display, _ => { });
+                Assert.True(panel.IsClosing);
+                var version = typeof(LyricsControlPanelWindow).GetField("_showVersion", flags)!.GetValue(panel);
+                var expanded = false;
+                for (var click = 0; click < 3; click++)
+                    main.ToggleControlPanelNear(new Rect(100, 100, 34, 34), display, value => expanded = value);
+                Assert.True(panel.IsClosing);
+                Assert.Equal(version, typeof(LyricsControlPanelWindow).GetField("_showVersion", flags)!.GetValue(panel));
+                Assert.False(expanded);
+            }
+            finally { panel.Close(); main.Close(); }
+        });
+    }
+
+    [Fact]
+    public void SourceClickCancelsPendingPanelPreparationAndClearsExpandedState()
+    {
+        RunSta(() =>
+        {
+            using var composition = new AppCompositionRoot();
+            using var offsets = new TaskbarLyrics.Core.Services.TrackLyricOffsetStore();
+            var main = new MainWindow(offsets, composition, () => { }, () => { });
+            const System.Reflection.BindingFlags flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+            var panel = (LyricsControlPanelWindow)typeof(MainWindow).GetMethod("CreateControlPanelWindow", flags)!.Invoke(main, null)!;
+            typeof(MainWindow).GetField("_controlPanelWindow", flags)!.SetValue(main, panel);
+            try
+            {
+                // Cached WebView preparation can be awaiting scripts while its window is hidden.
+                typeof(LyricsControlPanelWindow).GetProperty("IsOpening", flags)!.SetValue(panel, true);
+                var expanded = true;
+                typeof(MainWindow).GetField("_setControlPanelOpen", flags)!.SetValue(main, new Action<bool>(value => expanded = value));
+                main.ToggleControlPanelNear(new Rect(100, 100, 34, 34), DisplayMonitorService.GetDisplays()[0], value => expanded = value);
+                Assert.False(panel.IsOpening);
+                Assert.False(panel.IsVisible);
+                Assert.False(expanded);
+            }
+            finally { panel.Close(); main.Close(); }
+        });
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(1.5)]
+    public void SingleLineMainAndMirrorResizeArtworkInBothTaskbarSizeDirections(double dpi)
+    {
+        RunSta(() =>
+        {
+            using var composition = new AppCompositionRoot();
+            using var offsets = new TaskbarLyrics.Core.Services.TrackLyricOffsetStore();
+            DisplayMonitor Display(int height) => new("layout-test", "Layout", true,
+                new NativeRect(0, 0, 1920, 1080), new NativeRect(0, 0, 1920, 1080 - (int)(height * dpi)), dpi);
+            var compact = Display(32);
+            var normal = Display(48);
+            var main = new MainWindow(offsets, composition, () => { }, () => { });
+            var mirror = new LyricsMirrorWindow(compact, (_, _, _, _, _, _) => { }, composition);
+            var settings = new AppSettings { SingleLineLyrics = true, LyricsLayoutScalePercent = 70 };
+            var previous = TaskbarEmbeddingLayoutPolicy.FromDisplay(compact);
+            try
+            {
+                foreach (var display in new[] { compact, normal, compact })
+                {
+                    var current = TaskbarEmbeddingLayoutPolicy.FromDisplay(display);
+                    settings.LyricsLayoutScalePercent = TaskbarEmbeddingLayoutPolicy.ScaleForTaskbarHeightChange(settings, previous, current);
+                    previous = current;
+                    main.SetDisplayMonitor(display);
+                    mirror.SetDisplayMonitor(display);
+                    main.ApplySettings(settings);
+                    mirror.ApplySettings(settings);
+                    var metrics = LyricsLayoutMetrics.Create(settings, dpi,
+                        new TaskbarBounds(0, 0, 1920 / dpi, current.MaxHeight));
+                    foreach (var source in new Window[] { main, mirror })
+                    {
+                        // Hidden windows do not measure descendants; lay out their content directly.
+                        var root = (FrameworkElement)source.FindName("RootBorder");
+                        root.Measure(new Size(source.Width, source.Height));
+                        root.Arrange(new Rect(0, 0, source.Width, source.Height));
+                        root.UpdateLayout();
+                        var cover = (FrameworkElement)source.FindName("CoverHitSurface");
+                        Assert.Equal(metrics.CoverSize, cover.ActualWidth, 6);
+                        Assert.Equal(metrics.CoverSize, cover.ActualHeight, 6);
+                        Assert.Equal(metrics.DesiredWindowHeight, source.Height, 6);
+                        Assert.Equal(display == normal ? 105 : 70, settings.LyricsLayoutScalePercent, 6);
+                    }
+                }
+            }
+            finally { mirror.Close(); main.Close(); }
+        });
+    }
+
+    [Theory]
+    [InlineData(false, false, 1, CoverPosition.Left)]
+    [InlineData(false, true, 1.5, CoverPosition.Right)]
+    [InlineData(true, false, 1, CoverPosition.Left)]
+    [InlineData(true, true, 1.5, CoverPosition.Right)]
+    public void CompactAndSidebarHostsKeepNativeCoverInsideContent(bool vertical, bool singleLine, double dpi, CoverPosition position)
+    {
+        RunSta(() =>
+        {
+            using var composition = new AppCompositionRoot();
+            using var offsets = new TaskbarLyrics.Core.Services.TrackLyricOffsetStore();
+            var display = new DisplayMonitor("layout-test", "Layout", true, new NativeRect(0, 0, 1920, 1080),
+                vertical ? new NativeRect((int)(48 * dpi), 0, 1920, 1080)
+                    : new NativeRect(0, 0, 1920, 1080 - (int)(32 * dpi)), dpi);
+            var main = new MainWindow(offsets, composition, () => { }, () => { });
+            var mirror = new LyricsMirrorWindow(display, (_, _, _, _, _, _) => { }, composition);
+            var settings = new AppSettings { SingleLineLyrics = singleLine, CoverPosition = position, ControlPanelTriggerLyrics = true };
+            try
+            {
+                main.SetDisplayMonitor(display);
+                var floating = settings.Clone();
+                floating.UseFloatingWindow = true;
+                main.ApplySettings(floating);
+                mirror.ApplySettings(floating);
+                main.ApplySettings(settings);
+                mirror.ApplySettings(settings);
+                foreach (var source in new Window[] { main, mirror })
+                {
+                    source.Measure(new Size(source.Width, source.Height));
+                    source.Arrange(new Rect(0, 0, source.Width, source.Height));
+                    source.UpdateLayout();
+                    var content = (FrameworkElement)source.FindName("LyricsContentRoot");
+                    var cover = (FrameworkElement)source.FindName("CoverHitSurface");
+                    var origin = cover.TranslatePoint(new Point(), content);
+                    Assert.InRange(origin.X, -0.01, content.ActualWidth);
+                    Assert.InRange(origin.Y, -0.01, content.ActualHeight);
+                    Assert.True(origin.X + cover.ActualWidth <= content.ActualWidth + 0.01);
+                    Assert.True(origin.Y + cover.ActualHeight <= content.ActualHeight + 0.01);
+                    Assert.Equal(vertical ? 48 : 32, vertical ? source.Width : source.Height);
+                    var lyrics = (FrameworkElement)source.FindName("LyricsHitSurface");
+                    if (vertical)
+                    {
+                        Assert.Equal(display.Bounds.Top / dpi, source.Top);
+                        Assert.Equal(position == CoverPosition.Right ? VerticalAlignment.Bottom : VerticalAlignment.Top, cover.VerticalAlignment);
+                        Assert.Equal(position == CoverPosition.Left ? cover.Height + settings.CoverGap : 0, lyrics.Margin.Top);
+                    }
+                }
+            }
+            finally { mirror.Close(); main.Close(); }
+        });
+    }
+
+    [Theory]
     [InlineData(CoverPosition.Left, 100)]
     [InlineData(CoverPosition.Right, 100)]
     [InlineData(CoverPosition.Left, 150)]
@@ -466,6 +677,39 @@ public sealed class FloatingPanelInputTests
                 Assert.Null(new FloatingWindowPositionStore(path).Get(display.Id));
             }
             finally { owner.Close(); System.IO.File.Delete(path); }
+        });
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void MouseSeekKeepsClickedPositionWhenSliderHandlesTheMouseEvent(bool handled)
+    {
+        RunSta(() =>
+        {
+            var owner = CreateOwner();
+            var clock = new SeekTestClock();
+            var seeks = new List<TimeSpan>();
+            var panel = CreateSeekPanel(owner, seeks.Add, clock);
+            try
+            {
+                var slider = (System.Windows.Controls.Slider)panel.FindName("SeekSlider");
+                void RaiseMouse(RoutedEvent routedEvent) => slider.RaiseEvent(
+                    new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
+                    { RoutedEvent = routedEvent, Handled = handled });
+                RaiseMouse(UIElement.PreviewMouseLeftButtonDownEvent);
+                slider.Value = 750;
+                UpdateSeekPanel(panel, 60);
+                Assert.Equal(750, slider.Value);
+                RaiseMouse(UIElement.PreviewMouseLeftButtonUpEvent);
+                Assert.Equal(TimeSpan.FromSeconds(150), Assert.Single(seeks));
+                clock.Advance(TimeSpan.FromMilliseconds(100));
+                UpdateSeekPanel(panel, 60);
+                Assert.Equal(750, slider.Value);
+                UpdateSeekPanel(panel, 150.1);
+                Assert.Equal(750.5, slider.Value, 6);
+            }
+            finally { panel.Close(); owner.Close(); }
         });
     }
 

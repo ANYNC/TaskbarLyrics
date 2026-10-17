@@ -28,6 +28,17 @@ public sealed class EmbeddedTaskbarLayoutCalculatorTests
     }
 
     [Theory]
+    [InlineData(0, 0)]
+    [InlineData(40, 40)]
+    [InlineData(-200, 0)]
+    [InlineData(2000, 480)]
+    public void SidebarStartsAtTopAndClampsOffsetsWithinItsHeight(double offset, double expected)
+    {
+        var top = EmbeddedTaskbarLayoutCalculator.CalculateVerticalTop(900, 420, offset, alignTop: true);
+        Assert.Equal(expected, EmbeddedTaskbarLayoutCalculator.ClampVerticalTop(top, 900, 420));
+    }
+
+    [Theory]
     [InlineData(-20, 0)]
     [InlineData(40, 40)]
     [InlineData(120, 80)]

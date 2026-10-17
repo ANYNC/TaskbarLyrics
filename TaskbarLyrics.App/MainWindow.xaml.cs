@@ -371,10 +371,12 @@ public partial class MainWindow : Window, IDisposable
         CoverHitSurface.Width = metrics.CoverSize;
         CoverHitSurface.Height = metrics.CoverSize;
         var coverOnRight = _currentSettings.CoverPosition == CoverPosition.Right;
-        CoverHitSurface.HorizontalAlignment = coverOnRight
+        CoverHitSurface.VerticalAlignment = metrics.IsVertical
+            ? coverOnRight ? VerticalAlignment.Bottom : VerticalAlignment.Top : VerticalAlignment.Center;
+        CoverHitSurface.HorizontalAlignment = metrics.IsVertical ? System.Windows.HorizontalAlignment.Center : coverOnRight
             ? System.Windows.HorizontalAlignment.Right
             : System.Windows.HorizontalAlignment.Left;
-        CoverHitSurface.Margin = coverOnRight
+        CoverHitSurface.Margin = metrics.IsVertical ? new Thickness(0) : coverOnRight
             ? new Thickness(0, 0, metrics.LayoutHorizontalPadding, 0)
             : new Thickness(metrics.LayoutHorizontalPadding, 0, 0, 0);
         CoverHitSurface.Visibility = _currentSettings.ShowCover ? Visibility.Visible : Visibility.Collapsed;
@@ -429,7 +431,10 @@ public partial class MainWindow : Window, IDisposable
             return;
         }
         var hover = activation == ControlPanelActivation.Hover;
-        if (_controlPanelWindow is { IsVisible: true, IsClosing: false })
+        // A source click can deactivate the panel before its WebView message arrives.
+        // Consume that click while the exit animation is already in progress.
+        if (!hover && _controlPanelWindow is { IsClosing: true }) return;
+        if (_controlPanelWindow is { IsClosing: false } currentPanel && (currentPanel.IsVisible || currentPanel.IsOpening))
         {
             if (hover)
             {
@@ -1660,7 +1665,7 @@ public partial class MainWindow : Window, IDisposable
 
         var script = LyricsStyleScriptFactory.Create(
             settings,
-            GetTargetPixelsPerDip());
+            GetTargetPixelsPerDip(), GetTargetTaskbarBounds());
         PublishPresentationCommand("style", script, "lyrics style update");
     }
 
@@ -1979,8 +1984,11 @@ public partial class MainWindow : Window, IDisposable
 
     private LyricsLayoutMetrics CreateLayoutMetrics(AppSettings settings)
     {
-        return LyricsLayoutMetrics.Create(settings, GetTargetPixelsPerDip());
+        return LyricsLayoutMetrics.Create(settings, GetTargetPixelsPerDip(), GetTargetTaskbarBounds());
     }
+
+    private TaskbarBounds GetTargetTaskbarBounds() =>
+        TaskbarPlacementService.GetTaskbarBounds(_displayMonitor, GetTargetPixelsPerDip());
 
     private double GetTargetPixelsPerDip() =>
         PlacementDisplay?.PixelsPerDip ?? TaskbarPlacementService.GetPixelsPerDip(this);

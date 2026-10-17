@@ -68,6 +68,7 @@ internal readonly record struct AppSettingsChangeSet(
             current.SpectrumAudioAccessGranted != next.SpectrumAudioAccessGranted;
 
         var visualStyleChanged = isInitialApplication ||
+            current.SingleLineLyrics != next.SingleLineLyrics ||
             current.UseFloatingWindow != next.UseFloatingWindow ||
             current.FontSize != next.FontSize ||
             current.ShowCover != next.ShowCover ||
@@ -93,6 +94,8 @@ internal readonly record struct AppSettingsChangeSet(
             current.LyricsTextAlignment != next.LyricsTextAlignment;
 
         var lyricsLayoutChanged = isInitialApplication ||
+            current.UseFloatingWindow != next.UseFloatingWindow ||
+            current.SingleLineLyrics != next.SingleLineLyrics ||
             current.FontSize != next.FontSize ||
             current.ShowCover != next.ShowCover ||
             current.CoverPosition != next.CoverPosition ||

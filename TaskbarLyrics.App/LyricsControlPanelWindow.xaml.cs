@@ -58,6 +58,7 @@ public partial class LyricsControlPanelWindow : Window
 
     internal event EventHandler? Hidden;
     internal bool IsClosing => _isExitSlide;
+    internal bool IsOpening { get; private set; }
 
     internal LyricsControlPanelWindow(Action<MediaHotkeyAction> executeAction,
         Action openSettings, Action toggleTranslation, Action<TimeSpan> seek)
@@ -171,6 +172,7 @@ public partial class LyricsControlPanelWindow : Window
         }
 
         var version = ++_showVersion;
+        IsOpening = true;
         StopSlide();
         _canDismissOnDeactivate = false;
         var work = display.WorkArea;
@@ -225,6 +227,10 @@ public partial class LyricsControlPanelWindow : Window
             _initialization = null;
             throw;
         }
+        finally
+        {
+            if (version == _showVersion) IsOpening = false;
+        }
     }
 
     internal void HidePanel(bool immediate = false)
@@ -238,10 +244,13 @@ public partial class LyricsControlPanelWindow : Window
         }
 
         ++_showVersion;
+        var wasOpening = IsOpening;
+        IsOpening = false;
         _canDismissOnDeactivate = false;
         StopSlide();
         if (!IsVisible)
         {
+            if (wasOpening) Hidden?.Invoke(this, EventArgs.Empty);
             return;
         }
 

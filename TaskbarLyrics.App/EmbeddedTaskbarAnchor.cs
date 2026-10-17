@@ -72,9 +72,9 @@ internal static class EmbeddedTaskbarLayoutCalculator
         };
     }
 
-    public static double CalculateVerticalTop(double taskbarHeight, double windowHeight, double offset)
+    public static double CalculateVerticalTop(double taskbarHeight, double windowHeight, double offset, bool alignTop = false)
     {
-        return (taskbarHeight - windowHeight) / 2.0 + offset;
+        return alignTop ? offset : (taskbarHeight - windowHeight) / 2.0 + offset;
     }
 
     public static double ClampHorizontalLeft(
@@ -279,7 +279,9 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
         var width = AppSettings.ClampEffectiveWindowWidth(
             settings.WindowWidth,
             taskbarWidth);
-        var height = LyricsLayoutMetrics.Create(settings, pixelsPerDip).DesiredWindowHeight;
+        var metrics = LyricsLayoutMetrics.Create(settings, pixelsPerDip, new TaskbarBounds(0, 0, taskbarWidth, taskbarHeight));
+        if (metrics.IsVertical) width = taskbarWidth;
+        var height = metrics.DesiredWindowHeight;
         height = Math.Min(height, taskbarHeight);
 
         if (window.Width != width)
@@ -300,7 +302,8 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
         var clientTop = EmbeddedTaskbarLayoutCalculator.CalculateVerticalTop(
             taskbarHeight,
             height,
-            settings.YOffset);
+            settings.YOffset,
+            alignTop: metrics.IsVertical);
 
         clientLeft = EmbeddedTaskbarLayoutCalculator.ClampHorizontalLeft(
             clientLeft,

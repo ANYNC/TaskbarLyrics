@@ -85,6 +85,10 @@ internal partial class FloatingLyricsControlWindow : Window
         PreviewKeyDown += OnPreviewKeyDown;
         PreviewMouseDown += OnPreviewMouseDown;
         MouseMove += OnMouseMove;
+        // Slider handles track clicks itself when IsMoveToPointEnabled is set.
+        // Observe handled preview events as well so timeline updates cannot undo the click.
+        SeekSlider.AddHandler(UIElement.PreviewMouseLeftButtonDownEvent, new MouseButtonEventHandler(OnSeekStarted), true);
+        SeekSlider.AddHandler(UIElement.PreviewMouseLeftButtonUpEvent, new MouseButtonEventHandler(OnSeekFinished), true);
         VisualRoot.Opacity = 0;
         // Keep the visible control viewport hittable even between buttons, independent of the material HWND.
         Surface.Background = new SolidColorBrush(Color.FromArgb(1, 0, 0, 0));
@@ -214,7 +218,12 @@ internal partial class FloatingLyricsControlWindow : Window
     private void OnPrevious(object sender, RoutedEventArgs e) { if (IsPanelVisible && PreviousButton.IsEnabled) _execute(MediaHotkeyAction.PreviousTrack); }
     private void OnPlay(object sender, RoutedEventArgs e) { if (IsPanelVisible && PlayButton.IsEnabled) _execute(MediaHotkeyAction.TogglePlayPause); }
     private void OnNext(object sender, RoutedEventArgs e) { if (IsPanelVisible && NextButton.IsEnabled) _execute(MediaHotkeyAction.NextTrack); }
-    private void OnSeekStarted(object sender, MouseButtonEventArgs e) { _seeking = true; _seekIdentity = _trackIdentity; }
+    private void OnSeekStarted(object sender, MouseButtonEventArgs e)
+    {
+        if (!IsPanelVisible || !SeekSlider.IsEnabled) return;
+        _seeking = true;
+        _seekIdentity = _trackIdentity;
+    }
     private void OnSeekFinished(object sender, MouseButtonEventArgs e) => CommitSeek();
     private void OnSeekKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
@@ -287,6 +296,8 @@ internal partial class FloatingLyricsControlWindow : Window
         PreviewKeyDown -= OnPreviewKeyDown;
         PreviewMouseDown -= OnPreviewMouseDown;
         MouseMove -= OnMouseMove;
+        SeekSlider.RemoveHandler(UIElement.PreviewMouseLeftButtonDownEvent, new MouseButtonEventHandler(OnSeekStarted));
+        SeekSlider.RemoveHandler(UIElement.PreviewMouseLeftButtonUpEvent, new MouseButtonEventHandler(OnSeekFinished));
         base.OnClosed(e);
     }
 }
