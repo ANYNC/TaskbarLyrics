@@ -13,7 +13,7 @@ internal static class LyricsControlPanelPlacement
     {
         var alignedX = coverPosition == CoverPosition.Right ? anchor.Right - panelSize.Width : anchor.Left;
         var gap = GapDip * pixelsPerDip;
-        var centeredY = anchor.Top + (anchor.Height - panelSize.Height) / 2;
+        var besideVerticalTaskbar = false;
         double x;
         double y;
 
@@ -29,13 +29,15 @@ internal static class LyricsControlPanelPlacement
         }
         else if (anchor.Right <= workArea.Left)
         {
+            besideVerticalTaskbar = true;
             x = anchor.Right + gap;
-            y = centeredY;
+            y = anchor.Top;
         }
         else if (anchor.Left >= workArea.Right)
         {
+            besideVerticalTaskbar = true;
             x = anchor.Left - panelSize.Width - gap;
-            y = centeredY;
+            y = anchor.Top;
         }
         else
         {
@@ -49,7 +51,8 @@ internal static class LyricsControlPanelPlacement
         var preferredInset = anchor.Top >= workArea.Bottom
             ? Math.Max(0, workArea.Bottom - placedY - panelSize.Height)
             : gap;
-        var horizontalInset = Math.Min(preferredInset, Math.Max(0, (workArea.Width - panelSize.Width) / 2));
+        var horizontalInset = besideVerticalTaskbar ? 0
+            : Math.Min(preferredInset, Math.Max(0, (workArea.Width - panelSize.Width) / 2));
         var minX = workArea.Left + horizontalInset;
         var maxX = Math.Max(minX, workArea.Right - panelSize.Width - horizontalInset);
         return new Point(Math.Clamp(x, minX, maxX), placedY);

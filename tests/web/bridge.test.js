@@ -14,11 +14,12 @@ const persistedSettings = [
 ];
 
 async function createSettingsDom({ deferAnimationFrames = false, reducedMotion = false } = {}) {
-  const [html, bridge, hotkeys, state, script] = await Promise.all([
+  const [html, bridge, hotkeys, state, presentation, script] = await Promise.all([
     read("TaskbarLyrics.App/Web/Settings/settings.html"),
     read("TaskbarLyrics.App/Web/Settings/bridge.js"),
     read("TaskbarLyrics.App/Web/Settings/hotkeys.js"),
     read("TaskbarLyrics.App/Web/Settings/state.js"),
+    read("TaskbarLyrics.App/Web/Settings/display-presentation.js"),
     read("TaskbarLyrics.App/Web/Settings/settings.js")
   ]);
   const dom = new JSDOM(html, { runScripts: "outside-only" });
@@ -36,7 +37,11 @@ async function createSettingsDom({ deferAnimationFrames = false, reducedMotion =
   };
   dom.window.eval(bridge);
   dom.window.eval(hotkeys);
+  dom.window.HTMLMediaElement.prototype.load = () => {};
+  dom.window.HTMLMediaElement.prototype.pause = () => {};
+  dom.window.HTMLMediaElement.prototype.play = () => Promise.resolve();
   dom.window.eval(state);
+  dom.window.eval(presentation);
   return {
     dom,
     sent,
@@ -79,7 +84,7 @@ describe("settings WebView bridge", () => {
     dom.window.close();
   });
 
-  it("refreshes floating size readouts and collapsed embedded summaries without posting edits", async () => {
+  it("refreshes floating readouts, direct offsets and collapsed appearance without posting edits", async () => {
     const { dom, sent, script } = await createSettingsDom();
     dom.window.eval(script);
     const document = dom.window.document;
@@ -92,10 +97,12 @@ describe("settings WebView bridge", () => {
     const summary = document.querySelector("[data-embedded-appearance-summary]");
     expect(summary.closest("details").open).toBe(false);
     expect(summary.textContent).toBe("背景关闭 · 边框开启");
-    const positionSummary = document.querySelector("[data-embedded-position-summary]");
-    expect(positionSummary.closest("details").open).toBe(false);
-    expect(positionSummary.textContent).toBe("X 30 · Y -20");
-    expect(positionSummary.title).toBe("X 30 · Y -20");
+    const xOffset = document.querySelector('[data-setting="xOffset"][type="number"]');
+    const yOffset = document.querySelector('[data-setting="yOffset"][type="number"]');
+    expect(xOffset.closest("details")).toBeNull();
+    expect(yOffset.closest("details")).toBeNull();
+    expect(xOffset.value).toBe("30");
+    expect(yOffset.value).toBe("-20");
     dom.window.settingsApp.receive({ version: 1, type: "lyricsLayoutPreview", payload: {
       floatingWindowWidth: 720, floatingLyricsLayoutScalePercent: 150
     } });
@@ -103,7 +110,8 @@ describe("settings WebView bridge", () => {
     expect(document.querySelector('[data-setting="windowWidth"][type="number"]').value).toBe("420");
     receive({ useFloatingWindow: false, showBackground: true, showBorder: false, xOffset: -100, yOffset: 0 });
     expect(summary.textContent).toBe("背景开启 · 边框关闭");
-    expect(positionSummary.textContent).toBe("X -100 · Y 0");
+    expect(xOffset.value).toBe("-100");
+    expect(yOffset.value).toBe("0");
     expect(sent).toHaveLength(initialCount);
     dom.window.close();
   });
@@ -174,17 +182,17 @@ describe("settings WebView bridge", () => {
     const document = dom.window.document;
     for (const key of ["windowWidth", "lyricsLayoutScalePercent", "xOffset", "yOffset", "showBackground", "backgroundOpacity", "showBorder"]) {
       const control = document.querySelector(`[data-setting="${key}"]`);
-      expect(control.closest(".embedded-window-mode-card")).not.toBeNull();
+      expect(control.closest(".embedded-window-mode-settings")).not.toBeNull();
       expect(control.disabled).toBe(floating);
     }
     for (const key of ["embeddedPanelBlurAmount", "embeddedPanelBrightness", "embeddedPanelTintOpacity"]) {
       const control = document.querySelector(`[data-setting="${key}"]`);
-      expect(control.closest(".embedded-window-mode-card")).not.toBeNull();
+      expect(control.closest(".embedded-window-mode-settings")).not.toBeNull();
       expect(control.disabled).toBe(floating);
     }
     for (const key of ["floatingPanelBlurAmount", "floatingPanelBrightness", "floatingPanelTintOpacity"]) {
       const control = document.querySelector(`[data-setting="${key}"]`);
-      expect(control.closest(".floating-window-mode-card")).not.toBeNull();
+      expect(control.closest(".floating-window-mode-settings")).not.toBeNull();
       expect(control.disabled).toBe(!floating);
     }
     for (const key of ["fontFamily", "showCover", "lyricsTextAlignment"]) {
@@ -1684,7 +1692,7 @@ describe("settings WebView bridge", () => {
     const toggle = document.querySelector('input[data-setting="enableControlPanel"]');
     const row = document.querySelector("#embeddedControlPanelRow");
     expect(document.querySelectorAll('input[data-setting="enableControlPanel"]')).toHaveLength(1);
-    expect(row.closest(".embedded-window-mode-card")).not.toBeNull();
+    expect(row.closest(".embedded-window-mode-settings")).not.toBeNull();
     expect(row.closest(".window-mode-choice")).toBeNull();
     expect(toggle.disabled).toBe(disabled);
     expect(toggle.checked).toBe(true);
@@ -1816,7 +1824,8 @@ describe("settings WebView bridge", () => {
     xSlider.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
 
     expect(xNumber.value).toBe("120");
-    expect(document.querySelector("[data-embedded-position-summary]").textContent).toBe("X 120 · Y -20");
+    expect(document.querySelector('[data-setting="xOffset"][type="number"]').value).toBe("120");
+    expect(document.querySelector('[data-setting="yOffset"][type="number"]').value).toBe("-20");
     expect(sent.at(-1)).toEqual({
       version: 1,
       type: "previewUpdate",
@@ -1835,7 +1844,8 @@ describe("settings WebView bridge", () => {
     yNumber.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
     expect(ySlider.value).toBe("-75");
     expect(xNumber.value).toBe("120");
-    expect(document.querySelector("[data-embedded-position-summary]").textContent).toBe("X 120 · Y -75");
+    expect(document.querySelector('[data-setting="xOffset"][type="number"]').value).toBe("120");
+    expect(document.querySelector('[data-setting="yOffset"][type="number"]').value).toBe("-75");
 
     expect(sent.at(-1)).toEqual({
       version: 1,
@@ -2094,17 +2104,17 @@ describe("settings WebView bridge", () => {
     const embeddedNote = document.querySelector(".embedded-mode-note");
     const widthRow = document.querySelector("#embeddedWindowWidthRow");
     const widthControls = [...widthRow.querySelectorAll('[data-setting="windowWidth"]')];
-    expect(widthRow.closest(".embedded-window-mode-card")).not.toBeNull();
+    expect(widthRow.closest(".embedded-window-mode-settings")).not.toBeNull();
     expect(widthRow.closest(".advanced-size-panel")).toBeNull();
     expect(widthControls).toHaveLength(2);
     expect(widthControls.every(control => !control.disabled)).toBe(true);
     const dependentControls = [...document.querySelectorAll('[data-depends="useFloatingWindow"] input, [data-depends="useFloatingWindow"] button')];
-    expect(embeddedNote.closest(".embedded-window-mode-card")).not.toBeNull();
+    expect(embeddedNote.closest(".display-presentation")).not.toBeNull();
     expect(embeddedNote.closest(".window-mode-choice")).toBeNull();
     expect(embeddedNote.querySelector("#taskbarEmbeddingStatus")).not.toBeNull();
-    expect(topmostRow.closest(".floating-window-mode-card")).not.toBeNull();
+    expect(topmostRow.closest(".floating-window-mode-settings")).not.toBeNull();
     expect(topmostControl.closest(".window-mode-choice")).toBeNull();
-    expect(topmostRow.hidden).toBe(false);
+    expect(topmostRow.closest("[data-presentation-mode]").hidden).toBe(true);
     expect(topmostControl.checked).toBe(true);
     expect(embeddedMode.checked).toBe(true);
     expect(embeddedMode.tabIndex).toBe(0);
@@ -2117,7 +2127,7 @@ describe("settings WebView bridge", () => {
 
     expect(floatingMode.checked).toBe(true);
     expect(floatingMode.tabIndex).toBe(0);
-    expect(topmostRow.hidden).toBe(false);
+    expect(topmostRow.closest("[data-presentation-mode]").hidden).toBe(false);
     expect(dependentControls.every(control => !control.disabled)).toBe(true);
     expect(widthControls.every(control => control.disabled)).toBe(true);
     expect(widthRow.classList.contains("is-disabled")).toBe(true);
@@ -2149,7 +2159,7 @@ describe("settings WebView bridge", () => {
     expect(document.activeElement).toBe(embeddedMode);
     expect(embeddedMode.checked).toBe(true);
     expect(embeddedMode.tabIndex).toBe(0);
-    expect(topmostRow.hidden).toBe(false);
+    expect(topmostRow.closest("[data-presentation-mode]").hidden).toBe(true);
     expect(topmostControl.disabled).toBe(true);
     expect(topmostControl.checked).toBe(false);
     expect(dependentControls.every(control => control.disabled)).toBe(true);

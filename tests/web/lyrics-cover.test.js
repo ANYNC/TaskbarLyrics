@@ -403,6 +403,24 @@ describe("embedded control panel triggers", () => {
     dom.window.close();
   });
 
+  it("allows cover press feedback only for enabled click triggers", async () => {
+    const { dom, cover, applyStyle, style } = await triggerHarness();
+    expect(cover.classList.contains("panel-click-trigger")).toBe(true);
+    applyStyle({ controlPanelTriggerMethod: "Hover" });
+    expect(cover.classList.contains("panel-click-trigger")).toBe(false);
+    applyStyle({ controlPanelTriggerMethod: "Click", controlPanelTriggerCover: false });
+    expect(cover.classList.contains("panel-click-trigger")).toBe(false);
+    applyStyle({ controlPanelTriggerCover: true, enableControlPanel: false });
+    expect(cover.classList.contains("panel-click-trigger")).toBe(false);
+    applyStyle({ enableControlPanel: true, floatingControlPanel: true });
+    expect(cover.classList.contains("panel-click-trigger")).toBe(false);
+    applyStyle({ floatingControlPanel: false });
+    expect(cover.classList.contains("panel-click-trigger")).toBe(true);
+    expect(style).toContain(".cover.panel-click-trigger:not(:disabled):active .cover-action-icon");
+    expect(style).not.toContain(".cover:not(:disabled):active .cover-action-icon");
+    dom.window.close();
+  });
+
   it("keeps keyboard opening available in hover mode including with the cover hidden", async () => {
     const { dom, sent, lyrics, cover } = await triggerHarness({ showCover: false, controlPanelTriggerMethod: "Hover" });
     cover.click();

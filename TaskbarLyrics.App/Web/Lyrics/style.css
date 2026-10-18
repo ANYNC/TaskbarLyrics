@@ -226,27 +226,31 @@ html, body {
   background: rgba(0, 0, 0, 0.66);
   opacity: 0;
   pointer-events: none;
-  transition: opacity 150ms ease;
+  transition: opacity 180ms linear;
 }
 
 .cover-action-icon {
   width: min(19px, 58%);
   height: min(19px, 58%);
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4));
-  transform: translateY(2px);
+  transform: scale(0.92);
   transition: transform 150ms ease;
 }
 
-.cover:not(:disabled):is(:hover, :focus-visible, .panel-open) .cover-interaction {
+.cover:not(:disabled):is(:hover, :focus-visible, .panel-open) .cover-interaction,
+.cover.panel-trigger-hovered .cover-interaction,
+.cover.panel-open .cover-interaction {
   opacity: 1;
 }
 
-.cover:not(:disabled):is(:hover, :focus-visible, .panel-open) .cover-action-icon {
-  transform: translateY(0);
+.cover:not(:disabled):is(:hover, :focus-visible, .panel-open) .cover-action-icon,
+.cover.panel-trigger-hovered .cover-action-icon,
+.cover.panel-open .cover-action-icon {
+  transform: scale(1);
 }
 
-.cover:not(:disabled):active .cover-action-icon {
-  transform: translateY(-1px) scale(0.9);
+.cover.panel-click-trigger:not(:disabled):active .cover-action-icon {
+  transform: scale(0.9);
 }
 
 .cover:focus-visible {
@@ -263,6 +267,10 @@ html, body {
   .cover-action-icon {
     transition: none;
   }
+}
+
+@media (forced-colors: active) {
+  .cover-interaction { transition: none; }
 }
 
 .cover-floating-icon, .cover-locked-icon { display: none; width: min(17px, 54%); height: min(17px, 54%); opacity: 0.8; }

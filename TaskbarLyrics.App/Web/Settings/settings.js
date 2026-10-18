@@ -919,6 +919,7 @@
       };
 
       if (state) state.page = pageId;
+      window.taskbarLyricsDisplayPresentation?.sync(state);
       if (previousPageId !== pageId) bridge.post({ type: "settingsPageChanged", value: pageId });
       $$('[data-nav]').forEach(button => {
         const isActive = button.dataset.nav === pageId;
@@ -1674,21 +1675,18 @@
       });
       const coverTrigger = $('[data-setting="controlPanelTriggerCover"]');
       if (coverTrigger) coverTrigger.disabled ||= state.showCover === false;
+      window.taskbarLyricsDisplayPresentation?.sync(state);
     }
 
     function updateOutputs() {
       if ($("[data-floating-width]")) $("[data-floating-width]").textContent = `${formatLayoutMetric(state.floatingWindowWidth)} px`;
-      const positionSummary = $("[data-embedded-position-summary]");
-      if (positionSummary) {
-        positionSummary.textContent = `X ${formatLayoutMetric(state.xOffset)} · Y ${formatLayoutMetric(state.yOffset)}`;
-        positionSummary.title = positionSummary.textContent;
-      }
       const appearanceSummary = $("[data-embedded-appearance-summary]");
       if (appearanceSummary) {
         appearanceSummary.textContent = `背景${state.showBackground ? "开启" : "关闭"} · 边框${state.showBorder ? "开启" : "关闭"}`;
         appearanceSummary.title = appearanceSummary.textContent;
       }
       if ($("[data-floating-scale]")) $("[data-floating-scale]").textContent = `${formatLayoutMetric(state.floatingLyricsLayoutScalePercent)}%`;
+      window.taskbarLyricsDisplayPresentation?.updateOutputs(state);
       if ($("[data-effective-font-size]")) {
         const showCover = state.showCover !== false;
         $("[data-effective-font-size]").textContent = `${formatLayoutMetric(state.effectiveFontSize)} px`;

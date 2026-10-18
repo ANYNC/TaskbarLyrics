@@ -17,6 +17,42 @@ public sealed partial class FloatingPanelInputTests
         [MediaHotkeyAction.PreviousTrack, MediaHotkeyAction.TogglePlayPause, MediaHotkeyAction.NextTrack];
     private static readonly string[] TaskbarPanelButtonNames = ["PreviousButton", "PlayButton", "NextButton"];
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void NativeSidePanelTopAndSpacingMatchSourceCover(bool right)
+    {
+        RunSta(() =>
+        {
+            var panel = new LyricsControlPanelWindow(_ => { }, _ => { }) { Topmost = true };
+            try
+            {
+                var display = DisplayMonitorService.GetDisplays().First(d => d.IsPrimary);
+                var scale = display.PixelsPerDip;
+                var bounds = display.Bounds;
+                var sidebar = (int)Math.Round(48 * scale);
+                var sideDisplay = display with
+                {
+                    WorkArea = new NativeRect(bounds.Left + (right ? 0 : sidebar), bounds.Top,
+                        bounds.Right - (right ? sidebar : 0), bounds.Bottom)
+                };
+                var cover = new Rect(right ? bounds.Right - 42 * scale : bounds.Left + 8 * scale,
+                    bounds.Top + 200 * scale, 34 * scale, 34 * scale);
+                var task = panel.Dispatcher.InvokeAsync(() => panel.ShowNearAsync(cover, sideDisplay,
+                    CoverPosition.Left, activate: false)).Task.Unwrap();
+                var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+                while (!task.IsCompleted && DateTime.UtcNow < deadline) PumpMessages(TimeSpan.FromMilliseconds(10));
+                Assert.True(task.IsCompleted);
+                task.GetAwaiter().GetResult();
+                var actual = FloatingLyricsPanelController.GetBounds(panel);
+                var gap = right ? cover.Left - actual.Right : actual.Left - cover.Right;
+                Assert.InRange(Math.Abs(actual.Top - cover.Top), 0, 1);
+                Assert.InRange(Math.Abs(gap - 16 * scale), 0, 1);
+            }
+            finally { panel.Close(); }
+        });
+    }
+
     [Fact]
     public void NativeTaskbarPanelKeepsLayoutRoutesActionsAndCachesHiddenTimeline()
     {

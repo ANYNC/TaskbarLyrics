@@ -132,141 +132,38 @@
         </section>
 
         <section class="page" data-page="displayArea" aria-labelledby="displayAreaHeading">
-          <div class="page-inner">
-            <div class="live-note"><div class="live-note-copy"><strong>设置即时生效</strong><small>请直接查看歌词窗口，真实效果会随参数同步更新。</small></div><button id="showLyricsWindowButton" class="btn ghost" type="button" data-show-lyrics-window>显示歌词窗口</button></div>
-            <section class="panel">
-              <div class="panel-head"><div><h2 id="displayAreaHeading" tabindex="-1">显示方式与布局</h2><p>选择任务栏嵌入或悬浮显示，并调整封面、歌词区域比例与基础尺寸。</p></div></div>
-              <div class="settings">
-                <fieldset class="window-mode-picker">
-                  <legend class="sr-only">歌词窗口显示方式</legend>
-                  <div class="window-mode-options">
-                    <div class="window-mode-card embedded-window-mode-card">
-                      <div class="window-mode-header"><label class="window-mode-choice">
-                        <input class="sr-only" type="radio" name="windowPresentationMode" value="embedded" data-window-mode="embedded">
-                        <span class="window-mode-radio" aria-hidden="true"></span>
-                        <span class="window-mode-copy"><span class="window-mode-title"><strong>任务栏嵌入</strong><span class="window-mode-badge">推荐</span></span><small>歌词显示在任务栏内。</small></span>
-                      </label><button class="btn ghost small window-mode-reset" type="button" data-reset-window-mode="embedded" aria-label="重置任务栏嵌入设置" title="重置任务栏嵌入设置"><svg viewBox="0 0 24 24" aria-hidden="true" data-lucide="rotate-ccw"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button></div>
-                      <div class="embedded-mode-note"><small id="taskbarEmbeddingStatus" class="mode-status" role="status" hidden></small></div>
-                      <section class="mode-settings-group" aria-label="任务栏嵌入尺寸">
-                      <div id="embeddedWindowWidthRow" class="window-mode-setting-row window-width-setting is-disabled" data-embedded-only>
+  <div class="page-inner">
+    <div class="live-note"><div class="live-note-copy"><strong>设置即时生效</strong><small>请直接查看歌词窗口，真实效果会随参数同步更新。</small></div><button id="showLyricsWindowButton" class="btn ghost" type="button" data-show-lyrics-window="">显示歌词窗口</button></div>
+    <section class="panel display-presentation">
+      <div class="panel-head"><div><h2 id="displayAreaHeading" tabindex="-1">显示方式</h2><p>选择歌词显示的位置，调整当前模式的尺寸、交互与外观。</p></div><div class="display-mode-actions"><span>模式设置分别保留</span><button class="btn ghost small display-mode-reset" type="button" data-reset-window-mode="embedded" data-presentation-mode="embedded"  aria-label="重置任务栏嵌入设置" title="恢复任务栏嵌入的模式设置，通用歌词布局保持不变">恢复此模式</button><button class="btn ghost small display-mode-reset" type="button" data-reset-window-mode="floating" data-presentation-mode="floating" hidden aria-label="重置悬浮窗口设置" title="恢复悬浮窗口的模式设置，通用歌词布局保持不变">恢复此模式</button></div></div>
+      <fieldset class="window-mode-picker"><legend class="sr-only">歌词窗口显示方式</legend><div class="window-mode-options"><div class="window-mode-card embedded-window-mode-card"><label class="window-mode-choice"><input class="sr-only" type="radio" name="windowPresentationMode" value="embedded" data-window-mode="embedded"><svg class="window-mode-diagram" viewBox="0 0 72 48" aria-hidden="true"><rect x="1" y="1" width="70" height="46" rx="5"/><rect class="mode-diagram-window" x="15" y="8" width="39" height="25" rx="2"/><path d="M2 38h68"/><path class="mode-diagram-lyrics" d="M9 42h3m4 0h3m6 0h28"/></svg><span class="window-mode-copy"><span class="window-mode-title"><strong>任务栏嵌入</strong></span><small>融入任务栏，随时看见歌词。</small></span><span class="window-mode-radio" aria-hidden="true"></span></label></div><div class="window-mode-card floating-window-mode-card"><label class="window-mode-choice"><input class="sr-only" type="radio" name="windowPresentationMode" value="floating" data-window-mode="floating"><svg class="window-mode-diagram" viewBox="0 0 72 48" aria-hidden="true"><rect x="1" y="1" width="70" height="46" rx="5"/><rect class="mode-diagram-window" x="15" y="8" width="39" height="25" rx="2"/><path d="M2 38h68"/><rect class="mode-diagram-card" x="23" y="20" width="38" height="14" rx="3"/><path class="mode-diagram-lyrics" d="M29 25h5m4 0h17m-26 5h23"/></svg><span class="window-mode-copy"><span class="window-mode-title"><strong>悬浮窗口</strong></span><small>独立显示，自由摆放与调整。</small></span><span class="window-mode-radio" aria-hidden="true"></span></label></div></div></fieldset>
+      <div class="embedded-mode-note" data-presentation-mode="embedded"><small id="taskbarEmbeddingStatus" class="mode-status" role="status" hidden=""></small></div>
+      <div class="display-layout">
+        <div class="display-settings-column">
+          <section class="display-setting-group" data-display-group="size" aria-labelledby="displaySizeHeading">
+            <div class="display-group-heading"><h3 id="displaySizeHeading">尺寸与位置</h3></div>
+            <div data-presentation-mode="embedded" class="embedded-window-mode-settings"><div id="embeddedWindowWidthRow" class="window-mode-setting-row window-width-setting is-disabled" data-embedded-only="">
                         <label class="window-mode-setting-copy" for="embeddedWindowWidth"><strong>窗口长度</strong><small>横向调整宽度，纵向调整高度。</small></label>
-                        <div class="slider-number-control"><input type="range" min="100" max="1400" step="1" data-setting="windowWidth" aria-label="任务栏嵌入窗口长度滑块" disabled><label class="unit-input compact-number-input pixel-input"><input id="embeddedWindowWidth" type="number" min="100" max="1400" step="1" data-setting="windowWidth" aria-label="任务栏嵌入窗口长度数值" disabled><span>px</span></label></div>
-                      </div>
-                      <div data-embedded-only class="window-mode-setting-row layout-scale-row"><label class="window-mode-setting-copy" for="embeddedLayoutScale"><strong>歌词区域缩放</strong></label><div class="layout-scale-control"><div class="slider-number-control"><input id="embeddedLayoutScale" type="range" min="25" max="300" step="5" data-setting="lyricsLayoutScalePercent" aria-label="歌词区域缩放"><label class="unit-input compact-number-input percentage-input"><input type="number" min="25" max="300" step="1" data-setting="lyricsLayoutScalePercent" aria-label="歌词区域缩放百分比"><span>%</span></label></div><div class="mode-scale-footer"><output id="layoutScalePreview" class="layout-scale-preview"><span>字号 <strong data-effective-font-size>14 px</strong></span><span>封面 <strong data-effective-cover-size>34 px</strong></span><span data-effective-cover-gap-item>间距 <strong data-effective-cover-gap>8 px</strong></span></output><button class="btn ghost small" type="button" data-reset-layout-scale aria-label="恢复歌词区域缩放到 100%" title="恢复到 100%">恢复 100%</button></div><span id="layoutScaleAnnouncement" class="sr-only" aria-live="polite"></span></div></div>
-                      </section>
-                      <section class="mode-settings-group" aria-label="任务栏嵌入交互">
-                      <div id="embeddedControlPanelRow" class="window-mode-setting-row" data-embedded-only>
-                        <label class="window-mode-setting-copy" for="embeddedControlPanelToggle"><strong>控制面板</strong></label>
-                        <label class="switch small"><input id="embeddedControlPanelToggle" type="checkbox" data-setting="enableControlPanel" aria-label="控制面板"><span class="switch-track"></span></label>
-                      </div>
-                      <div class="window-mode-setting-row panel-trigger-row child" data-depends="enableControlPanel" data-embedded-only>
-                        <span id="panelTriggerMethodLabel" class="panel-trigger-label">触发方式</span>
-                        <div class="monitor-mode layout-options" role="radiogroup" aria-labelledby="panelTriggerMethodLabel">
-                          <label><input type="radio" name="controlPanelTriggerMethod" data-setting="controlPanelTriggerMethod" value="Click"><span>点击</span></label>
-                          <label><input type="radio" name="controlPanelTriggerMethod" data-setting="controlPanelTriggerMethod" value="Hover"><span>悬停</span></label>
-                        </div>
-                      </div>
-                      <div class="window-mode-setting-row panel-trigger-row child" data-depends="enableControlPanel" data-embedded-only>
-                        <span id="panelTriggerAreaLabel" class="panel-trigger-label">触发区域</span>
-                        <div class="panel-trigger-areas" role="group" aria-labelledby="panelTriggerAreaLabel">
-                          <label class="panel-trigger-chip"><input type="checkbox" data-setting="controlPanelTriggerCover"><span>封面</span></label>
-                          <label class="panel-trigger-chip"><input type="checkbox" data-setting="controlPanelTriggerLyrics"><span>歌词</span></label>
-                        </div>
-                      </div>
-                      </section>
-                      <details class="mode-details embedded-appearance-settings" open>
-                        <summary><span>面板材质</span></summary>
-                      <div class="window-mode-setting-row panel-material-setting is-disabled" data-embedded-only data-depends="enableControlPanel">
-                        <label class="window-mode-setting-copy" for="embeddedPanelBlurAmount"><strong>模糊</strong></label>
-                        <div class="slider-number-control"><input type="range" min="0" max="64" step="1" data-setting="embeddedPanelBlurAmount" aria-label="任务栏面板模糊"><label class="unit-input compact-number-input"><input id="embeddedPanelBlurAmount" type="number" min="0" max="64" step="1" data-setting="embeddedPanelBlurAmount" aria-label="任务栏面板模糊数值"><span>px</span></label></div>
-                      </div>
-                      <div class="window-mode-setting-row panel-material-setting is-disabled" data-embedded-only data-depends="enableControlPanel">
-                        <label class="window-mode-setting-copy" for="embeddedPanelBrightness"><strong>亮度</strong></label>
-                        <div class="slider-number-control"><input type="range" min="0" max="100" step="1" data-setting="embeddedPanelBrightness" data-value-scale="100" aria-label="任务栏面板亮度"><label class="unit-input compact-number-input percentage-input"><input id="embeddedPanelBrightness" type="number" min="0" max="100" step="1" data-setting="embeddedPanelBrightness" data-value-scale="100" aria-label="任务栏面板亮度百分比"><span>%</span></label></div>
-                      </div>
-                      <div class="window-mode-setting-row panel-material-setting is-disabled" data-embedded-only data-depends="enableControlPanel">
-                        <label class="window-mode-setting-copy" for="embeddedPanelTintOpacity"><strong>不透明度</strong></label>
-                        <div class="slider-number-control"><input type="range" min="0" max="100" step="1" data-setting="embeddedPanelTintOpacity" data-value-scale="100" aria-label="任务栏面板不透明度"><label class="unit-input compact-number-input percentage-input"><input id="embeddedPanelTintOpacity" type="number" min="0" max="100" step="1" data-setting="embeddedPanelTintOpacity" data-value-scale="100" aria-label="任务栏面板不透明度百分比"><span>%</span></label></div>
-                      </div>
-                      </details>
-                      <details class="mode-details mode-position-settings">
-                        <summary><span>位置与偏移</span><small data-embedded-position-summary>X 0 · Y 0</small></summary>
-                        <div class="mode-offset-grid" data-embedded-only>
-                          <div class="mode-offset-control slider-number-control">
-                            <div class="mode-offset-heading"><label for="embeddedXOffsetSlider">X</label><label class="unit-input compact-number-input pixel-input"><input type="number" min="-2000" max="2000" step="1" inputmode="numeric" data-setting="xOffset" aria-label="X 偏移数值"><span>px</span></label></div>
-                            <input id="embeddedXOffsetSlider" type="range" min="-2000" max="2000" step="1" data-setting="xOffset" aria-label="X 偏移滑块">
-                          </div>
-                          <div class="mode-offset-control slider-number-control">
-                            <div class="mode-offset-heading"><label for="embeddedYOffsetSlider">Y</label><label class="unit-input compact-number-input pixel-input"><input type="number" min="-2000" max="2000" step="1" inputmode="numeric" data-setting="yOffset" aria-label="Y 偏移数值"><span>px</span></label></div>
-                            <input id="embeddedYOffsetSlider" type="range" min="-2000" max="2000" step="1" data-setting="yOffset" aria-label="Y 偏移滑块">
-                          </div>
-                        </div>
-                      </details>
-                      <details class="mode-details"><summary><span>背景与边框</span><small data-embedded-appearance-summary>背景关闭 · 边框关闭</small></summary>
-                      <div data-embedded-only class="window-mode-setting-row compact"><div class="window-mode-setting-copy"><strong>显示背景</strong></div><label class="switch"><input type="checkbox" data-setting="showBackground" aria-label="显示背景"><span class="switch-track"></span></label></div>
-                      <div data-embedded-only class="window-mode-setting-row child" data-depends="showBackground"><div class="window-mode-setting-copy"><strong>背景不透明度</strong></div><div class="slider-number-control"><input type="range" min="0" max="1" step="0.05" data-setting="backgroundOpacity" aria-label="背景不透明度滑块"><label class="unit-input compact-number-input percentage-input"><input type="number" min="0" max="100" step="5" data-setting="backgroundOpacity" data-value-scale="100" aria-label="背景不透明度百分比"><span>%</span></label></div></div>
-                      <div data-embedded-only class="window-mode-setting-row compact"><div class="window-mode-setting-copy"><strong>显示边框</strong></div><label class="switch"><input type="checkbox" data-setting="showBorder" aria-label="显示边框"><span class="switch-track"></span></label></div>
-                      </details>
-                    </div>
-                    <div class="window-mode-card floating-window-mode-card">
-                      <div class="window-mode-header"><label class="window-mode-choice">
-                        <input class="sr-only" type="radio" name="windowPresentationMode" value="floating" data-window-mode="floating">
-                        <span class="window-mode-radio" aria-hidden="true"></span>
-                        <span class="window-mode-copy"><span class="window-mode-title"><strong>悬浮窗口</strong></span><small>拖动卡片调整尺寸与位置。</small></span>
-                      </label><button class="btn ghost small window-mode-reset" type="button" data-reset-window-mode="floating" aria-label="重置悬浮窗口设置" title="重置悬浮窗口设置"><svg viewBox="0 0 24 24" aria-hidden="true" data-lucide="rotate-ccw"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button></div>
-                      <section class="mode-settings-group" aria-label="悬浮窗口尺寸与位置">
-                        <div class="mode-dimension-readout"><span>宽度 <strong data-floating-width>420 px</strong></span><span>缩放 <strong data-floating-scale>100%</strong></span></div>
-                        <small class="mode-group-note">右上角调尺寸，点阵锚点移动。</small>
-                      </section>
-                      <section class="mode-settings-group" aria-label="悬浮窗口交互">
-                      <div id="floatingTopmostRow" class="window-mode-setting-row is-disabled" data-depends="useFloatingWindow">
+                        <div class="slider-number-control"><input type="range" min="100" max="1400" step="1" data-setting="windowWidth" aria-label="任务栏嵌入窗口长度滑块" disabled=""><label class="unit-input compact-number-input pixel-input"><input id="embeddedWindowWidth" type="number" min="100" max="1400" step="1" data-setting="windowWidth" aria-label="任务栏嵌入窗口长度数值" disabled=""><span>px</span></label></div>
+                      </div><div data-embedded-only="" class="window-mode-setting-row layout-scale-row"><label class="window-mode-setting-copy" for="embeddedLayoutScale"><strong>整体缩放</strong><small>同步调整文字、封面与间距。</small></label><div class="layout-scale-control"><div class="slider-number-control"><input id="embeddedLayoutScale" type="range" min="25" max="300" step="5" data-setting="lyricsLayoutScalePercent" aria-label="歌词区域缩放"><label class="unit-input compact-number-input percentage-input"><input type="number" min="25" max="300" step="1" data-setting="lyricsLayoutScalePercent" aria-label="歌词区域缩放百分比"><span>%</span></label></div><div class="mode-scale-footer"><output id="layoutScalePreview" class="layout-scale-preview"><span>字号 <strong data-effective-font-size="">14 px</strong></span><span>封面 <strong data-effective-cover-size="">34 px</strong></span><span data-effective-cover-gap-item="">间距 <strong data-effective-cover-gap="">8 px</strong></span></output><button class="btn ghost small" type="button" data-reset-layout-scale="" aria-label="恢复歌词区域缩放到 100%" title="恢复到 100%">恢复 100%</button></div><span id="layoutScaleAnnouncement" class="sr-only" aria-live="polite"></span></div></div><div class="window-mode-setting-row" data-embedded-only><label class="window-mode-setting-copy" for="embeddedXOffsetSlider"><strong>水平偏移</strong></label><div class="slider-number-control"><input id="embeddedXOffsetSlider" type="range" min="-2000" max="2000" step="1" data-setting="xOffset" aria-label="X 偏移滑块"><label class="unit-input compact-number-input pixel-input"><input type="number" min="-2000" max="2000" step="1" inputmode="numeric" data-setting="xOffset" aria-label="X 偏移数值"><span>px</span></label></div></div>
+<div class="window-mode-setting-row" data-embedded-only><label class="window-mode-setting-copy" for="embeddedYOffsetSlider"><strong>垂直偏移</strong></label><div class="slider-number-control"><input id="embeddedYOffsetSlider" type="range" min="-2000" max="2000" step="1" data-setting="yOffset" aria-label="Y 偏移滑块"><label class="unit-input compact-number-input pixel-input"><input type="number" min="-2000" max="2000" step="1" inputmode="numeric" data-setting="yOffset" aria-label="Y 偏移数值"><span>px</span></label></div></div></div>
+            <div data-presentation-mode="floating" class="floating-window-mode-settings" hidden><div class="mode-dimension-readout"><span>宽度 <strong data-floating-width="">420 px</strong></span><span>缩放 <strong data-floating-scale="">100%</strong></span></div><p class="display-group-note">右上角调整尺寸，展开后的点阵锚点移动卡片。</p><div id="floatingTopmostRow" class="window-mode-setting-row is-disabled" data-depends="useFloatingWindow">
                         <div class="window-mode-setting-copy"><strong id="floatingLayerLabel">显示层级</strong><small>桌面：位于应用下方；窗口：全屏时避让；全屏：保持置顶，独占全屏可能不支持。</small></div>
                         <div class="monitor-mode layout-options" role="radiogroup" aria-labelledby="floatingLayerLabel">
-                          <label><input type="radio" name="floatingWindowLayer" data-setting="floatingWindowLayer" value="Desktop" disabled><span>桌面</span></label>
-                          <label><input type="radio" name="floatingWindowLayer" data-setting="floatingWindowLayer" value="Window" disabled><span>窗口</span></label>
-                          <label><input type="radio" name="floatingWindowLayer" data-setting="floatingWindowLayer" value="Fullscreen" disabled><span>全屏</span></label>
+                          <label><input type="radio" name="floatingWindowLayer" data-setting="floatingWindowLayer" value="Desktop" disabled=""><span>桌面</span></label>
+                          <label><input type="radio" name="floatingWindowLayer" data-setting="floatingWindowLayer" value="Window" disabled=""><span>窗口</span></label>
+                          <label><input type="radio" name="floatingWindowLayer" data-setting="floatingWindowLayer" value="Fullscreen" disabled=""><span>全屏</span></label>
                         </div>
-                      </div>
-                      <div class="window-mode-setting-row is-disabled" data-depends="useFloatingWindow">
-                        <label class="window-mode-setting-copy" for="floatingControlPanelToggle"><strong>悬停播放控制</strong></label>
-                        <label class="switch small"><input id="floatingControlPanelToggle" type="checkbox" data-setting="enableFloatingControlPanel" aria-label="悬停播放控制" disabled><span class="switch-track"></span></label>
-                      </div>
-                      </section>
-                      <details class="mode-details floating-appearance-settings" open>
-                        <summary><span>卡片外观</span></summary>
-                      <div class="window-mode-setting-row panel-material-setting is-disabled" data-floating-only>
-                        <label class="window-mode-setting-copy" for="floatingPanelBlurAmount"><strong>模糊</strong></label>
-                        <div class="slider-number-control"><input type="range" min="0" max="64" step="1" data-setting="floatingPanelBlurAmount" aria-label="浮窗卡片模糊"><label class="unit-input compact-number-input"><input id="floatingPanelBlurAmount" type="number" min="0" max="64" step="1" data-setting="floatingPanelBlurAmount" aria-label="浮窗卡片模糊数值"><span>px</span></label></div>
-                      </div>
-                      <div class="window-mode-setting-row panel-material-setting is-disabled" data-floating-only>
-                        <label class="window-mode-setting-copy" for="floatingPanelBrightness"><strong>亮度</strong></label>
-                        <div class="slider-number-control"><input type="range" min="0" max="100" step="1" data-setting="floatingPanelBrightness" data-value-scale="100" aria-label="浮窗卡片亮度"><label class="unit-input compact-number-input percentage-input"><input id="floatingPanelBrightness" type="number" min="0" max="100" step="1" data-setting="floatingPanelBrightness" data-value-scale="100" aria-label="浮窗卡片亮度百分比"><span>%</span></label></div>
-                      </div>
-                      <div class="window-mode-setting-row panel-material-setting is-disabled" data-floating-only>
-                        <label class="window-mode-setting-copy" for="floatingPanelTintOpacity"><strong>不透明度</strong></label>
-                        <div class="slider-number-control"><input type="range" min="0" max="100" step="1" data-setting="floatingPanelTintOpacity" data-value-scale="100" aria-label="浮窗卡片不透明度"><label class="unit-input compact-number-input percentage-input"><input id="floatingPanelTintOpacity" type="number" min="0" max="100" step="1" data-setting="floatingPanelTintOpacity" data-value-scale="100" aria-label="浮窗卡片不透明度百分比"><span>%</span></label></div>
-                      </div>
-                      </details>
-                    </div>
-                  </div>
-                </fieldset>
-                <div class="mode-shared-heading"><strong>通用布局</strong><small>以下设置同时用于两种模式。</small></div>
-                <div class="setting-row compact layout-choice-row">
+                      </div></div>
+          </section>
+          <section class="display-setting-group" data-display-group="lyrics" aria-labelledby="displayLyricsHeading"><div class="display-group-heading"><h3 id="displayLyricsHeading">歌词布局</h3><small>两种模式共用</small></div><div class="setting-row compact layout-choice-row">
                   <div class="setting-label"><strong id="lyricsLineCountLabel">歌词行数</strong><small>单行仅显示当前歌词，适合小任务栏。</small></div>
                   <div class="monitor-mode layout-options" role="radiogroup" aria-labelledby="lyricsLineCountLabel">
                     <label><input type="radio" name="singleLineLyrics" value="false" data-value-type="boolean" data-setting="singleLineLyrics"><span>双行</span></label>
                     <label><input type="radio" name="singleLineLyrics" value="true" data-value-type="boolean" data-setting="singleLineLyrics"><span>单行</span></label>
                   </div>
                 </div>
-                <div class="setting-row compact"><div class="setting-label"><strong>显示封面</strong></div><label class="switch"><input type="checkbox" data-setting="showCover" aria-label="显示封面"><span class="switch-track"></span></label></div>
-                <div class="setting-row compact layout-choice-row" data-depends="showCover">
-                  <div class="setting-label"><strong id="coverPositionLabel">封面位置</strong></div>
-                  <div class="monitor-mode layout-options" role="radiogroup" aria-labelledby="coverPositionLabel">
-                    <label><input type="radio" name="coverPosition" value="Left" data-setting="coverPosition" aria-label="封面在歌词左侧或上方"><span>左侧 / 上方</span></label>
-                    <label><input type="radio" name="coverPosition" value="Right" data-setting="coverPosition" aria-label="封面在歌词右侧或下方"><span>右侧 / 下方</span></label>
-                  </div>
-                </div>
-                <div class="setting-row compact layout-choice-row">
+<div class="setting-row compact layout-choice-row">
                   <div class="setting-label"><strong id="lyricsTextAlignmentLabel">歌词对齐</strong></div>
                   <div class="monitor-mode layout-options" role="radiogroup" aria-labelledby="lyricsTextAlignmentLabel">
                     <label><input type="radio" name="lyricsTextAlignment" value="Left" data-setting="lyricsTextAlignment" aria-label="歌词左对齐或上对齐"><span>左 / 上</span></label>
@@ -274,37 +171,94 @@
                     <label><input type="radio" name="lyricsTextAlignment" value="Right" data-setting="lyricsTextAlignment" aria-label="歌词右对齐或下对齐"><span>右 / 下</span></label>
                   </div>
                 </div>
-                <details class="advanced-size-panel">
-                  <summary class="advanced-size-summary"><div class="setting-label"><strong>高级尺寸微调</strong><small>编辑缩放前的基础值；最终尺寸还会乘以整体缩放倍率。</small></div><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></summary>
+<div class="setting-row compact"><div class="setting-label"><strong>显示封面</strong></div><label class="switch"><input type="checkbox" data-setting="showCover" aria-label="显示封面"><span class="switch-track"></span></label></div>
+<div class="setting-row compact layout-choice-row display-dependent-row" data-depends="showCover" data-cover-position-row="">
+                  <div class="setting-label"><strong id="coverPositionLabel">封面位置</strong></div>
+                  <div class="monitor-mode layout-options" role="radiogroup" aria-labelledby="coverPositionLabel">
+                    <label><input type="radio" name="coverPosition" value="Left" data-setting="coverPosition" aria-label="封面在歌词左侧或上方"><span>左侧 / 上方</span></label>
+                    <label><input type="radio" name="coverPosition" value="Right" data-setting="coverPosition" aria-label="封面在歌词右侧或下方"><span>右侧 / 下方</span></label>
+                  </div>
+                </div><details class="advanced-size-panel">
+                  <summary class="advanced-size-summary"><div class="setting-label"><strong>高级尺寸微调</strong><small>编辑缩放前的基础值；最终尺寸还会乘以整体缩放倍率。</small></div><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"></path></svg></summary>
                   <div class="advanced-size-settings">
                     <div class="setting-row"><div class="setting-label"><strong>基础字号</strong><small>连续渲染值保留小数，范围 6～96 px。</small></div><div class="stepper"><button type="button" data-step-target="fontSize" data-delta="-1" aria-label="减小基础字号">−</button><input class="control" type="number" min="6" max="96" step="0.1" data-setting="fontSize" aria-label="基础字号"><button type="button" data-step-target="fontSize" data-delta="1" aria-label="增大基础字号">+</button></div></div>
                     <div class="setting-row" data-depends="showCover"><div class="setting-label"><strong>基础封面大小</strong><small>实际布局会对齐到整数像素，范围 12～200 px。</small></div><div class="stepper"><button type="button" data-step-target="coverSize" data-delta="-1" aria-label="减小基础封面">−</button><input class="control" type="number" min="12" max="200" step="1" data-setting="coverSize" aria-label="基础封面大小"><button type="button" data-step-target="coverSize" data-delta="1" aria-label="增大基础封面">+</button></div></div>
                     <div class="setting-row" data-depends="showCover"><div class="setting-label"><strong>基础封面间距</strong><small>封面与歌词之间的缩放前距离。</small></div><div class="slider-number-control"><input type="range" min="0" max="240" step="1" data-setting="coverGap" aria-label="基础封面间距滑块"><label class="unit-input compact-number-input pixel-input"><input type="number" min="0" max="240" step="1" data-setting="coverGap" aria-label="基础封面间距数值"><span>px</span></label></div></div>
                     <div class="setting-row" data-depends="showCover"><div class="setting-label"><strong>基础封面圆角</strong><small>不超过基础封面尺寸的一半。</small></div><div class="slider-number-control"><input type="range" min="0" max="100" step="1" data-setting="coverCornerRadius" aria-label="基础封面圆角滑块"><label class="unit-input compact-number-input pixel-input"><input type="number" min="0" max="100" step="1" data-setting="coverCornerRadius" aria-label="基础封面圆角数值"><span>px</span></label></div></div>
-                    <div class="advanced-size-actions"><button class="btn ghost small" type="button" data-reset-layout-base>重置基础尺寸</button></div>
+                    <div class="advanced-size-actions"><button class="btn ghost small" type="button" data-reset-layout-base="">重置基础尺寸</button></div>
                   </div>
-                </details>
-              </div>
-            </section>
-            <div class="panel">
-              <div class="panel-head"><div><h2>文字样式</h2><p>调整字体、字重、颜色和复杂背景下的可读性。字号属于基础尺寸，见上方「显示方式与布局 → 高级尺寸微调」。</p></div></div>
+                </details></section>
+          <section class="display-setting-group" data-display-group="controls" aria-label="播放控制">
+            <div data-presentation-mode="embedded" class="embedded-window-mode-settings"><div id="embeddedControlPanelRow" class="window-mode-setting-row display-group-heading" data-embedded-only><h3><label class="window-mode-setting-copy" for="embeddedControlPanelToggle">播放控制</label></h3><label class="switch small"><input id="embeddedControlPanelToggle" type="checkbox" data-setting="enableControlPanel" aria-label="启用任务栏播放控制"><span class="switch-track"></span></label></div><p class="display-group-note">在选定区域触发，快速播放、切歌与调整进度。</p><div data-panel-options><div class="window-mode-setting-row panel-trigger-row child" data-depends="enableControlPanel" data-embedded-only="">
+                        <span id="panelTriggerMethodLabel" class="panel-trigger-label">触发方式</span>
+                        <div class="monitor-mode layout-options" role="radiogroup" aria-labelledby="panelTriggerMethodLabel">
+                          <label><input type="radio" name="controlPanelTriggerMethod" data-setting="controlPanelTriggerMethod" value="Click"><span>点击</span></label>
+                          <label><input type="radio" name="controlPanelTriggerMethod" data-setting="controlPanelTriggerMethod" value="Hover"><span>悬停</span></label>
+                        </div>
+                      </div>
+<div class="window-mode-setting-row panel-trigger-row child" data-depends="enableControlPanel" data-embedded-only="">
+                        <span id="panelTriggerAreaLabel" class="panel-trigger-label">触发区域</span>
+                        <div class="panel-trigger-areas" role="group" aria-labelledby="panelTriggerAreaLabel">
+                          <label class="panel-trigger-chip"><input type="checkbox" data-setting="controlPanelTriggerCover"><span>封面</span></label>
+                          <label class="panel-trigger-chip"><input type="checkbox" data-setting="controlPanelTriggerLyrics"><span>歌词</span></label>
+                        </div>
+                      </div></div></div>
+            <div data-presentation-mode="floating" class="floating-window-mode-settings" hidden><div class="window-mode-setting-row display-group-heading" data-depends="useFloatingWindow"><h3><label class="window-mode-setting-copy" for="floatingControlPanelToggle">播放控制</label></h3><label class="switch small"><input id="floatingControlPanelToggle" type="checkbox" data-setting="enableFloatingControlPanel" aria-label="启用浮窗播放控制" disabled=""><span class="switch-track"></span></label></div><p class="display-group-note">悬停歌词卡片，展开播放控制。</p></div>
+          </section>
+          <section class="display-setting-group" data-display-group="appearance" aria-labelledby="displayAppearanceHeading"><div class="display-group-heading"><h3 id="displayAppearanceHeading">材质与外观</h3><small data-presentation-mode="embedded">任务栏控制面板</small><small data-presentation-mode="floating" hidden>悬浮歌词卡片</small></div><div data-presentation-mode="embedded" class="embedded-window-mode-settings"><details class="mode-details embedded-appearance-settings">
+                        <summary><span>面板材质</span><small data-material-summary="embedded"></small></summary><p class="display-group-note" data-material-hint="embedded">作用于任务栏播放控制面板。</p>
+                      <div class="window-mode-setting-row panel-material-setting is-disabled" data-embedded-only="" data-depends="enableControlPanel">
+                        <label class="window-mode-setting-copy" for="embeddedPanelBlurAmount"><strong>模糊</strong></label>
+                        <div class="slider-number-control"><input type="range" min="0" max="64" step="1" data-setting="embeddedPanelBlurAmount" aria-label="任务栏面板模糊"><label class="unit-input compact-number-input"><input id="embeddedPanelBlurAmount" type="number" min="0" max="64" step="1" data-setting="embeddedPanelBlurAmount" aria-label="任务栏面板模糊数值"><span>px</span></label></div>
+                      </div>
+                      <div class="window-mode-setting-row panel-material-setting is-disabled" data-embedded-only="" data-depends="enableControlPanel">
+                        <label class="window-mode-setting-copy" for="embeddedPanelBrightness"><strong>亮度</strong></label>
+                        <div class="slider-number-control"><input type="range" min="0" max="100" step="1" data-setting="embeddedPanelBrightness" data-value-scale="100" aria-label="任务栏面板亮度"><label class="unit-input compact-number-input percentage-input"><input id="embeddedPanelBrightness" type="number" min="0" max="100" step="1" data-setting="embeddedPanelBrightness" data-value-scale="100" aria-label="任务栏面板亮度百分比"><span>%</span></label></div>
+                      </div>
+                      <div class="window-mode-setting-row panel-material-setting is-disabled" data-embedded-only="" data-depends="enableControlPanel">
+                        <label class="window-mode-setting-copy" for="embeddedPanelTintOpacity"><strong>不透明度</strong></label>
+                        <div class="slider-number-control"><input type="range" min="0" max="100" step="1" data-setting="embeddedPanelTintOpacity" data-value-scale="100" aria-label="任务栏面板不透明度"><label class="unit-input compact-number-input percentage-input"><input id="embeddedPanelTintOpacity" type="number" min="0" max="100" step="1" data-setting="embeddedPanelTintOpacity" data-value-scale="100" aria-label="任务栏面板不透明度百分比"><span>%</span></label></div>
+                      </div>
+                      </details><details class="mode-details"><summary><span>歌词背景与边框</span><small data-embedded-appearance-summary="">背景关闭 · 边框关闭</small></summary>
+                      <div data-embedded-only="" class="window-mode-setting-row compact"><div class="window-mode-setting-copy"><strong>显示背景</strong></div><label class="switch"><input type="checkbox" data-setting="showBackground" aria-label="显示背景"><span class="switch-track"></span></label></div>
+                      <div data-embedded-only="" class="window-mode-setting-row child" data-depends="showBackground"><div class="window-mode-setting-copy"><strong>背景不透明度</strong></div><div class="slider-number-control"><input type="range" min="0" max="1" step="0.05" data-setting="backgroundOpacity" aria-label="背景不透明度滑块"><label class="unit-input compact-number-input percentage-input"><input type="number" min="0" max="100" step="5" data-setting="backgroundOpacity" data-value-scale="100" aria-label="背景不透明度百分比"><span>%</span></label></div></div>
+                      <div data-embedded-only="" class="window-mode-setting-row compact"><div class="window-mode-setting-copy"><strong>显示边框</strong></div><label class="switch"><input type="checkbox" data-setting="showBorder" aria-label="显示边框"><span class="switch-track"></span></label></div>
+                      </details></div><div data-presentation-mode="floating" class="floating-window-mode-settings" hidden><details class="mode-details floating-appearance-settings">
+                        <summary><span>卡片材质</span><small data-material-summary="floating"></small></summary><p class="display-group-note" data-material-hint="floating">作用于整张悬浮歌词卡片，播放控制使用同一材质。</p>
+                      <div class="window-mode-setting-row panel-material-setting is-disabled" data-floating-only="">
+                        <label class="window-mode-setting-copy" for="floatingPanelBlurAmount"><strong>模糊</strong></label>
+                        <div class="slider-number-control"><input type="range" min="0" max="64" step="1" data-setting="floatingPanelBlurAmount" aria-label="浮窗卡片模糊"><label class="unit-input compact-number-input"><input id="floatingPanelBlurAmount" type="number" min="0" max="64" step="1" data-setting="floatingPanelBlurAmount" aria-label="浮窗卡片模糊数值"><span>px</span></label></div>
+                      </div>
+                      <div class="window-mode-setting-row panel-material-setting is-disabled" data-floating-only="">
+                        <label class="window-mode-setting-copy" for="floatingPanelBrightness"><strong>亮度</strong></label>
+                        <div class="slider-number-control"><input type="range" min="0" max="100" step="1" data-setting="floatingPanelBrightness" data-value-scale="100" aria-label="浮窗卡片亮度"><label class="unit-input compact-number-input percentage-input"><input id="floatingPanelBrightness" type="number" min="0" max="100" step="1" data-setting="floatingPanelBrightness" data-value-scale="100" aria-label="浮窗卡片亮度百分比"><span>%</span></label></div>
+                      </div>
+                      <div class="window-mode-setting-row panel-material-setting is-disabled" data-floating-only="">
+                        <label class="window-mode-setting-copy" for="floatingPanelTintOpacity"><strong>不透明度</strong></label>
+                        <div class="slider-number-control"><input type="range" min="0" max="100" step="1" data-setting="floatingPanelTintOpacity" data-value-scale="100" aria-label="浮窗卡片不透明度"><label class="unit-input compact-number-input percentage-input"><input id="floatingPanelTintOpacity" type="number" min="0" max="100" step="1" data-setting="floatingPanelTintOpacity" data-value-scale="100" aria-label="浮窗卡片不透明度百分比"><span>%</span></label></div>
+                      </div>
+                      </details></div></section>
+        </div>
+        <aside class="display-preview" aria-labelledby="displayPreviewHeading"><div class="display-preview-sticky"><div class="display-preview-heading"><h3 id="displayPreviewHeading">模式演示</h3><span data-presentation-status role="status">固定示例</span></div><div class="display-preview-stage"><video data-presentation-video muted playsinline preload="none" poster="media/embedded-poster.png" aria-label="任务栏嵌入模式演示"></video></div><div class="display-preview-actions"><div><strong data-presentation-name>任务栏嵌入</strong><p data-presentation-description>歌词保留在任务栏，播放面板在附近独立出现。</p></div><button class="btn secondary small" type="button" data-replay-presentation aria-label="重播当前模式演示"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8M3 3v5h5"/></svg>重播演示</button></div><p class="display-preview-note">首次打开此页或切换模式时演示一次。演示使用固定参数，调整设置请查看实际歌词窗口。</p></div></aside>
+      </div>
+    </section>
+    <div class="panel">
+              <div class="panel-head"><div><h2>文字样式</h2><p>调整字体、字重、颜色和复杂背景下的可读性。字号属于基础尺寸，见上方「歌词布局 → 高级尺寸微调」。</p></div></div>
               <div class="settings">
-                <div class="setting-row"><div class="setting-label"><strong>字体</strong></div><button id="fontFamilySelect" class="control select-trigger" type="button" data-setting="fontFamily" aria-label="字体" aria-haspopup="listbox" aria-expanded="false"><span class="select-trigger-value"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
-                <div class="setting-row"><div class="setting-label"><strong>字重</strong></div><button class="control select-trigger" type="button" data-setting="fontWeight" aria-label="字重" aria-haspopup="listbox" aria-expanded="false"><span class="select-trigger-value"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
-                <div class="setting-row"><div class="setting-label"><strong>文字颜色</strong></div><div class="color-mode-control"><button class="control select-trigger" type="button" data-setting="foregroundColorMode" aria-label="文字颜色模式" aria-haspopup="listbox" aria-expanded="false"><span class="select-trigger-value"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><div class="preset-color-readout" data-preset-color><span class="color-swatch" data-mode-swatch></span><span data-mode-value>#FFFFFF</span></div><div class="color-control custom-color-control" data-custom-color hidden><button id="colorPickerButton" class="color-picker-button" type="button" data-setting="foregroundColor" aria-label="打开自定义取色器" aria-haspopup="dialog" aria-expanded="false"><span class="color-swatch" data-color-swatch></span><span>选择颜色</span></button><input class="control color-value-input" data-color-text="foregroundColor" aria-label="自定义文字颜色值" aria-describedby="foregroundColorError" aria-invalid="false" maxlength="7" spellcheck="false"><small id="foregroundColorError" class="input-error" hidden>请输入类似 #FFFFFF 的颜色值。</small></div></div></div>
+                <div class="setting-row"><div class="setting-label"><strong>字体</strong></div><button id="fontFamilySelect" class="control select-trigger" type="button" data-setting="fontFamily" aria-label="字体" aria-haspopup="listbox" aria-expanded="false"><span class="select-trigger-value"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg></button></div>
+                <div class="setting-row"><div class="setting-label"><strong>字重</strong></div><button class="control select-trigger" type="button" data-setting="fontWeight" aria-label="字重" aria-haspopup="listbox" aria-expanded="false"><span class="select-trigger-value"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg></button></div>
+                <div class="setting-row"><div class="setting-label"><strong>文字颜色</strong></div><div class="color-mode-control"><button class="control select-trigger" type="button" data-setting="foregroundColorMode" aria-label="文字颜色模式" aria-haspopup="listbox" aria-expanded="false"><span class="select-trigger-value"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg></button><div class="preset-color-readout" data-preset-color=""><span class="color-swatch" data-mode-swatch=""></span><span data-mode-value="">#FFFFFF</span></div><div class="color-control custom-color-control" data-custom-color="" hidden=""><button id="colorPickerButton" class="color-picker-button" type="button" data-setting="foregroundColor" aria-label="打开自定义取色器" aria-haspopup="dialog" aria-expanded="false"><span class="color-swatch" data-color-swatch=""></span><span>选择颜色</span></button><input class="control color-value-input" data-color-text="foregroundColor" aria-label="自定义文字颜色值" aria-describedby="foregroundColorError" aria-invalid="false" maxlength="7" spellcheck="false"><small id="foregroundColorError" class="input-error" hidden="">请输入类似 #FFFFFF 的颜色值。</small></div></div></div>
                 <div class="setting-row compact"><div class="setting-label"><strong>文字阴影</strong></div><label class="switch"><input type="checkbox" data-setting="showTextShadow" aria-label="文字阴影"><span class="switch-track"></span></label></div>
               </div>
             </div>
-
-            <section class="panel">
+<section class="panel">
               <div class="panel-head"><div><h2>显示器</h2><p>两种显示方式共用显示器选择。</p></div></div>
               <div class="settings">
-                <div class="setting-row monitor-setting-row"><div class="setting-label"><strong>显示器</strong><small>选择显示歌词的屏幕，适用于两种模式。</small></div><div class="monitor-selection"><div class="monitor-mode" role="radiogroup" aria-label="歌词显示器模式"><label><input type="radio" name="lyricsDisplayMode" value="All" data-display-mode><span>全部显示器</span></label><label><input type="radio" name="lyricsDisplayMode" value="Selected" data-display-mode><span>指定显示器</span></label></div><span id="displayMonitorListLabel" class="sr-only">选择显示歌词的显示器</span><div id="displayMonitorList" class="monitor-list" role="group" aria-labelledby="displayMonitorListLabel"></div><small id="displayMonitorHint" class="monitor-hint" role="status"></small></div></div>
+                <div class="setting-row monitor-setting-row"><div class="setting-label"><strong>显示器</strong><small>选择显示歌词的屏幕，适用于两种模式。</small></div><div class="monitor-selection"><div class="monitor-mode" role="radiogroup" aria-label="歌词显示器模式"><label><input type="radio" name="lyricsDisplayMode" value="All" data-display-mode=""><span>全部显示器</span></label><label><input type="radio" name="lyricsDisplayMode" value="Selected" data-display-mode=""><span>指定显示器</span></label></div><span id="displayMonitorListLabel" class="sr-only">选择显示歌词的显示器</span><div id="displayMonitorList" class="monitor-list" role="group" aria-labelledby="displayMonitorListLabel"></div><small id="displayMonitorHint" class="monitor-hint" role="status"></small></div></div>
               </div>
             </section>
-
-          </div>
-        </section>
+  </div>
+</section>
 
         <section class="page" data-page="general" aria-labelledby="generalHeading">
           <div class="page-inner">
@@ -472,6 +426,7 @@
   <script src="hotkeys.js"></script>
   <script src="state.js"></script>
   <script src="track-offsets-page.js"></script>
+  <script src="display-presentation.js"></script>
   <script src="settings.js"></script>
 </body>
 </html>

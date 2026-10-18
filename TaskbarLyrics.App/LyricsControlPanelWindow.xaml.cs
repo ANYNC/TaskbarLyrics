@@ -59,6 +59,7 @@ public partial class LyricsControlPanelWindow : Window
     internal bool IsOpening { get; private set; }
     internal bool IsClosing { get; private set; }
     private bool CanInteract => IsVisible && !IsClosing && !_disposed;
+    internal event EventHandler? Hiding;
     internal event EventHandler? Hidden;
 
     internal LyricsControlPanelWindow(Action<MediaHotkeyAction> execute, Action<TimeSpan> seek)
@@ -273,6 +274,8 @@ public partial class LyricsControlPanelWindow : Window
         _canDismissOnDeactivate = false;
         if (!IsVisible) { if (opening) Hidden?.Invoke(this, EventArgs.Empty); return; }
         IsClosing = true;
+        // Let the source affordance fade with the panel, rather than after Hidden.
+        Hiding?.Invoke(this, EventArgs.Empty);
         VisualRoot.IsHitTestVisible = false;
         NativeWindowInteraction.SetClickThrough(new WindowInteropHelper(this).Handle, true);
         _seeking = false; _pendingSeek = null;

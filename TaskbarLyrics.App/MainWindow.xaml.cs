@@ -494,15 +494,21 @@ public partial class MainWindow : Window, IDisposable
         var panel = new LyricsControlPanelWindow(
             action => TaskObserver.Observe(ExecuteMediaHotkeyAsync(action, CancellationToken.None), $"lyrics control panel {action}"),
             position => TaskObserver.Observe(_mediaPlaybackController.SeekToAsync(position, CancellationToken.None), "lyrics control panel seek"));
+        panel.Hiding += OnControlPanelHiding;
         panel.Hidden += OnControlPanelHidden;
         panel.ConfigureMaterial(_currentSettings.EmbeddedPanelBrightness, _currentSettings.EmbeddedPanelTintOpacity, _currentSettings.EmbeddedPanelBlurAmount);
         return panel;
     }
 
-    private void OnControlPanelHidden(object? sender, EventArgs e)
+    private void OnControlPanelHiding(object? sender, EventArgs e)
     {
         _setControlPanelOpen?.Invoke(false);
         _setControlPanelOpen = null;
+    }
+
+    private void OnControlPanelHidden(object? sender, EventArgs e)
+    {
+        OnControlPanelHiding(sender, e);
         _lastControlPanelClosedUtc = DateTimeOffset.UtcNow;
     }
 

@@ -102,12 +102,56 @@ public sealed class LyricsControlPanelPlacementTests
     [Theory]
     [InlineData(-30, 24)]
     [InlineData(1200, 816)]
-    public void KeepsPanelBesideVerticalTaskbarWithScaledGap(double anchorX, double expectedX)
+    public void AlignsPanelTopWithVerticalTaskbarCoverAndScalesGap(double anchorX, double expectedX)
     {
         var position = LyricsControlPanelPlacement.Place(
             new Rect(anchorX, 400, 30, 34), new Rect(0, 0, 1200, 900), new Size(360, 124), 1.5);
 
         Assert.Equal(expectedX, position.X);
-        Assert.Equal(355, position.Y);
+        Assert.Equal(400, position.Y);
+    }
+
+    [Theory]
+    [InlineData(false, 1, 0, 0)]
+    [InlineData(true, 1, 0, 0)]
+    [InlineData(false, 1.25, 0, 0)]
+    [InlineData(true, 1.25, 0, 0)]
+    [InlineData(false, 1.5, 0, 0)]
+    [InlineData(true, 1.5, 0, 0)]
+    [InlineData(false, 2, 0, 0)]
+    [InlineData(true, 2, 0, 0)]
+    [InlineData(false, 1, -1920, -1080)]
+    [InlineData(true, 1.5, -1920, -1080)]
+    public void SideTaskbarGapMatchesHorizontalTaskbarWithoutAddingWorkAreaInset(bool right, double scale,
+        double originX, double originY)
+    {
+        var work = new Rect(originX + (right ? 0 : 48 * scale), originY, 1872 * scale, 1080 * scale);
+        var cover = new Rect(originX + (right ? 1878 : 8) * scale, originY + 20 * scale, 34 * scale, 34 * scale);
+        var size = new Size(360 * scale, 124 * scale);
+        var position = LyricsControlPanelPlacement.Place(cover, work, size, scale);
+        var horizontalCover = new Rect(work.Left + 400 * scale, work.Bottom, 34 * scale, 34 * scale);
+        var horizontalPosition = LyricsControlPanelPlacement.Place(horizontalCover, work, size, scale);
+        var verticalGap = horizontalCover.Top - horizontalPosition.Y - size.Height;
+        var sideGap = right ? cover.Left - position.X - size.Width : position.X - cover.Right;
+
+        Assert.Equal(cover.Top, position.Y, 6);
+        Assert.Equal(16 * scale, sideGap, 6);
+        Assert.Equal(verticalGap, sideGap, 6);
+    }
+
+    [Theory]
+    [InlineData(false, -10, 0)]
+    [InlineData(true, -10, 0)]
+    [InlineData(false, 1060, 956)]
+    [InlineData(true, 1060, 956)]
+    public void SideTaskbarTopAlignmentStillKeepsPanelInsideWorkArea(bool right, double coverY, double expectedY)
+    {
+        var work = new Rect(right ? 0 : 48, 0, 1872, 1080);
+        var cover = new Rect(right ? 1878 : 8, coverY, 34, 34);
+        var size = new Size(360, 124);
+        var position = LyricsControlPanelPlacement.Place(cover, work, size);
+
+        Assert.Equal(expectedY, position.Y);
+        Assert.True(work.Contains(new Rect(position, size)));
     }
 }

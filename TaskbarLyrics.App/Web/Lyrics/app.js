@@ -130,18 +130,26 @@ panelLyricsEl?.addEventListener("keydown", event => {
   event.preventDefault();
   postPanelTrigger(panelLyricsEl, "Lyrics", "Keyboard");
 });
+function clearPanelHover() {
+  clearTimeout(panelHoverTimer);
+  panelHoverTimer = 0;
+  coverEl?.classList.remove("panel-trigger-hovered");
+}
+
 for (const [element, area] of [[coverEl, "Cover"], [panelLyricsEl, "Lyrics"]]) {
   element?.addEventListener("mouseenter", () => {
-    clearTimeout(panelHoverTimer);
-    if (panelTriggerMethod !== "Hover" || !panelAreaEnabled(area)) return;
+    clearPanelHover();
+    if (regionPhase !== "visible" || panelTriggerMethod !== "Hover" || !panelAreaEnabled(area)) return;
+    // All selected regions share the same immediate cue and delayed opening.
+    coverEl?.classList.add("panel-trigger-hovered");
     panelHoverTimer = setTimeout(() => {
       panelHoverTimer = 0;
       if (panelTriggerMethod === "Hover" && panelAreaEnabled(area)) postPanelTrigger(element, area, "Hover");
     }, 250);
   });
-  element?.addEventListener("mouseleave", () => clearTimeout(panelHoverTimer));
+  element?.addEventListener("mouseleave", clearPanelHover);
 }
-window.addEventListener("blur", () => clearTimeout(panelHoverTimer));
+window.addEventListener("blur", clearPanelHover);
 
 function setControlPanelOpen(open) {
   if (!coverEl) return;
@@ -238,7 +246,7 @@ function applyRegionVisibility(payload) {
   regionPhase = payload.phase;
   layoutEl.dataset.regionEdge = payload.edge;
   layoutEl.inert = regionPhase !== "visible";
-  clearTimeout(panelHoverTimer);
+  clearPanelHover();
   setControlPanelOpen(false);
   settleRegionContent();
   layoutEl.classList.remove("region-moving");
@@ -2547,7 +2555,7 @@ const lyricsApi = {
     root.style.setProperty("--font-size", `${requestedFontSize}px`);
     root.style.setProperty("--font-weight", window.taskbarLyricsState.normalizeWeight(payload.fontWeight));
     root.classList.toggle("cover-hidden", payload.showCover === false);
-    clearTimeout(panelHoverTimer);
+    clearPanelHover();
     panelTriggerEnabled = payload.enableControlPanel !== false;
     panelTriggerMethod = payload.controlPanelTriggerMethod === "Hover" ? "Hover" : "Click";
     panelTriggerCover = payload.controlPanelTriggerCover !== false;
@@ -2562,6 +2570,7 @@ const lyricsApi = {
     }
     if (coverEl) {
       coverEl.disabled = !panelTriggerEnabled || !root.classList.contains("floating-controls-enabled") && !panelTriggerCover;
+      coverEl.classList.toggle("panel-click-trigger", panelTriggerMethod === "Click" && panelAreaEnabled("Cover"));
       if (!panelTriggerEnabled || payload.showCover === false && !panelAreaEnabled("Lyrics")) setControlPanelOpen(false);
     }
 
