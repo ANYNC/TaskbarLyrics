@@ -18,7 +18,7 @@ public partial class MainWindow
     private void InitializeFloatingControls()
     {
         _floatingControls = new FloatingLyricsPanelController(Dispatcher, CreateFloatingControls);
-        _floatingControls.Register(this, () => PlacementDisplay, () => _isLyricsContentVisible && _isWebDocumentReady,
+        _floatingControls.Register(this, () => PlacementDisplay, () => _isLyricsContentVisible && _isWebDocumentReady && _regionVisibility.IsInteractive,
             SetFloatingControlSurface, DragFloatingWindow,
             () => NativeWindowInteraction.GetScreenBounds(CoverHitSurface), SetFloatingLockState);
         _floatingControls.RegisterSizeAdjustment(this, () => FloatingWindowSize.FromSettings(_currentSettings),

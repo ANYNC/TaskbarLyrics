@@ -21,12 +21,17 @@
     create(nextState, previousState, foregroundColor) {
       return normalizeControlPanelTriggers({
         ...nextState,
+        floatingWindowLayer: ["Desktop", "Window", "Fullscreen"].includes(nextState?.floatingWindowLayer)
+          ? nextState.floatingWindowLayer : nextState?.forceAlwaysOnTop === false ? "Window" : "Fullscreen",
         floatingWindowWidth: nextState?.floatingWindowWidth ?? nextState?.windowWidth ?? 420,
         enableFloatingControlPanel: nextState?.enableFloatingControlPanel ?? nextState?.enableControlPanel ?? true,
         floatingLyricsLayoutScalePercent: nextState?.floatingLyricsLayoutScalePercent ?? nextState?.lyricsLayoutScalePercent ?? 100,
         lyricsTextAlignment: normalizeLyricsTextAlignment(nextState?.lyricsTextAlignment),
         singleLineLyrics: nextState?.singleLineLyrics === true,
         coverPosition: nextState?.coverPosition === "Right" ? "Right" : "Left",
+        embeddedPanelBrightness: Number.isFinite(Number(nextState?.embeddedPanelBrightness)) ? Math.min(1, Math.max(0, Number(nextState.embeddedPanelBrightness))) : 0.45,
+        embeddedPanelTintOpacity: Number.isFinite(Number(nextState?.embeddedPanelTintOpacity)) ? Math.min(1, Math.max(0, Number(nextState.embeddedPanelTintOpacity))) : 0.55,
+        embeddedPanelBlurAmount: Number.isFinite(Number(nextState?.embeddedPanelBlurAmount)) ? Math.min(64, Math.max(0, Number(nextState.embeddedPanelBlurAmount))) : 24,
         floatingPanelBrightness: Number.isFinite(Number(nextState?.floatingPanelBrightness)) ? Math.min(1, Math.max(0, Number(nextState.floatingPanelBrightness))) : 0.45,
         floatingPanelTintOpacity: Number.isFinite(Number(nextState?.floatingPanelTintOpacity)) ? Math.min(1, Math.max(0, Number(nextState.floatingPanelTintOpacity))) : 0.55,
         floatingPanelBlurAmount: Number.isFinite(Number(nextState?.floatingPanelBlurAmount)) ? Math.min(64, Math.max(0, Number(nextState.floatingPanelBlurAmount))) : 24,

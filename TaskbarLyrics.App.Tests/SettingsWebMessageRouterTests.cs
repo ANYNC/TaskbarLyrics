@@ -7,6 +7,9 @@ public sealed class SettingsWebMessageRouterTests
     [Theory]
     [InlineData("floatingPanelBrightness")]
     [InlineData("floatingPanelTintOpacity")]
+    [InlineData("embeddedPanelBrightness")]
+    [InlineData("embeddedPanelTintOpacity")]
+    [InlineData("embeddedPanelBlurAmount")]
     public void ParsesFloatingAppearancePreviewAndCommit(string key)
     {
         foreach (var type in new[] { "previewUpdate", "update" })

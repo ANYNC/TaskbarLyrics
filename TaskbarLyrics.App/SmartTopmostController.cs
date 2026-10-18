@@ -12,7 +12,7 @@ internal sealed class SmartTopmostController : IDisposable
     private readonly ISmartTopmostWindowProbe _windowProbe;
     private readonly DispatcherTimer _timer;
     private bool _useFloatingWindow;
-    private bool _forceAlwaysOnTop;
+    private FloatingWindowLayer _layer;
     private NativeRect? _targetMonitorBounds;
     private bool _isDisposed;
     private bool _isApplying;
@@ -33,7 +33,7 @@ internal sealed class SmartTopmostController : IDisposable
 
     internal void ApplySettings(
         bool useFloatingWindow,
-        bool forceAlwaysOnTop,
+        FloatingWindowLayer layer,
         NativeRect? targetMonitorBounds)
     {
         if (_isDisposed)
@@ -42,10 +42,10 @@ internal sealed class SmartTopmostController : IDisposable
         }
 
         var settingsChanged = _useFloatingWindow != useFloatingWindow ||
-            _forceAlwaysOnTop != forceAlwaysOnTop ||
+            _layer != layer ||
             _targetMonitorBounds != targetMonitorBounds;
         _useFloatingWindow = useFloatingWindow;
-        _forceAlwaysOnTop = forceAlwaysOnTop;
+        _layer = layer;
         _targetMonitorBounds = targetMonitorBounds;
         if (settingsChanged)
         {
@@ -97,25 +97,32 @@ internal sealed class SmartTopmostController : IDisposable
         try
         {
             SmartTopmostForegroundWindow? foregroundWindow = null;
-            if (!_forceAlwaysOnTop &&
+            if (_layer == FloatingWindowLayer.Window &&
                 _windowProbe.TryGetForegroundWindow(out var candidate))
             {
                 foregroundWindow = candidate;
             }
 
             var decision = SmartTopmostPolicy.Evaluate(
-                _forceAlwaysOnTop,
+                _layer,
                 monitorBounds,
-                foregroundWindow);
+                foregroundWindow,
+                _layer == FloatingWindowLayer.Desktop ? _windowProbe.GetDesktopPlacement() : default);
+            // Avoid repeatedly raising the desktop card while Explorer restores application windows.
+            if (_layer == FloatingWindowLayer.Desktop && decision.ShouldBeTopmost && _lastDecision == decision)
+                return;
             if (!SmartTopmostPolicy.RequiresTopmostStateUpdate(_lastDecision, decision))
             {
                 return;
             }
 
-            if (TaskbarPlacementService.ApplyTopmostState(
+            var applied = _layer == FloatingWindowLayer.Desktop
+                ? TaskbarPlacementService.ApplyDesktopLayerState(_window, decision.ShouldBeTopmost)
+                : TaskbarPlacementService.ApplyTopmostState(
                     _window,
                     decision.ShouldBeTopmost,
-                    decision.WindowToPlaceAfter))
+                    decision.WindowToPlaceAfter);
+            if (applied)
             {
                 _lastDecision = decision;
             }

@@ -16,6 +16,18 @@ internal readonly record struct LyricsCoverClickBounds(
 
 internal static class LyricsWebMessageRouter
 {
+    public static bool TryGetRegionVisibilityCompleted(WebViewMessage? message, out int generation, out bool visible)
+    {
+        generation = 0;
+        visible = false;
+        if (message is not { Version: 1, Type: "regionVisibilityCompleted", Payload: { ValueKind: JsonValueKind.Object } payload } ||
+            !payload.TryGetProperty("generation", out var token) || token.ValueKind != JsonValueKind.Number ||
+            !token.TryGetInt32(out generation) || generation < 0 ||
+            !payload.TryGetProperty("visible", out var state) || state.ValueKind is not (JsonValueKind.True or JsonValueKind.False)) return false;
+        visible = state.GetBoolean();
+        return true;
+    }
+
     public static bool TryGetControlPanelTrigger(WebViewMessage? message, out LyricsCoverClickBounds bounds,
         out ControlPanelTriggerArea area, out ControlPanelActivation activation)
     {

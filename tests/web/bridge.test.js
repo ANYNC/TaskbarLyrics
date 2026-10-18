@@ -8,9 +8,9 @@ const settingsPages = ["sources", "shortcuts", "lyrics", "trackOffsets", "displa
 const persistedSettings = [
   "enableLocalLyrics", "localMusicFolders", "enableGlobalMediaHotkeys", "showLyricsOnStartup", "autoHideWhenNoPlayback",
   "showLyricTranslation", "enableWordScanning", "spectrumDisplayMode", "lyricsLayoutScalePercent", "fontSize", "showCover", "singleLineLyrics",
-  "enableControlPanel", "controlPanelTriggerMethod", "controlPanelTriggerCover", "controlPanelTriggerLyrics", "enableFloatingControlPanel", "floatingPanelBrightness", "floatingPanelTintOpacity", "floatingPanelBlurAmount", "coverPosition", "coverSize", "coverGap", "coverCornerRadius", "fontFamily", "fontWeight", "lyricsTextAlignment", "foregroundColorMode",
+  "enableControlPanel", "controlPanelTriggerMethod", "controlPanelTriggerCover", "controlPanelTriggerLyrics", "enableFloatingControlPanel", "floatingPanelBrightness", "floatingPanelTintOpacity", "floatingPanelBlurAmount", "embeddedPanelBrightness", "embeddedPanelTintOpacity", "embeddedPanelBlurAmount", "coverPosition", "coverSize", "coverGap", "coverCornerRadius", "fontFamily", "fontWeight", "lyricsTextAlignment", "foregroundColorMode",
   "showTextShadow", "toolWindowTheme", "showBackground", "backgroundOpacity", "showBorder", "windowWidth",
-  "xOffset", "yOffset", "forceAlwaysOnTop", "startWithWindows", "autoCheckUpdates"
+  "xOffset", "yOffset", "floatingWindowLayer", "startWithWindows", "autoCheckUpdates"
 ];
 
 async function createSettingsDom({ deferAnimationFrames = false, reducedMotion = false } = {}) {
@@ -177,6 +177,11 @@ describe("settings WebView bridge", () => {
       expect(control.closest(".embedded-window-mode-card")).not.toBeNull();
       expect(control.disabled).toBe(floating);
     }
+    for (const key of ["embeddedPanelBlurAmount", "embeddedPanelBrightness", "embeddedPanelTintOpacity"]) {
+      const control = document.querySelector(`[data-setting="${key}"]`);
+      expect(control.closest(".embedded-window-mode-card")).not.toBeNull();
+      expect(control.disabled).toBe(floating);
+    }
     for (const key of ["floatingPanelBlurAmount", "floatingPanelBrightness", "floatingPanelTintOpacity"]) {
       const control = document.querySelector(`[data-setting="${key}"]`);
       expect(control.closest(".floating-window-mode-card")).not.toBeNull();
@@ -214,6 +219,36 @@ describe("settings WebView bridge", () => {
     } } });
     expect(slider.disabled).toBe(true);
     expect(number.value).toBe("30");
+    dom.window.close();
+  });
+
+  it.each([
+    ["embeddedPanelBrightness", 65, 80, 0.8, 150, 100, 1],
+    ["embeddedPanelTintOpacity", 65, 80, 0.8, 150, 100, 1],
+    ["embeddedPanelBlurAmount", 24, 40, 40, 100, 64, 64]
+  ])("previews and commits taskbar material independently: %s", async (key, initial, edited, value, overflow, normalized, bounded) => {
+    const { dom, sent, script } = await createSettingsDom();
+    dom.window.eval(script);
+    const receive = settings => dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings } });
+    receive({ useFloatingWindow: false, enableControlPanel: true });
+    const slider = dom.window.document.querySelector(`input[type="range"][data-setting="${key}"]`);
+    const number = dom.window.document.querySelector(`input[type="number"][data-setting="${key}"]`);
+    expect(number.value).toBe(String(key === "embeddedPanelTintOpacity" ? 55 : key === "embeddedPanelBrightness" ? 45 : initial));
+    expect(slider.disabled).toBe(false);
+    slider.value = String(edited);
+    slider.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+    expect(number.value).toBe(String(edited));
+    expect(sent.at(-1)).toEqual({ version: 1, type: "previewUpdate", payload: { key, value } });
+    number.value = String(overflow);
+    number.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+    expect(number.value).toBe(String(normalized));
+    expect(sent.at(-1)).toEqual({ version: 1, type: "update", payload: { key, value: bounded } });
+    expect(sent.some(message => message.payload?.key?.startsWith("floatingPanel"))).toBe(false);
+    receive({ useFloatingWindow: true, enableControlPanel: true, [key]: value });
+    expect(slider.disabled).toBe(true);
+    expect(number.disabled).toBe(true);
+    receive({ useFloatingWindow: false, enableControlPanel: false, [key]: value });
+    expect(slider.disabled).toBe(true);
     dom.window.close();
   });
   it("keeps the floating hover switch independent without requiring a cover", async () => {
@@ -1662,6 +1697,51 @@ describe("settings WebView bridge", () => {
     }
   });
 
+  it.each([
+    [{ forceAlwaysOnTop: true }, "Fullscreen"],
+    [{ forceAlwaysOnTop: false }, "Window"],
+    [{ forceAlwaysOnTop: true, floatingWindowLayer: "Desktop" }, "Desktop"],
+    [{ forceAlwaysOnTop: false, floatingWindowLayer: "Unknown" }, "Window"]
+  ])("restores floating display level from %o", async (settings, expected) => {
+    const { dom, script } = await createSettingsDom();
+    dom.window.eval(script);
+    dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: {
+      settings: { useFloatingWindow: true, ...settings }
+    } });
+    expect(dom.window.document.querySelector('[data-setting="floatingWindowLayer"]:checked').value).toBe(expected);
+  });
+
+  it("supports all three floating levels by keyboard and preserves the choice across mode changes", async () => {
+    const { dom, sent, script } = await createSettingsDom();
+    dom.window.eval(script);
+    dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: {
+      settings: { useFloatingWindow: true, floatingWindowLayer: "Fullscreen" }
+    } });
+    const document = dom.window.document;
+    const options = [...document.querySelectorAll('[data-setting="floatingWindowLayer"]')];
+    expect(options.map(option => option.value)).toEqual(["Desktop", "Window", "Fullscreen"]);
+    expect(document.querySelector("#floatingTopmostRow").textContent).toContain("独占全屏可能不支持");
+    options[2].dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Home", bubbles: true }));
+    expect(options[0].checked).toBe(true);
+    expect(document.activeElement).toBe(options[0]);
+    expect(sent.at(-1).payload).toEqual({ key: "floatingWindowLayer", value: "Desktop" });
+    options[0].dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    expect(options[1].checked).toBe(true);
+    expect(sent.at(-1).payload).toEqual({ key: "floatingWindowLayer", value: "Window" });
+    options[1].dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "End", bubbles: true }));
+    expect(options[2].checked).toBe(true);
+    expect(sent.at(-1).payload).toEqual({ key: "floatingWindowLayer", value: "Fullscreen" });
+    options[0].click();
+    document.querySelector('[data-window-mode="embedded"]').click();
+    expect(options.every(option => option.disabled)).toBe(true);
+    const count = sent.length;
+    options[1].dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+    expect(sent).toHaveLength(count);
+    document.querySelector('[data-window-mode="floating"]').click();
+    expect(options[0].checked).toBe(true);
+    expect(options.every(option => !option.disabled)).toBe(true);
+  });
+
   it("preserves the panel preference while switching display modes and cover visibility", async () => {
     const { dom, sent, script } = await createSettingsDom();
     dom.window.eval(script);
@@ -1672,7 +1752,7 @@ describe("settings WebView bridge", () => {
     const toggle = document.querySelector("#embeddedControlPanelToggle");
     const floating = document.querySelector('[data-window-mode="floating"]');
     const embedded = document.querySelector('[data-window-mode="embedded"]');
-    const topmost = document.querySelector("#floatingTopmostToggle");
+    const topmost = document.querySelector('[data-setting="floatingWindowLayer"][value="Fullscreen"]');
     floating.click();
     expect(toggle.disabled).toBe(true);
     expect(toggle.checked).toBe(true);
@@ -1944,7 +2024,7 @@ describe("settings WebView bridge", () => {
     const document = dom.window.document;
     const sliders = Array.from(document.querySelectorAll('input[type="range"][data-setting]'));
 
-    expect(sliders.length).toBe(10);
+    expect(sliders.length).toBe(13);
     sliders.forEach(slider => {
       const control = slider.closest(".slider-number-control");
       expect(control).not.toBeNull();
@@ -2010,7 +2090,7 @@ describe("settings WebView bridge", () => {
     const embeddedMode = document.querySelector('[data-window-mode="embedded"]');
     const floatingMode = document.querySelector('[data-window-mode="floating"]');
     const topmostRow = document.querySelector("#floatingTopmostRow");
-    const topmostControl = topmostRow.querySelector('[data-setting="forceAlwaysOnTop"]');
+    const topmostControl = topmostRow.querySelector('[data-setting="floatingWindowLayer"][value="Fullscreen"]');
     const embeddedNote = document.querySelector(".embedded-mode-note");
     const widthRow = document.querySelector("#embeddedWindowWidthRow");
     const widthControls = [...widthRow.querySelectorAll('[data-setting="windowWidth"]')];
@@ -2047,7 +2127,8 @@ describe("settings WebView bridge", () => {
       payload: { key: "useFloatingWindow", value: true }
     });
 
-    topmostControl.checked = false;
+    const windowLayer = topmostRow.querySelector('[value="Window"]');
+    windowLayer.checked = true;
     const messagesBeforeDisabledWidth = sent.length;
     widthControls.forEach(control => {
       control.value = "350";
@@ -2055,12 +2136,12 @@ describe("settings WebView bridge", () => {
       control.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
     });
     expect(sent).toHaveLength(messagesBeforeDisabledWidth);
-    topmostControl.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+    windowLayer.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
     expect(floatingMode.checked).toBe(true);
     expect(sent.at(-1)).toEqual({
       version: 1,
       type: "update",
-      payload: { key: "forceAlwaysOnTop", value: false }
+      payload: { key: "floatingWindowLayer", value: "Window" }
     });
 
     floatingMode.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Home", bubbles: true }));

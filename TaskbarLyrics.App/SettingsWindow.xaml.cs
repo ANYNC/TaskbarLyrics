@@ -1255,6 +1255,9 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             ControlPanelTriggerLyrics = _settings.ControlPanelTriggerLyrics,
             EnableFloatingControlPanel = _settings.EnableFloatingControlPanel,
             FloatingLyricsLayoutScalePercent = _settings.FloatingLyricsLayoutScalePercent,
+            EmbeddedPanelBrightness = _settings.EmbeddedPanelBrightness,
+            EmbeddedPanelTintOpacity = _settings.EmbeddedPanelTintOpacity,
+            EmbeddedPanelBlurAmount = _settings.EmbeddedPanelBlurAmount,
             FloatingPanelBrightness = _settings.FloatingPanelBrightness,
             FloatingPanelTintOpacity = _settings.FloatingPanelTintOpacity,
             FloatingPanelBlurAmount = _settings.FloatingPanelBlurAmount,
@@ -1287,6 +1290,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             XOffset = _settings.XOffset,
             YOffset = _settings.YOffset,
             ForceAlwaysOnTop = _settings.ForceAlwaysOnTop,
+            FloatingWindowLayer = _settings.FloatingWindowLayer,
             UseFloatingWindow = _settings.UseFloatingWindow,
             TaskbarEmbeddingAvailable = inputBounds.IsSupported,
             TaskbarMaxWidth = inputBounds.MaxTaskbarWidth,
@@ -1491,8 +1495,9 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
 
         if (_settings.UseFloatingWindow && key is "windowWidth" or "lyricsLayoutScalePercent" or
             "horizontalAnchor" or "xOffset" or "yOffset" or "showBackground" or "backgroundOpacity" or
-            "showBorder" or "enableControlPanel" or "controlPanelTriggerMethod" or "controlPanelTriggerCover" or "controlPanelTriggerLyrics") return;
-        if (!_settings.UseFloatingWindow && key is "forceAlwaysOnTop" or "enableFloatingControlPanel" or
+            "showBorder" or "enableControlPanel" or "controlPanelTriggerMethod" or "controlPanelTriggerCover" or "controlPanelTriggerLyrics" or
+            "embeddedPanelBrightness" or "embeddedPanelTintOpacity" or "embeddedPanelBlurAmount") return;
+        if (!_settings.UseFloatingWindow && key is "forceAlwaysOnTop" or "floatingWindowLayer" or "enableFloatingControlPanel" or
             "floatingPanelBrightness" or "floatingPanelTintOpacity" or "floatingPanelBlurAmount") return;
 
         switch (key)
@@ -1567,6 +1572,15 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 break;
             case "forceAlwaysOnTop":
                 _settings.ForceAlwaysOnTop = ReadBool(element, _settings.ForceAlwaysOnTop);
+                _settings.FloatingWindowLayer = _settings.ForceAlwaysOnTop ? FloatingWindowLayer.Fullscreen : FloatingWindowLayer.Window;
+                break;
+            case "floatingWindowLayer":
+                if (element.ValueKind == JsonValueKind.String &&
+                    Enum.TryParse<FloatingWindowLayer>(element.GetString(), out var layer) && Enum.IsDefined(layer))
+                {
+                    _settings.FloatingWindowLayer = layer;
+                    _settings.ForceAlwaysOnTop = layer == FloatingWindowLayer.Fullscreen;
+                }
                 break;
             case "useFloatingWindow":
                 ApplyFloatingWindowSetting(ReadBool(element, _settings.UseFloatingWindow));
@@ -1604,6 +1618,15 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 break;
             case "floatingPanelBrightness":
                 _settings.FloatingPanelBrightness = ReadDouble(element, _settings.FloatingPanelBrightness);
+                break;
+            case "embeddedPanelBrightness":
+                _settings.EmbeddedPanelBrightness = ReadDouble(element, _settings.EmbeddedPanelBrightness);
+                break;
+            case "embeddedPanelTintOpacity":
+                _settings.EmbeddedPanelTintOpacity = ReadDouble(element, _settings.EmbeddedPanelTintOpacity);
+                break;
+            case "embeddedPanelBlurAmount":
+                _settings.EmbeddedPanelBlurAmount = ReadDouble(element, _settings.EmbeddedPanelBlurAmount);
                 break;
             case "floatingPanelTintOpacity":
                 _settings.FloatingPanelTintOpacity = ReadDouble(element, _settings.FloatingPanelTintOpacity);
@@ -1798,6 +1821,9 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
     {
         return key is
             "backgroundOpacity" or
+            "embeddedPanelBrightness" or
+            "embeddedPanelTintOpacity" or
+            "embeddedPanelBlurAmount" or
             "floatingPanelBrightness" or
             "floatingPanelTintOpacity" or
             "coverGap" or
@@ -2150,6 +2176,9 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         target.ControlPanelTriggerLyrics = source.ControlPanelTriggerLyrics;
         target.EnableFloatingControlPanel = source.EnableFloatingControlPanel;
         target.FloatingLyricsLayoutScalePercent = source.FloatingLyricsLayoutScalePercent;
+        target.EmbeddedPanelBrightness = source.EmbeddedPanelBrightness;
+        target.EmbeddedPanelTintOpacity = source.EmbeddedPanelTintOpacity;
+        target.EmbeddedPanelBlurAmount = source.EmbeddedPanelBlurAmount;
         target.FloatingPanelBrightness = source.FloatingPanelBrightness;
         target.FloatingPanelTintOpacity = source.FloatingPanelTintOpacity;
         target.FloatingPanelBlurAmount = source.FloatingPanelBlurAmount;
@@ -2173,6 +2202,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         target.XOffset = source.XOffset;
         target.YOffset = source.YOffset;
         target.ForceAlwaysOnTop = source.ForceAlwaysOnTop;
+        target.FloatingWindowLayer = source.FloatingWindowLayer;
         target.UseFloatingWindow = source.UseFloatingWindow;
         target.LyricsDisplayMode = source.LyricsDisplayMode;
         target.SelectedDisplayIds = source.SelectedDisplayIds.ToList();
@@ -2296,6 +2326,9 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         public bool ControlPanelTriggerLyrics { get; set; }
         public bool EnableFloatingControlPanel { get; set; }
         public double FloatingLyricsLayoutScalePercent { get; set; }
+        public double EmbeddedPanelBrightness { get; set; }
+        public double EmbeddedPanelTintOpacity { get; set; }
+        public double EmbeddedPanelBlurAmount { get; set; }
         public double FloatingPanelBrightness { get; set; }
         public double FloatingPanelTintOpacity { get; set; }
         public double FloatingPanelBlurAmount { get; set; }
@@ -2324,6 +2357,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         public double XOffset { get; set; }
         public double YOffset { get; set; }
         public bool ForceAlwaysOnTop { get; set; }
+        public FloatingWindowLayer FloatingWindowLayer { get; set; }
         public bool UseFloatingWindow { get; set; }
         public bool TaskbarEmbeddingAvailable { get; set; }
         public double TaskbarMaxWidth { get; set; }

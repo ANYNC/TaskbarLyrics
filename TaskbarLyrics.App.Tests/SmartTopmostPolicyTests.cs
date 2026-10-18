@@ -6,12 +6,33 @@ public sealed class SmartTopmostPolicyTests
 {
     private static readonly NativeRect PrimaryMonitor = new(0, 0, 1920, 1080);
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void DesktopFollowsShellPlacementAndReassertsOrderWithoutDependingOnFullscreen(bool shellTopmost)
+    {
+        var placement = new SmartTopmostDecision(shellTopmost, new IntPtr(73));
+        var result = SmartTopmostPolicy.Evaluate(FloatingWindowLayer.Desktop, PrimaryMonitor,
+            CreateForegroundWindow(PrimaryMonitor), placement);
+        Assert.Equal(placement.ShouldBeTopmost, result.ShouldBeTopmost);
+        Assert.Equal(placement.WindowToPlaceAfter, result.WindowToPlaceAfter);
+        Assert.True(SmartTopmostPolicy.RequiresTopmostStateUpdate(result, result));
+    }
+
+    [Fact]
+    public void FullscreenOnAnotherMonitorDoesNotLowerWindowLevel()
+    {
+        var result = SmartTopmostPolicy.Evaluate(FloatingWindowLayer.Window, PrimaryMonitor,
+            CreateForegroundWindow(new NativeRect(-2560, 0, 0, 1440)));
+        Assert.True(result.ShouldBeTopmost);
+    }
+
     [Fact]
     public void EvaluateWhenForceAlwaysOnTopIsEnabledKeepsLyricsTopmost()
     {
         var foreground = CreateForegroundWindow(new NativeRect(0, 0, 1920, 1080));
 
-        var result = SmartTopmostPolicy.Evaluate(true, PrimaryMonitor, foreground);
+        var result = SmartTopmostPolicy.Evaluate(FloatingWindowLayer.Fullscreen, PrimaryMonitor, foreground);
 
         Assert.True(result.ShouldBeTopmost);
         Assert.Equal(IntPtr.Zero, result.WindowToPlaceAfter);
@@ -23,7 +44,7 @@ public sealed class SmartTopmostPolicyTests
         var handle = new IntPtr(42);
         var foreground = CreateForegroundWindow(new NativeRect(0, 0, 1920, 1080), handle);
 
-        var result = SmartTopmostPolicy.Evaluate(false, PrimaryMonitor, foreground);
+        var result = SmartTopmostPolicy.Evaluate(FloatingWindowLayer.Window, PrimaryMonitor, foreground);
 
         Assert.False(result.ShouldBeTopmost);
         Assert.Equal(handle, result.WindowToPlaceAfter);
@@ -42,7 +63,7 @@ public sealed class SmartTopmostPolicyTests
     {
         var foreground = CreateForegroundWindow(new NativeRect(left, top, right, bottom));
 
-        var result = SmartTopmostPolicy.Evaluate(false, PrimaryMonitor, foreground);
+        var result = SmartTopmostPolicy.Evaluate(FloatingWindowLayer.Window, PrimaryMonitor, foreground);
 
         Assert.True(result.ShouldBeTopmost);
         Assert.Equal(IntPtr.Zero, result.WindowToPlaceAfter);
@@ -55,7 +76,7 @@ public sealed class SmartTopmostPolicyTests
             new NativeRect(0, 0, 1920, 1080),
             isDesktopOrShell: true);
 
-        var result = SmartTopmostPolicy.Evaluate(false, PrimaryMonitor, foreground);
+        var result = SmartTopmostPolicy.Evaluate(FloatingWindowLayer.Window, PrimaryMonitor, foreground);
 
         Assert.True(result.ShouldBeTopmost);
         Assert.Equal(IntPtr.Zero, result.WindowToPlaceAfter);
@@ -68,7 +89,7 @@ public sealed class SmartTopmostPolicyTests
         var handle = new IntPtr(99);
         var foreground = CreateForegroundWindow(targetMonitor, handle);
 
-        var result = SmartTopmostPolicy.Evaluate(false, targetMonitor, foreground);
+        var result = SmartTopmostPolicy.Evaluate(FloatingWindowLayer.Window, targetMonitor, foreground);
 
         Assert.False(result.ShouldBeTopmost);
         Assert.Equal(handle, result.WindowToPlaceAfter);

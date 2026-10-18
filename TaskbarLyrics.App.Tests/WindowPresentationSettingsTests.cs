@@ -61,6 +61,9 @@ public sealed class WindowPresentationSettingsTests
             FloatingPanelBlurAmount = 8,
             FloatingPanelBrightness = 0.2,
             FloatingPanelTintOpacity = 0.3,
+            EmbeddedPanelBlurAmount = 12,
+            EmbeddedPanelBrightness = 0.8,
+            EmbeddedPanelTintOpacity = 0.6,
             FontSize = 20,
             CoverSize = 44,
             CoverGap = 12,
@@ -73,10 +76,10 @@ public sealed class WindowPresentationSettingsTests
         var before = JsonSerializer.SerializeToElement(settings);
         var defaults = JsonSerializer.SerializeToElement(new AppSettings());
         string[] resetKeys = floating
-            ? ["FloatingWindowWidth", "FloatingLyricsLayoutScalePercent", "EnableFloatingControlPanel", "ForceAlwaysOnTop",
+            ? ["FloatingWindowWidth", "FloatingLyricsLayoutScalePercent", "EnableFloatingControlPanel", "ForceAlwaysOnTop", "FloatingWindowLayer",
                 "FloatingPanelBlurAmount", "FloatingPanelBrightness", "FloatingPanelTintOpacity"]
             : ["WindowWidth", "LyricsLayoutScalePercent", "EnableControlPanel", "HorizontalAnchor", "XOffset", "YOffset",
-                "ShowBackground", "BackgroundOpacity", "ShowBorder"];
+                "ShowBackground", "BackgroundOpacity", "ShowBorder", "EmbeddedPanelBlurAmount", "EmbeddedPanelBrightness", "EmbeddedPanelTintOpacity"];
         settings.ResetWindowPresentation(floating);
         foreach (var property in JsonSerializer.SerializeToElement(settings).EnumerateObject())
         {

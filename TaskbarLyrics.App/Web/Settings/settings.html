@@ -174,6 +174,21 @@
                         </div>
                       </div>
                       </section>
+                      <details class="mode-details embedded-appearance-settings" open>
+                        <summary><span>面板材质</span></summary>
+                      <div class="window-mode-setting-row panel-material-setting is-disabled" data-embedded-only data-depends="enableControlPanel">
+                        <label class="window-mode-setting-copy" for="embeddedPanelBlurAmount"><strong>模糊</strong></label>
+                        <div class="slider-number-control"><input type="range" min="0" max="64" step="1" data-setting="embeddedPanelBlurAmount" aria-label="任务栏面板模糊"><label class="unit-input compact-number-input"><input id="embeddedPanelBlurAmount" type="number" min="0" max="64" step="1" data-setting="embeddedPanelBlurAmount" aria-label="任务栏面板模糊数值"><span>px</span></label></div>
+                      </div>
+                      <div class="window-mode-setting-row panel-material-setting is-disabled" data-embedded-only data-depends="enableControlPanel">
+                        <label class="window-mode-setting-copy" for="embeddedPanelBrightness"><strong>亮度</strong></label>
+                        <div class="slider-number-control"><input type="range" min="0" max="100" step="1" data-setting="embeddedPanelBrightness" data-value-scale="100" aria-label="任务栏面板亮度"><label class="unit-input compact-number-input percentage-input"><input id="embeddedPanelBrightness" type="number" min="0" max="100" step="1" data-setting="embeddedPanelBrightness" data-value-scale="100" aria-label="任务栏面板亮度百分比"><span>%</span></label></div>
+                      </div>
+                      <div class="window-mode-setting-row panel-material-setting is-disabled" data-embedded-only data-depends="enableControlPanel">
+                        <label class="window-mode-setting-copy" for="embeddedPanelTintOpacity"><strong>不透明度</strong></label>
+                        <div class="slider-number-control"><input type="range" min="0" max="100" step="1" data-setting="embeddedPanelTintOpacity" data-value-scale="100" aria-label="任务栏面板不透明度"><label class="unit-input compact-number-input percentage-input"><input id="embeddedPanelTintOpacity" type="number" min="0" max="100" step="1" data-setting="embeddedPanelTintOpacity" data-value-scale="100" aria-label="任务栏面板不透明度百分比"><span>%</span></label></div>
+                      </div>
+                      </details>
                       <details class="mode-details mode-position-settings">
                         <summary><span>位置与偏移</span><small data-embedded-position-summary>X 0 · Y 0</small></summary>
                         <div class="mode-offset-grid" data-embedded-only>
@@ -205,8 +220,12 @@
                       </section>
                       <section class="mode-settings-group" aria-label="悬浮窗口交互">
                       <div id="floatingTopmostRow" class="window-mode-setting-row is-disabled" data-depends="useFloatingWindow">
-                        <label class="window-mode-setting-copy" for="floatingTopmostToggle"><strong>强制置顶</strong></label>
-                        <label class="switch small"><input id="floatingTopmostToggle" type="checkbox" data-setting="forceAlwaysOnTop" aria-label="强制歌词置顶" disabled><span class="switch-track"></span></label>
+                        <div class="window-mode-setting-copy"><strong id="floatingLayerLabel">显示层级</strong><small>桌面：位于应用下方；窗口：全屏时避让；全屏：保持置顶，独占全屏可能不支持。</small></div>
+                        <div class="monitor-mode layout-options" role="radiogroup" aria-labelledby="floatingLayerLabel">
+                          <label><input type="radio" name="floatingWindowLayer" data-setting="floatingWindowLayer" value="Desktop" disabled><span>桌面</span></label>
+                          <label><input type="radio" name="floatingWindowLayer" data-setting="floatingWindowLayer" value="Window" disabled><span>窗口</span></label>
+                          <label><input type="radio" name="floatingWindowLayer" data-setting="floatingWindowLayer" value="Fullscreen" disabled><span>全屏</span></label>
+                        </div>
                       </div>
                       <div class="window-mode-setting-row is-disabled" data-depends="useFloatingWindow">
                         <label class="window-mode-setting-copy" for="floatingControlPanelToggle"><strong>悬停播放控制</strong></label>
@@ -215,17 +234,17 @@
                       </section>
                       <details class="mode-details floating-appearance-settings" open>
                         <summary><span>卡片外观</span></summary>
-                      <div class="window-mode-setting-row floating-material-setting is-disabled" data-floating-only>
-                        <label class="window-mode-setting-copy" for="floatingPanelBlurAmount"><strong>高斯模糊</strong></label>
-                        <div class="slider-number-control"><input type="range" min="0" max="64" step="1" data-setting="floatingPanelBlurAmount" aria-label="浮窗卡片高斯模糊"><label class="unit-input compact-number-input"><input id="floatingPanelBlurAmount" type="number" min="0" max="64" step="1" data-setting="floatingPanelBlurAmount" aria-label="浮窗卡片高斯模糊数值"><span>px</span></label></div>
+                      <div class="window-mode-setting-row panel-material-setting is-disabled" data-floating-only>
+                        <label class="window-mode-setting-copy" for="floatingPanelBlurAmount"><strong>模糊</strong></label>
+                        <div class="slider-number-control"><input type="range" min="0" max="64" step="1" data-setting="floatingPanelBlurAmount" aria-label="浮窗卡片模糊"><label class="unit-input compact-number-input"><input id="floatingPanelBlurAmount" type="number" min="0" max="64" step="1" data-setting="floatingPanelBlurAmount" aria-label="浮窗卡片模糊数值"><span>px</span></label></div>
                       </div>
-                      <div class="window-mode-setting-row floating-material-setting is-disabled" data-floating-only>
-                        <label class="window-mode-setting-copy" for="floatingPanelBrightness"><strong>底色明暗</strong></label>
-                        <div class="slider-number-control"><input type="range" min="0" max="100" step="1" data-setting="floatingPanelBrightness" data-value-scale="100" aria-label="浮窗卡片底色明暗"><label class="unit-input compact-number-input percentage-input"><input id="floatingPanelBrightness" type="number" min="0" max="100" step="1" data-setting="floatingPanelBrightness" data-value-scale="100" aria-label="浮窗卡片底色明暗百分比"><span>%</span></label></div>
+                      <div class="window-mode-setting-row panel-material-setting is-disabled" data-floating-only>
+                        <label class="window-mode-setting-copy" for="floatingPanelBrightness"><strong>亮度</strong></label>
+                        <div class="slider-number-control"><input type="range" min="0" max="100" step="1" data-setting="floatingPanelBrightness" data-value-scale="100" aria-label="浮窗卡片亮度"><label class="unit-input compact-number-input percentage-input"><input id="floatingPanelBrightness" type="number" min="0" max="100" step="1" data-setting="floatingPanelBrightness" data-value-scale="100" aria-label="浮窗卡片亮度百分比"><span>%</span></label></div>
                       </div>
-                      <div class="window-mode-setting-row floating-material-setting is-disabled" data-floating-only>
-                        <label class="window-mode-setting-copy" for="floatingPanelTintOpacity"><strong>底色不透明度</strong></label>
-                        <div class="slider-number-control"><input type="range" min="0" max="100" step="1" data-setting="floatingPanelTintOpacity" data-value-scale="100" aria-label="浮窗卡片底色不透明度"><label class="unit-input compact-number-input percentage-input"><input id="floatingPanelTintOpacity" type="number" min="0" max="100" step="1" data-setting="floatingPanelTintOpacity" data-value-scale="100" aria-label="浮窗卡片底色不透明度百分比"><span>%</span></label></div>
+                      <div class="window-mode-setting-row panel-material-setting is-disabled" data-floating-only>
+                        <label class="window-mode-setting-copy" for="floatingPanelTintOpacity"><strong>不透明度</strong></label>
+                        <div class="slider-number-control"><input type="range" min="0" max="100" step="1" data-setting="floatingPanelTintOpacity" data-value-scale="100" aria-label="浮窗卡片不透明度"><label class="unit-input compact-number-input percentage-input"><input id="floatingPanelTintOpacity" type="number" min="0" max="100" step="1" data-setting="floatingPanelTintOpacity" data-value-scale="100" aria-label="浮窗卡片不透明度百分比"><span>%</span></label></div>
                       </div>
                       </details>
                     </div>

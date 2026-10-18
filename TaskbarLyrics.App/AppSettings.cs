@@ -60,6 +60,13 @@ public enum LyricsDisplayMode
     Selected
 }
 
+public enum FloatingWindowLayer
+{
+    Desktop,
+    Window,
+    Fullscreen
+}
+
 public sealed class AppSettings
 {
     public const int MinimumPlayerLyricOffsetMilliseconds = -5000;
@@ -198,6 +205,25 @@ public sealed class AppSettings
 
     public bool GetEnableControlPanel() => UseFloatingWindow ? EnableFloatingControlPanel : EnableControlPanel;
 
+    private double _embeddedPanelBrightness = 0.45;
+    private double _embeddedPanelTintOpacity = 0.55;
+    private double _embeddedPanelBlurAmount = 24;
+    public double EmbeddedPanelBrightness
+    {
+        get => _embeddedPanelBrightness;
+        set => _embeddedPanelBrightness = double.IsFinite(value) ? Math.Clamp(value, 0, 1) : 0.45;
+    }
+    public double EmbeddedPanelTintOpacity
+    {
+        get => _embeddedPanelTintOpacity;
+        set => _embeddedPanelTintOpacity = double.IsFinite(value) ? Math.Clamp(value, 0, 1) : 0.55;
+    }
+    public double EmbeddedPanelBlurAmount
+    {
+        get => _embeddedPanelBlurAmount;
+        set => _embeddedPanelBlurAmount = double.IsFinite(value) ? Math.Clamp(value, 0, 64) : 24;
+    }
+
     private double _floatingPanelBrightness = 0.45;
     private double _floatingPanelTintOpacity = 0.55;
     private double _floatingPanelBlurAmount = 24;
@@ -257,6 +283,15 @@ public sealed class AppSettings
     public double YOffset { get; set; }
 
     public bool ForceAlwaysOnTop { get; set; } = true;
+
+    private FloatingWindowLayer? _floatingWindowLayer;
+
+    // Missing/invalid new fields retain the legacy switch's behavior, independent of JSON field order.
+    public FloatingWindowLayer FloatingWindowLayer
+    {
+        get => _floatingWindowLayer ?? (ForceAlwaysOnTop ? FloatingWindowLayer.Fullscreen : FloatingWindowLayer.Window);
+        set => _floatingWindowLayer = Enum.IsDefined(value) ? value : null;
+    }
 
     public LyricsDisplayMode LyricsDisplayMode { get; set; } = LyricsDisplayMode.All;
 
@@ -436,6 +471,7 @@ public sealed class AppSettings
             FloatingLyricsLayoutScalePercent = defaults.FloatingLyricsLayoutScalePercent;
             EnableFloatingControlPanel = defaults.EnableFloatingControlPanel;
             ForceAlwaysOnTop = defaults.ForceAlwaysOnTop;
+            FloatingWindowLayer = defaults.FloatingWindowLayer;
             FloatingPanelBlurAmount = defaults.FloatingPanelBlurAmount;
             FloatingPanelBrightness = defaults.FloatingPanelBrightness;
             FloatingPanelTintOpacity = defaults.FloatingPanelTintOpacity;
@@ -445,6 +481,9 @@ public sealed class AppSettings
             WindowWidth = defaults.WindowWidth;
             LyricsLayoutScalePercent = defaults.LyricsLayoutScalePercent;
             EnableControlPanel = defaults.EnableControlPanel;
+            EmbeddedPanelBrightness = defaults.EmbeddedPanelBrightness;
+            EmbeddedPanelTintOpacity = defaults.EmbeddedPanelTintOpacity;
+            EmbeddedPanelBlurAmount = defaults.EmbeddedPanelBlurAmount;
             ControlPanelTriggerMethod = defaults.ControlPanelTriggerMethod;
             ControlPanelTriggerCover = defaults.ControlPanelTriggerCover;
             ControlPanelTriggerLyrics = defaults.ControlPanelTriggerLyrics;

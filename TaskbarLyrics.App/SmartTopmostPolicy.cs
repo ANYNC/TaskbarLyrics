@@ -20,16 +20,23 @@ internal readonly record struct SmartTopmostForegroundWindow(
 
 internal readonly record struct SmartTopmostDecision(
     bool ShouldBeTopmost,
-    IntPtr WindowToPlaceAfter);
+    IntPtr WindowToPlaceAfter,
+    bool Reassert = false);
 
 internal static class SmartTopmostPolicy
 {
     internal static SmartTopmostDecision Evaluate(
-        bool forceAlwaysOnTop,
+        FloatingWindowLayer layer,
         NativeRect targetMonitorBounds,
-        SmartTopmostForegroundWindow? foregroundWindow)
+        SmartTopmostForegroundWindow? foregroundWindow,
+        SmartTopmostDecision desktopPlacement = default)
     {
-        if (!forceAlwaysOnTop &&
+        if (layer == FloatingWindowLayer.Desktop)
+        {
+            return desktopPlacement with { Reassert = true };
+        }
+
+        if (layer == FloatingWindowLayer.Window &&
             foregroundWindow is { IsEligible: true } candidate &&
             CoversMonitor(candidate.VisibleBounds, targetMonitorBounds))
         {
@@ -50,5 +57,5 @@ internal static class SmartTopmostPolicy
     internal static bool RequiresTopmostStateUpdate(
         SmartTopmostDecision? previousDecision,
         SmartTopmostDecision currentDecision) =>
-        previousDecision != currentDecision || currentDecision.ShouldBeTopmost;
+        previousDecision != currentDecision || currentDecision.ShouldBeTopmost || currentDecision.Reassert;
 }

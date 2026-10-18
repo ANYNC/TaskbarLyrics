@@ -346,7 +346,7 @@ internal sealed class FloatingLyricsPanelController : IDisposable
                     target.ResizeGrip?.Position(target.CardBounds, scale, _active == target, _light);
                     target.Topmost = target.Window.Topmost;
                 }
-                return target.Material.EnsureBelow(new WindowInteropHelper(target.Window).Handle);
+                return EnsureWindowOrder(target);
             }
             var remainVisible = _active == target && (keepOpen || _dragging == target);
             if (_active == target && !remainVisible) Close(immediate: true);
@@ -385,6 +385,7 @@ internal sealed class FloatingLyricsPanelController : IDisposable
                 target.ResizeGrip.AdjustmentCompleted += canceled => FinishSizeAdjustment(target, canceled);
             }
             target.ResizeGrip?.Position(target.CardBounds, scale, remainVisible, _light);
+            if (!EnsureWindowOrder(target)) { Release(target); return false; }
             if (remainVisible && directionChanged) target.Surface(true, target.Above);
             return true;
         }
@@ -413,7 +414,12 @@ internal sealed class FloatingLyricsPanelController : IDisposable
                 else
                 {
                     var scale = TaskbarNativeMethods.GetDpiForWindow(new WindowInteropHelper(target.Window).Handle) / 96.0;
-                    if (ShowPlaybackControls) target.UnlockWindow?.Position(cover, scale);
+                    if (ShowPlaybackControls && target.UnlockWindow is { } unlock)
+                    {
+                        unlock.Position(cover, scale);
+                        FloatingPanelWindowOrder.EnsureAbove(new WindowInteropHelper(unlock).Handle,
+                            new WindowInteropHelper(target.Window).Handle);
+                    }
                     continue;
                 }
             }
@@ -440,6 +446,18 @@ internal sealed class FloatingLyricsPanelController : IDisposable
         if (hovered != _candidate)
         { _candidate = hovered; _enteredAt = Stopwatch.GetTimestamp(); _suppressed = false; }
         if (hovered is not null && !_suppressed && Stopwatch.GetElapsedTime(_enteredAt).TotalMilliseconds >= 200) Show(hovered);
+    }
+
+    private static bool EnsureWindowOrder(Target target)
+    {
+        var lyrics = new WindowInteropHelper(target.Window).Handle;
+        if (target.Material?.EnsureBelow(lyrics) != true) return false;
+        if (target.Panel is { IsClosed: false } panel &&
+            !FloatingPanelWindowOrder.EnsureAbove(new WindowInteropHelper(panel).Handle, lyrics)) return false;
+        if (target.ResizeGrip is { IsVisible: true } grip &&
+            !FloatingPanelWindowOrder.EnsureAbove(new WindowInteropHelper(grip).Handle,
+                target.Panel is { } controls ? new WindowInteropHelper(controls).Handle : lyrics)) return false;
+        return target.Material.EnsureBelow(lyrics);
     }
     private static (System.Windows.Point Position, IntPtr Root)? ReadPointer()
     {

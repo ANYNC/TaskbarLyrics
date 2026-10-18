@@ -17,6 +17,7 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
     private readonly SmartTopmostController _smartTopmostController;
     private readonly Action<Window, Rect, DisplayMonitor, Action<bool>, ControlPanelTriggerArea, ControlPanelActivation> _onCoverClicked;
     private readonly FloatingWindowPlacement _floatingPlacement;
+    private readonly LyricsRegionVisibilityController _regionVisibility;
     private DisplayMonitor _displayMonitor;
     private AppSettings _settings = new();
     private bool _isWebReady;
@@ -29,6 +30,15 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
         IAppCompositionRoot compositionRoot)
     {
         InitializeComponent();
+        _regionVisibility = new LyricsRegionVisibilityController(Dispatcher,
+            (generation, phase) => TaskObserver.Observe(SendRegionVisibilityAsync(generation, phase), "mirror region visibility"),
+            (visible, interactive) =>
+            {
+                RootBorder.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+                RootBorder.IsHitTestVisible = interactive;
+                CoverHitSurface.Opacity = LyricsHitSurface.Opacity = interactive ? 1 : 0;
+                if (visible) UpdateLayout();
+            });
         _floatingPlacement = compositionRoot.CreateFloatingWindowPlacement(this);
         _floatingPlacement.Refresh(displayMonitor);
         _onCoverClicked = onCoverClicked;
@@ -45,7 +55,11 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
 
     internal bool IsEmbeddedInTaskbar => _embeddedTaskbarAnchor.IsAttached;
     internal DisplayMonitor DisplayMonitor => _settings.UseFloatingWindow ? _floatingPlacement.Display ?? _displayMonitor : _displayMonitor;
-    internal bool IsContentVisible => _isContentVisible && _isWebReady;
+    internal bool IsContentVisible => _isContentVisible && _isWebReady && _regionVisibility.IsInteractive;
+
+    private async Task SendRegionVisibilityAsync(int generation, LyricsRegionVisibilityPhase phase) =>
+        await LyricsWebView.ExecuteScriptAsync(LyricsWebViewScriptFactory.SetRegionVisibility(
+            generation, phase, TaskbarPlacementService.GetTaskbarEdge(DisplayMonitor)));
 
     internal Rect GetCoverBounds() => NativeWindowInteraction.GetScreenBounds(CoverHitSurface);
     internal FloatingWindowSize GetFloatingSize() => FloatingWindowSize.FromSettings(_settings);
@@ -89,7 +103,7 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
         if (!keepControlPanelOpen) SetFloatingControlSurface(false, false, false);
         _smartTopmostController.ApplySettings(
             _settings.UseFloatingWindow,
-            _settings.ForceAlwaysOnTop,
+            _settings.FloatingWindowLayer,
             display.Bounds);
         var pixelsPerDip = display.PixelsPerDip;
         var taskbar = TaskbarPlacementService.GetTaskbarBounds(_displayMonitor, pixelsPerDip);
@@ -147,7 +161,8 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
         }
 
         _isContentVisible = isVisible;
-        RootBorder.Visibility = isVisible ? Visibility.Visible : Visibility.Collapsed;
+        if (isVisible) _pendingScripts.Remove("lyrics");
+        _regionVisibility.SetVisible(isVisible);
     }
 
     public void ApplyPresentationCommand(LyricsPresentationCommand command)
@@ -174,6 +189,7 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
         }
 
         _isDisposed = true;
+        _regionVisibility.Dispose();
         Loaded -= OnLoaded;
         SourceInitialized -= OnSourceInitialized;
         IsVisibleChanged -= OnIsVisibleChanged;
@@ -225,15 +241,18 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
 
     private void OnWebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
     {
-        if (_isDisposed || !_isContentVisible || !(_settings.UseFloatingWindow || _settings.GetEnableControlPanel()))
-        {
-            return;
-        }
-
+        if (_isDisposed) return;
         try
         {
+            var message = LyricsWebMessageRouter.Parse(e.TryGetWebMessageAsString());
+            if (LyricsWebMessageRouter.TryGetRegionVisibilityCompleted(message, out var generation, out var visible))
+            {
+                _regionVisibility.Complete(generation, visible);
+                return;
+            }
+            if (!_isContentVisible || !_regionVisibility.IsInteractive || !(_settings.UseFloatingWindow || _settings.GetEnableControlPanel())) return;
             if (!LyricsWebMessageRouter.TryGetControlPanelTrigger(
-                    LyricsWebMessageRouter.Parse(e.TryGetWebMessageAsString()), out var click, out var area, out var activation) ||
+                    message, out var click, out var area, out var activation) ||
                 !_settings.CanTriggerControlPanel(area, activation))
             {
                 return;
@@ -304,6 +323,7 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
 
             LyricsWebView.InvalidateArrange();
             UpdateLayout();
+            _regionVisibility.OnDocumentReady();
             foreach (var slot in InitialScriptSlots)
             {
                 ExecutePendingScript(slot);
@@ -333,6 +353,7 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
         }
 
         TaskObserver.Observe(LyricsWebView.ExecuteScriptAsync(script), $"lyrics mirror {slot} update");
+        if (slot == "lyrics") _regionVisibility.OnFrameDispatched();
     }
 
     private async Task CompleteSpectrumScriptAsync(string executedScript)

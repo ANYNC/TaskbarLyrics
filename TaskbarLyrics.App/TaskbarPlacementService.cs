@@ -241,6 +241,16 @@ internal sealed class TaskbarPlacementService
             defaultThickness);
     }
 
+    internal static string GetTaskbarEdge(DisplayMonitor? display)
+    {
+        var metrics = display is null ? GetPrimaryDisplayMetrics(1)
+            : ConvertPhysicalDisplayMetrics(display.Bounds, display.WorkArea, display.PixelsPerDip);
+        var taskbar = ResolveTaskbarBounds(metrics);
+        return taskbar.IsVertical
+            ? taskbar.Left <= metrics.Left + 0.5 ? "left" : "right"
+            : taskbar.Top <= metrics.Top + 0.5 ? "top" : "bottom";
+    }
+
     internal static bool ApplyTopmostState(
         Window window,
         bool shouldBeTopmost,
@@ -255,9 +265,7 @@ internal sealed class TaskbarPlacementService
         window.Topmost = shouldBeTopmost;
         var hWndInsertAfter = shouldBeTopmost
             ? TaskbarNativeMethods.HWND_TOPMOST
-            : windowToPlaceAfter != IntPtr.Zero
-                ? windowToPlaceAfter
-                : TaskbarNativeMethods.HWND_NOTOPMOST;
+            : windowToPlaceAfter != IntPtr.Zero ? windowToPlaceAfter : TaskbarNativeMethods.HWND_NOTOPMOST;
 
         return TaskbarNativeMethods.SetWindowPos(
             hwnd,
@@ -270,6 +278,22 @@ internal sealed class TaskbarPlacementService
             TaskbarNativeMethods.SWP_NOSIZE |
             TaskbarNativeMethods.SWP_NOACTIVATE |
             TaskbarNativeMethods.SWP_ASYNCWINDOWPOS);
+    }
+
+    internal static bool ApplyDesktopLayerState(Window window, bool showingDesktop)
+    {
+        var hwnd = new WindowInteropHelper(window).Handle;
+        if (hwnd == IntPtr.Zero) return false;
+        foreach (Window companion in window.OwnedWindows)
+            companion.Topmost = showingDesktop;
+        window.Topmost = showingDesktop;
+        // Absolute handles also work when a protected external window rejects relative insertion.
+        // Do not activate the card or reorder its hidden owner during the native position commit.
+        return TaskbarNativeMethods.SetWindowPos(hwnd,
+            showingDesktop ? TaskbarNativeMethods.HWND_TOPMOST : TaskbarNativeMethods.HWND_BOTTOM,
+            0, 0, 0, 0, TaskbarNativeMethods.SWP_NOMOVE | TaskbarNativeMethods.SWP_NOSIZE |
+            TaskbarNativeMethods.SWP_NOACTIVATE | TaskbarNativeMethods.SWP_NOOWNERZORDER |
+            TaskbarNativeMethods.SWP_NOSENDCHANGING);
     }
 
     public static void ApplyToolWindowStyle(IntPtr hwnd)
@@ -333,10 +357,13 @@ internal static class TaskbarNativeMethods
 {
     internal static readonly IntPtr HWND_TOPMOST = new(-1);
     internal static readonly IntPtr HWND_NOTOPMOST = new(-2);
+    internal static readonly IntPtr HWND_BOTTOM = new(1);
     internal const uint SWP_NOSIZE = 0x0001;
     internal const uint SWP_NOMOVE = 0x0002;
     internal const uint SWP_NOZORDER = 0x0004;
     internal const uint SWP_NOACTIVATE = 0x0010;
+    internal const uint SWP_NOOWNERZORDER = 0x0200;
+    internal const uint SWP_NOSENDCHANGING = 0x0400;
     internal const uint SWP_ASYNCWINDOWPOS = 0x4000;
     internal const uint SWP_SHOWWINDOW = 0x0040;
     internal const int SW_SHOWNOACTIVATE = 4;

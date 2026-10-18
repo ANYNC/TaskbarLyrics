@@ -75,7 +75,10 @@ internal readonly record struct AppSettingsChangeSet(
             current.GetEnableControlPanel() != next.GetEnableControlPanel() ||
             (!next.UseFloatingWindow && (current.ControlPanelTriggerMethod != next.ControlPanelTriggerMethod ||
                 current.ControlPanelTriggerCover != next.ControlPanelTriggerCover ||
-                current.ControlPanelTriggerLyrics != next.ControlPanelTriggerLyrics)) ||
+                current.ControlPanelTriggerLyrics != next.ControlPanelTriggerLyrics ||
+                current.EmbeddedPanelBrightness != next.EmbeddedPanelBrightness ||
+                current.EmbeddedPanelTintOpacity != next.EmbeddedPanelTintOpacity ||
+                current.EmbeddedPanelBlurAmount != next.EmbeddedPanelBlurAmount)) ||
             (next.UseFloatingWindow && (current.FloatingPanelBrightness != next.FloatingPanelBrightness ||
                 current.FloatingPanelTintOpacity != next.FloatingPanelTintOpacity ||
                 current.FloatingPanelBlurAmount != next.FloatingPanelBlurAmount)) ||
@@ -108,7 +111,7 @@ internal readonly record struct AppSettingsChangeSet(
             current.GetWindowWidth() != next.GetWindowWidth() ||
             (!next.UseFloatingWindow && (current.HorizontalAnchor != next.HorizontalAnchor ||
                 current.XOffset != next.XOffset || current.YOffset != next.YOffset)) ||
-            (next.UseFloatingWindow && current.ForceAlwaysOnTop != next.ForceAlwaysOnTop) ||
+            (next.UseFloatingWindow && current.FloatingWindowLayer != next.FloatingWindowLayer) ||
             current.UseFloatingWindow != next.UseFloatingWindow ||
             current.LyricsDisplayMode != next.LyricsDisplayMode ||
             !AreSameStrings(current.SelectedDisplayIds, next.SelectedDisplayIds);

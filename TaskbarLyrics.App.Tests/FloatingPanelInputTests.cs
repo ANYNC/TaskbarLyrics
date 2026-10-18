@@ -13,7 +13,7 @@ namespace TaskbarLyrics.App.Tests;
 public sealed class FloatingPanelInputTestGroup;
 
 [Collection("FloatingPanelInput")]
-public sealed class FloatingPanelInputTests
+public sealed partial class FloatingPanelInputTests
 {
     [Theory]
     [InlineData(false)]
@@ -81,7 +81,6 @@ public sealed class FloatingPanelInputTests
                 panel.Left = 100;
                 panel.Top = 100;
                 panel.Show();
-                typeof(LyricsControlPanelWindow).GetField("_isWebReady", flags)!.SetValue(panel, true);
                 var display = DisplayMonitorService.GetDisplays()[0];
                 // Deactivation starts the exit before the source WebView delivers its click.
                 if (deactivateBeforeClick) panel.HidePanel();

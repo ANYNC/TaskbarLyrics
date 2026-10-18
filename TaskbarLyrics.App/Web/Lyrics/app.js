@@ -94,6 +94,7 @@ coverEl?.addEventListener("mousedown", event => {
 });
 
 function postPanelTrigger(element, area, activation) {
+  if (regionPhase !== "visible") return;
   const bounds = element.getBoundingClientRect();
   const payload = {
     x: bounds.x,
@@ -181,6 +182,11 @@ const lyricsTextAlignments = new Set(["Left", "Center", "Right"]);
 const presentationApi = window.taskbarLyricsPresentation;
 const presentationPlanner = new presentationApi.PresentationPlanner();
 const presentationCoordinator = new presentationApi.PresentationCoordinator(presentationPlanner);
+const regionCoordinator = new presentationApi.PresentationCoordinator(presentationPlanner);
+let regionPhase = "visible";
+let regionGeneration = -1;
+let latestRegionFrame = null;
+let deferredRegionCover = null;
 const transitionOperations = Object.freeze({
   LYRICS_FRAME: "lyricsFrame",
   SPECTRUM_ENTRY: "spectrumEntry",
@@ -203,6 +209,105 @@ function clamp01(value) {
 
 function prefersReducedMotion() {
   return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
+}
+
+function settleRegionContent() {
+  const frame = latestRegionFrame || presentationCoordinator.currentFrame;
+  cancelActiveTransition();
+  if (frame.scene === presentationApi.SCENES.SPECTRUM) {
+    applySpectrumFrame(frame, frame.isPlaying);
+  } else {
+    setDisplayMode(false);
+    clearSpectrumBars();
+    renderLyricsFrame(frame, false);
+  }
+}
+
+function applyRegionVisibility(payload) {
+  if (!Number.isSafeInteger(payload?.generation) || payload.generation < 0 || payload.generation < regionGeneration ||
+      !["preparing", "entering", "exiting", "visible", "hidden"].includes(payload.phase) ||
+      !["top", "bottom", "left", "right"].includes(payload.edge)) return;
+  if (payload.generation === regionGeneration && payload.phase === regionPhase) return;
+
+  const previousPhase = regionPhase;
+  const position = window.getComputedStyle(layoutEl);
+  const frozenTransform = position.transform;
+  const frozenOpacity = position.opacity;
+  regionCoordinator.cancelTransition();
+  regionGeneration = payload.generation;
+  regionPhase = payload.phase;
+  layoutEl.dataset.regionEdge = payload.edge;
+  layoutEl.inert = regionPhase !== "visible";
+  clearTimeout(panelHoverTimer);
+  setControlPanelOpen(false);
+  settleRegionContent();
+  layoutEl.classList.remove("region-moving");
+
+  if (regionPhase === "preparing") {
+    if (previousPhase === "exiting" || previousPhase === "entering") {
+      // Pause a reversed transition at its current position until the new first frame arrives.
+      layoutEl.style.transform = frozenTransform;
+      layoutEl.style.opacity = frozenOpacity;
+    } else {
+      layoutEl.classList.add("region-concealed");
+      layoutEl.style.removeProperty("transform");
+      layoutEl.style.removeProperty("opacity");
+    }
+    return;
+  }
+
+  const visible = regionPhase === "entering" || regionPhase === "visible";
+  if (visible && deferredRegionCover) {
+    const cover = deferredRegionCover;
+    deferredRegionCover = null;
+    lyricsApi.setCover(cover.dataUri, cover.fallbackText, cover.fallbackColor, cover.fallbackIconDataUri, cover.trackId);
+  }
+  if (regionPhase === "visible" || regionPhase === "hidden") {
+    layoutEl.classList.toggle("region-concealed", !visible);
+    layoutEl.style.removeProperty("transform");
+    layoutEl.style.removeProperty("opacity");
+    if (!visible) stopSpectrumRenderer();
+    return;
+  }
+
+  const generation = regionGeneration;
+  const finish = () => {
+    regionPhase = visible ? "visible" : "hidden";
+    layoutEl.classList.remove("region-moving");
+    layoutEl.classList.toggle("region-concealed", !visible);
+    layoutEl.style.removeProperty("transform");
+    layoutEl.style.removeProperty("opacity");
+    layoutEl.inert = !visible;
+    window.taskbarLyricsBridge?.post("regionVisibilityCompleted", { generation, visible });
+  };
+  if (!visible) {
+    stopSpectrumRenderer();
+    ++coverGeneration;
+    clearCoverUpdateTimer();
+    clearTimeout(coverStateTimer);
+    coverStateTimer = 0;
+    coverEl?.classList.remove("switching");
+  }
+  if (prefersReducedMotion()) {
+    finish();
+    return;
+  }
+
+  // Region movement and lyric rolling use independent coordinators and transforms.
+  layoutEl.style.transform = frozenTransform;
+  layoutEl.style.opacity = frozenOpacity;
+  void layoutEl.offsetHeight;
+  layoutEl.classList.add("region-moving");
+  const context = regionCoordinator.beginTransition({ kind: "regionVisibility" }, { complete: finish });
+  context.listenTransitionEnd(layoutEl, event => {
+    if (event.target === layoutEl && event.propertyName === "transform") context.finish();
+  });
+  context.requestFrame(() => {
+    layoutEl.classList.toggle("region-concealed", !visible);
+    layoutEl.style.removeProperty("transform");
+    layoutEl.style.removeProperty("opacity");
+  });
+  context.scheduleFallback(context.finish, 440);
 }
 
 function normalizeWordScanProgress(value) {
@@ -2209,6 +2314,7 @@ const lyricsApi = {
     const shouldShowSpectrum = targetFrame.scene === presentationApi.SCENES.SPECTRUM;
 
     if (shouldShowSpectrum) {
+      latestRegionFrame = targetFrame;
       if (normalizedTrackId.length > 0) {
         lastTrackId = normalizedTrackId;
       }
@@ -2219,6 +2325,7 @@ const lyricsApi = {
     if (shouldKeepStableContentForSameTrackSearch(targetFrame)) {
       return;
     }
+    latestRegionFrame = targetFrame;
 
     if (presentationCoordinator.currentFrame.scene === presentationApi.SCENES.SPECTRUM ||
         isSpectrumExitTransitionActive()) {
@@ -2516,6 +2623,7 @@ window.taskbarLyrics = {
     const payload = message.payload;
     switch (message.type) {
       case "lyrics":
+        if (regionPhase === "exiting" || regionPhase === "hidden") break;
         lyricsApi.setLyrics(
           payload?.current,
           payload?.next,
@@ -2528,10 +2636,15 @@ window.taskbarLyrics = {
           payload?.currentTranslation,
           payload?.nextTranslation,
           payload?.translationMode,
-          payload?.animateTransition,
+          regionPhase === "visible" ? payload?.animateTransition : false,
           payload?.scene);
         break;
       case "cover":
+        if (regionPhase === "exiting" || regionPhase === "hidden") {
+          deferredRegionCover = payload;
+          break;
+        }
+        deferredRegionCover = null;
         lyricsApi.setCover(
           payload?.dataUri,
           payload?.fallbackText,
@@ -2540,6 +2653,7 @@ window.taskbarLyrics = {
           payload?.trackId);
         break;
       case "spectrum":
+        if (regionPhase === "exiting" || regionPhase === "hidden") break;
         lyricsApi.setSpectrum(payload);
         break;
       case "spectrumTuning":
@@ -2547,6 +2661,9 @@ window.taskbarLyrics = {
         break;
       case "style":
         lyricsApi.applyStyle(payload);
+        break;
+      case "regionVisibility":
+        applyRegionVisibility(payload);
         break;
       case "controlPanelState":
         setControlPanelOpen(payload?.open);

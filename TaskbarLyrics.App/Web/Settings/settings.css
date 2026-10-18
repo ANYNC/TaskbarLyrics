@@ -341,7 +341,7 @@
     .window-mode-setting-copy strong { font-size: 11px; font-weight: 600; }
     .window-mode-setting-copy small { color: var(--muted-foreground); font-size: 10px; line-height: 1.4; }
     .window-mode-setting-row .switch input:disabled { cursor: not-allowed; }
-    .floating-material-setting .slider-number-control { width: 180px; max-width: 100%; }
+    .panel-material-setting .slider-number-control { width: 180px; max-width: 100%; }
     .window-width-setting { grid-template-columns: minmax(0, 1fr); gap: 6px; }
     .window-width-setting .slider-number-control { width: 100%; grid-template-columns: minmax(0, 1fr) max-content; }
     .setting-row.monitor-setting-row { grid-template-columns: minmax(0, 1fr) minmax(360px, 560px); align-items: start; gap: 32px; padding-block: 14px; }
@@ -833,11 +833,13 @@
 
     .window-mode-card .slider-number-control { width: 100%; min-width: 0; grid-template-columns: minmax(0, 1fr) max-content; }
     .window-mode-card .slider-number-control input[type="range"] { min-width: 0; }
-    .window-mode-card .floating-material-setting, .window-mode-card .layout-scale-row,
+    .window-mode-card .panel-material-setting, .window-mode-card .layout-scale-row,
     .window-mode-card .window-mode-setting-row:has(> .slider-number-control) { grid-template-columns: minmax(0, 1fr); }
     .window-mode-card .window-mode-setting-copy { display: grid; gap: 4px; }
     .window-mode-card .window-mode-setting-copy strong { font-size: 12px; }
     .window-mode-card .window-mode-setting-copy small { font-size: 11px; }
+    #floatingTopmostRow { grid-template-columns: minmax(0, 1fr); }
+    #floatingTopmostRow .layout-options { justify-self: start; }
     .window-mode-options { align-items: start; }
     .mode-settings-group { min-width: 0; margin: 0 16px 16px; padding-top: 12px; border-top: 1px solid var(--border); display: grid; gap: 8px; }
     .mode-settings-group > .window-mode-setting-row, .mode-details > .window-mode-setting-row { margin: 0; padding: 0; border: 0; }
