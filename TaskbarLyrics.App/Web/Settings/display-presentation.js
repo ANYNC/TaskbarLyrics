@@ -10,6 +10,7 @@
   let revision = 0;
   let animations = [];
   const durations = { embedded: 5, floating: 8 };
+  const mediaVersion = 'floating-transparent-hq-v4';
 
   function pause() {
     if (!videoMode) return;
@@ -45,7 +46,6 @@
       });
       mode = nextMode;
     }
-    page.querySelector('[data-panel-options]').hidden = state.enableControlPanel === false;
     if (animate) {
       const after = groups.map(group => group.getBoundingClientRect());
       const duration = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--duration-slow')) || 220;
@@ -70,8 +70,8 @@
       ? '展开播放控制面板，并演示移动位置与调整大小。'
       : '歌词保留在任务栏，播放面板在附近独立出现。';
     video.setAttribute('aria-label', `${floating ? '悬浮窗口' : '任务栏嵌入'}模式演示`);
-    video.poster = `media/${nextMode}-poster.png`;
-    video.src = `media/${nextMode}.mp4`;
+    video.poster = `media/${nextMode}-poster.png?v=${mediaVersion}`;
+    video.src = `media/${nextMode}.mp4?v=${mediaVersion}`;
     video.load();
     status.textContent = motion.matches ? '已减少动态效果 · 可手动重播' : '固定示例';
     if (!motion.matches && !document.hidden) play();

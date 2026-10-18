@@ -163,7 +163,11 @@ describe("settings WebView bridge", () => {
     const selected = document.querySelector("[data-window-mode]:checked").value;
     const button = document.querySelector(`[data-reset-window-mode="${mode}"]`);
     expect(button.closest("label")).toBeNull();
-    button.click();
+    expect(button.textContent).toBe("恢复此模式默认");
+    expect(button.hasAttribute("title")).toBe(false);
+    expect(button.getAttribute("aria-label")).toBe(`恢复此模式默认：${mode === "embedded" ? "任务栏嵌入" : "悬浮窗口"}`);
+    expect(button.querySelector("svg").getAttribute("aria-hidden")).toBe("true");
+    button.querySelector("svg path").dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
     expect(sent.at(-1)).toEqual({ version: 1, type: "resetWindowPresentation", payload: mode });
     expect(document.querySelector("[data-window-mode]:checked").value).toBe(selected);
     expect(document.querySelector("[data-floating-scale]").textContent).toBe("160%");
@@ -1629,6 +1633,32 @@ describe("settings WebView bridge", () => {
     });
   });
 
+  it.each([false, true])("keeps the shared lyric layout outside the mode panel and editable for floating=%s", async floating => {
+    const { dom, sent, script } = await createSettingsDom();
+    dom.window.eval(script);
+    const document = dom.window.document;
+    const layout = document.querySelector('[data-display-group="lyrics"]');
+    const receive = useFloatingWindow => dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: {
+      settings: { useFloatingWindow, enableControlPanel: false, enableFloatingControlPanel: false,
+        singleLineLyrics: true, lyricsTextAlignment: "Center", showCover: true, coverPosition: "Right" }
+    } });
+    const count = sent.length;
+    receive(!floating);
+    receive(floating);
+    expect(document.querySelectorAll('[data-display-group="lyrics"]')).toHaveLength(1);
+    expect(layout.closest(".display-presentation")).toBeNull();
+    expect(layout.parentElement).toBe(document.querySelector('[data-page="displayArea"] > .page-inner'));
+    expect(layout.closest("[hidden]")).toBeNull();
+    for (const control of layout.querySelectorAll("input")) expect(control.disabled).toBe(false);
+    expect(layout.querySelector('[data-setting="singleLineLyrics"][value="true"]').checked).toBe(true);
+    expect(layout.querySelector('[data-setting="lyricsTextAlignment"][value="Center"]').checked).toBe(true);
+    expect(layout.querySelector('[data-cover-display][value="Right"]').checked).toBe(true);
+    expect(sent).toHaveLength(count);
+    layout.querySelector('[data-setting="singleLineLyrics"][value="false"]').click();
+    expect(sent.at(-1)).toEqual({ version: 1, type: "update", payload: { key: "singleLineLyrics", value: false } });
+    dom.window.close();
+  });
+
   it("defaults to double line and sends boolean values when switching lyric line count", async () => {
     const { dom, sent, script } = await createSettingsDom();
     dom.window.eval(script);
@@ -1675,8 +1705,23 @@ describe("settings WebView bridge", () => {
     document.querySelector('#embeddedControlPanelToggle').click();
     expect(cover.disabled && lyrics.disabled && method.disabled).toBe(true);
     expect(lyrics.checked && method.checked).toBe(true);
+    for (const control of [cover, lyrics, method]) {
+      expect(control.closest("[hidden]")).toBeNull();
+    }
+    const disabledCount = sent.length;
+    cover.click();
+    lyrics.click();
+    method.click();
+    expect(sent).toHaveLength(disabledCount);
+    expect(cover.checked).toBe(false);
+    expect(lyrics.checked && method.checked).toBe(true);
     document.querySelector('#embeddedControlPanelToggle').click();
     expect(lyrics.disabled || method.disabled).toBe(false);
+    expect(cover.checked).toBe(false);
+    expect(lyrics.checked && method.checked).toBe(true);
+    for (const control of [cover, lyrics, method]) {
+      expect(control.closest("[hidden]")).toBeNull();
+    }
     lyrics.click();
     expect(lyrics.checked).toBe(true);
     receive({ useFloatingWindow: true, showCover: true, enableControlPanel: true,

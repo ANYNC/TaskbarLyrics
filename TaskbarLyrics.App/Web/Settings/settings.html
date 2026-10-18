@@ -135,7 +135,11 @@
   <div class="page-inner">
     <div class="live-note"><div class="live-note-copy"><strong>设置即时生效</strong><small>请直接查看歌词窗口，真实效果会随参数同步更新。</small></div><button id="showLyricsWindowButton" class="btn ghost" type="button" data-show-lyrics-window="">显示歌词窗口</button></div>
     <section class="panel display-presentation">
-      <div class="panel-head"><div><h2 id="displayAreaHeading" tabindex="-1">显示方式</h2><p>选择歌词显示的位置，调整当前模式的尺寸、交互与外观。</p></div><div class="display-mode-actions"><span>模式设置分别保留</span><button class="btn ghost small display-mode-reset" type="button" data-reset-window-mode="embedded" data-presentation-mode="embedded"  aria-label="重置任务栏嵌入设置" title="恢复任务栏嵌入的模式设置，通用歌词布局保持不变">恢复此模式</button><button class="btn ghost small display-mode-reset" type="button" data-reset-window-mode="floating" data-presentation-mode="floating" hidden aria-label="重置悬浮窗口设置" title="恢复悬浮窗口的模式设置，通用歌词布局保持不变">恢复此模式</button></div></div>
+      <div class="panel-head"><div><h2 id="displayAreaHeading" tabindex="-1">显示方式</h2><p>选择歌词显示的位置，调整当前模式的尺寸、交互与外观。</p></div><div class="display-mode-actions"><span>模式设置分别保留</span>
+        <!-- Lucide rotate-ccw (ISC), bundled in Assets/Icons/Lucide. -->
+        <button class="btn ghost small display-mode-reset" type="button" data-reset-window-mode="embedded" data-presentation-mode="embedded" aria-label="恢复此模式默认：任务栏嵌入"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg><span>恢复此模式默认</span></button>
+        <button class="btn ghost small display-mode-reset" type="button" data-reset-window-mode="floating" data-presentation-mode="floating" hidden aria-label="恢复此模式默认：悬浮窗口"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg><span>恢复此模式默认</span></button>
+      </div></div>
       <fieldset class="window-mode-picker"><legend class="sr-only">歌词窗口显示方式</legend><div class="window-mode-options"><div class="window-mode-card embedded-window-mode-card"><label class="window-mode-choice"><input class="sr-only" type="radio" name="windowPresentationMode" value="embedded" data-window-mode="embedded"><svg class="window-mode-diagram" viewBox="0 0 72 48" aria-hidden="true"><rect x="1" y="1" width="70" height="46" rx="5"/><rect class="mode-diagram-window" x="15" y="8" width="39" height="25" rx="2"/><path d="M2 38h68"/><path class="mode-diagram-lyrics" d="M9 42h3m4 0h3m6 0h28"/></svg><span class="window-mode-copy"><span class="window-mode-title"><strong>任务栏嵌入</strong></span><small>融入任务栏，随时看见歌词。</small></span><span class="window-mode-radio" aria-hidden="true"></span></label></div><div class="window-mode-card floating-window-mode-card"><label class="window-mode-choice"><input class="sr-only" type="radio" name="windowPresentationMode" value="floating" data-window-mode="floating"><svg class="window-mode-diagram" viewBox="0 0 72 48" aria-hidden="true"><rect x="1" y="1" width="70" height="46" rx="5"/><rect class="mode-diagram-window" x="15" y="8" width="39" height="25" rx="2"/><path d="M2 38h68"/><rect class="mode-diagram-card" x="23" y="20" width="38" height="14" rx="3"/><path class="mode-diagram-lyrics" d="M29 25h5m4 0h17m-26 5h23"/></svg><span class="window-mode-copy"><span class="window-mode-title"><strong>悬浮窗口</strong></span><small>独立显示，自由摆放与调整。</small></span><span class="window-mode-radio" aria-hidden="true"></span></label></div></div></fieldset>
       <div class="embedded-mode-note" data-presentation-mode="embedded"><small id="taskbarEmbeddingStatus" class="mode-status" role="status" hidden=""></small></div>
       <div class="display-layout">
@@ -170,29 +174,6 @@
                         </div>
                       </div></div>
 </section>
-          <section class="display-setting-group" data-display-group="lyrics" aria-labelledby="displayLyricsHeading"><div class="display-group-heading"><h3 id="displayLyricsHeading">歌词布局</h3><small>两种模式共用</small></div><div class="setting-row compact layout-choice-row">
-                  <div class="setting-label"><strong id="lyricsLineCountLabel">歌词行数</strong><small>单行仅显示当前歌词，适合小任务栏。</small></div>
-                  <div class="monitor-mode layout-options" role="radiogroup" aria-labelledby="lyricsLineCountLabel">
-                    <label><input type="radio" name="singleLineLyrics" value="false" data-value-type="boolean" data-setting="singleLineLyrics"><span>双行</span></label>
-                    <label><input type="radio" name="singleLineLyrics" value="true" data-value-type="boolean" data-setting="singleLineLyrics"><span>单行</span></label>
-                  </div>
-                </div>
-<div class="setting-row compact layout-choice-row">
-                  <div class="setting-label"><strong id="lyricsTextAlignmentLabel">歌词对齐</strong></div>
-                  <div class="monitor-mode layout-options" role="radiogroup" aria-labelledby="lyricsTextAlignmentLabel">
-                    <label><input type="radio" name="lyricsTextAlignment" value="Left" data-setting="lyricsTextAlignment" aria-label="歌词左对齐或上对齐"><span>左 / 上</span></label>
-                    <label><input type="radio" name="lyricsTextAlignment" value="Center" data-setting="lyricsTextAlignment" aria-label="歌词居中"><span>居中</span></label>
-                    <label><input type="radio" name="lyricsTextAlignment" value="Right" data-setting="lyricsTextAlignment" aria-label="歌词右对齐或下对齐"><span>右 / 下</span></label>
-                  </div>
-                </div>
-<div class="setting-row compact layout-choice-row">
-                  <div class="setting-label"><strong id="coverDisplayLabel">封面</strong></div>
-                  <div class="monitor-mode layout-options" role="radiogroup" aria-labelledby="coverDisplayLabel" data-cover-display-options="" data-settings="showCover coverPosition">
-                    <label><input type="radio" name="coverDisplayMode" value="Hidden" data-cover-display="" aria-label="隐藏封面"><span>隐藏</span></label>
-                    <label><input type="radio" name="coverDisplayMode" value="Left" data-cover-display="" aria-label="封面在歌词左侧或上方"><span>左侧 / 上方</span></label>
-                    <label><input type="radio" name="coverDisplayMode" value="Right" data-cover-display="" aria-label="封面在歌词右侧或下方"><span>右侧 / 下方</span></label>
-                  </div>
-                </div></section>
           <section class="display-setting-group" data-display-group="controls" aria-label="播放控制面板">
             <div data-presentation-mode="embedded" class="embedded-window-mode-settings"><div id="embeddedControlPanelRow" class="window-mode-setting-row display-group-heading" data-embedded-only=""><h3><label class="window-mode-setting-copy" for="embeddedControlPanelToggle">播放控制面板</label></h3><label class="switch small"><input id="embeddedControlPanelToggle" type="checkbox" data-setting="enableControlPanel" aria-label="启用任务栏播放控制面板"><span class="switch-track"></span></label></div><div data-panel-options=""><div class="window-mode-setting-row panel-trigger-row child" data-depends="enableControlPanel" data-embedded-only="">
                         <span id="panelTriggerMethodLabel" class="panel-trigger-label">触发方式</span>
@@ -234,7 +215,35 @@
                       <div data-embedded-only="" class="window-mode-setting-row compact"><div class="window-mode-setting-copy"><strong>显示边框</strong></div><label class="switch"><input type="checkbox" data-setting="showBorder" aria-label="显示边框"><span class="switch-track"></span></label></div>
                       </details></div></section>
         </div>
-        <aside class="display-preview" aria-labelledby="displayPreviewHeading"><div class="display-preview-sticky"><div class="display-preview-heading"><h3 id="displayPreviewHeading">模式演示</h3><span data-presentation-status role="status">固定示例</span></div><div class="display-preview-stage"><video data-presentation-video muted playsinline preload="none" poster="media/embedded-poster.png" aria-label="任务栏嵌入模式演示"></video></div><div class="display-preview-actions"><div><strong data-presentation-name>任务栏嵌入</strong><p data-presentation-description>歌词保留在任务栏，播放面板在附近独立出现。</p></div><button class="btn secondary small" type="button" data-replay-presentation aria-label="重播当前模式演示"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8M3 3v5h5"/></svg>重播演示</button></div><p class="display-preview-note">首次打开此页或切换模式时演示一次。演示使用固定参数，调整设置请查看实际歌词窗口。</p></div></aside>
+        <aside class="display-preview" aria-labelledby="displayPreviewHeading"><div class="display-preview-sticky"><div class="display-preview-heading"><h3 id="displayPreviewHeading">模式演示</h3><span data-presentation-status role="status">固定示例</span></div><div class="display-preview-stage"><video data-presentation-video muted playsinline preload="none" poster="media/embedded-poster.png?v=floating-transparent-hq-v4" aria-label="任务栏嵌入模式演示"></video></div><div class="display-preview-actions"><div><strong data-presentation-name>任务栏嵌入</strong><p data-presentation-description>歌词保留在任务栏，播放面板在附近独立出现。</p></div><button class="btn secondary small" type="button" data-replay-presentation aria-label="重播当前模式演示"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8M3 3v5h5"/></svg>重播演示</button></div><p class="display-preview-note">首次打开此页或切换模式时演示一次。演示使用固定参数，调整设置请查看实际歌词窗口。</p></div></aside>
+      </div>
+    </section>
+    <section class="panel" data-display-group="lyrics" aria-labelledby="displayLyricsHeading">
+      <div class="panel-head"><div><h2 id="displayLyricsHeading">歌词布局</h2><p>两种显示方式共用歌词行数、对齐方式和封面位置。</p></div></div>
+      <div class="settings">
+        <div class="setting-row compact layout-choice-row">
+          <div class="setting-label"><strong id="lyricsLineCountLabel">歌词行数</strong><small>单行仅显示当前歌词，适合小任务栏。</small></div>
+          <div class="monitor-mode layout-options" role="radiogroup" aria-labelledby="lyricsLineCountLabel">
+            <label><input type="radio" name="singleLineLyrics" value="false" data-value-type="boolean" data-setting="singleLineLyrics"><span>双行</span></label>
+            <label><input type="radio" name="singleLineLyrics" value="true" data-value-type="boolean" data-setting="singleLineLyrics"><span>单行</span></label>
+          </div>
+        </div>
+        <div class="setting-row compact layout-choice-row">
+          <div class="setting-label"><strong id="lyricsTextAlignmentLabel">歌词对齐</strong></div>
+          <div class="monitor-mode layout-options" role="radiogroup" aria-labelledby="lyricsTextAlignmentLabel">
+            <label><input type="radio" name="lyricsTextAlignment" value="Left" data-setting="lyricsTextAlignment" aria-label="歌词左对齐或上对齐"><span>左 / 上</span></label>
+            <label><input type="radio" name="lyricsTextAlignment" value="Center" data-setting="lyricsTextAlignment" aria-label="歌词居中"><span>居中</span></label>
+            <label><input type="radio" name="lyricsTextAlignment" value="Right" data-setting="lyricsTextAlignment" aria-label="歌词右对齐或下对齐"><span>右 / 下</span></label>
+          </div>
+        </div>
+        <div class="setting-row compact layout-choice-row">
+          <div class="setting-label"><strong id="coverDisplayLabel">封面</strong></div>
+          <div class="monitor-mode layout-options" role="radiogroup" aria-labelledby="coverDisplayLabel" data-cover-display-options="" data-settings="showCover coverPosition">
+            <label><input type="radio" name="coverDisplayMode" value="Hidden" data-cover-display="" aria-label="隐藏封面"><span>隐藏</span></label>
+            <label><input type="radio" name="coverDisplayMode" value="Left" data-cover-display="" aria-label="封面在歌词左侧或上方"><span>左侧 / 上方</span></label>
+            <label><input type="radio" name="coverDisplayMode" value="Right" data-cover-display="" aria-label="封面在歌词右侧或下方"><span>右侧 / 下方</span></label>
+          </div>
+        </div>
       </div>
     </section>
     <div class="panel">

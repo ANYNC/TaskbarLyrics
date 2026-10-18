@@ -79,13 +79,13 @@ describe("display presentation", () => {
     dom.window.close();
   });
 
-  it("shows only the active profile and dependent controls while preserving hidden values", async () => {
+  it("shows only the active profile without hiding disabled panel options or clearing hidden values", async () => {
     const { dom, sync } = await createPresentation();
     const document = dom.window.document;
     const cover = document.querySelector('[data-cover-display][value="Hidden"]');
     cover.checked = true;
     sync({ page: "sources", useFloatingWindow: false, enableControlPanel: false, showCover: false });
-    expect(document.querySelector("[data-panel-options]").hidden).toBe(true);
+    expect(document.querySelector("[data-panel-options]").hidden).toBe(false);
     expect([...document.querySelectorAll('[data-presentation-mode="floating"]')].every(element => element.hidden)).toBe(true);
     sync({ page: "sources", useFloatingWindow: true, enableControlPanel: true, showCover: true });
     expect(document.querySelector("[data-panel-options]").hidden).toBe(false);
