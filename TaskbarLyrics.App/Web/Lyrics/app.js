@@ -1621,6 +1621,35 @@ function applyProgressPatch(frame) {
   presentationCoordinator.setCurrentFrame(normalized);
 }
 
+function clearRollEdgeMask() {
+  viewportEl.style.removeProperty("--roll-fade-top");
+  viewportEl.style.removeProperty("--roll-fade-bottom");
+}
+
+function captureRollEdgeMask() {
+  clearRollEdgeMask();
+  if (root.classList.contains("vertical-taskbar") || prefersReducedMotion()) return;
+  const viewport = viewportEl.getBoundingClientRect();
+  if (!Number.isFinite(viewport.height) || viewport.height <= 0) return;
+  const texts = root.classList.contains("single-line") ? [currentLineTextEl] : [currentLineTextEl, nextLineTextEl];
+  const bounds = texts.filter(text => text?.textContent.trim()).map(text => {
+    const box = text.getBoundingClientRect();
+    const style = window.getComputedStyle(text);
+    // Measure the resting line box without its descender padding, before promotion changes its metrics.
+    return {
+      top: box.top + (Number.parseFloat(style.paddingTop) || 0) - viewport.top,
+      bottom: box.bottom - (Number.parseFloat(style.paddingBottom) || 0) - viewport.top,
+      height: box.height
+    };
+  }).filter(box => box.height > 0 && Number.isFinite(box.top) && Number.isFinite(box.bottom));
+  if (!bounds.length) return;
+  const top = Math.max(0, Math.min(viewport.height, Math.min(...bounds.map(box => box.top))));
+  const bottom = Math.max(top, Math.min(viewport.height, Math.max(...bounds.map(box => box.bottom))));
+  if (bottom <= top) return;
+  viewportEl.style.setProperty("--roll-fade-top", `${top}px`);
+  viewportEl.style.setProperty("--roll-fade-bottom", `${bottom}px`);
+}
+
 function cancelActiveTransition() {
   const wasSpectrumExit = isSpectrumExitTransitionActive();
   presentationCoordinator.cancelTransition();
@@ -1633,6 +1662,7 @@ function cancelActiveTransition() {
   clearSpectrumExitStyles();
   trackEl.classList.add("no-anim");
   trackEl.classList.remove("animating", "vertical-roll", "single-line-roll");
+  clearRollEdgeMask();
   trackEl.classList.remove("translation-pair-animating");
   currentLineEl.classList.remove("leaving");
   nextLineEl.classList.remove("promoting");
@@ -1874,6 +1904,7 @@ function finalizeTransition(
   setLineWordScanProgress(nextLineEl, null);
   setIncomingLine("");
   trackEl.classList.remove("animating", "vertical-roll", "single-line-roll");
+  clearRollEdgeMask();
   currentLineEl.classList.remove("leaving");
   nextLineEl.classList.remove("promoting");
   trackEl.classList.remove("word-scan-transition");
@@ -1938,6 +1969,7 @@ function startTransition(
     return;
   }
 
+  captureRollEdgeMask();
   setTranslationMode(Boolean(translationMode));
   const singleLine = root.classList.contains("single-line");
   if (translationMode && !singleLine) {
@@ -1969,6 +2001,7 @@ function finalizeTranslationPairTransition(
   setSecondaryLine(promotedTranslation);
   setLineWordScanProgress(nextLineEl, null);
   trackEl.classList.remove("translation-pair-animating", "animating", "word-scan-transition", "vertical-roll", "single-line-roll");
+  clearRollEdgeMask();
   currentLineEl.classList.remove("leaving");
   nextLineEl.classList.remove("promoting");
   transitionPromotedLine = "";

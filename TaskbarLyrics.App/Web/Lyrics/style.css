@@ -423,6 +423,18 @@ html, body {
   display: block;
 }
 
+@media (prefers-reduced-motion: no-preference) {
+  :root:not(.vertical-taskbar) .layout:not(.region-moving) .viewport:has(> .track.animating) {
+    --roll-edge-mask: linear-gradient(to bottom,
+      transparent 0,
+      #000 var(--roll-fade-top, 0px),
+      #000 var(--roll-fade-bottom, 100%),
+      transparent 100%);
+    -webkit-mask-image: var(--roll-edge-mask);
+    mask-image: var(--roll-edge-mask);
+  }
+}
+
 .track {
   width: 100%;
   display: flex;
