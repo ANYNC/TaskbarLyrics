@@ -1126,6 +1126,11 @@
       if (!state) return;
       $$('[data-setting]').forEach(control => control.classList.contains("select-trigger") ? syncSelectTrigger(control) : setControlValue(control, state[control.dataset.setting]));
       syncWindowModeSelection();
+      const coverDisplay = state.showCover === false ? "Hidden" : state.coverPosition;
+      $$('[data-cover-display]').forEach(option => {
+        option.checked = option.value === coverDisplay;
+        option.tabIndex = option.checked ? 0 : -1;
+      });
       $$('input[type="range"][data-setting]').forEach(syncSliderProgress);
       $$('[data-color-text="foregroundColor"]').forEach(control => {
         if (!control.classList.contains("invalid")) control.value = state.foregroundColor.toUpperCase();
@@ -1384,9 +1389,9 @@
       const previousCornerRadius = state.coverCornerRadius;
       state[key] = value;
       if (["floatingPanelBlurAmount", "embeddedPanelBlurAmount"].includes(key))
-        state[key] = Number.isFinite(Number(value)) ? Math.min(64, Math.max(0, Number(value))) : 24;
+        state[key] = Number.isFinite(Number(value)) ? Math.min(64, Math.max(0, Number(value))) : window.taskbarLyricsSettingsState.panelMaterialDefaults[key];
       if (["floatingPanelBrightness", "floatingPanelTintOpacity", "embeddedPanelBrightness", "embeddedPanelTintOpacity"].includes(key))
-        state[key] = Number.isFinite(Number(value)) ? Math.min(1, Math.max(0, Number(value))) : (key.endsWith("Brightness") ? 0.45 : 0.55);
+        state[key] = Number.isFinite(Number(value)) ? Math.min(1, Math.max(0, Number(value))) : window.taskbarLyricsSettingsState.panelMaterialDefaults[key];
       if (key === "foregroundColor") {
         state.foregroundColor = fromArgb(value);
         state.customForegroundColor = state.foregroundColor;
@@ -1439,6 +1444,14 @@
         bridge.post({ type: "update", key: "coverCornerRadius", value: state.coverCornerRadius });
       }
       markSaved();
+    }
+
+    function commitCoverDisplay(value) {
+      if (!state || !["Hidden", "Left", "Right"].includes(value)) return;
+      const showCover = value !== "Hidden";
+      // Set the side before revealing the cover; hiding preserves its stored position.
+      if (showCover && state.coverPosition !== value) commitSetting("coverPosition", value);
+      if ((state.showCover !== false) !== showCover) commitSetting("showCover", showCover);
     }
 
     function scheduleSettingPreview(key, value, source) {
@@ -1686,7 +1699,6 @@
         appearanceSummary.title = appearanceSummary.textContent;
       }
       if ($("[data-floating-scale]")) $("[data-floating-scale]").textContent = `${formatLayoutMetric(state.floatingLyricsLayoutScalePercent)}%`;
-      window.taskbarLyricsDisplayPresentation?.updateOutputs(state);
       if ($("[data-effective-font-size]")) {
         const showCover = state.showCover !== false;
         $("[data-effective-font-size]").textContent = `${formatLayoutMetric(state.effectiveFontSize)} px`;
@@ -2031,7 +2043,10 @@
         const next = event.key === "Home" ? 0 : event.key === "End" ? options.length - 1
           : (current + (["ArrowRight", "ArrowDown"].includes(event.key) ? 1 : -1) + options.length) % options.length;
         options[next].focus({ preventScroll: true });
-        if (!options[next].checked) commitSetting(options[next].dataset.setting, options[next].value);
+        if (!options[next].checked) {
+          if (options[next].hasAttribute("data-cover-display")) commitCoverDisplay(options[next].value);
+          else commitSetting(options[next].dataset.setting, options[next].value);
+        }
         return;
       }
       if (windowModeOption && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) {
@@ -2195,6 +2210,12 @@
       }
 
       if (event.target === $("#playerOffsetInput")) { commitPlayerOffset(event.target.value); return; }
+
+      const coverDisplayOption = event.target.closest("[data-cover-display]");
+      if (coverDisplayOption) {
+        if (coverDisplayOption.checked) commitCoverDisplay(coverDisplayOption.value);
+        return;
+      }
 
       const windowModeOption = event.target.closest("[data-window-mode]");
       if (windowModeOption) {

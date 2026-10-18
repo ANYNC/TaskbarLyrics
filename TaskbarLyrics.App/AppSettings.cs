@@ -205,42 +205,49 @@ public sealed class AppSettings
 
     public bool GetEnableControlPanel() => UseFloatingWindow ? EnableFloatingControlPanel : EnableControlPanel;
 
-    private double _embeddedPanelBrightness = 0.45;
-    private double _embeddedPanelTintOpacity = 0.55;
-    private double _embeddedPanelBlurAmount = 24;
+    public const double DefaultEmbeddedPanelBrightness = 0.20;
+    public const double DefaultEmbeddedPanelTintOpacity = 0.65;
+    public const double DefaultEmbeddedPanelBlurAmount = 24;
+    public const double DefaultFloatingPanelBrightness = 0.25;
+    public const double DefaultFloatingPanelTintOpacity = 0.55;
+    public const double DefaultFloatingPanelBlurAmount = 32;
+
+    private double _embeddedPanelBrightness = DefaultEmbeddedPanelBrightness;
+    private double _embeddedPanelTintOpacity = DefaultEmbeddedPanelTintOpacity;
+    private double _embeddedPanelBlurAmount = DefaultEmbeddedPanelBlurAmount;
     public double EmbeddedPanelBrightness
     {
         get => _embeddedPanelBrightness;
-        set => _embeddedPanelBrightness = double.IsFinite(value) ? Math.Clamp(value, 0, 1) : 0.45;
+        set => _embeddedPanelBrightness = double.IsFinite(value) ? Math.Clamp(value, 0, 1) : DefaultEmbeddedPanelBrightness;
     }
     public double EmbeddedPanelTintOpacity
     {
         get => _embeddedPanelTintOpacity;
-        set => _embeddedPanelTintOpacity = double.IsFinite(value) ? Math.Clamp(value, 0, 1) : 0.55;
+        set => _embeddedPanelTintOpacity = double.IsFinite(value) ? Math.Clamp(value, 0, 1) : DefaultEmbeddedPanelTintOpacity;
     }
     public double EmbeddedPanelBlurAmount
     {
         get => _embeddedPanelBlurAmount;
-        set => _embeddedPanelBlurAmount = double.IsFinite(value) ? Math.Clamp(value, 0, 64) : 24;
+        set => _embeddedPanelBlurAmount = double.IsFinite(value) ? Math.Clamp(value, 0, 64) : DefaultEmbeddedPanelBlurAmount;
     }
 
-    private double _floatingPanelBrightness = 0.45;
-    private double _floatingPanelTintOpacity = 0.55;
-    private double _floatingPanelBlurAmount = 24;
+    private double _floatingPanelBrightness = DefaultFloatingPanelBrightness;
+    private double _floatingPanelTintOpacity = DefaultFloatingPanelTintOpacity;
+    private double _floatingPanelBlurAmount = DefaultFloatingPanelBlurAmount;
     public double FloatingPanelBlurAmount
     {
         get => _floatingPanelBlurAmount;
-        set => _floatingPanelBlurAmount = double.IsFinite(value) ? Math.Clamp(value, 0, 64) : 24;
+        set => _floatingPanelBlurAmount = double.IsFinite(value) ? Math.Clamp(value, 0, 64) : DefaultFloatingPanelBlurAmount;
     }
     public double FloatingPanelBrightness
     {
         get => _floatingPanelBrightness;
-        set => _floatingPanelBrightness = double.IsFinite(value) ? Math.Clamp(value, 0, 1) : 0.45;
+        set => _floatingPanelBrightness = double.IsFinite(value) ? Math.Clamp(value, 0, 1) : DefaultFloatingPanelBrightness;
     }
     public double FloatingPanelTintOpacity
     {
         get => _floatingPanelTintOpacity;
-        set => _floatingPanelTintOpacity = double.IsFinite(value) ? Math.Clamp(value, 0, 1) : 0.55;
+        set => _floatingPanelTintOpacity = double.IsFinite(value) ? Math.Clamp(value, 0, 1) : DefaultFloatingPanelTintOpacity;
     }
 
     public double LyricsLayoutScalePercent { get; set; } = DefaultLyricsLayoutScalePercent;

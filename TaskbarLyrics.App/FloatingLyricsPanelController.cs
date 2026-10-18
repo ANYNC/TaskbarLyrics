@@ -47,9 +47,9 @@ internal sealed class FloatingLyricsPanelController : IDisposable
     private bool _suppressed;
     private bool _enabled;
     private bool _light;
-    private double _brightness = 0.45;
-    private double _tintOpacity = 0.55;
-    private double _blurAmount = 24;
+    private double _brightness = AppSettings.DefaultFloatingPanelBrightness;
+    private double _tintOpacity = AppSettings.DefaultFloatingPanelTintOpacity;
+    private double _blurAmount = AppSettings.DefaultFloatingPanelBlurAmount;
     private bool _compositionUnavailable;
     private Target? _fadingTarget;
     private long _fadeStartedAt;

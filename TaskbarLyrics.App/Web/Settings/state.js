@@ -1,5 +1,13 @@
 (() => {
   const textAlignments = new Set(["Left", "Center", "Right"]);
+  const panelMaterialDefaults = Object.freeze({
+    embeddedPanelBrightness: 0.20,
+    embeddedPanelTintOpacity: 0.65,
+    embeddedPanelBlurAmount: 24,
+    floatingPanelBrightness: 0.25,
+    floatingPanelTintOpacity: 0.55,
+    floatingPanelBlurAmount: 32
+  });
 
   function normalizeLyricsTextAlignment(value) {
     return textAlignments.has(value) ? value : "Left";
@@ -17,6 +25,7 @@
   }
 
   window.taskbarLyricsSettingsState = {
+    panelMaterialDefaults,
     normalizeControlPanelTriggers,
     create(nextState, previousState, foregroundColor) {
       return normalizeControlPanelTriggers({
@@ -29,12 +38,12 @@
         lyricsTextAlignment: normalizeLyricsTextAlignment(nextState?.lyricsTextAlignment),
         singleLineLyrics: nextState?.singleLineLyrics === true,
         coverPosition: nextState?.coverPosition === "Right" ? "Right" : "Left",
-        embeddedPanelBrightness: Number.isFinite(Number(nextState?.embeddedPanelBrightness)) ? Math.min(1, Math.max(0, Number(nextState.embeddedPanelBrightness))) : 0.45,
-        embeddedPanelTintOpacity: Number.isFinite(Number(nextState?.embeddedPanelTintOpacity)) ? Math.min(1, Math.max(0, Number(nextState.embeddedPanelTintOpacity))) : 0.55,
-        embeddedPanelBlurAmount: Number.isFinite(Number(nextState?.embeddedPanelBlurAmount)) ? Math.min(64, Math.max(0, Number(nextState.embeddedPanelBlurAmount))) : 24,
-        floatingPanelBrightness: Number.isFinite(Number(nextState?.floatingPanelBrightness)) ? Math.min(1, Math.max(0, Number(nextState.floatingPanelBrightness))) : 0.45,
-        floatingPanelTintOpacity: Number.isFinite(Number(nextState?.floatingPanelTintOpacity)) ? Math.min(1, Math.max(0, Number(nextState.floatingPanelTintOpacity))) : 0.55,
-        floatingPanelBlurAmount: Number.isFinite(Number(nextState?.floatingPanelBlurAmount)) ? Math.min(64, Math.max(0, Number(nextState.floatingPanelBlurAmount))) : 24,
+        embeddedPanelBrightness: Number.isFinite(Number(nextState?.embeddedPanelBrightness)) ? Math.min(1, Math.max(0, Number(nextState.embeddedPanelBrightness))) : panelMaterialDefaults.embeddedPanelBrightness,
+        embeddedPanelTintOpacity: Number.isFinite(Number(nextState?.embeddedPanelTintOpacity)) ? Math.min(1, Math.max(0, Number(nextState.embeddedPanelTintOpacity))) : panelMaterialDefaults.embeddedPanelTintOpacity,
+        embeddedPanelBlurAmount: Number.isFinite(Number(nextState?.embeddedPanelBlurAmount)) ? Math.min(64, Math.max(0, Number(nextState.embeddedPanelBlurAmount))) : panelMaterialDefaults.embeddedPanelBlurAmount,
+        floatingPanelBrightness: Number.isFinite(Number(nextState?.floatingPanelBrightness)) ? Math.min(1, Math.max(0, Number(nextState.floatingPanelBrightness))) : panelMaterialDefaults.floatingPanelBrightness,
+        floatingPanelTintOpacity: Number.isFinite(Number(nextState?.floatingPanelTintOpacity)) ? Math.min(1, Math.max(0, Number(nextState.floatingPanelTintOpacity))) : panelMaterialDefaults.floatingPanelTintOpacity,
+        floatingPanelBlurAmount: Number.isFinite(Number(nextState?.floatingPanelBlurAmount)) ? Math.min(64, Math.max(0, Number(nextState.floatingPanelBlurAmount))) : panelMaterialDefaults.floatingPanelBlurAmount,
         page: previousState?.page ?? "sources",
         foregroundColor,
         trackOffsetSourceFilter: previousState?.trackOffsetSourceFilter ?? "All",

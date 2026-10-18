@@ -37,9 +37,9 @@ public partial class LyricsControlPanelWindow : Window
     private readonly DispatcherTimer _hideTimer;
     private FloatingMaterialCompositor? _compositor;
     private IFloatingPanelMaterial? _material;
-    private double _materialBrightness = 0.45;
-    private double _materialTintOpacity = 0.55;
-    private double _materialBlurAmount = 24;
+    private double _materialBrightness = AppSettings.DefaultEmbeddedPanelBrightness;
+    private double _materialTintOpacity = AppSettings.DefaultEmbeddedPanelTintOpacity;
+    private double _materialBlurAmount = AppSettings.DefaultEmbeddedPanelBlurAmount;
     private Window? _hoverSource;
     private Rect _hoverSourceBounds;
     private long? _hoverLeftAt;

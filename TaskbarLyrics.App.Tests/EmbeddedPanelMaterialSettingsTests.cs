@@ -9,8 +9,8 @@ public sealed class EmbeddedPanelMaterialSettingsTests
     [InlineData(-1, 0, 0, 0)]
     [InlineData(80, 1, 1, 64)]
     [InlineData(0.7, 0.7, 0.7, 0.7)]
-    [InlineData(double.NaN, 0.45, 0.55, 24)]
-    [InlineData(double.PositiveInfinity, 0.45, 0.55, 24)]
+    [InlineData(double.NaN, 0.20, 0.65, 24)]
+    [InlineData(double.PositiveInfinity, 0.20, 0.65, 24)]
     public void TaskbarMaterialValuesAreBoundedAndCloned(double value, double brightness, double opacity, double blur)
     {
         var settings = new AppSettings { EmbeddedPanelBrightness = value, EmbeddedPanelTintOpacity = value, EmbeddedPanelBlurAmount = value };
@@ -31,8 +31,8 @@ public sealed class EmbeddedPanelMaterialSettingsTests
             File.WriteAllText(path, "{\"FloatingPanelBrightness\":0.8,\"FloatingPanelTintOpacity\":0.2,\"FloatingPanelBlurAmount\":40}");
             var store = new SettingsStore(path);
             var settings = store.Load();
-            Assert.Equal(0.45, settings.EmbeddedPanelBrightness);
-            Assert.Equal(0.55, settings.EmbeddedPanelTintOpacity);
+            Assert.Equal(0.20, settings.EmbeddedPanelBrightness);
+            Assert.Equal(0.65, settings.EmbeddedPanelTintOpacity);
             Assert.Equal(24, settings.EmbeddedPanelBlurAmount);
             settings.EmbeddedPanelBrightness = 0.7;
             settings.EmbeddedPanelTintOpacity = 0.3;

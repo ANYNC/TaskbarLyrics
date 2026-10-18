@@ -82,17 +82,15 @@ describe("display presentation", () => {
   it("shows only the active profile and dependent controls while preserving hidden values", async () => {
     const { dom, sync } = await createPresentation();
     const document = dom.window.document;
-    const cover = document.querySelector('[data-setting="showCover"]');
-    cover.checked = false;
+    const cover = document.querySelector('[data-cover-display][value="Hidden"]');
+    cover.checked = true;
     sync({ page: "sources", useFloatingWindow: false, enableControlPanel: false, showCover: false });
     expect(document.querySelector("[data-panel-options]").hidden).toBe(true);
-    expect(document.querySelector("[data-cover-position-row]").hidden).toBe(true);
     expect([...document.querySelectorAll('[data-presentation-mode="floating"]')].every(element => element.hidden)).toBe(true);
     sync({ page: "sources", useFloatingWindow: true, enableControlPanel: true, showCover: true });
     expect(document.querySelector("[data-panel-options]").hidden).toBe(false);
-    expect(document.querySelector("[data-cover-position-row]").hidden).toBe(false);
     expect([...document.querySelectorAll('[data-presentation-mode="embedded"]')].every(element => element.hidden)).toBe(true);
-    expect(cover.checked).toBe(false);
+    expect(cover.checked).toBe(true);
     expect(document.querySelector('[data-setting="floatingLyricsLayoutScalePercent"]')).toBeNull();
     for (const key of ["xOffset", "yOffset"]) {
       expect(document.querySelector(`[data-setting="${key}"]`).closest("details")).toBeNull();

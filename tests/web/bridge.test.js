@@ -195,10 +195,58 @@ describe("settings WebView bridge", () => {
       expect(control.closest(".floating-window-mode-settings")).not.toBeNull();
       expect(control.disabled).toBe(!floating);
     }
-    for (const key of ["fontFamily", "showCover", "lyricsTextAlignment"]) {
+    for (const key of ["fontFamily", "lyricsTextAlignment"]) {
       expect(document.querySelector(`[data-setting="${key}"]`).closest(".window-mode-card")).toBeNull();
     }
     expect(document.querySelector("#displayMonitorList")).not.toBeNull();
+    dom.window.close();
+  });
+
+  it.each([false, true])("keeps material sliders expanded inside the control panel group for floating=%s", async floating => {
+    const { dom, script } = await createSettingsDom();
+    dom.window.eval(script);
+    dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings: {
+      useFloatingWindow: floating, enableControlPanel: false, enableFloatingControlPanel: false
+    } } });
+    const document = dom.window.document;
+    const group = document.querySelector('[data-display-group="controls"]');
+    expect(group.getAttribute("aria-label")).toBe("播放控制面板");
+    for (const prefix of ["embedded", "floating"]) {
+      for (const suffix of ["BlurAmount", "Brightness", "TintOpacity"]) {
+        const slider = document.querySelector(`[data-setting="${prefix}Panel${suffix}"][type="range"]`);
+        expect(slider.closest("details")).toBeNull();
+        expect(slider.closest('[data-display-group="controls"]')).toBe(group);
+        expect(slider.closest("[data-presentation-mode]").hidden).toBe((prefix === "floating") !== floating);
+        // Embedded material requires its panel; floating material also belongs to the lyric card.
+        expect(slider.disabled).toBe(prefix === "embedded" || !floating);
+      }
+    }
+    expect(document.querySelector('[data-material-summary]')).toBeNull();
+    expect(document.querySelector('[data-embedded-appearance-summary]').closest("details")).not.toBeNull();
+    dom.window.close();
+  });
+
+  it.each([undefined, NaN])("uses profile material defaults for absent or invalid fields: %s", async value => {
+    const { dom, sent, script } = await createSettingsDom();
+    dom.window.eval(script);
+    const defaults = {
+      embeddedPanelBlurAmount: 24, embeddedPanelBrightness: 20, embeddedPanelTintOpacity: 65,
+      floatingPanelBlurAmount: 32, floatingPanelBrightness: 25, floatingPanelTintOpacity: 55
+    };
+    const initialCount = sent.length;
+    const settings = Object.fromEntries(Object.keys(defaults).map(key => [key, value]));
+    dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings } });
+    for (const [key, expected] of Object.entries(defaults)) {
+      expect(dom.window.document.querySelector(`input[type="number"][data-setting="${key}"]`).value).toBe(String(expected));
+    }
+    const saved = { embeddedPanelBrightness: 0.45, embeddedPanelTintOpacity: 0.55, embeddedPanelBlurAmount: 24,
+      floatingPanelBrightness: 0.45, floatingPanelTintOpacity: 0.55, floatingPanelBlurAmount: 24 };
+    dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings: saved } });
+    for (const [key, savedValue] of Object.entries(saved)) {
+      const expected = key.endsWith("BlurAmount") ? savedValue : Math.round(savedValue * 100);
+      expect(dom.window.document.querySelector(`input[type="number"][data-setting="${key}"]`).value).toBe(String(expected));
+    }
+    expect(sent).toHaveLength(initialCount);
     dom.window.close();
   });
 
@@ -241,7 +289,7 @@ describe("settings WebView bridge", () => {
     receive({ useFloatingWindow: false, enableControlPanel: true });
     const slider = dom.window.document.querySelector(`input[type="range"][data-setting="${key}"]`);
     const number = dom.window.document.querySelector(`input[type="number"][data-setting="${key}"]`);
-    expect(number.value).toBe(String(key === "embeddedPanelTintOpacity" ? 55 : key === "embeddedPanelBrightness" ? 45 : initial));
+    expect(number.value).toBe(String(key === "embeddedPanelTintOpacity" ? 65 : key === "embeddedPanelBrightness" ? 20 : initial));
     expect(slider.disabled).toBe(false);
     slider.value = String(edited);
     slider.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
@@ -735,7 +783,10 @@ describe("settings WebView bridge", () => {
       expect(document.querySelector(`[data-page="${page}"]`)).not.toBeNull();
     }
 
-    const settingKeys = new Set([...document.querySelectorAll("[data-setting]")].map(control => control.dataset.setting));
+    const settingKeys = new Set([
+      ...[...document.querySelectorAll("[data-setting]")].map(control => control.dataset.setting),
+      ...[...document.querySelectorAll("[data-settings]")].flatMap(control => control.dataset.settings.split(" "))
+    ]);
     for (const key of persistedSettings) {
       expect(settingKeys.has(key), `missing persisted setting control: ${key}`).toBe(true);
     }
@@ -1560,9 +1611,8 @@ describe("settings WebView bridge", () => {
       }
     });
 
-    const toggle = document.querySelector('input[data-setting="showCover"]');
-    toggle.checked = false;
-    toggle.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+    const toggle = document.querySelector('input[data-cover-display][value="Hidden"]');
+    toggle.click();
 
     expect(sent.at(-1)).toEqual({
       version: 1,
@@ -1647,7 +1697,7 @@ describe("settings WebView bridge", () => {
     click.focus();
     click.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true, cancelable: true }));
     expect(sent.at(-1).payload).toEqual({ key: "controlPanelTriggerMethod", value: "Hover" });
-    document.querySelector('[data-setting="showCover"]').click();
+    document.querySelector('[data-cover-display][value="Hidden"]').click();
     expect(document.querySelector('[data-setting="controlPanelTriggerCover"]').disabled).toBe(true);
     expect(document.querySelector('[data-setting="controlPanelTriggerLyrics"]').checked).toBe(true);
     expect(document.querySelector('#embeddedControlPanelToggle').disabled).toBe(false);
@@ -1669,7 +1719,7 @@ describe("settings WebView bridge", () => {
     toggle.checked = false;
     toggle.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
     expect(sent.at(-1)).toEqual({ version: 1, type: "update", payload: { key: "enableControlPanel", value: false } });
-    expect(dom.window.document.querySelector('input[data-setting="showCover"]').checked).toBe(true);
+    expect(dom.window.document.querySelector('input[data-cover-display][value="Hidden"]').checked).toBe(false);
     dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: {
       settings: { sourceRecognitionOrder: [], playerLyricOffsets: {}, showCover: true, enableControlPanel: false }
     } });
@@ -1776,7 +1826,7 @@ describe("settings WebView bridge", () => {
     embedded.click();
     expect(toggle.checked).toBe(false);
     toggle.click();
-    const cover = document.querySelector('input[data-setting="showCover"]');
+    const cover = document.querySelector('input[data-cover-display][value="Hidden"]');
     cover.click();
     expect(toggle.disabled).toBe(false);
     expect(toggle.checked).toBe(true);
@@ -2348,35 +2398,43 @@ describe("settings WebView bridge", () => {
       payload: { key: "lyricsTextAlignment", value: "Right" }
     });
   });
-  it("keeps cover cards independent of alignment and preserves the choice while cover is hidden", async () => {
+  it("combines cover visibility and position while preserving alignment and the hidden position", async () => {
     const { dom, sent, script } = await createSettingsDom();
     dom.window.eval(script);
     const document = dom.window.document;
     const receive = settings => dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings, fonts: [] } });
     receive({ showCover: true, coverPosition: "Unsupported", lyricsTextAlignment: "Center" });
-    const cover = value => document.querySelector(`input[data-setting="coverPosition"][value="${value}"]`);
+    const cover = value => document.querySelector(`input[data-cover-display][value="${value}"]`);
     const alignment = value => document.querySelector(`input[data-setting="lyricsTextAlignment"][value="${value}"]`);
     expect(cover("Left").checked).toBe(true);
     expect(alignment("Center").checked).toBe(true);
-    expect(cover("Left").closest('[data-page]').dataset.page).toBe("displayArea");
     cover("Right").closest("label").click();
     expect(sent.at(-1)).toEqual({ version: 1, type: "update", payload: { key: "coverPosition", value: "Right" } });
-    expect(alignment("Center").checked).toBe(true);
-    document.querySelector('input[data-setting="showCover"]').click();
-    expect(cover("Right").checked).toBe(true);
-    expect(cover("Right").disabled).toBe(true);
-    const count = sent.length;
-    cover("Left").closest("label").click();
-    expect(sent).toHaveLength(count);
-    alignment("Right").click();
-    expect(alignment("Right").disabled).toBe(false);
-    expect(sent.at(-1).payload).toEqual({ key: "lyricsTextAlignment", value: "Right" });
-    document.querySelector('input[data-setting="showCover"]').click();
+    cover("Hidden").click();
+    expect(cover("Hidden").checked).toBe(true);
     expect(cover("Right").disabled).toBe(false);
-    expect(cover("Right").checked).toBe(true);
+    expect(sent.at(-1).payload).toEqual({ key: "showCover", value: false });
+    alignment("Right").click();
+    expect(sent.at(-1).payload).toEqual({ key: "lyricsTextAlignment", value: "Right" });
+    const count = sent.length;
+    cover("Right").click();
+    expect(sent.slice(count).map(message => message.payload)).toEqual([{ key: "showCover", value: true }]);
+    cover("Hidden").click();
+    const hiddenCount = sent.length;
+    cover("Left").click();
+    expect(sent.slice(hiddenCount).map(message => message.payload)).toEqual([
+      { key: "coverPosition", value: "Left" }, { key: "showCover", value: true }
+    ]);
+    expect(cover("Left").checked).toBe(true);
+    expect(alignment("Right").checked).toBe(true);
+    const finalCount = sent.length;
+    receive({ showCover: false, coverPosition: "Right", lyricsTextAlignment: "Center" });
+    expect(cover("Hidden").checked).toBe(true);
     receive({ showCover: true, coverPosition: "Left", lyricsTextAlignment: "Center" });
     expect(cover("Left").checked).toBe(true);
     expect(alignment("Center").checked).toBe(true);
+    expect(sent).toHaveLength(finalCount);
+    dom.window.close();
   });
 
   it("navigates layout radio cards with arrows and Home/End without duplicate updates", async () => {
@@ -2384,8 +2442,8 @@ describe("settings WebView bridge", () => {
     dom.window.eval(script);
     dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings: { showCover: true, coverPosition: "Left", lyricsTextAlignment: "Left", horizontalAnchor: "Center" }, fonts: [] } });
     const document = dom.window.document;
-    const coverLeft = document.querySelector('input[data-setting="coverPosition"][value="Left"]');
-    const coverRight = document.querySelector('input[data-setting="coverPosition"][value="Right"]');
+    const coverLeft = document.querySelector('input[data-cover-display][value="Left"]');
+    const coverRight = document.querySelector('input[data-cover-display][value="Right"]');
     const key = (input, value) => input.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: value, bubbles: true, cancelable: true }));
     key(coverLeft, "ArrowRight");
     expect(coverRight.checked).toBe(true);
@@ -2394,7 +2452,15 @@ describe("settings WebView bridge", () => {
     key(coverRight, "End");
     expect(sent).toHaveLength(count);
     key(coverRight, "Home");
+    const hidden = document.querySelector('input[data-cover-display][value="Hidden"]');
+    expect(hidden.checked).toBe(true);
+    expect(document.activeElement).toBe(hidden);
+    const hiddenCount = sent.length;
+    key(hidden, "Home");
+    expect(sent).toHaveLength(hiddenCount);
+    key(hidden, "ArrowRight");
     expect(coverLeft.checked).toBe(true);
+    expect(document.activeElement).toBe(coverLeft);
     const alignmentLeft = document.querySelector('input[data-setting="lyricsTextAlignment"][value="Left"]');
     key(alignmentLeft, "End");
     expect(sent.at(-1).payload).toEqual({ key: "lyricsTextAlignment", value: "Right" });

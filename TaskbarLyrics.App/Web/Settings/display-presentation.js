@@ -46,7 +46,6 @@
       mode = nextMode;
     }
     page.querySelector('[data-panel-options]').hidden = state.enableControlPanel === false;
-    page.querySelector('[data-cover-position-row]').hidden = state.showCover === false;
     if (animate) {
       const after = groups.map(group => group.getBoundingClientRect());
       const duration = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--duration-slow')) || 220;
@@ -68,7 +67,7 @@
     const floating = nextMode === 'floating';
     page.querySelector('[data-presentation-name]').textContent = floating ? '悬浮窗口' : '任务栏嵌入';
     page.querySelector('[data-presentation-description]').textContent = floating
-      ? '展开播放控制，并演示移动位置与调整大小。'
+      ? '展开播放控制面板，并演示移动位置与调整大小。'
       : '歌词保留在任务栏，播放面板在附近独立出现。';
     video.setAttribute('aria-label', `${floating ? '悬浮窗口' : '任务栏嵌入'}模式演示`);
     video.poster = `media/${nextMode}-poster.png`;
@@ -76,20 +75,6 @@
     video.load();
     status.textContent = motion.matches ? '已减少动态效果 · 可手动重播' : '固定示例';
     if (!motion.matches && !document.hidden) play();
-  }
-
-  function updateOutputs(state) {
-    const metric = value => Number.isFinite(Number(value)) ? String(Math.round(Number(value) * 100) / 100) : '0';
-    for (const prefix of ['embedded', 'floating']) {
-      const summary = page.querySelector(`[data-material-summary="${prefix}"]`);
-      const enabled = prefix !== 'embedded' || state.enableControlPanel !== false;
-      summary.textContent = enabled
-        ? `模糊 ${metric(state[`${prefix}PanelBlurAmount`])} px · 亮度 ${metric(Number(state[`${prefix}PanelBrightness`]) * 100)}% · 不透明度 ${metric(Number(state[`${prefix}PanelTintOpacity`]) * 100)}%`
-        : '开启播放控制后可调整';
-      summary.title = summary.textContent;
-      if (prefix === 'embedded') page.querySelector('[data-material-hint="embedded"]').textContent = enabled
-        ? '作用于任务栏播放控制面板。' : '开启播放控制后可调整面板材质，已保存的参数会保留。';
-    }
   }
 
   page.querySelector('[data-replay-presentation]').addEventListener('click', play);
@@ -113,5 +98,5 @@
     pause();
   }, { once: true });
 
-  window.taskbarLyricsDisplayPresentation = { sync, updateOutputs };
+  window.taskbarLyricsDisplayPresentation = { sync };
 })();

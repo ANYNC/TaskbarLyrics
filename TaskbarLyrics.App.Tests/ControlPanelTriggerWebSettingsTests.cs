@@ -51,10 +51,10 @@ public sealed class ControlPanelTriggerWebSettingsTests
                     Update("floatingWindowLayer", "99");
                     Update("floatingWindowLayer", 1);
                     Assert.Equal(floating ? FloatingWindowLayer.Desktop : FloatingWindowLayer.Fullscreen, settings.FloatingWindowLayer);
-                    Assert.Equal(floating ? 0.45 : 0.8, settings.EmbeddedPanelBrightness);
-                    Assert.Equal(floating ? 0.55 : 0.3, settings.EmbeddedPanelTintOpacity);
+                    Assert.Equal(floating ? 0.20 : 0.8, settings.EmbeddedPanelBrightness);
+                    Assert.Equal(floating ? 0.65 : 0.3, settings.EmbeddedPanelTintOpacity);
                     Assert.Equal(floating ? 24 : 48, settings.EmbeddedPanelBlurAmount);
-                    Assert.Equal(floating ? 0.2 : 0.45, settings.FloatingPanelBrightness);
+                    Assert.Equal(floating ? 0.2 : 0.25, settings.FloatingPanelBrightness);
                     Assert.Equal(floating ? ControlPanelTriggerMethod.Click : ControlPanelTriggerMethod.Hover, settings.ControlPanelTriggerMethod);
                     Assert.Equal(floating, settings.ControlPanelTriggerCover);
                     Assert.Equal(!floating, settings.ControlPanelTriggerLyrics);

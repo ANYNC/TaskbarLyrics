@@ -833,13 +833,12 @@
     .display-mode-reset { white-space: nowrap; }
     .display-layout { min-width: 0; display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(280px, .9fr); align-items: start; gap: 40px; padding: 24px 18px; overflow-anchor: none; }
     .display-settings-column, .display-preview { min-width: 0; }
-    .display-settings-column { max-width: 780px; }
     .display-setting-group + .display-setting-group { margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--border); }
     .display-group-heading { min-height: 28px; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
     .display-group-heading h3, .display-preview-heading h3 { margin: 0; font-size: 14px; font-weight: 600; line-height: 1.5; }
     .display-group-heading small { color: var(--muted-foreground); font-size: 12px; }
     .display-group-note { margin: 4px 0 12px; color: var(--muted-foreground); font-size: 12px; line-height: 1.6; }
-    .display-settings-column .window-mode-setting-row, .display-settings-column .setting-row { min-height: 54px; margin: 0; padding: 10px 0; border: 0; gap: 16px; grid-template-columns: minmax(100px, 1fr) minmax(180px, 300px); }
+    .display-settings-column .window-mode-setting-row, .display-settings-column .setting-row { min-height: 54px; margin: 0; padding: 10px 0; border: 0; gap: 16px; grid-template-columns: minmax(100px, .8fr) minmax(180px, 1.2fr); }
     .display-settings-column .window-mode-setting-row.display-group-heading { min-height: 28px; grid-template-columns: minmax(0, 1fr) auto; margin: 0 0 8px; padding: 0; }
     .display-settings-column .setting-row.compact, .display-settings-column .window-mode-setting-row.compact { grid-template-columns: minmax(0, 1fr) auto; }
     .display-settings-column .setting-label small { font-size: 12px; }
@@ -855,7 +854,6 @@
     .mode-dimension-readout strong { margin-left: 6px; color: var(--foreground); font-size: 14px; font-weight: 600; }
     .display-settings-column #floatingTopmostRow { grid-template-columns: minmax(0, 1fr); gap: 10px; }
     #floatingTopmostRow .layout-options { justify-self: start; }
-    .display-settings-column .display-dependent-row { padding-left: 16px; }
     .display-settings-column .advanced-size-panel { margin-top: 8px; border-top: 1px solid var(--border); }
     .display-settings-column .advanced-size-summary { padding-inline: 0; }
     .display-settings-column .advanced-size-settings { border: 0; padding-left: 16px; }
@@ -869,6 +867,7 @@
     .panel-trigger-chip:has(input:disabled) { opacity: .5; cursor: default; }
     .panel-trigger-chip input { margin: 0; width: 13px; height: 13px; accent-color: var(--primary); }
     .panel-trigger-chip:has(input:focus-visible) { outline: 2px solid var(--ring); outline-offset: 2px; }
+    .panel-material-controls { margin-top: 8px; }
     .mode-details { min-width: 0; margin: 0; }
     .mode-details + .mode-details { border-top: 1px solid var(--border); }
     .mode-details > summary { min-width: 0; min-height: 48px; padding: 10px 0; display: flex; align-items: center; gap: 12px; color: var(--foreground); font-size: 13px; cursor: pointer; list-style: none; }
@@ -880,7 +879,7 @@
     .mode-details > summary:hover { color: var(--primary); }
     .mode-details > summary:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: var(--radius-sm); }
     .display-preview { align-self: stretch; }
-    .display-preview-sticky { position: sticky; top: 20px; max-width: 720px; }
+    .display-preview-sticky { position: sticky; top: 20px; }
     .display-preview-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
     .display-preview-heading span, .display-preview-note, .display-preview-actions p { color: var(--muted-foreground); font-size: 12px; line-height: 1.6; }
     .display-preview-stage { overflow: hidden; aspect-ratio: 8 / 5; border: 1px solid var(--border); border-radius: var(--radius); background: var(--background); }
@@ -894,9 +893,8 @@
     .display-preview-note { margin: 16px 0 0; }
     @media (max-width: 1100px) {
       .display-layout { grid-template-columns: minmax(0, 1fr); gap: 28px; }
-      .display-settings-column { max-width: none; }
       .display-preview { grid-row: 1; }
-      .display-preview-sticky { position: static; max-width: 560px; }
+      .display-preview-sticky { position: static; }
       .display-presentation .window-mode-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
     @media (max-width: 720px) {
