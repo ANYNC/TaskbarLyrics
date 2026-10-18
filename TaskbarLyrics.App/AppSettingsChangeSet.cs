@@ -68,40 +68,50 @@ internal readonly record struct AppSettingsChangeSet(
             current.SpectrumAudioAccessGranted != next.SpectrumAudioAccessGranted;
 
         var visualStyleChanged = isInitialApplication ||
+            current.SingleLineLyrics != next.SingleLineLyrics ||
             current.UseFloatingWindow != next.UseFloatingWindow ||
             current.FontSize != next.FontSize ||
             current.ShowCover != next.ShowCover ||
-            current.EnableControlPanel != next.EnableControlPanel ||
+            current.GetEnableControlPanel() != next.GetEnableControlPanel() ||
+            (!next.UseFloatingWindow && (current.ControlPanelTriggerMethod != next.ControlPanelTriggerMethod ||
+                current.ControlPanelTriggerCover != next.ControlPanelTriggerCover ||
+                current.ControlPanelTriggerLyrics != next.ControlPanelTriggerLyrics ||
+                current.EmbeddedPanelBrightness != next.EmbeddedPanelBrightness ||
+                current.EmbeddedPanelTintOpacity != next.EmbeddedPanelTintOpacity ||
+                current.EmbeddedPanelBlurAmount != next.EmbeddedPanelBlurAmount)) ||
+            (next.UseFloatingWindow && (current.FloatingPanelBrightness != next.FloatingPanelBrightness ||
+                current.FloatingPanelTintOpacity != next.FloatingPanelTintOpacity ||
+                current.FloatingPanelBlurAmount != next.FloatingPanelBlurAmount)) ||
             current.CoverPosition != next.CoverPosition ||
             current.CoverSize != next.CoverSize ||
             current.CoverGap != next.CoverGap ||
             current.CoverCornerRadius != next.CoverCornerRadius ||
-            current.LyricsLayoutScalePercent != next.LyricsLayoutScalePercent ||
+            current.GetLyricsLayoutScalePercent() != next.GetLyricsLayoutScalePercent() ||
             !string.Equals(current.FontFamily, next.FontFamily, StringComparison.Ordinal) ||
             !string.Equals(current.FontWeight, next.FontWeight, StringComparison.Ordinal) ||
             current.ForegroundColorMode != next.ForegroundColorMode ||
             !string.Equals(current.ForegroundColor, next.ForegroundColor, StringComparison.Ordinal) ||
-            current.ShowBackground != next.ShowBackground ||
-            current.BackgroundOpacity != next.BackgroundOpacity ||
-            current.ShowBorder != next.ShowBorder ||
+            (!next.UseFloatingWindow && (current.ShowBackground != next.ShowBackground ||
+                current.BackgroundOpacity != next.BackgroundOpacity || current.ShowBorder != next.ShowBorder)) ||
             current.ShowTextShadow != next.ShowTextShadow ||
             current.LyricsTextAlignment != next.LyricsTextAlignment;
 
         var lyricsLayoutChanged = isInitialApplication ||
+            current.UseFloatingWindow != next.UseFloatingWindow ||
+            current.SingleLineLyrics != next.SingleLineLyrics ||
             current.FontSize != next.FontSize ||
             current.ShowCover != next.ShowCover ||
             current.CoverPosition != next.CoverPosition ||
             current.CoverSize != next.CoverSize ||
             current.CoverGap != next.CoverGap ||
             current.CoverCornerRadius != next.CoverCornerRadius ||
-            current.LyricsLayoutScalePercent != next.LyricsLayoutScalePercent;
+            current.GetLyricsLayoutScalePercent() != next.GetLyricsLayoutScalePercent();
 
         var windowLayoutChanged = isInitialApplication ||
-            current.WindowWidth != next.WindowWidth ||
-            current.HorizontalAnchor != next.HorizontalAnchor ||
-            current.XOffset != next.XOffset ||
-            current.YOffset != next.YOffset ||
-            current.ForceAlwaysOnTop != next.ForceAlwaysOnTop ||
+            current.GetWindowWidth() != next.GetWindowWidth() ||
+            (!next.UseFloatingWindow && (current.HorizontalAnchor != next.HorizontalAnchor ||
+                current.XOffset != next.XOffset || current.YOffset != next.YOffset)) ||
+            (next.UseFloatingWindow && current.FloatingWindowLayer != next.FloatingWindowLayer) ||
             current.UseFloatingWindow != next.UseFloatingWindow ||
             current.LyricsDisplayMode != next.LyricsDisplayMode ||
             !AreSameStrings(current.SelectedDisplayIds, next.SelectedDisplayIds);

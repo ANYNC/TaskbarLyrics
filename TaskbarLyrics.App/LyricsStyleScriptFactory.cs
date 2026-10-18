@@ -5,7 +5,7 @@ namespace TaskbarLyrics.App;
 
 internal static class LyricsStyleScriptFactory
 {
-    public static string Create(AppSettings settings, double pixelsPerDip)
+    public static string Create(AppSettings settings, double pixelsPerDip, TaskbarBounds? taskbar = null)
     {
         ArgumentNullException.ThrowIfNull(settings);
         settings.NormalizeLyricsTextAlignment();
@@ -15,15 +15,22 @@ internal static class LyricsStyleScriptFactory
         var secondaryColor = ForegroundColorPolicy.CreateSecondaryColor(foregroundColor);
         var translationColor = ForegroundColorPolicy.CreateTranslationColor(foregroundColor);
         var wordScanOverlayColor = ForegroundColorPolicy.CreateWordScanOverlayColor(foregroundColor);
-        var metrics = LyricsLayoutMetrics.Create(settings, pixelsPerDip);
+        var metrics = LyricsLayoutMetrics.Create(settings, pixelsPerDip, taskbar);
         var stylePayload = new
         {
             fontFamily = AppSettings.NormalizeFontFamily(settings.FontFamily),
             layoutScalePercent = metrics.ScalePercent,
             fontSize = metrics.FontSize,
+            verticalTaskbar = metrics.IsVertical,
+            singleLine = metrics.IsSingleLine,
             showCover = settings.ShowCover,
             coverPosition = settings.CoverPosition,
-            enableControlPanel = settings.EnableControlPanel && !settings.UseFloatingWindow,
+            enableControlPanel = settings.UseFloatingWindow || settings.GetEnableControlPanel(),
+            floatingControlPanel = settings.UseFloatingWindow,
+            floatingInputPassthrough = settings.UseFloatingWindow && !settings.EnableFloatingControlPanel,
+            controlPanelTriggerMethod = settings.ControlPanelTriggerMethod,
+            controlPanelTriggerCover = settings.ControlPanelTriggerCover,
+            controlPanelTriggerLyrics = settings.ControlPanelTriggerLyrics,
             coverSize = metrics.CoverSize,
             coverGap = metrics.CoverGap,
             coverCornerRadius = metrics.CoverCornerRadius,
@@ -51,10 +58,10 @@ internal static class LyricsStyleScriptFactory
             secondaryColor = ToCssColor(secondaryColor),
             translationColor = ToCssColor(translationColor),
             wordScanOverlayColor = ToCssColor(wordScanOverlayColor),
-            surfaceColor = settings.ShowBackground
+            surfaceColor = !settings.UseFloatingWindow && settings.ShowBackground
                 ? $"rgba(18, 18, 24, {Math.Clamp(settings.BackgroundOpacity, 0, 1).ToString("0.####", CultureInfo.InvariantCulture)})"
                 : "transparent",
-            surfaceShadow = settings.ShowBorder
+            surfaceShadow = !settings.UseFloatingWindow && settings.ShowBorder
                 ? "inset 0 0 0 1px rgba(255, 255, 255, 0.16)"
                 : "none",
             textShadow = settings.ShowTextShadow

@@ -1,0 +1,89 @@
+<Window x:Class="TaskbarLyrics.App.FloatingLyricsControlWindow" x:ClassModifier="internal"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="浮窗播放控制" WindowStyle="None" ResizeMode="NoResize"
+        ShowInTaskbar="False" ShowActivated="False" AllowsTransparency="True" Background="Transparent"
+        Width="420" Height="96" UseLayoutRounding="True">
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries><ResourceDictionary Source="PlaybackControlStyles.xaml"/></ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Window.Resources>
+    <Grid x:Name="VisualRoot">
+        <Border x:Name="Surface" Background="Transparent" BorderThickness="0" Padding="12,2,12,8">
+            <Grid>
+                <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition x:Name="TransportRow" Height="0"/><RowDefinition x:Name="SeekRow" Height="16"/><RowDefinition x:Name="TimeRow" Height="14"/></Grid.RowDefinitions>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <Grid x:Name="Metadata" VerticalAlignment="Center" Margin="0,0,8,6">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="18"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <Border x:Name="DragGrip" Width="24" Height="{Binding ActualHeight, ElementName=MetadataText}"
+                            Margin="-6,0,0,0" HorizontalAlignment="Left" Background="Transparent" Cursor="SizeAll"
+                            AutomationProperties.Name="拖动浮窗" MouseLeftButtonDown="OnGripPressed"
+                            MouseMove="OnGripMoved" MouseLeftButtonUp="OnGripReleased" LostMouseCapture="OnGripReleased">
+                        <!-- Lucide derivative: grip-vertical-10.svg (ISC), viewport origin (7,3).
+                             Crop SVG padding so visible dots align with the progress track. -->
+                        <Viewbox Width="10" Height="33" Margin="6,0,0,0" VerticalAlignment="Center"
+                                 HorizontalAlignment="Left" Stretch="Uniform" IsHitTestVisible="False">
+                            <Path Width="10" Height="33" StrokeThickness="2">
+                                <Path.Style>
+                                    <Style TargetType="Path">
+                                        <Setter Property="Stroke" Value="{DynamicResource PanelSubtle}"/>
+                                        <Setter Property="Opacity" Value="0.68"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType={x:Type Border}}}" Value="True">
+                                                <Setter Property="Stroke" Value="{DynamicResource PanelForeground}"/>
+                                                <Setter Property="Opacity" Value="1"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Path.Style>
+                                <Path.Data>
+                                    <GeometryGroup>
+                                        <EllipseGeometry Center="2,2" RadiusX="1" RadiusY="1"/>
+                                        <EllipseGeometry Center="8,2" RadiusX="1" RadiusY="1"/>
+                                        <EllipseGeometry Center="2,9.25" RadiusX="1" RadiusY="1"/>
+                                        <EllipseGeometry Center="8,9.25" RadiusX="1" RadiusY="1"/>
+                                        <EllipseGeometry Center="2,16.5" RadiusX="1" RadiusY="1"/>
+                                        <EllipseGeometry Center="8,16.5" RadiusX="1" RadiusY="1"/>
+                                        <EllipseGeometry Center="2,23.75" RadiusX="1" RadiusY="1"/>
+                                        <EllipseGeometry Center="8,23.75" RadiusX="1" RadiusY="1"/>
+                                        <EllipseGeometry Center="2,31" RadiusX="1" RadiusY="1"/>
+                                        <EllipseGeometry Center="8,31" RadiusX="1" RadiusY="1"/>
+                                    </GeometryGroup>
+                                </Path.Data>
+                            </Path>
+                        </Viewbox>
+                    </Border>
+                    <StackPanel x:Name="MetadataText" Grid.Column="1">
+                    <TextBlock x:Name="TitleText" Text="暂无播放" FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource PanelForeground}" TextTrimming="CharacterEllipsis"/>
+                    <TextBlock x:Name="ArtistText" Text="当前没有播放内容" FontSize="12" Foreground="{DynamicResource PanelSubtle}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"/>
+                    </StackPanel>
+                </Grid>
+                <StackPanel x:Name="Actions" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,6">
+                    <Button x:Name="PreviousButton" Style="{StaticResource MediaButton}" Click="OnPrevious" AutomationProperties.Name="上一首" IsEnabled="False">
+                        <Viewbox Width="22" Height="22"><Canvas Width="24" Height="24">
+                            <Path Data="M18.1 5.2c.8-.5 1.9.1 1.9 1.1v11.4c0 1-1.1 1.6-1.9 1.1l-8.5-5.7a1.3 1.3 0 0 1 0-2.2l8.5-5.7Z" Fill="{DynamicResource PanelForeground}"/>
+                            <Path Data="M5 5.5v13" Stroke="{DynamicResource PanelForeground}" StrokeThickness="3" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                        </Canvas></Viewbox>
+                    </Button>
+                    <Button x:Name="PlayButton" Tag="round" Style="{StaticResource MediaButton}" Width="36" Height="36" Margin="6,0" Background="{DynamicResource PanelButton}" Click="OnPlay" AutomationProperties.Name="播放" IsEnabled="False">
+                        <Viewbox Width="22" Height="22"><Canvas Width="24" Height="24">
+                            <Path x:Name="PlayGlyph" Data="M8 5.6c0-.95 1.05-1.5 1.83-.97l9 6.18c.82.56.82 1.82 0 2.38l-9 6.18C9.05 19.9 8 19.35 8 18.4V5.6Z" Fill="{DynamicResource PanelButtonText}"/>
+                            <Path x:Name="PauseGlyph" Data="M8 5.5v13m8-13v13" Visibility="Collapsed" Stroke="{DynamicResource PanelButtonText}" StrokeThickness="3" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                        </Canvas></Viewbox>
+                    </Button>
+                    <Button x:Name="NextButton" Style="{StaticResource MediaButton}" Click="OnNext" AutomationProperties.Name="下一首" IsEnabled="False">
+                        <Viewbox Width="22" Height="22"><Canvas Width="24" Height="24">
+                            <Path Data="M5.9 5.2C5.1 4.7 4 5.3 4 6.3v11.4c0 1 1.1 1.6 1.9 1.1l8.5-5.7a1.3 1.3 0 0 0 0-2.2L5.9 5.2Z" Fill="{DynamicResource PanelForeground}"/>
+                            <Path Data="M19 5.5v13" Stroke="{DynamicResource PanelForeground}" StrokeThickness="3" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                        </Canvas></Viewbox>
+                    </Button>
+                </StackPanel>
+                <Slider x:Name="SeekSlider" Grid.Row="2" Grid.ColumnSpan="2" Minimum="0" Maximum="1000" SmallChange="5" LargeChange="50" IsEnabled="False" AutomationProperties.Name="播放位置"
+                        PreviewKeyDown="OnSeekKeyDown" KeyUp="OnSeekKeyUp" ValueChanged="OnSeekValueChanged"/>
+                <TextBlock x:Name="ElapsedText" Grid.Row="3" Text="0:00" FontSize="11" Foreground="{DynamicResource PanelSubtle}"/>
+                <TextBlock x:Name="DurationText" Grid.Row="3" Grid.Column="1" Text="0:00" FontSize="11" HorizontalAlignment="Right" Foreground="{DynamicResource PanelSubtle}"/>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

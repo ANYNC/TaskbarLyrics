@@ -30,6 +30,9 @@
                     Background="#01000000"
                     IsHitTestVisible="False"
                     Visibility="Collapsed" />
+            <Border x:Name="LyricsHitSurface"
+                    Background="#01000000"
+                    Visibility="Collapsed" />
             <wv2:WebView2 x:Name="LyricsWebView"
                           HorizontalAlignment="Stretch"
                           VerticalAlignment="Stretch"

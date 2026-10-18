@@ -34,6 +34,12 @@ public sealed class SettingsStore
             MigrateLegacySpectrumSettings(document.RootElement, settings);
             MigrateSpectrumAudioAccess(document.RootElement, settings);
             MigrateTaskbarPresentation(document.RootElement, settings);
+            if (!document.RootElement.TryGetProperty(nameof(AppSettings.FloatingWindowWidth), out _))
+                settings.FloatingWindowWidth = settings.WindowWidth;
+            if (!document.RootElement.TryGetProperty(nameof(AppSettings.FloatingLyricsLayoutScalePercent), out _))
+                settings.FloatingLyricsLayoutScalePercent = settings.LyricsLayoutScalePercent;
+            if (!document.RootElement.TryGetProperty(nameof(AppSettings.EnableFloatingControlPanel), out _))
+                settings.EnableFloatingControlPanel = settings.EnableControlPanel;
             settings.NormalizePlayerSources();
             settings.NormalizeLyricsLayout();
             settings.NormalizeDisplaySelection();

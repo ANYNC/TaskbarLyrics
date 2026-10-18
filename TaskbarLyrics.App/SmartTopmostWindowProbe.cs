@@ -6,6 +6,7 @@ namespace TaskbarLyrics.App;
 internal interface ISmartTopmostWindowProbe
 {
     bool TryGetForegroundWindow(out SmartTopmostForegroundWindow foregroundWindow);
+    SmartTopmostDecision GetDesktopPlacement();
 }
 
 internal sealed class SmartTopmostWindowProbe : ISmartTopmostWindowProbe
@@ -13,6 +14,25 @@ internal sealed class SmartTopmostWindowProbe : ISmartTopmostWindowProbe
     private const uint DwmwaExtendedFrameBounds = 9;
     private const uint GaRoot = 2;
     private static readonly uint CurrentProcessId = (uint)Environment.ProcessId;
+    private bool _showingDesktop;
+
+    public SmartTopmostDecision GetDesktopPlacement()
+    {
+        var foreground = NativeMethods.GetForegroundWindow();
+        // Retain the desktop state while the user operates our owned controls. A normal app,
+        // including our settings window, returns the card to the bottom of the application band.
+        if (foreground != IntPtr.Zero && !IsOwnToolWindow(foreground))
+            _showingDesktop = IsDesktopOrShellWindow(foreground, desktopOnly: true);
+
+        // Absolute band handles avoid access-denied errors when an external HWND is protected.
+        // Win+D raises Explorer over ordinary windows, so briefly use the topmost band on desktop.
+        return new SmartTopmostDecision(_showingDesktop,
+            _showingDesktop ? IntPtr.Zero : TaskbarNativeMethods.HWND_BOTTOM, Reassert: true);
+    }
+
+    private static bool IsOwnToolWindow(IntPtr hwnd) =>
+        NativeMethods.GetWindowProcessId(hwnd) == CurrentProcessId &&
+        (TaskbarNativeMethods.GetWindowLongPtr(hwnd, TaskbarNativeMethods.GWL_EXSTYLE).ToInt64() & TaskbarNativeMethods.WS_EX_TOOLWINDOW) != 0;
 
     public bool TryGetForegroundWindow(out SmartTopmostForegroundWindow foregroundWindow)
     {
@@ -73,7 +93,7 @@ internal sealed class SmartTopmostWindowProbe : ISmartTopmostWindowProbe
         return false;
     }
 
-    private static bool IsDesktopOrShellWindow(IntPtr hwnd)
+    private static bool IsDesktopOrShellWindow(IntPtr hwnd, bool desktopOnly = false)
     {
         var desktop = NativeMethods.GetDesktopWindow();
         var shell = NativeMethods.GetShellWindow();
@@ -100,10 +120,10 @@ internal sealed class SmartTopmostWindowProbe : ISmartTopmostWindowProbe
             var className = classNameBuffer.AsSpan(0, length);
             return className.SequenceEqual("Progman") ||
                 className.SequenceEqual("WorkerW") ||
-                className.SequenceEqual("Shell_TrayWnd") ||
+                (!desktopOnly && (className.SequenceEqual("Shell_TrayWnd") ||
                 className.SequenceEqual("Shell_SecondaryTrayWnd") ||
                 className.SequenceEqual("DV2ControlHost") ||
-                className.SequenceEqual("XamlExplorerHostIslandWindow");
+                className.SequenceEqual("XamlExplorerHostIslandWindow")));
         }
         finally
         {

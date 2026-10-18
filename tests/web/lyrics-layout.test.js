@@ -57,8 +57,8 @@ describe("lyrics responsive layout", () => {
     expect(style).toContain("@supports ((mask-image: linear-gradient(to right, #000, transparent)) or");
     expect(style).toContain("(-webkit-mask-image: linear-gradient(to right, #000, transparent)))");
     expect(style).toMatch(/--word-scan-effective-feather:\s*min\(\s*var\(--word-scan-feather-width\),\s*var\(--word-scan-progress\),\s*calc\(100% - var\(--word-scan-progress\)\)\)/s);
-    expect(style).toMatch(/-webkit-mask-image:\s*linear-gradient\(\s*to right,\s*#000 0,\s*#000 calc\(var\(--word-scan-progress\) - var\(--word-scan-effective-feather\)\),\s*transparent calc\(var\(--word-scan-progress\) \+ var\(--word-scan-effective-feather\)\),\s*transparent 100%\)/s);
-    expect(style).toMatch(/(?<!-webkit-)mask-image:\s*linear-gradient\(\s*to right,\s*#000 0,\s*#000 calc\(var\(--word-scan-progress\) - var\(--word-scan-effective-feather\)\),\s*transparent calc\(var\(--word-scan-progress\) \+ var\(--word-scan-effective-feather\)\),\s*transparent 100%\)/s);
+    expect(style).toMatch(/-webkit-mask-image:\s*linear-gradient\(\s*var\(--word-scan-direction, to right\),\s*#000 0,\s*#000 calc\(var\(--word-scan-progress\) - var\(--word-scan-effective-feather\)\),\s*transparent calc\(var\(--word-scan-progress\) \+ var\(--word-scan-effective-feather\)\),\s*transparent 100%\)/s);
+    expect(style).toMatch(/(?<!-webkit-)mask-image:\s*linear-gradient\(\s*var\(--word-scan-direction, to right\),\s*#000 0,\s*#000 calc\(var\(--word-scan-progress\) - var\(--word-scan-effective-feather\)\),\s*transparent calc\(var\(--word-scan-progress\) \+ var\(--word-scan-effective-feather\)\),\s*transparent 100%\)/s);
     expect(style).toContain("-webkit-mask-repeat: no-repeat");
     expect(style).toContain("mask-repeat: no-repeat");
     expect(style).toMatch(/@supports[\s\S]*\.current-line\.word-scanning \.line-text-scan,[\s\S]*color:\s*var\(--word-scan-overlay\)/s);

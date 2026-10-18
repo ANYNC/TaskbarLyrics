@@ -43,6 +43,7 @@
   --cover-size: 34px;
   --cover-gap: 8px;
   --cover-radius: 6px;
+  --viewport-descender-buffer: 2px;
   --layout-padding-inline: 0px;
   --lyrics-pane-padding-top: 3px;
   --lyrics-pane-padding-right: 4px;
@@ -97,6 +98,24 @@ html, body {
   box-shadow: var(--surface-shadow);
 }
 
+.layout[data-region-edge="bottom"] { --region-exit-x: 0px; --region-exit-y: 100%; }
+.layout[data-region-edge="top"] { --region-exit-x: 0px; --region-exit-y: -100%; }
+.layout[data-region-edge="left"] { --region-exit-x: -100%; --region-exit-y: 0px; }
+.layout[data-region-edge="right"] { --region-exit-x: 100%; --region-exit-y: 0px; }
+.layout.region-concealed {
+  transform: translate(var(--region-exit-x, 0px), var(--region-exit-y, 100%));
+  opacity: 0;
+}
+.layout.region-moving {
+  transition: transform 300ms cubic-bezier(0.22, 0.72, 0.24, 1), opacity 300ms ease;
+  will-change: transform, opacity;
+}
+.layout.region-moving .line,
+.layout.region-moving .line-text-stack,
+.layout.region-moving .cover-image {
+  transition: none !important;
+}
+
 .shell {
   width: 100%;
   height: 100%;
@@ -104,6 +123,17 @@ html, body {
   grid-template-columns: var(--cover-size) var(--cover-gap) minmax(0, 1fr);
   grid-template-areas: "cover gap lyrics";
   align-items: center;
+}
+
+.floating-controls-enabled .layout {
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+/* The host extends WebView for text descenders; keep artwork centered in the native content area. */
+:root:not(.vertical-taskbar) .cover {
+  margin-bottom: var(--viewport-descender-buffer);
 }
 
 .cover-hidden .shell {
@@ -119,6 +149,36 @@ html, body {
 .cover { grid-area: cover; }
 .cover-gap { grid-area: gap; }
 .lyrics-pane { grid-area: lyrics; }
+
+:root.vertical-taskbar:not(.cover-hidden) .shell {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: var(--cover-size) var(--cover-gap) minmax(0, 1fr);
+  grid-template-areas: "cover" "gap" "lyrics";
+  justify-items: center;
+}
+
+.vertical-taskbar .lyrics-pane { width: 100%; }
+
+:root.vertical-taskbar[data-cover-position="Right"]:not(.cover-hidden) .shell {
+  grid-template-rows: minmax(0, 1fr) var(--cover-gap) var(--cover-size);
+  grid-template-areas: "lyrics" "gap" "cover";
+}
+
+/* The extra WebView descender pixels belong to text, not to the native artwork bounds. */
+.vertical-taskbar[data-cover-position="Right"] .cover {
+  transform: translateY(calc(-1 * var(--viewport-descender-buffer)));
+}
+
+.single-line .track > .next-line,
+.single-line .incoming-translation-pair {
+  display: none !important;
+}
+
+.single-line .track.single-line-roll > .next-line:not(.incoming-line) {
+  display: flex !important;
+}
+.lyrics-pane.panel-trigger { cursor: pointer; }
+.lyrics-pane.panel-trigger:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; border-radius: 4px; }
 
 .cover-hidden :is(.cover, .cover-gap) {
   display: none;
@@ -166,32 +226,36 @@ html, body {
   background: rgba(0, 0, 0, 0.66);
   opacity: 0;
   pointer-events: none;
-  transition: opacity 150ms ease;
+  transition: opacity 180ms linear;
 }
 
 .cover-action-icon {
   width: min(19px, 58%);
   height: min(19px, 58%);
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4));
-  transform: translateY(2px);
+  transform: scale(0.92);
   transition: transform 150ms ease;
 }
 
-.cover:not(:disabled):is(:hover, :focus-visible, .panel-open) .cover-interaction {
+.cover:not(:disabled):is(:hover, :focus-visible, .panel-open) .cover-interaction,
+.cover.panel-trigger-hovered .cover-interaction,
+.cover.panel-open .cover-interaction {
   opacity: 1;
 }
 
-.cover:not(:disabled):is(:hover, :focus-visible, .panel-open) .cover-action-icon {
-  transform: translateY(0);
+.cover:not(:disabled):is(:hover, :focus-visible, .panel-open) .cover-action-icon,
+.cover.panel-trigger-hovered .cover-action-icon,
+.cover.panel-open .cover-action-icon {
+  transform: scale(1);
 }
 
-.cover:not(:disabled):active .cover-action-icon {
-  transform: translateY(-1px) scale(0.9);
+.cover.panel-click-trigger:not(:disabled):active .cover-action-icon {
+  transform: scale(0.9);
 }
 
 .cover:focus-visible {
   outline: 2px solid white;
-  outline-offset: 2px;
+  outline-offset: -2px;
 }
 
 .cover:disabled {
@@ -204,6 +268,24 @@ html, body {
     transition: none;
   }
 }
+
+@media (forced-colors: active) {
+  .cover-interaction { transition: none; }
+}
+
+.cover-floating-icon, .cover-locked-icon { display: none; width: min(17px, 54%); height: min(17px, 54%); opacity: 0.8; }
+.floating-controls-enabled .cover-action-icon { display: none; }
+/* Show the available action: lock while unlocked, unlock while locked. */
+.floating-controls-enabled .cover-locked-icon { display: block; }
+.floating-controls-enabled.floating-locked .cover-locked-icon { display: none; }
+.floating-controls-enabled.floating-locked .cover-floating-icon { display: block; }
+.floating-controls-enabled .cover:not(:disabled) .cover-interaction { opacity: 0; background: rgba(0, 0, 0, 0.38); }
+.floating-controls-enabled .cover:not(:disabled):is(:hover, :focus-visible) .cover-interaction { opacity: 1; }
+/* The separate native unlock window owns mouse hover while the lyrics HWND passes through. */
+.floating-controls-enabled.floating-locked .cover:not(:disabled) .cover-interaction { opacity: 0; }
+.floating-controls-enabled.floating-locked.floating-lock-hovered .cover:not(:disabled) .cover-interaction { opacity: 1; }
+.floating-input-passthrough .layout { pointer-events: none; }
+.floating-input-passthrough .cover-interaction { visibility: hidden; }
 
 .cover-fallback {
   position: absolute;
@@ -225,6 +307,8 @@ html, body {
 }
 
 .cover-image {
+  -webkit-user-drag: none;
+  pointer-events: none;
   position: absolute;
   inset: 0;
   width: 100%;
@@ -345,6 +429,18 @@ html, body {
   position: relative;
   overflow: hidden;
   display: block;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :root:not(.vertical-taskbar) .layout:not(.region-moving) .viewport:has(> .track.animating) {
+    --roll-edge-mask: linear-gradient(to bottom,
+      transparent 0,
+      #000 var(--roll-fade-top, 0px),
+      #000 var(--roll-fade-bottom, 100%),
+      transparent 100%);
+    -webkit-mask-image: var(--roll-edge-mask);
+    mask-image: var(--roll-edge-mask);
+  }
 }
 
 .track {
@@ -496,19 +592,94 @@ html, body {
     clip-path: none;
     color: var(--word-scan-overlay);
     -webkit-mask-image: linear-gradient(
-      to right,
+      var(--word-scan-direction, to right),
       #000 0,
       #000 calc(var(--word-scan-progress) - var(--word-scan-effective-feather)),
       transparent calc(var(--word-scan-progress) + var(--word-scan-effective-feather)),
       transparent 100%);
     mask-image: linear-gradient(
-      to right,
+      var(--word-scan-direction, to right),
       #000 0,
       #000 calc(var(--word-scan-progress) - var(--word-scan-effective-feather)),
       transparent calc(var(--word-scan-progress) + var(--word-scan-effective-feather)),
       transparent 100%);
     -webkit-mask-repeat: no-repeat;
     mask-repeat: no-repeat;
+  }
+}
+
+.vertical-taskbar {
+  --word-scan-direction: to bottom;
+}
+
+.vertical-taskbar .track {
+  height: 100%;
+  flex-direction: row-reverse;
+}
+
+.vertical-taskbar .incoming-translation-pair {
+  width: calc(2 * var(--row-height) + var(--row-gap));
+  height: 100%;
+  flex: 0 0 calc(2 * var(--row-height) + var(--row-gap));
+  flex-direction: row-reverse;
+}
+
+.vertical-taskbar .line {
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+  width: var(--row-height);
+  min-width: var(--row-height);
+  height: 100%;
+  min-height: 0;
+  flex: 0 0 var(--row-height);
+  top: 0;
+  transform-origin: center top;
+}
+
+.vertical-taskbar .next-line.promoting {
+  transform: scale(var(--promotion-scale));
+}
+
+.vertical-taskbar .line-text-viewport {
+  height: 100%;
+  min-height: 0;
+}
+
+.vertical-taskbar .line-text-stack {
+  width: 100%;
+  max-width: 100%;
+  height: fit-content;
+  max-height: 100%;
+}
+
+.vertical-taskbar .line-text {
+  height: 100%;
+  padding: 0 0 0 var(--line-text-padding-bottom);
+}
+
+.vertical-taskbar .line.horizontal-scrolling .line-text-stack {
+  width: 100%;
+  max-width: 100%;
+  height: max-content;
+  max-height: none;
+  transform: translateY(var(--line-scroll-offset));
+}
+
+.vertical-taskbar .line.horizontal-scrolling .line-text {
+  width: 100%;
+  height: max-content;
+}
+
+@supports not ((mask-image: linear-gradient(to bottom, #000, transparent)) or
+  (-webkit-mask-image: linear-gradient(to bottom, #000, transparent))) {
+  .vertical-taskbar .current-line.word-scanning .line-text-base,
+  .vertical-taskbar .next-line.promoting.word-scanning .line-text-base {
+    clip-path: inset(var(--word-scan-progress) 0 0 0);
+  }
+
+  .vertical-taskbar .current-line.word-scanning .line-text-scan,
+  .vertical-taskbar .next-line.promoting.word-scanning .line-text-scan {
+    clip-path: inset(0 0 calc(100% - var(--word-scan-progress)) 0);
   }
 }
 
@@ -546,6 +717,18 @@ html, body {
 
 .layout.translation-mode .track > .next-line:not(.incoming-line) .line-text-scan {
   visibility: hidden;
+}
+
+.vertical-taskbar .layout.translation-mode .track > .next-line:not(.incoming-line) {
+  top: 0;
+}
+
+.single-line .layout.translation-mode .track > .next-line.promoting:not(.incoming-line) {
+  color: var(--primary);
+}
+
+.single-line .layout.translation-mode .track > .next-line.promoting.word-scanning .line-text-scan {
+  visibility: visible;
 }
 
 .incoming-translation-pair {
@@ -636,6 +819,7 @@ html, body {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .layout.region-moving,
   .lyrics-layer,
   .spectrum-layer,
   .layout.spectrum-mode.spectrum-exiting.spectrum-exit-active .lyrics-layer,

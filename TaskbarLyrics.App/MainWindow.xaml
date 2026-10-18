@@ -31,6 +31,9 @@
                     Background="#01000000"
                     IsHitTestVisible="False"
                     Visibility="Collapsed" />
+            <Border x:Name="LyricsHitSurface"
+                    Background="#01000000"
+                    Visibility="Collapsed" />
             <Grid x:Name="LyricsWebHost"
                   HorizontalAlignment="Stretch"
                   VerticalAlignment="Stretch"

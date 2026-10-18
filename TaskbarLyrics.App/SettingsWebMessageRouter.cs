@@ -132,6 +132,12 @@ internal static class SettingsWebMessageRouter
         }
     }
 
+    public static bool TryParseWindowPresentation(JsonElement? payload, out bool floating)
+    {
+        floating = payload is { ValueKind: JsonValueKind.String } value && value.GetString() == "floating";
+        return payload is { ValueKind: JsonValueKind.String } mode && mode.GetString() is "floating" or "embedded";
+    }
+
     public static SettingsWebMessage? Parse(string? messageJson)
     {
         var message = WebViewMessageRouter.Parse(messageJson);

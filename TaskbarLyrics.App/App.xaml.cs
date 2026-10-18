@@ -22,6 +22,7 @@ public partial class App : System.Windows.Application, IDisposable
     private TrackLyricOffsetStore? _trackLyricOffsetStore;
     private GlobalMediaHotkeyService? _mediaHotkeyService;
     private AppCompositionRoot? _compositionRoot;
+    private TaskbarEmbeddingConstraints? _taskbarScaleConstraints;
     private CancellationTokenSource? _activationServerCancellation;
     private SpectrumTuningSettings _spectrumTuningSettings = SpectrumTuningSettings.CreateDefault();
     private int _isDisposed;
@@ -68,6 +69,7 @@ public partial class App : System.Windows.Application, IDisposable
             startupDisplays,
             Settings.LyricsDisplayMode,
             Settings.SelectedDisplayIds);
+        _taskbarScaleConstraints = TaskbarEmbeddingLayoutPolicy.FromDisplays(startupTargets);
         if (startupTargets.Count > 0 && NormalizeStartupWindowPresentation(
                 Settings,
                 TaskbarEmbeddingLayoutPolicy.FromDisplays(startupTargets),
@@ -82,7 +84,8 @@ public partial class App : System.Windows.Application, IDisposable
         _lyricsWindowHost = new LyricsWindowHost(
             Settings, _trackLyricOffsetStore, _compositionRoot,
             () => Dispatcher.BeginInvoke(OpenSettingsWindow),
-            () => ToggleMediaHotkeyAction(MediaHotkeyAction.ToggleTranslation));
+            () => ToggleMediaHotkeyAction(MediaHotkeyAction.ToggleTranslation),
+            SaveFloatingSize);
         _mediaHotkeyService = new GlobalMediaHotkeyService(ExecuteMediaHotkeyAsync);
         _mediaHotkeyService.Apply(Settings.GlobalMediaHotkeys);
 
@@ -115,6 +118,7 @@ public partial class App : System.Windows.Application, IDisposable
             ExitApplication);
         StartActivationServer();
         SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
+        SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
         TaskObserver.Observe(RunAutomaticUpdateCheckAsync(), "automatic update check");
     }
 
@@ -134,6 +138,7 @@ public partial class App : System.Windows.Application, IDisposable
         _activationServerCancellation?.Cancel();
         _activationServerCancellation?.Dispose();
         SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
+        SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
         _settingsStore?.Save(Settings);
         _spectrumTuningWindow?.Close();
         _mediaHotkeyService?.Dispose();
@@ -144,6 +149,8 @@ public partial class App : System.Windows.Application, IDisposable
         SingleInstanceService.Release();
         GC.SuppressFinalize(this);
     }
+
+    internal void ResetFloatingPositions() => _lyricsWindowHost?.ResetFloatingPositions();
 
     public bool SaveSettings(AppSettings settings)
     {
@@ -159,6 +166,7 @@ public partial class App : System.Windows.Application, IDisposable
         var changes = AppSettingsChangeSet.Create(currentSettings, nextSettings);
         NativeWindowTheme.SetMode(nextSettings.ToolWindowTheme);
         Settings = nextSettings;
+        _taskbarScaleConstraints = GetTaskbarScaleConstraints(nextSettings);
         var saved = _settingsStore?.Save(Settings) ?? false;
         if (changes.RequiresLyricsWindowApply)
         {
@@ -177,6 +185,16 @@ public partial class App : System.Windows.Application, IDisposable
         }
 
         return saved;
+    }
+
+    private void SaveFloatingSize(FloatingWindowSize size)
+    {
+        // Resize originates on the lyrics STA; merge only its two fields on the application dispatcher.
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            if (IsExiting || !Settings.UseFloatingWindow) return;
+            if (!SaveSettings(size.ApplyTo(Settings))) Log.Warn("Floating window size could not be saved.");
+        }));
     }
 
     public void PreviewSettings(AppSettings settings)
@@ -296,6 +314,8 @@ public partial class App : System.Windows.Application, IDisposable
 
     private void OnUserPreferenceChanged(object sender, UserPreferenceChangedEventArgs e)
     {
+        if (e.Category is UserPreferenceCategory.Desktop or UserPreferenceCategory.Window or UserPreferenceCategory.General)
+            QueueTaskbarScaleRefresh();
         if (e.Category is not (UserPreferenceCategory.Color or UserPreferenceCategory.General or UserPreferenceCategory.VisualStyle))
         {
             return;
@@ -318,6 +338,34 @@ public partial class App : System.Windows.Application, IDisposable
             }
         });
     }
+
+    private void OnDisplaySettingsChanged(object? sender, EventArgs e) => QueueTaskbarScaleRefresh();
+
+    private void QueueTaskbarScaleRefresh()
+    {
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            if (IsExiting || Volatile.Read(ref _isDisposed) != 0) return;
+            var constraints = GetTaskbarScaleConstraints(Settings);
+            var scale = TaskbarEmbeddingLayoutPolicy.ScaleForTaskbarHeightChange(Settings, _taskbarScaleConstraints, constraints);
+            _taskbarScaleConstraints = constraints;
+            if (Math.Abs(scale - Settings.LyricsLayoutScalePercent) > 0.001)
+            {
+                // Merge only the embedded scale on the settings owner's dispatcher.
+                var adjusted = Settings.Clone();
+                adjusted.LyricsLayoutScalePercent = scale;
+                if (!SaveSettings(adjusted)) Log.Warn("Taskbar layout scale could not be saved.");
+            }
+            else if (_settingsWindow is not null)
+            {
+                TaskObserver.Observe(_settingsWindow.ApplyExternalSettingsAsync(Settings.Clone()), "taskbar layout bounds update");
+            }
+        }), DispatcherPriority.ContextIdle);
+    }
+
+    private static TaskbarEmbeddingConstraints GetTaskbarScaleConstraints(AppSettings settings) =>
+        TaskbarEmbeddingLayoutPolicy.FromDisplays(LyricsDisplayTargetSelector.Select(
+            DisplayMonitorService.GetDisplays(), settings.LyricsDisplayMode, settings.SelectedDisplayIds));
 
     private void ToggleLyricsWindow()
     {

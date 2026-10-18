@@ -18,6 +18,12 @@ const incomingTranslationOriginalScanTextEl = document.getElementById("incomingT
 const incomingTranslationLineEl = document.getElementById("incomingTranslationLine");
 const incomingTranslationTextEl = document.getElementById("incomingTranslationText");
 const coverEl = document.getElementById("cover");
+const panelLyricsEl = document.querySelector(".lyrics-pane");
+let panelTriggerMethod = "Click";
+let panelTriggerCover = true;
+let panelTriggerLyrics = false;
+let panelTriggerEnabled = true;
+let panelHoverTimer = 0;
 const coverImageEl = document.getElementById("coverImage");
 const coverImageNextEl = document.getElementById("coverImageNext");
 const coverFallbackEl = document.getElementById("coverFallback");
@@ -75,23 +81,94 @@ let standbyCoverImageEl = coverImageNextEl;
 let currentCoverUri = "";
 let coverGeneration = 0;
 
-coverEl?.addEventListener("click", () => {
-  if (coverEl.disabled || root.classList.contains("cover-hidden")) return;
-  const bounds = coverEl.getBoundingClientRect();
-  window.taskbarLyricsBridge?.post("coverClick", {
+// The cover is a panel button, not an image export surface.
+for (const eventName of ["dragstart", "copy", "contextmenu"]) {
+  coverEl?.addEventListener(eventName, event => event.preventDefault());
+}
+
+coverEl?.addEventListener("mousedown", event => {
+  if (event.button !== 0 || !root.classList.contains("floating-controls-enabled")) return;
+  // The native unlock window restores WebView focus later; do not leave a pointer-focused cover behind.
+  event.preventDefault();
+  if (document.activeElement === coverEl) coverEl.blur();
+});
+
+function postPanelTrigger(element, area, activation) {
+  if (regionPhase !== "visible") return;
+  const bounds = element.getBoundingClientRect();
+  const payload = {
     x: bounds.x,
     y: bounds.y,
     width: bounds.width,
     height: bounds.height,
     viewportWidth: window.innerWidth,
     viewportHeight: window.innerHeight
-  });
+  };
+  // Keep the existing cover message for default activation and floating lock/unlock.
+  if (area === "Cover" && activation === "Click") window.taskbarLyricsBridge?.post("coverClick", payload);
+  else window.taskbarLyricsBridge?.post("controlPanelTrigger", { ...payload, area, activation });
+}
+
+function panelAreaEnabled(area) {
+  return panelTriggerEnabled && !root.classList.contains("floating-controls-enabled") &&
+    (area === "Cover" ? panelTriggerCover && !root.classList.contains("cover-hidden") : panelTriggerLyrics);
+}
+
+coverEl?.addEventListener("click", event => {
+  if (coverEl.disabled || root.classList.contains("cover-hidden")) return;
+  if (root.classList.contains("floating-controls-enabled")) postPanelTrigger(coverEl, "Cover", "Click");
+  else if (panelAreaEnabled("Cover") && (panelTriggerMethod === "Click" || event.detail === 0))
+    postPanelTrigger(coverEl, "Cover", event.detail === 0 && panelTriggerMethod === "Hover" ? "Keyboard" : "Click");
 });
+
+panelLyricsEl?.addEventListener("click", () => {
+  if (!panelAreaEnabled("Lyrics") || panelTriggerMethod !== "Click" || window.getSelection()?.toString()) return;
+  postPanelTrigger(panelLyricsEl, "Lyrics", "Click");
+});
+panelLyricsEl?.addEventListener("keydown", event => {
+  if (event.target !== panelLyricsEl || !panelAreaEnabled("Lyrics") || !["Enter", " "].includes(event.key) || event.repeat) return;
+  event.preventDefault();
+  postPanelTrigger(panelLyricsEl, "Lyrics", "Keyboard");
+});
+function clearPanelHover() {
+  clearTimeout(panelHoverTimer);
+  panelHoverTimer = 0;
+  coverEl?.classList.remove("panel-trigger-hovered");
+}
+
+for (const [element, area] of [[coverEl, "Cover"], [panelLyricsEl, "Lyrics"]]) {
+  element?.addEventListener("mouseenter", () => {
+    clearPanelHover();
+    if (regionPhase !== "visible" || panelTriggerMethod !== "Hover" || !panelAreaEnabled(area)) return;
+    // All selected regions share the same immediate cue and delayed opening.
+    coverEl?.classList.add("panel-trigger-hovered");
+    panelHoverTimer = setTimeout(() => {
+      panelHoverTimer = 0;
+      if (panelTriggerMethod === "Hover" && panelAreaEnabled(area)) postPanelTrigger(element, area, "Hover");
+    }, 250);
+  });
+  element?.addEventListener("mouseleave", clearPanelHover);
+}
+window.addEventListener("blur", clearPanelHover);
 
 function setControlPanelOpen(open) {
   if (!coverEl) return;
   coverEl.classList.toggle("panel-open", open === true);
   coverEl.setAttribute("aria-expanded", String(open === true));
+  if (panelLyricsEl?.getAttribute("role") === "button") panelLyricsEl.setAttribute("aria-expanded", String(open === true));
+}
+
+function setFloatingLockState(locked, hovered = false) {
+  const floating = root.classList.contains("floating-controls-enabled");
+  const active = floating && locked === true;
+  root.classList.toggle("floating-locked", active);
+  root.classList.toggle("floating-lock-hovered", active && hovered === true);
+  if (!coverEl) return;
+  coverEl.setAttribute("aria-label", floating ? (active ? "解锁浮窗" : "锁定浮窗") : "展开播放控制");
+  coverEl.removeAttribute("title");
+  if (floating) coverEl.setAttribute("aria-pressed", String(active));
+  else coverEl.removeAttribute("aria-pressed");
+  if (active) setControlPanelOpen(false);
 }
 let isSpectrumMode = false;
 let hasAudioDrivenSpectrum = false;
@@ -113,6 +190,11 @@ const lyricsTextAlignments = new Set(["Left", "Center", "Right"]);
 const presentationApi = window.taskbarLyricsPresentation;
 const presentationPlanner = new presentationApi.PresentationPlanner();
 const presentationCoordinator = new presentationApi.PresentationCoordinator(presentationPlanner);
+const regionCoordinator = new presentationApi.PresentationCoordinator(presentationPlanner);
+let regionPhase = "visible";
+let regionGeneration = -1;
+let latestRegionFrame = null;
+let deferredRegionCover = null;
 const transitionOperations = Object.freeze({
   LYRICS_FRAME: "lyricsFrame",
   SPECTRUM_ENTRY: "spectrumEntry",
@@ -135,6 +217,105 @@ function clamp01(value) {
 
 function prefersReducedMotion() {
   return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
+}
+
+function settleRegionContent() {
+  const frame = latestRegionFrame || presentationCoordinator.currentFrame;
+  cancelActiveTransition();
+  if (frame.scene === presentationApi.SCENES.SPECTRUM) {
+    applySpectrumFrame(frame, frame.isPlaying);
+  } else {
+    setDisplayMode(false);
+    clearSpectrumBars();
+    renderLyricsFrame(frame, false);
+  }
+}
+
+function applyRegionVisibility(payload) {
+  if (!Number.isSafeInteger(payload?.generation) || payload.generation < 0 || payload.generation < regionGeneration ||
+      !["preparing", "entering", "exiting", "visible", "hidden"].includes(payload.phase) ||
+      !["top", "bottom", "left", "right"].includes(payload.edge)) return;
+  if (payload.generation === regionGeneration && payload.phase === regionPhase) return;
+
+  const previousPhase = regionPhase;
+  const position = window.getComputedStyle(layoutEl);
+  const frozenTransform = position.transform;
+  const frozenOpacity = position.opacity;
+  regionCoordinator.cancelTransition();
+  regionGeneration = payload.generation;
+  regionPhase = payload.phase;
+  layoutEl.dataset.regionEdge = payload.edge;
+  layoutEl.inert = regionPhase !== "visible";
+  clearPanelHover();
+  setControlPanelOpen(false);
+  settleRegionContent();
+  layoutEl.classList.remove("region-moving");
+
+  if (regionPhase === "preparing") {
+    if (previousPhase === "exiting" || previousPhase === "entering") {
+      // Pause a reversed transition at its current position until the new first frame arrives.
+      layoutEl.style.transform = frozenTransform;
+      layoutEl.style.opacity = frozenOpacity;
+    } else {
+      layoutEl.classList.add("region-concealed");
+      layoutEl.style.removeProperty("transform");
+      layoutEl.style.removeProperty("opacity");
+    }
+    return;
+  }
+
+  const visible = regionPhase === "entering" || regionPhase === "visible";
+  if (visible && deferredRegionCover) {
+    const cover = deferredRegionCover;
+    deferredRegionCover = null;
+    lyricsApi.setCover(cover.dataUri, cover.fallbackText, cover.fallbackColor, cover.fallbackIconDataUri, cover.trackId);
+  }
+  if (regionPhase === "visible" || regionPhase === "hidden") {
+    layoutEl.classList.toggle("region-concealed", !visible);
+    layoutEl.style.removeProperty("transform");
+    layoutEl.style.removeProperty("opacity");
+    if (!visible) stopSpectrumRenderer();
+    return;
+  }
+
+  const generation = regionGeneration;
+  const finish = () => {
+    regionPhase = visible ? "visible" : "hidden";
+    layoutEl.classList.remove("region-moving");
+    layoutEl.classList.toggle("region-concealed", !visible);
+    layoutEl.style.removeProperty("transform");
+    layoutEl.style.removeProperty("opacity");
+    layoutEl.inert = !visible;
+    window.taskbarLyricsBridge?.post("regionVisibilityCompleted", { generation, visible });
+  };
+  if (!visible) {
+    stopSpectrumRenderer();
+    ++coverGeneration;
+    clearCoverUpdateTimer();
+    clearTimeout(coverStateTimer);
+    coverStateTimer = 0;
+    coverEl?.classList.remove("switching");
+  }
+  if (prefersReducedMotion()) {
+    finish();
+    return;
+  }
+
+  // Region movement and lyric rolling use independent coordinators and transforms.
+  layoutEl.style.transform = frozenTransform;
+  layoutEl.style.opacity = frozenOpacity;
+  void layoutEl.offsetHeight;
+  layoutEl.classList.add("region-moving");
+  const context = regionCoordinator.beginTransition({ kind: "regionVisibility" }, { complete: finish });
+  context.listenTransitionEnd(layoutEl, event => {
+    if (event.target === layoutEl && event.propertyName === "transform") context.finish();
+  });
+  context.requestFrame(() => {
+    layoutEl.classList.toggle("region-concealed", !visible);
+    layoutEl.style.removeProperty("transform");
+    layoutEl.style.removeProperty("opacity");
+  });
+  context.scheduleFallback(context.finish, 440);
 }
 
 function normalizeWordScanProgress(value) {
@@ -347,13 +528,14 @@ function resolveTranslationDisplay(line) {
 }
 
 function setTrackOffset(rowCount) {
-  const offset = snapToPhysicalPixel(-linePitchPx * rowCount);
+  const vertical = root.classList.contains("vertical-taskbar");
+  const offset = snapToPhysicalPixel((vertical ? 1 : -1) * linePitchPx * rowCount);
   if (offset === 0) {
     trackEl.style.removeProperty("transform");
     return;
   }
 
-  trackEl.style.transform = `translateY(${offset}px)`;
+  trackEl.style.transform = vertical ? `translateX(${offset}px)` : `translateY(${offset}px)`;
 }
 
 function snapToPhysicalPixel(value) {
@@ -406,8 +588,9 @@ function measureLineHorizontalScroll(lineElement) {
     return null;
   }
 
-  const viewportWidth = elements.textViewport.clientWidth;
-  const contentWidth = elements.baseText.scrollWidth;
+  const vertical = root.classList.contains("vertical-taskbar");
+  const viewportWidth = vertical ? elements.textViewport.clientHeight : elements.textViewport.clientWidth;
+  const contentWidth = vertical ? elements.baseText.scrollHeight : elements.baseText.scrollWidth;
   const metrics = {
     textStack: elements.textStack,
     viewportWidth,
@@ -1446,6 +1629,35 @@ function applyProgressPatch(frame) {
   presentationCoordinator.setCurrentFrame(normalized);
 }
 
+function clearRollEdgeMask() {
+  viewportEl.style.removeProperty("--roll-fade-top");
+  viewportEl.style.removeProperty("--roll-fade-bottom");
+}
+
+function captureRollEdgeMask() {
+  clearRollEdgeMask();
+  if (root.classList.contains("vertical-taskbar") || prefersReducedMotion()) return;
+  const viewport = viewportEl.getBoundingClientRect();
+  if (!Number.isFinite(viewport.height) || viewport.height <= 0) return;
+  const texts = root.classList.contains("single-line") ? [currentLineTextEl] : [currentLineTextEl, nextLineTextEl];
+  const bounds = texts.filter(text => text?.textContent.trim()).map(text => {
+    const box = text.getBoundingClientRect();
+    const style = window.getComputedStyle(text);
+    // Measure the resting line box without its descender padding, before promotion changes its metrics.
+    return {
+      top: box.top + (Number.parseFloat(style.paddingTop) || 0) - viewport.top,
+      bottom: box.bottom - (Number.parseFloat(style.paddingBottom) || 0) - viewport.top,
+      height: box.height
+    };
+  }).filter(box => box.height > 0 && Number.isFinite(box.top) && Number.isFinite(box.bottom));
+  if (!bounds.length) return;
+  const top = Math.max(0, Math.min(viewport.height, Math.min(...bounds.map(box => box.top))));
+  const bottom = Math.max(top, Math.min(viewport.height, Math.max(...bounds.map(box => box.bottom))));
+  if (bottom <= top) return;
+  viewportEl.style.setProperty("--roll-fade-top", `${top}px`);
+  viewportEl.style.setProperty("--roll-fade-bottom", `${bottom}px`);
+}
+
 function cancelActiveTransition() {
   const wasSpectrumExit = isSpectrumExitTransitionActive();
   presentationCoordinator.cancelTransition();
@@ -1457,7 +1669,8 @@ function cancelActiveTransition() {
   presentationCoordinator.takeLatest();
   clearSpectrumExitStyles();
   trackEl.classList.add("no-anim");
-  trackEl.classList.remove("animating");
+  trackEl.classList.remove("animating", "vertical-roll", "single-line-roll");
+  clearRollEdgeMask();
   trackEl.classList.remove("translation-pair-animating");
   currentLineEl.classList.remove("leaving");
   nextLineEl.classList.remove("promoting");
@@ -1657,15 +1870,17 @@ function updateMetrics() {
 
   metricsUpdatePending = false;
   // Exclude the host-provided descender buffer from row metrics.
-  const measuredViewportHeight = viewportEl.clientHeight || 30;
-  const minimumHostHeight = Math.max(2, Math.round(26 * layoutScaleFactor));
-  const hostHeight = Math.max(minimumHostHeight, measuredViewportHeight - viewportDescenderBufferPx);
-  rowHeightPx = Math.max(1, Math.floor(hostHeight / 2));
-  rowGapPx = Math.max(0, hostHeight - (rowHeightPx * 2));
+  const vertical = root.classList.contains("vertical-taskbar");
+  const measuredViewportHeight = (vertical ? viewportEl.clientWidth : viewportEl.clientHeight) || 30;
+  const rows = root.classList.contains("single-line") ? 1 : 2;
+  const minimumHostHeight = rows;
+  const hostHeight = Math.max(minimumHostHeight, measuredViewportHeight - (vertical ? 0 : viewportDescenderBufferPx));
+  rowHeightPx = Math.max(1, Math.floor(hostHeight / rows));
+  rowGapPx = rows === 1 ? 0 : Math.max(0, hostHeight - (rowHeightPx * 2));
   linePitchPx = rowHeightPx + rowGapPx;
   const currentSizeMax = Math.max(11.2 * layoutScaleFactor, rowHeightPx * 0.92);
   currentSize = Math.min(requestedFontSize, currentSizeMax);
-  const nextSize = Math.max(9 * layoutScaleFactor, currentSize * 0.92);
+  const nextSize = Math.min(currentSize, Math.max(9 * layoutScaleFactor, currentSize * 0.92));
   root.style.setProperty("--row-height", `${rowHeightPx}px`);
   root.style.setProperty("--row-gap", `${rowGapPx}px`);
   root.style.setProperty("--line-pitch", `${linePitchPx}px`);
@@ -1696,7 +1911,8 @@ function finalizeTransition(
   setSecondaryLine(upcomingNext);
   setLineWordScanProgress(nextLineEl, null);
   setIncomingLine("");
-  trackEl.classList.remove("animating");
+  trackEl.classList.remove("animating", "vertical-roll", "single-line-roll");
+  clearRollEdgeMask();
   currentLineEl.classList.remove("leaving");
   nextLineEl.classList.remove("promoting");
   trackEl.classList.remove("word-scan-transition");
@@ -1761,8 +1977,10 @@ function startTransition(
     return;
   }
 
+  captureRollEdgeMask();
   setTranslationMode(Boolean(translationMode));
-  if (translationMode) {
+  const singleLine = root.classList.contains("single-line");
+  if (translationMode && !singleLine) {
     startTranslationPairTransition(
       newCurrent,
       currentTranslation,
@@ -1773,7 +1991,7 @@ function startTransition(
     return;
   }
 
-  startStandardTransition(newCurrent, newNext, progress, currentLineIndex, wordScanProgress, resolvedTargetFrame);
+  startStandardTransition(newCurrent, translationMode ? currentTranslation : newNext, progress, currentLineIndex, wordScanProgress, resolvedTargetFrame);
 }
 
 function finalizeTranslationPairTransition(
@@ -1790,7 +2008,8 @@ function finalizeTranslationPairTransition(
   setWordScanProgress(wordScanProgress, false);
   setSecondaryLine(promotedTranslation);
   setLineWordScanProgress(nextLineEl, null);
-  trackEl.classList.remove("translation-pair-animating", "animating", "word-scan-transition");
+  trackEl.classList.remove("translation-pair-animating", "animating", "word-scan-transition", "vertical-roll", "single-line-roll");
+  clearRollEdgeMask();
   currentLineEl.classList.remove("leaving");
   nextLineEl.classList.remove("promoting");
   transitionPromotedLine = "";
@@ -1835,6 +2054,7 @@ function startTranslationPairTransition(
   wordScanProgress,
   targetFrame = null) {
   transitionUsesTranslationPair = true;
+  trackEl.classList.toggle("vertical-roll", root.classList.contains("vertical-taskbar"));
   const promoted = toDisplayLine(newCurrent, SEARCHING_TEXT);
   const promotedTranslation = toDisplayLine(currentTranslation, " ");
   transitionPromotedLine = promoted;
@@ -1918,6 +2138,8 @@ function startStandardTransition(
   wordScanProgress = null,
   targetFrame = null) {
   transitionUsesTranslationPair = false;
+  trackEl.classList.toggle("vertical-roll", root.classList.contains("vertical-taskbar"));
+  trackEl.classList.toggle("single-line-roll", root.classList.contains("single-line"));
   const promoted = toDisplayLine(newCurrent, SEARCHING_TEXT);
   const upcoming = toDisplayLine(newNext, " ");
   transitionPromotedLine = promoted;
@@ -2133,6 +2355,7 @@ const lyricsApi = {
     const shouldShowSpectrum = targetFrame.scene === presentationApi.SCENES.SPECTRUM;
 
     if (shouldShowSpectrum) {
+      latestRegionFrame = targetFrame;
       if (normalizedTrackId.length > 0) {
         lastTrackId = normalizedTrackId;
       }
@@ -2143,6 +2366,7 @@ const lyricsApi = {
     if (shouldKeepStableContentForSameTrackSearch(targetFrame)) {
       return;
     }
+    latestRegionFrame = targetFrame;
 
     if (presentationCoordinator.currentFrame.scene === presentationApi.SCENES.SPECTRUM ||
         isSpectrumExitTransitionActive()) {
@@ -2312,9 +2536,17 @@ const lyricsApi = {
       return;
     }
 
+    if (root.classList.contains("single-line") !== (payload.singleLine === true) ||
+        root.classList.contains("vertical-taskbar") !== (payload.verticalTaskbar === true)) cancelActiveTransition();
+    root.classList.toggle("single-line", payload.singleLine === true);
+    root.classList.toggle("vertical-taskbar", payload.verticalTaskbar === true);
+
     root.style.setProperty("--font-family", payload.fontFamily || "\"SF Pro Display\", \"Segoe UI Variable Display\", \"Segoe UI Variable Text\", \"Microsoft YaHei UI\", sans-serif");
     applyLyricsTextAlignment(payload.textAlignment);
     root.dataset.coverPosition = payload.coverPosition === "Right" ? "Right" : "Left";
+    root.classList.toggle("floating-controls-enabled", payload.floatingControlPanel === true && payload.enableControlPanel !== false);
+    root.classList.toggle("floating-input-passthrough", root.classList.contains("floating-controls-enabled") && payload.floatingInputPassthrough === true);
+    setFloatingLockState(root.classList.contains("floating-locked"), root.classList.contains("floating-lock-hovered"));
     const layoutScalePercent = Number(payload.layoutScalePercent);
     if (Number.isFinite(layoutScalePercent) && layoutScalePercent > 0) {
       layoutScaleFactor = layoutScalePercent / 100;
@@ -2323,9 +2555,23 @@ const lyricsApi = {
     root.style.setProperty("--font-size", `${requestedFontSize}px`);
     root.style.setProperty("--font-weight", window.taskbarLyricsState.normalizeWeight(payload.fontWeight));
     root.classList.toggle("cover-hidden", payload.showCover === false);
+    clearPanelHover();
+    panelTriggerEnabled = payload.enableControlPanel !== false;
+    panelTriggerMethod = payload.controlPanelTriggerMethod === "Hover" ? "Hover" : "Click";
+    panelTriggerCover = payload.controlPanelTriggerCover !== false;
+    panelTriggerLyrics = payload.controlPanelTriggerLyrics === true;
+    if (panelLyricsEl) {
+      const enabled = panelAreaEnabled("Lyrics");
+      panelLyricsEl.classList.toggle("panel-trigger", enabled);
+      for (const [name, value] of [["role", "button"], ["tabindex", "0"], ["aria-label", "展开播放控制"], ["aria-expanded", coverEl?.getAttribute("aria-expanded") || "false"]]) {
+        if (enabled) panelLyricsEl.setAttribute(name, value);
+        else panelLyricsEl.removeAttribute(name);
+      }
+    }
     if (coverEl) {
-      coverEl.disabled = payload.enableControlPanel === false;
-      if (coverEl.disabled || payload.showCover === false) setControlPanelOpen(false);
+      coverEl.disabled = !panelTriggerEnabled || !root.classList.contains("floating-controls-enabled") && !panelTriggerCover;
+      coverEl.classList.toggle("panel-click-trigger", panelTriggerMethod === "Click" && panelAreaEnabled("Cover"));
+      if (!panelTriggerEnabled || payload.showCover === false && !panelAreaEnabled("Lyrics")) setControlPanelOpen(false);
     }
 
     const coverSize = Number(payload.coverSize);
@@ -2345,6 +2591,7 @@ const lyricsApi = {
     if (Number.isFinite(descenderBuffer) && descenderBuffer >= 0) {
       viewportDescenderBufferPx = descenderBuffer;
     }
+    root.style.setProperty("--viewport-descender-buffer", `${viewportDescenderBufferPx}px`);
 
     const pixelMetrics = {
       layoutHorizontalPadding: "--layout-padding-inline",
@@ -2418,6 +2665,7 @@ window.taskbarLyrics = {
     const payload = message.payload;
     switch (message.type) {
       case "lyrics":
+        if (regionPhase === "exiting" || regionPhase === "hidden") break;
         lyricsApi.setLyrics(
           payload?.current,
           payload?.next,
@@ -2430,10 +2678,15 @@ window.taskbarLyrics = {
           payload?.currentTranslation,
           payload?.nextTranslation,
           payload?.translationMode,
-          payload?.animateTransition,
+          regionPhase === "visible" ? payload?.animateTransition : false,
           payload?.scene);
         break;
       case "cover":
+        if (regionPhase === "exiting" || regionPhase === "hidden") {
+          deferredRegionCover = payload;
+          break;
+        }
+        deferredRegionCover = null;
         lyricsApi.setCover(
           payload?.dataUri,
           payload?.fallbackText,
@@ -2442,6 +2695,7 @@ window.taskbarLyrics = {
           payload?.trackId);
         break;
       case "spectrum":
+        if (regionPhase === "exiting" || regionPhase === "hidden") break;
         lyricsApi.setSpectrum(payload);
         break;
       case "spectrumTuning":
@@ -2450,8 +2704,18 @@ window.taskbarLyrics = {
       case "style":
         lyricsApi.applyStyle(payload);
         break;
+      case "regionVisibility":
+        applyRegionVisibility(payload);
+        break;
       case "controlPanelState":
         setControlPanelOpen(payload?.open);
+        break;
+      case "floatingControlSurface":
+        root.classList.toggle("floating-controls-open", payload?.open === true);
+        root.style.setProperty("--floating-control-surface", payload?.light === true ? "#f8f9fb" : "#202124");
+        break;
+      case "floatingLockState":
+        if (typeof payload?.locked === "boolean") setFloatingLockState(payload.locked, payload.hovered);
         break;
     }
   }

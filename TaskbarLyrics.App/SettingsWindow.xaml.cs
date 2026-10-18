@@ -325,12 +325,16 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 await SaveSettingsAndNotifyWebAsync();
                 await PushSettingsToWebAsync();
                 break;
+            case "resetWindowPresentation":
+                if (!SettingsWebMessageRouter.TryParseWindowPresentation(message.Value, out var resetFloating)) break;
+                _settings.ResetWindowPresentation(resetFloating);
+                if (!resetFloating && !_settings.UseFloatingWindow) ClampEmbeddedLayoutToCurrentDisplays();
+                if (await SaveSettingsAndNotifyWebAsync() && resetFloating && System.Windows.Application.Current is App resetApp)
+                    resetApp.ResetFloatingPositions();
+                await PushSettingsToWebAsync();
+                break;
             case "resetLyricsLayoutBase":
-                _settings.FontSize = AppSettings.DefaultFontSize;
-                _settings.CoverSize = AppSettings.DefaultCoverSize;
-                _settings.CoverGap = AppSettings.DefaultCoverGap;
-                _settings.CoverCornerRadius = AppSettings.DefaultCoverCornerRadius;
-                _settings.WindowWidth = AppSettings.DefaultWindowWidth;
+                _settings.ResetLyricsLayoutBase();
                 await SaveSettingsAndNotifyWebAsync();
                 await PushSettingsToWebAsync();
                 break;
@@ -1176,13 +1180,16 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         _settings.NormalizeCoverPosition();
         _settings.NormalizeWindowLayout();
         var mediaHotkeys = _settings.GlobalMediaHotkeys ??= new GlobalMediaHotkeySettings();
-        var layoutMetrics = CreateLyricsLayoutMetrics();
         var availableDisplays = DisplayMonitorService.GetDisplays();
         var targetDisplays = LyricsDisplayTargetSelector.Select(
             availableDisplays,
             _settings.LyricsDisplayMode,
             _settings.SelectedDisplayIds);
         var taskbarConstraints = TaskbarEmbeddingLayoutPolicy.FromDisplays(targetDisplays);
+        var previewDisplay = targetDisplays.FirstOrDefault(display => display.IsPrimary) ?? (targetDisplays.Count > 0 ? targetDisplays[0] : null);
+        var previewDpi = previewDisplay?.PixelsPerDip ?? VisualTreeHelper.GetDpi(this).DpiScaleX;
+        var layoutMetrics = CreateEmbeddedLayoutPreviewMetrics(_settings, previewDpi,
+            previewDisplay is null ? null : TaskbarPlacementService.GetTaskbarBounds(previewDisplay, previewDpi));
         var inputBounds = TaskbarEmbeddingLayoutPolicy.GetInputBounds(
             _settings,
             taskbarConstraints,
@@ -1241,18 +1248,29 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             SpectrumAudioAccessGranted = _settings.SpectrumAudioAccessGranted,
             FontSize = _settings.FontSize,
             ShowCover = _settings.ShowCover,
+            SingleLineLyrics = _settings.SingleLineLyrics,
             EnableControlPanel = _settings.EnableControlPanel,
+            ControlPanelTriggerMethod = _settings.ControlPanelTriggerMethod,
+            ControlPanelTriggerCover = _settings.ControlPanelTriggerCover,
+            ControlPanelTriggerLyrics = _settings.ControlPanelTriggerLyrics,
+            EnableFloatingControlPanel = _settings.EnableFloatingControlPanel,
+            FloatingLyricsLayoutScalePercent = _settings.FloatingLyricsLayoutScalePercent,
+            EmbeddedPanelBrightness = _settings.EmbeddedPanelBrightness,
+            EmbeddedPanelTintOpacity = _settings.EmbeddedPanelTintOpacity,
+            EmbeddedPanelBlurAmount = _settings.EmbeddedPanelBlurAmount,
+            FloatingPanelBrightness = _settings.FloatingPanelBrightness,
+            FloatingPanelTintOpacity = _settings.FloatingPanelTintOpacity,
+            FloatingPanelBlurAmount = _settings.FloatingPanelBlurAmount,
             CoverSize = _settings.CoverSize,
             CoverGap = _settings.CoverGap,
             CoverCornerRadius = _settings.CoverCornerRadius,
-            LyricsLayoutScalePercent = layoutMetrics.ScalePercent,
+            LyricsLayoutScalePercent = _settings.LyricsLayoutScalePercent,
             EffectiveFontSize = layoutMetrics.FontSize,
             EffectiveCoverSize = layoutMetrics.CoverSize,
             EffectiveCoverGap = layoutMetrics.CoverGap,
             EffectiveCoverCornerRadius = layoutMetrics.CoverCornerRadius,
             EffectiveWindowWidth = AppSettings.ClampEffectiveWindowWidth(
-                _settings.WindowWidth,
-                _settings.LyricsLayoutScalePercent,
+                _settings.GetWindowWidth(),
                 _settings.UseFloatingWindow
                     ? SystemParameters.WorkArea.Width
                     : taskbarConstraints.MaxWidth),
@@ -1265,12 +1283,14 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             ShowBorder = _settings.ShowBorder,
             ShowTextShadow = _settings.ShowTextShadow,
             WindowWidth = _settings.WindowWidth,
+            FloatingWindowWidth = _settings.FloatingWindowWidth,
             HorizontalAnchor = _settings.HorizontalAnchor,
             LyricsTextAlignment = _settings.LyricsTextAlignment,
             CoverPosition = _settings.CoverPosition,
             XOffset = _settings.XOffset,
             YOffset = _settings.YOffset,
             ForceAlwaysOnTop = _settings.ForceAlwaysOnTop,
+            FloatingWindowLayer = _settings.FloatingWindowLayer,
             UseFloatingWindow = _settings.UseFloatingWindow,
             TaskbarEmbeddingAvailable = inputBounds.IsSupported,
             TaskbarMaxWidth = inputBounds.MaxTaskbarWidth,
@@ -1306,13 +1326,16 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
 
     private Dictionary<string, object> CreateLyricsLayoutPreview(bool includeInputBounds)
     {
-        var metrics = CreateLyricsLayoutMetrics();
         var availableDisplays = DisplayMonitorService.GetDisplays();
         var targetDisplays = LyricsDisplayTargetSelector.Select(
             availableDisplays,
             _settings.LyricsDisplayMode,
             _settings.SelectedDisplayIds);
         var taskbarConstraints = TaskbarEmbeddingLayoutPolicy.FromDisplays(targetDisplays);
+        var previewDisplay = targetDisplays.FirstOrDefault(display => display.IsPrimary) ?? (targetDisplays.Count > 0 ? targetDisplays[0] : null);
+        var previewDpi = previewDisplay?.PixelsPerDip ?? VisualTreeHelper.GetDpi(this).DpiScaleX;
+        var metrics = CreateEmbeddedLayoutPreviewMetrics(_settings, previewDpi,
+            previewDisplay is null ? null : TaskbarPlacementService.GetTaskbarBounds(previewDisplay, previewDpi));
         return CreateLyricsLayoutPreviewPayload(
             _settings,
             metrics,
@@ -1330,7 +1353,9 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
     {
         var preview = new Dictionary<string, object>
         {
-            ["scalePercent"] = metrics.ScalePercent,
+            ["scalePercent"] = settings.LyricsLayoutScalePercent,
+            ["floatingLyricsLayoutScalePercent"] = settings.FloatingLyricsLayoutScalePercent,
+            ["floatingWindowWidth"] = settings.FloatingWindowWidth,
             ["fontSize"] = AppSettings.ClampFontSize(settings.FontSize),
             ["coverSize"] = AppSettings.ClampCoverSize(settings.CoverSize),
             ["coverGap"] = AppSettings.ClampCoverGap(settings.CoverGap),
@@ -1342,8 +1367,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             ["effectiveCoverGap"] = metrics.CoverGap,
             ["effectiveCoverCornerRadius"] = metrics.CoverCornerRadius,
             ["effectiveWindowWidth"] = AppSettings.ClampEffectiveWindowWidth(
-                settings.WindowWidth,
-                settings.LyricsLayoutScalePercent,
+                settings.GetWindowWidth(),
                 settings.UseFloatingWindow || !taskbarConstraints.IsSupported
                     ? fallbackWidth
                     : taskbarConstraints.MaxWidth)
@@ -1373,9 +1397,12 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         return preview;
     }
 
-    private LyricsLayoutMetrics CreateLyricsLayoutMetrics()
+    internal static LyricsLayoutMetrics CreateEmbeddedLayoutPreviewMetrics(AppSettings settings, double pixelsPerDip, TaskbarBounds? taskbar = null)
     {
-        return LyricsLayoutMetrics.Create(_settings, VisualTreeHelper.GetDpi(this).DpiScaleX);
+        // These readouts belong to the embedded settings card even while the floating window is active.
+        var embeddedSettings = settings.Clone();
+        embeddedSettings.UseFloatingWindow = false;
+        return LyricsLayoutMetrics.Create(embeddedSettings, pixelsPerDip, taskbar);
     }
 
     private List<string> NormalizeSourceOrder(IEnumerable<string>? order)
@@ -1466,6 +1493,13 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             return;
         }
 
+        if (_settings.UseFloatingWindow && key is "windowWidth" or "lyricsLayoutScalePercent" or
+            "horizontalAnchor" or "xOffset" or "yOffset" or "showBackground" or "backgroundOpacity" or
+            "showBorder" or "enableControlPanel" or "controlPanelTriggerMethod" or "controlPanelTriggerCover" or "controlPanelTriggerLyrics" or
+            "embeddedPanelBrightness" or "embeddedPanelTintOpacity" or "embeddedPanelBlurAmount") return;
+        if (!_settings.UseFloatingWindow && key is "forceAlwaysOnTop" or "floatingWindowLayer" or "enableFloatingControlPanel" or
+            "floatingPanelBrightness" or "floatingPanelTintOpacity" or "floatingPanelBlurAmount") return;
+
         switch (key)
         {
             case "enableQQMusic":
@@ -1538,6 +1572,15 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 break;
             case "forceAlwaysOnTop":
                 _settings.ForceAlwaysOnTop = ReadBool(element, _settings.ForceAlwaysOnTop);
+                _settings.FloatingWindowLayer = _settings.ForceAlwaysOnTop ? FloatingWindowLayer.Fullscreen : FloatingWindowLayer.Window;
+                break;
+            case "floatingWindowLayer":
+                if (element.ValueKind == JsonValueKind.String &&
+                    Enum.TryParse<FloatingWindowLayer>(element.GetString(), out var layer) && Enum.IsDefined(layer))
+                {
+                    _settings.FloatingWindowLayer = layer;
+                    _settings.ForceAlwaysOnTop = layer == FloatingWindowLayer.Fullscreen;
+                }
                 break;
             case "useFloatingWindow":
                 ApplyFloatingWindowSetting(ReadBool(element, _settings.UseFloatingWindow));
@@ -1555,8 +1598,41 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             case "showCover":
                 _settings.ShowCover = ReadBool(element, _settings.ShowCover);
                 break;
+            case "singleLineLyrics":
+                _settings.SingleLineLyrics = ReadBool(element, _settings.SingleLineLyrics);
+                break;
             case "enableControlPanel":
                 _settings.EnableControlPanel = ReadBool(element, _settings.EnableControlPanel);
+                break;
+            case "controlPanelTriggerMethod":
+                _settings.ControlPanelTriggerMethod = ReadEnum(element, _settings.ControlPanelTriggerMethod);
+                break;
+            case "controlPanelTriggerCover":
+                _settings.ControlPanelTriggerCover = ReadBool(element, _settings.ControlPanelTriggerCover);
+                break;
+            case "controlPanelTriggerLyrics":
+                _settings.ControlPanelTriggerLyrics = ReadBool(element, _settings.ControlPanelTriggerLyrics);
+                break;
+            case "enableFloatingControlPanel":
+                _settings.EnableFloatingControlPanel = ReadBool(element, _settings.EnableFloatingControlPanel);
+                break;
+            case "floatingPanelBrightness":
+                _settings.FloatingPanelBrightness = ReadDouble(element, _settings.FloatingPanelBrightness);
+                break;
+            case "embeddedPanelBrightness":
+                _settings.EmbeddedPanelBrightness = ReadDouble(element, _settings.EmbeddedPanelBrightness);
+                break;
+            case "embeddedPanelTintOpacity":
+                _settings.EmbeddedPanelTintOpacity = ReadDouble(element, _settings.EmbeddedPanelTintOpacity);
+                break;
+            case "embeddedPanelBlurAmount":
+                _settings.EmbeddedPanelBlurAmount = ReadDouble(element, _settings.EmbeddedPanelBlurAmount);
+                break;
+            case "floatingPanelTintOpacity":
+                _settings.FloatingPanelTintOpacity = ReadDouble(element, _settings.FloatingPanelTintOpacity);
+                break;
+            case "floatingPanelBlurAmount":
+                _settings.FloatingPanelBlurAmount = ReadDouble(element, _settings.FloatingPanelBlurAmount);
                 break;
             case "coverSize":
                 _settings.CoverSize = AppSettings.ClampCoverSize(ReadDouble(element, _settings.CoverSize));
@@ -1590,6 +1666,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 _settings.BackgroundOpacity = Math.Clamp(ReadDouble(element, _settings.BackgroundOpacity), 0, 1);
                 break;
             case "windowWidth":
+                if (_settings.UseFloatingWindow) break;
                 _settings.WindowWidth = Math.Clamp(
                     ReadDouble(element, _settings.WindowWidth),
                     AppSettings.MinimumWindowWidth,
@@ -1680,6 +1757,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
     private static bool IsTaskbarBoundedLayoutSetting(string? key)
     {
         return key is "fontSize" or
+            "singleLineLyrics" or
             "showCover" or
             "coverSize" or
             "coverGap" or
@@ -1718,12 +1796,14 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
 
     private static bool RequiresSettingsStateRefresh(string? key)
     {
-        return key is "foregroundColorMode" or "spectrumDisplayMode" or "useFloatingWindow" || IsMediaHotkeySetting(key);
+        return key is "foregroundColorMode" or "spectrumDisplayMode" or "useFloatingWindow" or "showCover" or
+            "controlPanelTriggerMethod" or "controlPanelTriggerCover" or "controlPanelTriggerLyrics" || IsMediaHotkeySetting(key);
     }
 
     private static bool IsLyricsLayoutSetting(string? key)
     {
         return key is "showCover" or
+            "singleLineLyrics" or
             "fontSize" or
             "coverSize" or
             "coverGap" or
@@ -1741,6 +1821,11 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
     {
         return key is
             "backgroundOpacity" or
+            "embeddedPanelBrightness" or
+            "embeddedPanelTintOpacity" or
+            "embeddedPanelBlurAmount" or
+            "floatingPanelBrightness" or
+            "floatingPanelTintOpacity" or
             "coverGap" or
             "coverCornerRadius" or
             "lyricsLayoutScalePercent" or
@@ -1904,6 +1989,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
 
     private bool SaveSettings()
     {
+        _settings.NormalizeControlPanelTriggers();
         if (System.Windows.Application.Current is App app)
         {
             return app.SaveSettings(_settings.Clone());
@@ -2083,7 +2169,19 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         target.FontSize = source.FontSize;
         target.UseSafeCoverSizeRange = source.UseSafeCoverSizeRange;
         target.ShowCover = source.ShowCover;
+        target.SingleLineLyrics = source.SingleLineLyrics;
         target.EnableControlPanel = source.EnableControlPanel;
+        target.ControlPanelTriggerMethod = source.ControlPanelTriggerMethod;
+        target.ControlPanelTriggerCover = source.ControlPanelTriggerCover;
+        target.ControlPanelTriggerLyrics = source.ControlPanelTriggerLyrics;
+        target.EnableFloatingControlPanel = source.EnableFloatingControlPanel;
+        target.FloatingLyricsLayoutScalePercent = source.FloatingLyricsLayoutScalePercent;
+        target.EmbeddedPanelBrightness = source.EmbeddedPanelBrightness;
+        target.EmbeddedPanelTintOpacity = source.EmbeddedPanelTintOpacity;
+        target.EmbeddedPanelBlurAmount = source.EmbeddedPanelBlurAmount;
+        target.FloatingPanelBrightness = source.FloatingPanelBrightness;
+        target.FloatingPanelTintOpacity = source.FloatingPanelTintOpacity;
+        target.FloatingPanelBlurAmount = source.FloatingPanelBlurAmount;
         target.CoverSize = source.CoverSize;
         target.CoverGap = source.CoverGap;
         target.CoverCornerRadius = source.CoverCornerRadius;
@@ -2097,12 +2195,14 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         target.ShowBorder = source.ShowBorder;
         target.ShowTextShadow = source.ShowTextShadow;
         target.WindowWidth = source.WindowWidth;
+        target.FloatingWindowWidth = source.FloatingWindowWidth;
         target.HorizontalAnchor = source.HorizontalAnchor;
         target.LyricsTextAlignment = source.LyricsTextAlignment;
         target.CoverPosition = source.CoverPosition;
         target.XOffset = source.XOffset;
         target.YOffset = source.YOffset;
         target.ForceAlwaysOnTop = source.ForceAlwaysOnTop;
+        target.FloatingWindowLayer = source.FloatingWindowLayer;
         target.UseFloatingWindow = source.UseFloatingWindow;
         target.LyricsDisplayMode = source.LyricsDisplayMode;
         target.SelectedDisplayIds = source.SelectedDisplayIds.ToList();
@@ -2219,7 +2319,19 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         public bool SpectrumAudioAccessGranted { get; set; }
         public double FontSize { get; set; }
         public bool ShowCover { get; set; }
+        public bool SingleLineLyrics { get; set; }
         public bool EnableControlPanel { get; set; }
+        public ControlPanelTriggerMethod ControlPanelTriggerMethod { get; set; }
+        public bool ControlPanelTriggerCover { get; set; }
+        public bool ControlPanelTriggerLyrics { get; set; }
+        public bool EnableFloatingControlPanel { get; set; }
+        public double FloatingLyricsLayoutScalePercent { get; set; }
+        public double EmbeddedPanelBrightness { get; set; }
+        public double EmbeddedPanelTintOpacity { get; set; }
+        public double EmbeddedPanelBlurAmount { get; set; }
+        public double FloatingPanelBrightness { get; set; }
+        public double FloatingPanelTintOpacity { get; set; }
+        public double FloatingPanelBlurAmount { get; set; }
         public double CoverSize { get; set; }
         public double CoverGap { get; set; }
         public double CoverCornerRadius { get; set; }
@@ -2238,12 +2350,14 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         public bool ShowBorder { get; set; }
         public bool ShowTextShadow { get; set; }
         public double WindowWidth { get; set; }
+        public double FloatingWindowWidth { get; set; }
         public LyricsHorizontalAnchor HorizontalAnchor { get; set; }
         public LyricsTextAlignment LyricsTextAlignment { get; set; }
         public CoverPosition CoverPosition { get; set; }
         public double XOffset { get; set; }
         public double YOffset { get; set; }
         public bool ForceAlwaysOnTop { get; set; }
+        public FloatingWindowLayer FloatingWindowLayer { get; set; }
         public bool UseFloatingWindow { get; set; }
         public bool TaskbarEmbeddingAvailable { get; set; }
         public double TaskbarMaxWidth { get; set; }

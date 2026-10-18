@@ -5,6 +5,35 @@ namespace TaskbarLyrics.App.Tests;
 
 public sealed class LyricsWebMessageRouterTests
 {
+    [Theory]
+    [InlineData("Cover", "Hover", true)]
+    [InlineData("Lyrics", "Click", true)]
+    [InlineData("Lyrics", "Keyboard", true)]
+    [InlineData("Cover", "Unknown", false)]
+    [InlineData("Unknown", "Hover", false)]
+    [InlineData("1", "Hover", false)]
+    [InlineData("Cover, Lyrics", "Hover", false)]
+    public void ControlPanelTriggerValidatesAreaAndActivation(string area, string activation, bool expected)
+    {
+        var message = LyricsWebMessageRouter.Parse(
+            $"{{\"version\":1,\"type\":\"controlPanelTrigger\",\"payload\":{{\"area\":\"{area}\",\"activation\":\"{activation}\",\"x\":4,\"y\":3,\"width\":34,\"height\":34,\"viewportWidth\":500,\"viewportHeight\":50}}}}");
+        Assert.Equal(expected, LyricsWebMessageRouter.TryGetControlPanelTrigger(message, out var bounds, out var actualArea, out var actualActivation));
+        if (!expected) return;
+        Assert.Equal(area, actualArea.ToString());
+        Assert.Equal(activation, actualActivation.ToString());
+        Assert.Equal(new Rect(8, 6, 68, 68), bounds.InHost(new Size(1000, 100)));
+    }
+
+    [Theory]
+    [InlineData(1, 490, 500)]
+    [InlineData(1, -1, 500)]
+    [InlineData(1, 0, 0)]
+    [InlineData(2, 0, 500)]
+    public void ControlPanelTriggerRejectsInvalidBoundsAndVersions(int version, double x, double viewportWidth)
+    {
+        var json = FormattableString.Invariant($"{{\"version\":{version},\"type\":\"controlPanelTrigger\",\"payload\":{{\"area\":\"Lyrics\",\"activation\":\"Hover\",\"x\":{x},\"y\":0,\"width\":34,\"height\":34,\"viewportWidth\":{viewportWidth},\"viewportHeight\":50}}}}");
+        Assert.False(LyricsWebMessageRouter.TryGetControlPanelTrigger(LyricsWebMessageRouter.Parse(json), out _, out _, out _));
+    }
     [Fact]
     public void CoverClickAcceptsBoundedViewportCoordinates()
     {
@@ -12,6 +41,9 @@ public sealed class LyricsWebMessageRouterTests
             "{\"version\":1,\"type\":\"coverClick\",\"payload\":{\"x\":4,\"y\":3,\"width\":34,\"height\":34,\"viewportWidth\":500,\"viewportHeight\":50}}");
 
         Assert.True(LyricsWebMessageRouter.TryGetCoverClick(message, out var bounds));
+        Assert.True(LyricsWebMessageRouter.TryGetControlPanelTrigger(message, out _, out var area, out var activation));
+        Assert.Equal(ControlPanelTriggerArea.Cover, area);
+        Assert.Equal(ControlPanelActivation.Click, activation);
         Assert.Equal(new Rect(8, 6, 68, 68), bounds.InHost(new Size(1000, 100)));
     }
 

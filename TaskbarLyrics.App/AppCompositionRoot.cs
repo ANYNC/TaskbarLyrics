@@ -11,6 +11,7 @@ internal sealed record MusicSessionServices(
 
 internal interface IAppCompositionRoot : IDisposable
 {
+    FloatingWindowPlacement CreateFloatingWindowPlacement(System.Windows.Window window);
     MusicSessionServices CreateMusicSessionServices();
 
     LyricSyncService CreateLyricSyncService(
@@ -34,6 +35,11 @@ internal interface IAppCompositionRoot : IDisposable
 
 internal sealed class AppCompositionRoot : IAppCompositionRoot
 {
+    private readonly Lazy<FloatingWindowPositionStore> _floatingWindowPositions = new(() => new FloatingWindowPositionStore(
+        System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "TaskbarLyrics", "floating-window-positions.json")));
+
+    public FloatingWindowPlacement CreateFloatingWindowPlacement(System.Windows.Window window) => new(window, _floatingWindowPositions.Value);
     private readonly IResolvedLyricCache _resolvedLyricCache;
     private readonly Action _clearPipelineCache;
 

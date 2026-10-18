@@ -919,6 +919,7 @@
       };
 
       if (state) state.page = pageId;
+      window.taskbarLyricsDisplayPresentation?.sync(state);
       if (previousPageId !== pageId) bridge.post({ type: "settingsPageChanged", value: pageId });
       $$('[data-nav]').forEach(button => {
         const isActive = button.dataset.nav === pageId;
@@ -1082,7 +1083,7 @@
           option.tabIndex = selected ? 0 : -1;
         });
       }
-      else if (control.type === "radio") control.checked = control.value === value;
+      else if (control.type === "radio") control.checked = control.value === String(value);
       else if (control.type === "checkbox") control.checked = Boolean(value);
       else if (control.tagName === "TEXTAREA" && Array.isArray(value)) control.value = value.join("\n");
       else if (Number.isFinite(Number(value)) && control.dataset.valueScale) {
@@ -1093,6 +1094,7 @@
 
     function readSettingControlValue(control) {
       if (control.type === "checkbox") return control.checked;
+      if (control.dataset.valueType === "boolean") return control.value === "true";
       if (control.type !== "number" && control.type !== "range") return control.value;
       const value = Number(control.value);
       const scale = Number(control.dataset.valueScale) || 1;
@@ -1124,6 +1126,11 @@
       if (!state) return;
       $$('[data-setting]').forEach(control => control.classList.contains("select-trigger") ? syncSelectTrigger(control) : setControlValue(control, state[control.dataset.setting]));
       syncWindowModeSelection();
+      const coverDisplay = state.showCover === false ? "Hidden" : state.coverPosition;
+      $$('[data-cover-display]').forEach(option => {
+        option.checked = option.value === coverDisplay;
+        option.tabIndex = option.checked ? 0 : -1;
+      });
       $$('input[type="range"][data-setting]').forEach(syncSliderProgress);
       $$('[data-color-text="foregroundColor"]').forEach(control => {
         if (!control.classList.contains("invalid")) control.value = state.foregroundColor.toUpperCase();
@@ -1179,7 +1186,7 @@
       $("#displayMonitorHint").textContent = displays.length === 0
         ? "连接显示器后，此列表将自动更新。"
         : mode === "All"
-          ? `已连接 ${displays.length} 台显示器，歌词将在全部任务栏显示。`
+          ? `已连接 ${displays.length} 台显示器，歌词将在全部显示器显示。`
           : connectedSelectedCount > 0
             ? `已选择 ${connectedSelectedCount}/${displays.length} 台显示器。`
             : "未选择显示器时，将临时显示在主显示器。";
@@ -1381,6 +1388,10 @@
     function applySettingLocally(key, value) {
       const previousCornerRadius = state.coverCornerRadius;
       state[key] = value;
+      if (["floatingPanelBlurAmount", "embeddedPanelBlurAmount"].includes(key))
+        state[key] = Number.isFinite(Number(value)) ? Math.min(64, Math.max(0, Number(value))) : window.taskbarLyricsSettingsState.panelMaterialDefaults[key];
+      if (["floatingPanelBrightness", "floatingPanelTintOpacity", "embeddedPanelBrightness", "embeddedPanelTintOpacity"].includes(key))
+        state[key] = Number.isFinite(Number(value)) ? Math.min(1, Math.max(0, Number(value))) : window.taskbarLyricsSettingsState.panelMaterialDefaults[key];
       if (key === "foregroundColor") {
         state.foregroundColor = fromArgb(value);
         state.customForegroundColor = state.foregroundColor;
@@ -1398,6 +1409,13 @@
         expandedTrackOffsetKey = null;
         syncControls();
         requestTrackOffsetPage(1);
+        return;
+      }
+      if (value === false &&
+          (key === "controlPanelTriggerLyrics" && !(state.showCover !== false && state.controlPanelTriggerCover) ||
+           key === "controlPanelTriggerCover" && !state.controlPanelTriggerLyrics)) {
+        syncControls();
+        showToast("至少选择一个可用触发区域。");
         return;
       }
       pendingRangePreviews.delete(key);
@@ -1428,10 +1446,19 @@
       markSaved();
     }
 
+    function commitCoverDisplay(value) {
+      if (!state || !["Hidden", "Left", "Right"].includes(value)) return;
+      const showCover = value !== "Hidden";
+      // Set the side before revealing the cover; hiding preserves its stored position.
+      if (showCover && state.coverPosition !== value) commitSetting("coverPosition", value);
+      if ((state.showCover !== false) !== showCover) commitSetting("showCover", showCover);
+    }
+
     function scheduleSettingPreview(key, value, source) {
       if (!state) return;
       state[key] = value;
       liveRangeValues.set(key, { value, editing: true });
+      updateOutputs();
       $$(`[data-setting="${key}"]`).forEach(control => {
         if (control !== source) setControlValue(control, value);
         if (control.type === "range") syncSliderProgress(control);
@@ -1651,15 +1678,27 @@
     }
 
     function applyDependencies() {
-      $$('[data-depends]').forEach(row => {
-        const enabled = Boolean(state[row.dataset.depends]) &&
-          (!row.hasAttribute("data-embedded-only") || state.useFloatingWindow !== true);
+      window.taskbarLyricsSettingsState.normalizeControlPanelTriggers(state);
+      $$('[data-depends], [data-embedded-only], [data-floating-only]').forEach(row => {
+        const enabled = (!row.dataset.depends || Boolean(state[row.dataset.depends])) &&
+          (!row.hasAttribute("data-embedded-only") || state.useFloatingWindow !== true) &&
+          (!row.hasAttribute("data-floating-only") || state.useFloatingWindow === true);
         row.classList.toggle("is-disabled", !enabled);
         row.querySelectorAll("input, select, textarea, button").forEach(control => { control.disabled = !enabled; });
       });
+      const coverTrigger = $('[data-setting="controlPanelTriggerCover"]');
+      if (coverTrigger) coverTrigger.disabled ||= state.showCover === false;
+      window.taskbarLyricsDisplayPresentation?.sync(state);
     }
 
     function updateOutputs() {
+      if ($("[data-floating-width]")) $("[data-floating-width]").textContent = `${formatLayoutMetric(state.floatingWindowWidth)} px`;
+      const appearanceSummary = $("[data-embedded-appearance-summary]");
+      if (appearanceSummary) {
+        appearanceSummary.textContent = `背景${state.showBackground ? "开启" : "关闭"} · 边框${state.showBorder ? "开启" : "关闭"}`;
+        appearanceSummary.title = appearanceSummary.textContent;
+      }
+      if ($("[data-floating-scale]")) $("[data-floating-scale]").textContent = `${formatLayoutMetric(state.floatingLyricsLayoutScalePercent)}%`;
       if ($("[data-effective-font-size]")) {
         const showCover = state.showCover !== false;
         $("[data-effective-font-size]").textContent = `${formatLayoutMetric(state.effectiveFontSize)} px`;
@@ -1668,7 +1707,6 @@
           : "已隐藏";
         $("[data-effective-cover-gap]").textContent = `${formatLayoutMetric(state.effectiveCoverGap)} px`;
         $("[data-effective-cover-gap-item]").hidden = !showCover;
-        $("[data-effective-window-width]").textContent = `${formatLayoutMetric(state.effectiveWindowWidth)} px`;
       }
     }
 
@@ -1692,7 +1730,7 @@
 
     function updateLayoutPreview(payload = {}) {
       if (!state) return;
-      ["scalePercent", "fontSize", "coverSize", "coverGap", "coverCornerRadius", "effectiveFontSize", "effectiveCoverSize", "effectiveCoverGap", "effectiveCoverCornerRadius", "effectiveWindowWidth"].forEach(key => {
+      ["scalePercent", "floatingLyricsLayoutScalePercent", "floatingWindowWidth", "fontSize", "coverSize", "coverGap", "coverCornerRadius", "effectiveFontSize", "effectiveCoverSize", "effectiveCoverGap", "effectiveCoverCornerRadius", "effectiveWindowWidth"].forEach(key => {
         const value = Number(payload[key]);
         if (!Number.isFinite(value)) return;
         const stateKey = key === "scalePercent" ? "lyricsLayoutScalePercent" : key;
@@ -1819,6 +1857,15 @@
         const max = Number(input.max);
         const value = Math.min(max, Math.max(min, Number(state[key]) + Number(step.dataset.delta)));
         commitSetting(key, value); return;
+      }
+
+      const modeReset = event.target.closest("[data-reset-window-mode]");
+      if (modeReset && state) {
+        pendingRangePreviews.forEach((value, key) => bridge.post({ type: "update", key, value }));
+        pendingRangePreviews.clear();
+        liveRangeValues.clear();
+        bridge.post({ type: "resetWindowPresentation", value: modeReset.dataset.resetWindowMode });
+        return;
       }
 
       if (event.target.closest("[data-reset-layout-scale]")) {
@@ -1996,7 +2043,10 @@
         const next = event.key === "Home" ? 0 : event.key === "End" ? options.length - 1
           : (current + (["ArrowRight", "ArrowDown"].includes(event.key) ? 1 : -1) + options.length) % options.length;
         options[next].focus({ preventScroll: true });
-        if (!options[next].checked) commitSetting(options[next].dataset.setting, options[next].value);
+        if (!options[next].checked) {
+          if (options[next].hasAttribute("data-cover-display")) commitCoverDisplay(options[next].value);
+          else commitSetting(options[next].dataset.setting, options[next].value);
+        }
         return;
       }
       if (windowModeOption && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) {
@@ -2161,6 +2211,12 @@
 
       if (event.target === $("#playerOffsetInput")) { commitPlayerOffset(event.target.value); return; }
 
+      const coverDisplayOption = event.target.closest("[data-cover-display]");
+      if (coverDisplayOption) {
+        if (coverDisplayOption.checked) commitCoverDisplay(coverDisplayOption.value);
+        return;
+      }
+
       const windowModeOption = event.target.closest("[data-window-mode]");
       if (windowModeOption) {
         commitSetting("useFloatingWindow", windowModeOption.dataset.windowMode === "floating");
@@ -2186,12 +2242,12 @@
         return;
       }
       const control = event.target.closest('input[type="range"][data-setting]');
-      if (control) {
+      if (control && !control.disabled) {
         scheduleSettingPreview(control.dataset.setting, readSettingControlValue(control), control);
         return;
       }
       const numberControl = event.target.closest('.slider-number-control input[type="number"][data-setting]');
-      if (!numberControl || numberControl.value === "" || !numberControl.validity.valid) return;
+      if (!numberControl || numberControl.disabled || numberControl.value === "" || !numberControl.validity.valid) return;
       scheduleSettingPreview(numberControl.dataset.setting, readSettingControlValue(numberControl), numberControl);
     });
 

@@ -5,17 +5,36 @@ namespace TaskbarLyrics.App.Tests;
 public sealed class LyricsStyleScriptFactoryTests
 {
     [Theory]
+    [InlineData(false, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(true, false, true)]
+    [InlineData(true, true, false)]
+    public void FloatingInputPassthroughFollowsPlaybackControlWithoutDisablingCoverInteraction(bool floating, bool playback, bool expected)
+    {
+        var settings = new AppSettings
+        {
+            UseFloatingWindow = floating,
+            EnableFloatingControlPanel = playback
+        };
+        var script = LyricsStyleScriptFactory.Create(settings, 1);
+        Assert.Contains($"\"floatingInputPassthrough\":{expected.ToString().ToLowerInvariant()}", script);
+        if (floating) Assert.Contains("\"enableControlPanel\":true", script);
+        Assert.Equal(playback, settings.EnableFloatingControlPanel);
+    }
+
+    [Theory]
     [InlineData(true, false, true)]
     [InlineData(false, false, false)]
-    [InlineData(true, true, false)]
-    [InlineData(false, true, false)]
-    public void CreateEmitsControlPanelAvailabilityForEmbeddedModeOnly(bool enabled, bool floating, bool expected)
+    [InlineData(true, true, true)]
+    [InlineData(false, true, true)]
+    public void CreateEmitsControlPanelAvailabilityAndFloatingMode(bool enabled, bool floating, bool expected)
     {
         var settings = new AppSettings { EnableControlPanel = enabled, UseFloatingWindow = floating };
         var script = LyricsStyleScriptFactory.Create(settings, 1);
 
         Assert.Contains($"\"enableControlPanel\":{expected.ToString().ToLowerInvariant()}", script);
         Assert.Equal(enabled, settings.EnableControlPanel);
+        Assert.Contains($"\"floatingControlPanel\":{floating.ToString().ToLowerInvariant()}", script);
     }
 
     [Fact]

@@ -6,6 +6,50 @@ namespace TaskbarLyrics.App.Tests;
 public sealed class SettingsStoreTests
 {
     [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public void PresentationWidthsMigrateOnceAndRoundTripIndependently(bool floating, bool hasFloatingWidth)
+    {
+        var directory = Path.Combine(AppContext.BaseDirectory, $"settings-widths-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var path = Path.Combine(directory, "settings.json");
+            File.WriteAllText(path, $"{{\"UseFloatingWindow\":{floating.ToString().ToLowerInvariant()},\"WindowWidth\":620" +
+                (hasFloatingWidth ? ",\"FloatingWindowWidth\":860}" : "}"));
+            var store = new SettingsStore(path);
+            var loaded = store.Load();
+            Assert.Equal(620, loaded.WindowWidth);
+            Assert.Equal(hasFloatingWidth ? 860 : 620, loaded.FloatingWindowWidth);
+            Assert.Equal(loaded.FloatingWindowWidth, loaded.Clone().FloatingWindowWidth);
+            loaded.WindowWidth = 360;
+            Assert.True(store.Save(loaded));
+            var roundTripped = store.Load();
+            Assert.Equal(360, roundTripped.WindowWidth);
+            Assert.Equal(hasFloatingWidth ? 860 : 620, roundTripped.FloatingWindowWidth);
+            roundTripped.UseFloatingWindow = true;
+            Assert.Equal(roundTripped.FloatingWindowWidth, roundTripped.GetWindowWidth());
+            roundTripped.UseFloatingWindow = false;
+            Assert.Equal(360, roundTripped.GetWindowWidth());
+        }
+        finally { Directory.Delete(directory, recursive: true); }
+    }
+
+    [Theory]
+    [InlineData(0, 100)]
+    [InlineData(5000, 1400)]
+    [InlineData(double.NaN, AppSettings.DefaultWindowWidth)]
+    public void FloatingWidthNormalizesWithoutChangingEmbeddedWidth(double input, double expected)
+    {
+        var settings = new AppSettings { WindowWidth = 620, FloatingWindowWidth = input };
+        settings.NormalizeWindowLayout();
+        Assert.Equal(620, settings.WindowWidth);
+        Assert.Equal(expected, settings.FloatingWindowWidth);
+    }
+
+    [Theory]
     [InlineData("{}", true)]
     [InlineData("{\"EnableControlPanel\":false}", false)]
     [InlineData("{\"EnableControlPanel\":true}", true)]
@@ -500,6 +544,7 @@ public sealed class SettingsStoreTests
 
             Assert.False(loaded.UseFloatingWindow);
             Assert.Equal(400, loaded.WindowWidth);
+            Assert.Equal(400, loaded.FloatingWindowWidth);
             Assert.Equal(12, loaded.XOffset);
             Assert.Equal(-4, loaded.YOffset);
 

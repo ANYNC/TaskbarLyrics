@@ -25,10 +25,21 @@ internal sealed class TaskbarPlacementService
             ? GetPrimaryDisplayMetrics(pixelsPerDip)
             : ConvertPhysicalDisplayMetrics(targetDisplay.Bounds, targetDisplay.WorkArea, pixelsPerDip);
         var taskbar = ResolveTaskbarBounds(display);
-        var metrics = LyricsLayoutMetrics.Create(settings, pixelsPerDip);
+        var metrics = LyricsLayoutMetrics.Create(settings, pixelsPerDip, taskbar);
         window.Height = Math.Min(metrics.DesiredWindowHeight, display.Height);
 
-        var requestedLeft = settings.HorizontalAnchor switch
+        if (metrics.IsVertical)
+        {
+            window.Width = taskbar.Width;
+            window.Left = taskbar.Left;
+            window.Top = taskbar.Top + EmbeddedTaskbarLayoutCalculator.ClampVerticalTop(
+                EmbeddedTaskbarLayoutCalculator.CalculateVerticalTop(taskbar.Height, window.Height, settings.YOffset, alignTop: true),
+                taskbar.Height, window.Height);
+            CommitNativeBounds(window, pixelsPerDip);
+            return;
+        }
+
+        var requestedLeft = settings.UseFloatingWindow ? display.Left : settings.HorizontalAnchor switch
         {
             LyricsHorizontalAnchor.Left => display.Left + settings.XOffset,
             LyricsHorizontalAnchor.Center => display.Left + ((display.Width - window.Width) / 2.0) + settings.XOffset,
@@ -41,7 +52,7 @@ internal sealed class TaskbarPlacementService
             taskbar.CenterY - display.Top,
             window.Height,
             display.Height,
-            settings.YOffset);
+            settings.UseFloatingWindow ? 0 : settings.YOffset);
 
         CommitNativeBounds(window, pixelsPerDip);
     }
@@ -61,6 +72,11 @@ internal sealed class TaskbarPlacementService
         var visualScale = VisualTreeHelper.GetDpi(window).DpiScaleY;
         return double.IsFinite(visualScale) && visualScale > 0 ? visualScale : 1;
     }
+
+    internal static TaskbarBounds GetTaskbarBounds(DisplayMonitor? display, double pixelsPerDip) =>
+        ResolveTaskbarBounds(display is null
+            ? GetPrimaryDisplayMetrics(pixelsPerDip)
+            : ConvertPhysicalDisplayMetrics(display.Bounds, display.WorkArea, pixelsPerDip));
 
     private static TaskbarDisplayMetrics GetPrimaryDisplayMetrics(double pixelsPerDip)
     {
@@ -188,7 +204,7 @@ internal sealed class TaskbarPlacementService
                 display.Left,
                 display.WorkAreaBottom,
                 display.Width,
-                Math.Max(defaultThickness, display.Bottom - display.WorkAreaBottom));
+                display.Bottom - display.WorkAreaBottom);
         }
 
         if (display.WorkAreaTop > display.Top + edgeTolerance)
@@ -197,7 +213,7 @@ internal sealed class TaskbarPlacementService
                 display.Left,
                 display.Top,
                 display.Width,
-                Math.Max(defaultThickness, display.WorkAreaTop - display.Top));
+                display.WorkAreaTop - display.Top);
         }
 
         if (display.WorkAreaLeft > display.Left + edgeTolerance)
@@ -205,7 +221,7 @@ internal sealed class TaskbarPlacementService
             return new TaskbarBounds(
                 display.Left,
                 display.Top,
-                Math.Max(defaultThickness, display.WorkAreaLeft - display.Left),
+                display.WorkAreaLeft - display.Left,
                 display.Height);
         }
 
@@ -214,7 +230,7 @@ internal sealed class TaskbarPlacementService
             return new TaskbarBounds(
                 display.WorkAreaRight,
                 display.Top,
-                Math.Max(defaultThickness, display.Right - display.WorkAreaRight),
+                display.Right - display.WorkAreaRight,
                 display.Height);
         }
 
@@ -223,6 +239,16 @@ internal sealed class TaskbarPlacementService
             display.Bottom - defaultThickness,
             display.Width,
             defaultThickness);
+    }
+
+    internal static string GetTaskbarEdge(DisplayMonitor? display)
+    {
+        var metrics = display is null ? GetPrimaryDisplayMetrics(1)
+            : ConvertPhysicalDisplayMetrics(display.Bounds, display.WorkArea, display.PixelsPerDip);
+        var taskbar = ResolveTaskbarBounds(metrics);
+        return taskbar.IsVertical
+            ? taskbar.Left <= metrics.Left + 0.5 ? "left" : "right"
+            : taskbar.Top <= metrics.Top + 0.5 ? "top" : "bottom";
     }
 
     internal static bool ApplyTopmostState(
@@ -239,9 +265,7 @@ internal sealed class TaskbarPlacementService
         window.Topmost = shouldBeTopmost;
         var hWndInsertAfter = shouldBeTopmost
             ? TaskbarNativeMethods.HWND_TOPMOST
-            : windowToPlaceAfter != IntPtr.Zero
-                ? windowToPlaceAfter
-                : TaskbarNativeMethods.HWND_NOTOPMOST;
+            : windowToPlaceAfter != IntPtr.Zero ? windowToPlaceAfter : TaskbarNativeMethods.HWND_NOTOPMOST;
 
         return TaskbarNativeMethods.SetWindowPos(
             hwnd,
@@ -254,6 +278,22 @@ internal sealed class TaskbarPlacementService
             TaskbarNativeMethods.SWP_NOSIZE |
             TaskbarNativeMethods.SWP_NOACTIVATE |
             TaskbarNativeMethods.SWP_ASYNCWINDOWPOS);
+    }
+
+    internal static bool ApplyDesktopLayerState(Window window, bool showingDesktop)
+    {
+        var hwnd = new WindowInteropHelper(window).Handle;
+        if (hwnd == IntPtr.Zero) return false;
+        foreach (Window companion in window.OwnedWindows)
+            companion.Topmost = showingDesktop;
+        window.Topmost = showingDesktop;
+        // Absolute handles also work when a protected external window rejects relative insertion.
+        // Do not activate the card or reorder its hidden owner during the native position commit.
+        return TaskbarNativeMethods.SetWindowPos(hwnd,
+            showingDesktop ? TaskbarNativeMethods.HWND_TOPMOST : TaskbarNativeMethods.HWND_BOTTOM,
+            0, 0, 0, 0, TaskbarNativeMethods.SWP_NOMOVE | TaskbarNativeMethods.SWP_NOSIZE |
+            TaskbarNativeMethods.SWP_NOACTIVATE | TaskbarNativeMethods.SWP_NOOWNERZORDER |
+            TaskbarNativeMethods.SWP_NOSENDCHANGING);
     }
 
     public static void ApplyToolWindowStyle(IntPtr hwnd)
@@ -306,6 +346,8 @@ internal readonly record struct TaskbarDisplayMetrics(
 
 internal readonly record struct TaskbarBounds(double Left, double Top, double Width, double Height)
 {
+    public bool IsVertical => Height > Width;
+
     public double CenterY => Top + (Height / 2);
 }
 
@@ -315,10 +357,13 @@ internal static class TaskbarNativeMethods
 {
     internal static readonly IntPtr HWND_TOPMOST = new(-1);
     internal static readonly IntPtr HWND_NOTOPMOST = new(-2);
+    internal static readonly IntPtr HWND_BOTTOM = new(1);
     internal const uint SWP_NOSIZE = 0x0001;
     internal const uint SWP_NOMOVE = 0x0002;
     internal const uint SWP_NOZORDER = 0x0004;
     internal const uint SWP_NOACTIVATE = 0x0010;
+    internal const uint SWP_NOOWNERZORDER = 0x0200;
+    internal const uint SWP_NOSENDCHANGING = 0x0400;
     internal const uint SWP_ASYNCWINDOWPOS = 0x4000;
     internal const uint SWP_SHOWWINDOW = 0x0040;
     internal const int SW_SHOWNOACTIVATE = 4;

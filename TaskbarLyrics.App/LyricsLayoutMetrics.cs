@@ -27,6 +27,7 @@ internal sealed record LyricsLayoutMetrics
     private const double BaseWindowVerticalSpacing = 10;
     private const double BaseTextVerticalSpacing = 12;
     private const double BaseWindowMinimumHeight = 36;
+    private const double SingleLineFontSizeMultiplier = 1.4;
 
     public required double ScalePercent { get; init; }
 
@@ -84,25 +85,32 @@ internal sealed record LyricsLayoutMetrics
 
     public required double DesiredWindowHeight { get; init; }
 
-    public static LyricsLayoutMetrics Create(AppSettings settings, double pixelsPerDip = 1)
+    public bool IsVertical { get; init; }
+
+    public bool IsSingleLine { get; init; }
+
+    public static LyricsLayoutMetrics Create(AppSettings settings, double pixelsPerDip = 1, TaskbarBounds? taskbar = null)
     {
         ArgumentNullException.ThrowIfNull(settings);
         pixelsPerDip = NormalizePixelsPerDip(pixelsPerDip);
 
-        var scalePercent = AppSettings.ClampLyricsLayoutScalePercent(settings.LyricsLayoutScalePercent);
+        var scalePercent = AppSettings.ClampLyricsLayoutScalePercent(settings.GetLyricsLayoutScalePercent());
         var scale = scalePercent / 100;
         var baseFontSize = AppSettings.ClampFontSize(settings.FontSize);
         var baseCoverSize = AppSettings.ClampCoverSize(settings.CoverSize);
-        var fontSize = baseFontSize * scale;
+        var fontSize = baseFontSize * scale * (settings.SingleLineLyrics ? SingleLineFontSizeMultiplier : 1);
         var coverSize = AlignPixel(baseCoverSize * scale, pixelsPerDip);
         var coverGap = AlignPixel(AppSettings.ClampCoverGap(settings.CoverGap) * scale, pixelsPerDip);
         var baseCornerRadius = AppSettings.ClampCoverCornerRadius(settings.CoverCornerRadius, baseCoverSize);
         var coverCornerRadius = Math.Min(
             AlignPixel(baseCornerRadius * scale, pixelsPerDip),
             AlignPixelDown(coverSize / 2, pixelsPerDip));
-        var coverVerticalSpacing = AlignPixel(BaseWindowVerticalSpacing * scale, pixelsPerDip);
+        var hostHorizontalPadding = AlignPixel(BaseHostHorizontalPadding * scale, pixelsPerDip);
+        var coverVerticalSpacing = settings.UseFloatingWindow
+            ? 2 * hostHorizontalPadding
+            : AlignPixel(BaseWindowVerticalSpacing * scale, pixelsPerDip);
         var minimumWindowHeight = AlignPixel(BaseWindowMinimumHeight * scale, pixelsPerDip);
-        var textHeight = fontSize * 2.15 + (BaseTextVerticalSpacing * scale);
+        var textHeight = fontSize * (settings.SingleLineLyrics ? 1.15 : 2.15) + (BaseTextVerticalSpacing * scale);
         var contentHeight = settings.ShowCover
             ? Math.Max(textHeight, coverSize + coverVerticalSpacing)
             : textHeight;
@@ -110,23 +118,24 @@ internal sealed record LyricsLayoutMetrics
             minimumWindowHeight,
             contentHeight), pixelsPerDip);
 
-        return new LyricsLayoutMetrics
+        var metrics = new LyricsLayoutMetrics
         {
+            IsSingleLine = settings.SingleLineLyrics,
             ScalePercent = scalePercent,
             FontSize = fontSize,
             CoverSize = coverSize,
             CoverGap = coverGap,
             CoverCornerRadius = coverCornerRadius,
-            HostHorizontalPadding = AlignPixel(BaseHostHorizontalPadding * scale, pixelsPerDip),
+            HostHorizontalPadding = hostHorizontalPadding,
             HostVerticalPadding = AlignPixel(BaseHostVerticalPadding * scale, pixelsPerDip),
             MinimumContentHeight = AlignPixel(BaseMinimumContentHeight * scale, pixelsPerDip),
             ViewportDescenderBuffer = AlignPixel(BaseViewportDescenderBuffer * scale, pixelsPerDip),
             LayoutHorizontalPadding = AlignPixel(BaseLayoutHorizontalPadding * scale, pixelsPerDip),
-            LyricsPaneTopPadding = AlignPixel(BaseLyricsPaneTopPadding * scale, pixelsPerDip),
+            LyricsPaneTopPadding = settings.SingleLineLyrics ? 0 : AlignPixel(BaseLyricsPaneTopPadding * scale, pixelsPerDip),
             LyricsPaneRightPadding = AlignPixel(BaseLyricsPaneRightPadding * scale, pixelsPerDip),
             LyricsPaneLeftPadding = AlignPixel(BaseLyricsPaneLeftPadding * scale, pixelsPerDip),
-            PrimaryOffsetY = AlignPixel(BasePrimaryOffsetY * scale, pixelsPerDip),
-            SecondaryOffsetY = AlignPixel(BaseSecondaryOffsetY * scale, pixelsPerDip),
+            PrimaryOffsetY = settings.SingleLineLyrics ? 0 : AlignPixel(BasePrimaryOffsetY * scale, pixelsPerDip),
+            SecondaryOffsetY = settings.SingleLineLyrics ? 0 : AlignPixel(BaseSecondaryOffsetY * scale, pixelsPerDip),
             LineTextBottomPadding = AlignPixel(BaseLineTextBottomPadding * scale, pixelsPerDip),
             SurfaceRadius = AlignPixel(BaseSurfaceRadius * scale, pixelsPerDip),
             LayerTransitionOffset = AlignPixel(BaseLayerTransitionOffset * scale, pixelsPerDip),
@@ -141,6 +150,48 @@ internal sealed record LyricsLayoutMetrics
             SpectrumMiddleHeight = AlignPixel(BaseSpectrumMiddleHeight * scale, pixelsPerDip),
             DesiredWindowHeight = desiredWindowHeight
         };
+
+        if (settings.UseFloatingWindow || taskbar is not { Width: > 0, Height: > 0 } bounds)
+            return metrics;
+
+        if (bounds.IsVertical)
+        {
+            var horizontalPadding = Math.Min(hostHorizontalPadding, AlignPixelDown(bounds.Width / 12, pixelsPerDip));
+            var fittedCover = Math.Min(coverSize, Math.Max(0, bounds.Width - 2 * horizontalPadding));
+            var columnWidth = (bounds.Width - 2 * horizontalPadding - metrics.LyricsPaneLeftPadding -
+                metrics.LyricsPaneRightPadding) / (settings.SingleLineLyrics ? 1 : 2);
+            return metrics with
+            {
+                IsVertical = true,
+                HostHorizontalPadding = horizontalPadding,
+                CoverSize = fittedCover,
+                CoverCornerRadius = Math.Min(coverCornerRadius, fittedCover / 2),
+                FontSize = Math.Min(fontSize, Math.Max(1, (columnWidth - metrics.LineTextBottomPadding) / 1.12)),
+                MinimumContentHeight = 0,
+                DesiredWindowHeight = Math.Min(bounds.Height, AppSettings.CalculateEffectiveWindowWidth(settings.WindowWidth))
+            };
+        }
+
+        // Fit complete rows and native input bounds within a short taskbar, retaining
+        // the user's line-count choice and saved layout values.
+        if (bounds.Height < 40)
+        {
+            var verticalPadding = Math.Min(metrics.HostVerticalPadding, AlignPixelDown(bounds.Height / 8, pixelsPerDip));
+            var availableHeight = Math.Max(1 / pixelsPerDip, bounds.Height - 2 * verticalPadding);
+            var fittedCover = Math.Min(coverSize, availableHeight);
+            return metrics with
+            {
+                HostVerticalPadding = verticalPadding,
+                MinimumContentHeight = 0,
+                CoverSize = fittedCover,
+                CoverCornerRadius = Math.Min(coverCornerRadius, fittedCover / 2),
+                FontSize = Math.Min(fontSize, Math.Max(1, ((availableHeight - metrics.LyricsPaneTopPadding) /
+                    (settings.SingleLineLyrics ? 1 : 2) - metrics.PrimaryOffsetY - metrics.LineTextBottomPadding) / 1.12)),
+                DesiredWindowHeight = bounds.Height
+            };
+        }
+
+        return metrics;
     }
 
     private static double AlignPixel(double value, double pixelsPerDip)
@@ -155,7 +206,7 @@ internal sealed record LyricsLayoutMetrics
 
     private static double AlignPixelUp(double value, double pixelsPerDip)
     {
-        return Math.Ceiling(value * pixelsPerDip) / pixelsPerDip;
+        return Math.Ceiling(Math.Round(value * pixelsPerDip, 8)) / pixelsPerDip;
     }
 
     private static double NormalizePixelsPerDip(double pixelsPerDip)

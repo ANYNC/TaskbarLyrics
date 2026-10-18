@@ -22,6 +22,15 @@ public enum CoverPosition
     Right = 1
 }
 
+public enum ControlPanelTriggerMethod
+{
+    Click,
+    Hover
+}
+
+internal enum ControlPanelTriggerArea { Cover, Lyrics }
+internal enum ControlPanelActivation { Click, Hover, Keyboard }
+
 public enum ForegroundColorMode
 {
     Dark = 0,
@@ -49,6 +58,13 @@ public enum LyricsDisplayMode
 {
     All,
     Selected
+}
+
+public enum FloatingWindowLayer
+{
+    Desktop,
+    Window,
+    Fullscreen
 }
 
 public sealed class AppSettings
@@ -157,9 +173,88 @@ public sealed class AppSettings
 
     public bool ShowCover { get; set; } = true;
 
+    public bool SingleLineLyrics { get; set; }
+
     public bool EnableControlPanel { get; set; } = true;
 
+    public ControlPanelTriggerMethod ControlPanelTriggerMethod { get; set; } = ControlPanelTriggerMethod.Click;
+    public bool ControlPanelTriggerCover { get; set; } = true;
+    public bool ControlPanelTriggerLyrics { get; set; }
+
+    public void NormalizeControlPanelTriggers()
+    {
+        if (!Enum.IsDefined(ControlPanelTriggerMethod)) ControlPanelTriggerMethod = ControlPanelTriggerMethod.Click;
+        if (!ControlPanelTriggerLyrics && (!ControlPanelTriggerCover || !ShowCover))
+        {
+            if (ShowCover) ControlPanelTriggerCover = true;
+            else ControlPanelTriggerLyrics = true;
+        }
+    }
+
+    internal bool CanTriggerControlPanel(ControlPanelTriggerArea area, ControlPanelActivation activation)
+    {
+        if (!Enum.IsDefined(area) || !Enum.IsDefined(activation)) return false;
+        if (UseFloatingWindow) return ShowCover && area == ControlPanelTriggerArea.Cover && activation == ControlPanelActivation.Click;
+        return EnableControlPanel &&
+            (area == ControlPanelTriggerArea.Cover ? ShowCover && ControlPanelTriggerCover : ControlPanelTriggerLyrics) &&
+            (activation == ControlPanelActivation.Keyboard ||
+                (activation == ControlPanelActivation.Hover) == (ControlPanelTriggerMethod == ControlPanelTriggerMethod.Hover));
+    }
+
+    public bool EnableFloatingControlPanel { get; set; } = true;
+
+    public bool GetEnableControlPanel() => UseFloatingWindow ? EnableFloatingControlPanel : EnableControlPanel;
+
+    public const double DefaultEmbeddedPanelBrightness = 0.20;
+    public const double DefaultEmbeddedPanelTintOpacity = 0.65;
+    public const double DefaultEmbeddedPanelBlurAmount = 24;
+    public const double DefaultFloatingPanelBrightness = 0.25;
+    public const double DefaultFloatingPanelTintOpacity = 0.55;
+    public const double DefaultFloatingPanelBlurAmount = 32;
+
+    private double _embeddedPanelBrightness = DefaultEmbeddedPanelBrightness;
+    private double _embeddedPanelTintOpacity = DefaultEmbeddedPanelTintOpacity;
+    private double _embeddedPanelBlurAmount = DefaultEmbeddedPanelBlurAmount;
+    public double EmbeddedPanelBrightness
+    {
+        get => _embeddedPanelBrightness;
+        set => _embeddedPanelBrightness = double.IsFinite(value) ? Math.Clamp(value, 0, 1) : DefaultEmbeddedPanelBrightness;
+    }
+    public double EmbeddedPanelTintOpacity
+    {
+        get => _embeddedPanelTintOpacity;
+        set => _embeddedPanelTintOpacity = double.IsFinite(value) ? Math.Clamp(value, 0, 1) : DefaultEmbeddedPanelTintOpacity;
+    }
+    public double EmbeddedPanelBlurAmount
+    {
+        get => _embeddedPanelBlurAmount;
+        set => _embeddedPanelBlurAmount = double.IsFinite(value) ? Math.Clamp(value, 0, 64) : DefaultEmbeddedPanelBlurAmount;
+    }
+
+    private double _floatingPanelBrightness = DefaultFloatingPanelBrightness;
+    private double _floatingPanelTintOpacity = DefaultFloatingPanelTintOpacity;
+    private double _floatingPanelBlurAmount = DefaultFloatingPanelBlurAmount;
+    public double FloatingPanelBlurAmount
+    {
+        get => _floatingPanelBlurAmount;
+        set => _floatingPanelBlurAmount = double.IsFinite(value) ? Math.Clamp(value, 0, 64) : DefaultFloatingPanelBlurAmount;
+    }
+    public double FloatingPanelBrightness
+    {
+        get => _floatingPanelBrightness;
+        set => _floatingPanelBrightness = double.IsFinite(value) ? Math.Clamp(value, 0, 1) : DefaultFloatingPanelBrightness;
+    }
+    public double FloatingPanelTintOpacity
+    {
+        get => _floatingPanelTintOpacity;
+        set => _floatingPanelTintOpacity = double.IsFinite(value) ? Math.Clamp(value, 0, 1) : DefaultFloatingPanelTintOpacity;
+    }
+
     public double LyricsLayoutScalePercent { get; set; } = DefaultLyricsLayoutScalePercent;
+
+    public double FloatingLyricsLayoutScalePercent { get; set; } = DefaultLyricsLayoutScalePercent;
+
+    public double GetLyricsLayoutScalePercent() => UseFloatingWindow ? FloatingLyricsLayoutScalePercent : LyricsLayoutScalePercent;
 
     public string FontFamily { get; set; } = DefaultFontFamily;
 
@@ -177,7 +272,12 @@ public sealed class AppSettings
 
     public bool ShowTextShadow { get; set; }
 
+    // Keep the existing persisted name for the embedded presentation.
     public double WindowWidth { get; set; } = DefaultWindowWidth;
+
+    public double FloatingWindowWidth { get; set; } = DefaultWindowWidth;
+
+    public double GetWindowWidth() => UseFloatingWindow ? FloatingWindowWidth : WindowWidth;
 
     public LyricsHorizontalAnchor HorizontalAnchor { get; set; } = LyricsHorizontalAnchor.Left;
 
@@ -190,6 +290,15 @@ public sealed class AppSettings
     public double YOffset { get; set; }
 
     public bool ForceAlwaysOnTop { get; set; } = true;
+
+    private FloatingWindowLayer? _floatingWindowLayer;
+
+    // Missing/invalid new fields retain the legacy switch's behavior, independent of JSON field order.
+    public FloatingWindowLayer FloatingWindowLayer
+    {
+        get => _floatingWindowLayer ?? (ForceAlwaysOnTop ? FloatingWindowLayer.Fullscreen : FloatingWindowLayer.Window);
+        set => _floatingWindowLayer = Enum.IsDefined(value) ? value : null;
+    }
 
     public LyricsDisplayMode LyricsDisplayMode { get; set; } = LyricsDisplayMode.All;
 
@@ -360,6 +469,48 @@ public sealed class AppSettings
             : sourceId;
     }
 
+    public void ResetWindowPresentation(bool floating)
+    {
+        var defaults = new AppSettings();
+        if (floating)
+        {
+            FloatingWindowWidth = defaults.FloatingWindowWidth;
+            FloatingLyricsLayoutScalePercent = defaults.FloatingLyricsLayoutScalePercent;
+            EnableFloatingControlPanel = defaults.EnableFloatingControlPanel;
+            ForceAlwaysOnTop = defaults.ForceAlwaysOnTop;
+            FloatingWindowLayer = defaults.FloatingWindowLayer;
+            FloatingPanelBlurAmount = defaults.FloatingPanelBlurAmount;
+            FloatingPanelBrightness = defaults.FloatingPanelBrightness;
+            FloatingPanelTintOpacity = defaults.FloatingPanelTintOpacity;
+        }
+        else
+        {
+            WindowWidth = defaults.WindowWidth;
+            LyricsLayoutScalePercent = defaults.LyricsLayoutScalePercent;
+            EnableControlPanel = defaults.EnableControlPanel;
+            EmbeddedPanelBrightness = defaults.EmbeddedPanelBrightness;
+            EmbeddedPanelTintOpacity = defaults.EmbeddedPanelTintOpacity;
+            EmbeddedPanelBlurAmount = defaults.EmbeddedPanelBlurAmount;
+            ControlPanelTriggerMethod = defaults.ControlPanelTriggerMethod;
+            ControlPanelTriggerCover = defaults.ControlPanelTriggerCover;
+            ControlPanelTriggerLyrics = defaults.ControlPanelTriggerLyrics;
+            HorizontalAnchor = defaults.HorizontalAnchor;
+            XOffset = defaults.XOffset;
+            YOffset = defaults.YOffset;
+            ShowBackground = defaults.ShowBackground;
+            BackgroundOpacity = defaults.BackgroundOpacity;
+            ShowBorder = defaults.ShowBorder;
+        }
+    }
+
+    public void ResetLyricsLayoutBase()
+    {
+        FontSize = DefaultFontSize;
+        CoverSize = DefaultCoverSize;
+        CoverGap = DefaultCoverGap;
+        CoverCornerRadius = DefaultCoverCornerRadius;
+    }
+
     public void NormalizeLyricsLayout()
     {
         FontSize = ClampFontSize(FontSize);
@@ -367,8 +518,10 @@ public sealed class AppSettings
         CoverGap = ClampCoverGap(CoverGap);
         CoverCornerRadius = ClampCoverCornerRadius(CoverCornerRadius, CoverSize);
         LyricsLayoutScalePercent = ClampLyricsLayoutScalePercent(LyricsLayoutScalePercent);
+        FloatingLyricsLayoutScalePercent = ClampLyricsLayoutScalePercent(FloatingLyricsLayoutScalePercent);
         NormalizeLyricsTextAlignment();
         NormalizeCoverPosition();
+        NormalizeControlPanelTriggers();
     }
 
     public void NormalizeCoverPosition()
@@ -406,6 +559,7 @@ public sealed class AppSettings
         WindowWidth = double.IsFinite(WindowWidth)
             ? Math.Clamp(WindowWidth, MinimumWindowWidth, MaximumWindowWidth)
             : DefaultWindowWidth;
+        FloatingWindowWidth = CalculateEffectiveWindowWidth(FloatingWindowWidth);
         XOffset = double.IsFinite(XOffset)
             ? Math.Clamp(XOffset, MinimumWindowOffset, MaximumWindowOffset)
             : 0;
@@ -550,14 +704,9 @@ public sealed class AppSettings
             MaximumLyricsLayoutScalePercent);
     }
 
-    public static double ClampEffectiveWindowWidth(double baseWindowWidth, double scalePercent, double maxWidth)
+    public static double ClampEffectiveWindowWidth(double windowWidth, double maxWidth)
     {
-        var scale = double.IsFinite(scalePercent)
-            ? ClampLyricsLayoutScalePercent(scalePercent) / 100.0
-            : DefaultLyricsLayoutScalePercent / 100.0;
-        var baseWidth = double.IsFinite(baseWindowWidth)
-            ? Math.Clamp(baseWindowWidth, MinimumWindowWidth, MaximumWindowWidth)
-            : DefaultWindowWidth;
+        var width = CalculateEffectiveWindowWidth(windowWidth);
         if (!double.IsFinite(maxWidth) || maxWidth <= 0)
         {
             maxWidth = MaximumWindowWidth;
@@ -568,19 +717,11 @@ public sealed class AppSettings
             return maxWidth;
         }
 
-        return Math.Clamp(baseWidth * scale, MinimumWindowWidth, maxWidth);
+        return Math.Clamp(width, MinimumWindowWidth, maxWidth);
     }
 
-    public static double CalculateEffectiveWindowWidth(double baseWindowWidth, double scalePercent)
-    {
-        var scale = double.IsFinite(scalePercent)
-            ? ClampLyricsLayoutScalePercent(scalePercent) / 100.0
-            : DefaultLyricsLayoutScalePercent / 100.0;
-        var baseWidth = double.IsFinite(baseWindowWidth)
-            ? Math.Clamp(baseWindowWidth, MinimumWindowWidth, MaximumWindowWidth)
-            : DefaultWindowWidth;
-        return Math.Max(MinimumWindowWidth, baseWidth * scale);
-    }
+    public static double CalculateEffectiveWindowWidth(double windowWidth) => double.IsFinite(windowWidth)
+        ? Math.Clamp(windowWidth, MinimumWindowWidth, MaximumWindowWidth) : DefaultWindowWidth;
 
 }
 
