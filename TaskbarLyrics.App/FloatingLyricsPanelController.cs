@@ -31,7 +31,7 @@ internal sealed class FloatingLyricsPanelController : IDisposable
         internal bool CoverHovered;
         internal FloatingCoverUnlockWindow? UnlockWindow;
         internal Func<FloatingWindowSize>? ReadSize;
-        internal Action<FloatingWindowSize>? PreviewSize;
+        internal Action<FloatingWindowSize, Rect>? PreviewSize;
         internal Action<FloatingWindowSize>? CommitSize;
         internal FloatingResizeGripWindow? ResizeGrip;
     }
@@ -96,7 +96,7 @@ internal sealed class FloatingLyricsPanelController : IDisposable
     internal bool IsAdjustingSize => _resizing is not null;
 
     internal void RegisterSizeAdjustment(Window window, Func<FloatingWindowSize> read,
-        Action<FloatingWindowSize> preview, Action<FloatingWindowSize> commit)
+        Action<FloatingWindowSize, Rect> preview, Action<FloatingWindowSize> commit)
     {
         var target = _targets.Find(target => target.Window == window)
             ?? throw new InvalidOperationException("Register the floating window before its sizing callbacks.");
@@ -132,7 +132,7 @@ internal sealed class FloatingLyricsPanelController : IDisposable
         _updatingDrag = true;
         try
         {
-            target.PreviewSize?.Invoke(size);
+            target.PreviewSize?.Invoke(size, _sizeOriginalBounds);
             target.Window.UpdateLayout();
             var bounds = GetBounds(target.Window);
             var desired = restore ? _sizeOriginalBounds : FloatingWindowPlacement.Clamp(

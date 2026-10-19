@@ -46,8 +46,8 @@
   --viewport-descender-buffer: 2px;
   --layout-padding-inline: 0px;
   --lyrics-pane-padding-top: 3px;
-  --lyrics-pane-padding-right: 4px;
-  --lyrics-pane-padding-left: 2px;
+  --lyrics-pane-padding-right: 3px;
+  --lyrics-pane-padding-left: 3px;
   --primary-offset-y: 1px;
   --secondary-offset-y: 2px;
   --line-text-padding-bottom: 2px;
@@ -64,7 +64,7 @@
   --spectrum-middle-height: 11px;
   --surface-color: transparent;
   --surface-shadow: none;
-  --text-shadow: 0 1px 2px rgba(0, 0, 0, 0.36);
+  --text-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
   --line-transform-origin: left center;
 }
 
@@ -548,29 +548,29 @@ html, body {
   text-overflow: clip;
 }
 
-/* Paint into the existing floating pane padding without changing text geometry. */
+/* Both modes paint into the existing pane padding without changing text geometry. */
 @supports (overflow: clip) and (overflow-clip-margin: 3px) {
-  :root.floating-controls-enabled:not(.vertical-taskbar) :is(.lyrics-pane, .lyrics-layer, .viewport, .line-text-viewport, .line-text) {
+  :root:not(.vertical-taskbar) :is(.lyrics-pane, .lyrics-layer, .viewport, .line-text-viewport, .line-text) {
     overflow: clip;
     overflow-clip-margin: 3px;
   }
 
   /* Unlike hidden overflow, clip does not reset a grid item's automatic minimum. */
-  :root.floating-controls-enabled:not(.vertical-taskbar) .line-text {
+  :root:not(.vertical-taskbar) .line-text {
     min-width: 0;
   }
 
-  :root.floating-controls-enabled:not(.vertical-taskbar) .line.horizontal-scrolling .line-text {
+  :root:not(.vertical-taskbar) .line.horizontal-scrolling .line-text {
     overflow: visible;
   }
 
   /* Scrolling letters must not enter the horizontal shadow-only space. */
-  :root.floating-controls-enabled:not(.vertical-taskbar) .line.horizontal-scrolling .line-text-viewport {
+  :root:not(.vertical-taskbar) .line.horizontal-scrolling .line-text-viewport {
     clip-path: inset(-3px 0 -3px 0);
   }
 
   /* Preserve the original cut-off and fading while lines roll between rows. */
-  :root.floating-controls-enabled:not(.vertical-taskbar) .viewport:has(> .track.animating) {
+  :root:not(.vertical-taskbar) .viewport:has(> .track.animating) {
     overflow: hidden;
   }
 }

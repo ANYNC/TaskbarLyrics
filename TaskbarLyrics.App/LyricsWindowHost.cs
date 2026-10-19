@@ -336,14 +336,16 @@ internal sealed class LyricsWindowHost : IDisposable
         }
     }
 
-    private void OnFloatingSizePreviewRequested(FloatingWindowSize size)
+    private void OnFloatingSizePreviewRequested(FloatingWindowSize size, Window source, Rect anchor)
     {
         // Preview only the existing hosts. Restoring saved placement or replaying content here
         // fights the gesture's positioning and needlessly reconfigures WebView on every move.
         _currentSettings = size.ApplyTo(_currentSettings);
-        _window?.ApplySettings(_currentSettings, keepControlPanelOpen: true, preserveFloatingPosition: true);
+        _window?.ApplySettings(_currentSettings, keepControlPanelOpen: true, preserveFloatingPosition: true,
+            floatingResizeAnchor: source == _window ? anchor : null);
         foreach (var mirror in _mirrorWindows.Values)
-            mirror.ApplySettings(_currentSettings, keepControlPanelOpen: true, preserveFloatingPosition: true);
+            mirror.ApplySettings(_currentSettings, keepControlPanelOpen: true, preserveFloatingPosition: true,
+                floatingResizeAnchor: source == mirror ? anchor : null);
     }
 
     private void OnFloatingSizeCommitted(FloatingWindowSize size)

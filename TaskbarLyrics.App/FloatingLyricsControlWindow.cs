@@ -149,9 +149,7 @@ internal partial class FloatingLyricsControlWindow : Window
         Owner = owner;
         Topmost = owner.Topmost;
         KeepOpenForKeyboard = false;
-        Width = placement.Bounds.Width / scale;
-        Height = placement.Bounds.Height / scale;
-        var narrow = playbackControls && Width < 220;
+        var narrow = playbackControls && placement.Bounds.Width / scale < 220;
         Actions.Visibility = SeekSlider.Visibility = ElapsedText.Visibility = DurationText.Visibility =
             playbackControls ? Visibility.Visible : Visibility.Collapsed;
         SeekRow.Height = new GridLength(playbackControls ? 16 : 0);
@@ -165,13 +163,13 @@ internal partial class FloatingLyricsControlWindow : Window
         PlayButton.Width = PlayButton.Height = narrow ? 28 : 36;
         PlayButton.Margin = new Thickness(narrow ? 4 : 6, 0, narrow ? 4 : 6, 0);
         Actions.HorizontalAlignment = narrow ? System.Windows.HorizontalAlignment.Center : System.Windows.HorizontalAlignment.Stretch;
-        Left = placement.Bounds.Left / scale;
-        Top = placement.Bounds.Top / scale;
-        Show();
-        TaskbarNativeMethods.SetWindowPos(new WindowInteropHelper(this).Handle, IntPtr.Zero,
+        // WPF synchronizes its bounds from this single native move/resize.
+        // Setting Width/Height/Left/Top first would expose intermediate rectangles.
+        TaskbarNativeMethods.SetWindowPos(new WindowInteropHelper(this).EnsureHandle(), IntPtr.Zero,
             (int)Math.Round(placement.Bounds.Left), (int)Math.Round(placement.Bounds.Top),
             (int)Math.Round(placement.Bounds.Width), (int)Math.Round(placement.Bounds.Height),
             TaskbarNativeMethods.SWP_NOZORDER | TaskbarNativeMethods.SWP_NOACTIVATE);
+        if (!IsVisible) Show();
     }
 
     internal void SetPanelVisible(bool visible, bool immediate = false)

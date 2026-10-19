@@ -170,7 +170,8 @@ public partial class MainWindow : Window, IDisposable
         }
     }
 
-    public void ApplySettings(AppSettings settings, bool keepControlPanelOpen = false, bool preserveFloatingPosition = false)
+    public void ApplySettings(AppSettings settings, bool keepControlPanelOpen = false, bool preserveFloatingPosition = false,
+        Rect? floatingResizeAnchor = null)
     {
         var snapshot = settings.Clone();
         var changes = AppSettingsChangeSet.Create(_currentSettings, snapshot, !_hasAppliedSettings);
@@ -195,7 +196,16 @@ public partial class MainWindow : Window, IDisposable
                 snapshot.CustomPlayerSources.Select(source => source.SourceAppUserModelId).ToArray());
         }
 
-        if (changes.WindowLayoutChanged || changes.LyricsLayoutChanged || changes.TaskbarEmbeddingChanged)
+        var resizeFromBottom = false;
+        if (snapshot.UseFloatingWindow && floatingResizeAnchor is { } anchor && PlacementDisplay is { } display)
+        {
+            resizeFromBottom = true;
+            var metrics = CreateLayoutMetrics(snapshot);
+            FloatingWindowPlacement.ResizeFromBottom(this,
+                AppSettings.ClampEffectiveWindowWidth(snapshot.GetWindowWidth(), GetTargetWorkAreaWidth()),
+                Math.Min(metrics.DesiredWindowHeight, display.Height), anchor, display);
+        }
+        else if (changes.WindowLayoutChanged || changes.LyricsLayoutChanged || changes.TaskbarEmbeddingChanged)
         {
             Width = !snapshot.UseFloatingWindow
                 ? AppSettings.ClampEffectiveWindowWidth(
@@ -208,7 +218,7 @@ public partial class MainWindow : Window, IDisposable
 
         if (changes.LyricsLayoutChanged)
         {
-            ApplyHostLayout(CreateLayoutMetrics(snapshot));
+            ApplyHostLayout(CreateLayoutMetrics(snapshot), resizeWindow: !resizeFromBottom);
         }
 
         if (changes.LocalMediaLibraryChanged)
@@ -367,9 +377,9 @@ public partial class MainWindow : Window, IDisposable
         if (!keepControlPanelOpen) SetFloatingControlSurface(false, false);
     }
 
-    private void ApplyHostLayout(LyricsLayoutMetrics metrics)
+    private void ApplyHostLayout(LyricsLayoutMetrics metrics, bool resizeWindow = true)
     {
-        Height = Math.Min(metrics.DesiredWindowHeight, PlacementDisplay?.Height ?? metrics.DesiredWindowHeight);
+        if (resizeWindow) Height = Math.Min(metrics.DesiredWindowHeight, PlacementDisplay?.Height ?? metrics.DesiredWindowHeight);
         RootBorder.Padding = new Thickness(
             metrics.HostHorizontalPadding,
             metrics.HostVerticalPadding,

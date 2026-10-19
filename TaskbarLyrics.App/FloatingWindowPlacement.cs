@@ -85,6 +85,19 @@ internal sealed class FloatingWindowPlacement(Window window, FloatingWindowPosit
             TaskbarNativeMethods.SWP_NOSIZE | TaskbarNativeMethods.SWP_NOZORDER | TaskbarNativeMethods.SWP_NOACTIVATE);
     }
 
+    internal static void ResizeFromBottom(Window window, double width, double height, Rect anchor, DisplayMonitor display)
+    {
+        var handle = new WindowInteropHelper(window).EnsureHandle();
+        var scale = TaskbarNativeMethods.GetDpiForWindow(handle) / 96.0;
+        var physicalWidth = Math.Round(width * scale);
+        var physicalHeight = Math.Round(height * scale);
+        var bounds = Clamp(new Rect(anchor.Left, anchor.Bottom - physicalHeight, physicalWidth, physicalHeight), display.WorkArea);
+        // Apply the size and bottom anchoring before WPF can expose an intermediate HWND.
+        TaskbarNativeMethods.SetWindowPos(handle, IntPtr.Zero,
+            (int)Math.Round(bounds.Left), (int)Math.Round(bounds.Top), (int)physicalWidth, (int)physicalHeight,
+            TaskbarNativeMethods.SWP_NOZORDER | TaskbarNativeMethods.SWP_NOACTIVATE);
+    }
+
     internal static Rect Clamp(Rect bounds, NativeRect work) => new(
         Math.Clamp(bounds.Left, work.Left, Math.Max(work.Left, work.Right - bounds.Width)),
         Math.Clamp(bounds.Top, work.Top, Math.Max(work.Top, work.Bottom - bounds.Height)), bounds.Width, bounds.Height);

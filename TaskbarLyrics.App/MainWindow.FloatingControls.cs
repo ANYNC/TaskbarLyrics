@@ -10,7 +10,7 @@ namespace TaskbarLyrics.App;
 public partial class MainWindow
 {
     private FloatingLyricsPanelController? _floatingControls;
-    internal event Action<FloatingWindowSize>? FloatingSizePreviewRequested;
+    internal event Action<FloatingWindowSize, Window, Rect>? FloatingSizePreviewRequested;
     internal event Action<FloatingWindowSize>? FloatingSizeCommitted;
 
     private bool FloatingControlsLight => (_primaryTextColor.R + _primaryTextColor.G + _primaryTextColor.B) / 3 < 128;
@@ -22,7 +22,7 @@ public partial class MainWindow
             SetFloatingControlSurface, DragFloatingWindow,
             () => NativeWindowInteraction.GetScreenBounds(CoverHitSurface), SetFloatingLockState);
         _floatingControls.RegisterSizeAdjustment(this, () => FloatingWindowSize.FromSettings(_currentSettings),
-            size => FloatingSizePreviewRequested?.Invoke(size), size =>
+            (size, anchor) => FloatingSizePreviewRequested?.Invoke(size, this, anchor), size =>
             {
                 _floatingPlacement.RememberCurrentPosition();
                 FloatingSizeCommitted?.Invoke(size);
@@ -35,7 +35,7 @@ public partial class MainWindow
             (open, above) => mirror.SetFloatingControlSurface(open, above, FloatingControlsLight), mirror.DragFloatingWindow,
             mirror.GetCoverBounds, mirror.SetFloatingLockState);
         _floatingControls?.RegisterSizeAdjustment(mirror, mirror.GetFloatingSize,
-            size => FloatingSizePreviewRequested?.Invoke(size), size =>
+            (size, anchor) => FloatingSizePreviewRequested?.Invoke(size, mirror, anchor), size =>
             {
                 mirror.RememberFloatingPosition();
                 FloatingSizeCommitted?.Invoke(size);

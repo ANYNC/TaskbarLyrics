@@ -58,15 +58,12 @@ internal sealed class FloatingMaterialFallbackWindow : Window, IFloatingPanelMat
             new RectangleGeometry(card, 12, 12));
         shadowClip.Freeze();
         _shadowLayer.Clip = shadowClip;
-        Width = cardBounds.Width / scale + ShadowPaddingDip * 2;
-        Height = cardBounds.Height / scale + ShadowPaddingDip * 2;
-        Left = cardBounds.Left / scale - ShadowPaddingDip;
-        Top = cardBounds.Top / scale - ShadowPaddingDip;
-        Show();
+        // Resize and move together: changing Height before Top moves the bottom edge.
         var padding = (int)Math.Round(ShadowPaddingDip * scale);
         TaskbarNativeMethods.SetWindowPos(Handle, lyricsHandle, (int)Math.Round(cardBounds.Left) - padding,
             (int)Math.Round(cardBounds.Top) - padding, (int)Math.Round(cardBounds.Width) + padding * 2,
             (int)Math.Round(cardBounds.Height) + padding * 2, TaskbarNativeMethods.SWP_NOACTIVATE);
+        if (!IsVisible) Show();
     }
     public bool EnsureBelow(IntPtr lyricsHandle) => FloatingPanelWindowOrder.EnsureBelow(Handle, lyricsHandle);
     public void Configure(bool light, double brightness, double tintOpacity, double blurAmount)

@@ -94,7 +94,8 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
         if (!_isDisposed) ApplySettings(_settings, keepControlPanelOpen: true);
     }
 
-    public void ApplySettings(AppSettings settings, bool keepControlPanelOpen = false, bool preserveFloatingPosition = false)
+    public void ApplySettings(AppSettings settings, bool keepControlPanelOpen = false, bool preserveFloatingPosition = false,
+        Rect? floatingResizeAnchor = null)
     {
         _settings = settings.Clone();
         _floatingPlacement.Configure(_settings);
@@ -108,15 +109,20 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
         var pixelsPerDip = display.PixelsPerDip;
         var taskbar = TaskbarPlacementService.GetTaskbarBounds(_displayMonitor, pixelsPerDip);
         var metrics = LyricsLayoutMetrics.Create(_settings, pixelsPerDip, taskbar);
-        Height = Math.Min(metrics.DesiredWindowHeight, display.Height);
-        Width = !_settings.UseFloatingWindow
+        var width = !_settings.UseFloatingWindow
             ? AppSettings.ClampEffectiveWindowWidth(
                 _settings.GetWindowWidth(),
                 TaskbarEmbeddingLayoutPolicy.FromDisplay(_displayMonitor).MaxWidth)
             : AppSettings.ClampEffectiveWindowWidth(
                 _settings.GetWindowWidth(),
                 display.WorkAreaWidth / pixelsPerDip);
-        Height = metrics.DesiredWindowHeight;
+        if (_settings.UseFloatingWindow && floatingResizeAnchor is { } anchor)
+            FloatingWindowPlacement.ResizeFromBottom(this, width, metrics.DesiredWindowHeight, anchor, display);
+        else
+        {
+            Width = width;
+            Height = metrics.DesiredWindowHeight;
+        }
         RootBorder.Padding = new Thickness(
             metrics.HostHorizontalPadding,
             metrics.HostVerticalPadding,

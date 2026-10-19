@@ -33,7 +33,7 @@ public sealed partial class FloatingPanelInputTests
                 controls.Register(owner, () => display, () => true, (_, _) => { },
                     coverBounds: () => new Rect(FloatingLyricsPanelController.GetBounds(owner).TopLeft,
                         new System.Windows.Size(34 * display.PixelsPerDip, 34 * display.PixelsPerDip)));
-                controls.RegisterSizeAdjustment(owner, () => new FloatingWindowSize(420, 100), _ => { }, _ => { });
+                controls.RegisterSizeAdjustment(owner, () => new FloatingWindowSize(420, 100), (_, _) => { }, _ => { });
                 controls.Enabled = true;
                 controls.Open(display.Id, owner);
                 // Opening/focusing controls may raise owned HWNDs. The next policy application

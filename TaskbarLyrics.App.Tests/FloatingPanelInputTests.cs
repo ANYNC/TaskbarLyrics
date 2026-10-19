@@ -347,7 +347,7 @@ public sealed partial class FloatingPanelInputTests
             {
                 var display = DisplayMonitorService.GetDisplays().First(item => item.IsPrimary);
                 controller.Register(owner, () => display, () => true, (_, _) => { }, drag: () => dragged = true);
-                controller.RegisterSizeAdjustment(owner, () => new FloatingWindowSize(420, 100), _ => { }, _ => { });
+                controller.RegisterSizeAdjustment(owner, () => new FloatingWindowSize(420, 100), (_, _) => { }, _ => { });
                 controller.ShowPlaybackControls = false;
                 controller.Enabled = true;
                 controller.Open(display.Id, owner);
@@ -474,7 +474,7 @@ public sealed partial class FloatingPanelInputTests
                         coverHovered = hovered;
                         if (changed.Count == 0 || changed[^1] != locked) changed.Add(locked);
                     });
-                controller.RegisterSizeAdjustment(owner, () => new FloatingWindowSize(420, 100), _ => { }, _ => { });
+                controller.RegisterSizeAdjustment(owner, () => new FloatingWindowSize(420, 100), (_, _) => { }, _ => { });
                 controller.Enabled = true;
                 controller.Open(display.Id, owner);
                 Assert.NotNull(controller.Panel);
