@@ -241,8 +241,8 @@ public sealed partial class FloatingPanelInputTests
             var mirror = new LyricsMirrorWindow(display, (_, _, _, _, _, _) => { }, composition);
             const System.Reflection.BindingFlags flags = System.Reflection.BindingFlags.Instance |
                 System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.DeclaredOnly;
-            main.Loaded -= (RoutedEventHandler)typeof(MainWindow).GetMethod("OnLoaded", flags)!.CreateDelegate(typeof(RoutedEventHandler), main);
-            mirror.Loaded -= (RoutedEventHandler)typeof(LyricsMirrorWindow).GetMethod("OnLoaded", flags)!.CreateDelegate(typeof(RoutedEventHandler), mirror);
+            main.Loaded -= typeof(MainWindow).GetMethod("OnLoaded", flags)!.CreateDelegate<RoutedEventHandler>(main);
+            mirror.Loaded -= typeof(LyricsMirrorWindow).GetMethod("OnLoaded", flags)!.CreateDelegate<RoutedEventHandler>(mirror);
             var settings = new AppSettings
             {
                 CoverPosition = position,

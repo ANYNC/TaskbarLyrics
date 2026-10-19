@@ -52,6 +52,7 @@ internal sealed class FloatingMaterialWindow : IFloatingPanelMaterial
                 ExtendedWindowStyle = 0x08200080
             });
             _source.AddHook(WndProc);
+            _source.DpiChanged += OnDpiChanged;
             _source.CompositionTarget.BackgroundColor = System.Windows.Media.Colors.Transparent;
             _shadowWindow = new FloatingMaterialFallbackWindow(shadowOnly: true);
             _hideTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(180) };
@@ -181,6 +182,13 @@ internal sealed class FloatingMaterialWindow : IFloatingPanelMaterial
         if (!_visible) TaskbarNativeMethods.ShowWindow(Handle, 0);
     }
 
+    private static void OnDpiChanged(object sender, HwndDpiChangedEventArgs e)
+    {
+        // This HWND has no WPF visual tree: Position owns its physical bounds and Composition geometry.
+        // WPF's suggested rectangle would scale those target-screen pixels a second time on monitor changes.
+        e.Handled = true;
+    }
+
     private IntPtr WndProc(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
         if (message == 0x0084)
@@ -205,6 +213,7 @@ internal sealed class FloatingMaterialWindow : IFloatingPanelMaterial
         _disposed = true;
         if (_hideTimer is not null) { _hideTimer.Stop(); _hideTimer.Tick -= HideAfterFade; }
         _shadowWindow?.Dispose();
+        if (_source is not null) _source.DpiChanged -= OnDpiChanged;
         _source?.RemoveHook(WndProc);
         if (_target is not null) _target.Root = null;
         _root?.Children.RemoveAll();
