@@ -5,6 +5,17 @@ namespace TaskbarLyrics.App.Tests;
 public sealed class LyricsStyleScriptFactoryTests
 {
     [Theory]
+    [InlineData(false, false, "null")]
+    [InlineData(true, false, "40")]
+    [InlineData(true, true, "null")]
+    public void CreateEmitsIndependentFloatingDoubleLineHeight(bool floating, bool singleLine, string expected)
+    {
+        var settings = new AppSettings { UseFloatingWindow = floating, SingleLineLyrics = singleLine };
+        var script = LyricsStyleScriptFactory.Create(settings, 1);
+        Assert.Contains($"\"lyricsPaneHeight\":{expected}", script);
+    }
+
+    [Theory]
     [InlineData(false, false, false)]
     [InlineData(false, true, false)]
     [InlineData(true, false, true)]

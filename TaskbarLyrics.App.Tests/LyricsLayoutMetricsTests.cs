@@ -5,6 +5,45 @@ namespace TaskbarLyrics.App.Tests;
 public sealed class LyricsLayoutMetricsTests
 {
     [Theory]
+    [InlineData(100, 1, 14, 34, true)]
+    [InlineData(100, 1.25, 14, 34, true)]
+    [InlineData(125, 1.5, 14, 34, true)]
+    [InlineData(200, 2, 14, 34, true)]
+    [InlineData(100, 1, 26, 20, true)]
+    [InlineData(100, 1, 14, 50, true)]
+    [InlineData(100, 1, 14, 34, false)]
+    public void FloatingDoubleLineUsesEmbeddedTextHeightWithoutChangingCardInsets(
+        double scale, double dpi, double fontSize, double coverSize, bool showCover)
+    {
+        var settings = new AppSettings
+        {
+            FontSize = fontSize,
+            CoverSize = coverSize,
+            ShowCover = showCover,
+            LyricsLayoutScalePercent = scale,
+            FloatingLyricsLayoutScalePercent = scale
+        };
+        var embedded = LyricsLayoutMetrics.Create(settings, dpi);
+        settings.UseFloatingWindow = true;
+        var floating = LyricsLayoutMetrics.Create(settings, dpi);
+
+        var expectedHeight = Math.Max(embedded.MinimumContentHeight,
+            embedded.DesiredWindowHeight - 2 * embedded.HostVerticalPadding) + embedded.ViewportDescenderBuffer;
+        Assert.Equal(expectedHeight, floating.LyricsPaneHeight);
+        Assert.Null(embedded.LyricsPaneHeight);
+        Assert.True(floating.DesiredWindowHeight >= embedded.DesiredWindowHeight);
+        Assert.Equal(embedded.CoverSize, floating.CoverSize);
+        Assert.Equal(embedded.FontSize, floating.FontSize);
+    }
+
+    [Fact]
+    public void FloatingSingleLineKeepsItsExistingViewportHeight()
+    {
+        var metrics = LyricsLayoutMetrics.Create(new AppSettings { UseFloatingWindow = true, SingleLineLyrics = true });
+        Assert.Null(metrics.LyricsPaneHeight);
+    }
+
+    [Theory]
     [InlineData(100, 1)]
     [InlineData(100, 1.25)]
     [InlineData(125, 1)]

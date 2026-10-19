@@ -35,6 +35,7 @@ internal static class LyricsStyleScriptFactory
             coverGap = metrics.CoverGap,
             coverCornerRadius = metrics.CoverCornerRadius,
             viewportDescenderBuffer = metrics.ViewportDescenderBuffer,
+            lyricsPaneHeight = metrics.LyricsPaneHeight,
             layoutHorizontalPadding = metrics.LayoutHorizontalPadding,
             lyricsPaneTopPadding = metrics.LyricsPaneTopPadding,
             lyricsPaneRightPadding = metrics.LyricsPaneRightPadding,

@@ -2593,6 +2593,13 @@ const lyricsApi = {
     }
     root.style.setProperty("--viewport-descender-buffer", `${viewportDescenderBufferPx}px`);
 
+    const lyricsPaneHeight = Number(payload.lyricsPaneHeight);
+    if (Number.isFinite(lyricsPaneHeight) && lyricsPaneHeight > 0) {
+      root.style.setProperty("--lyrics-pane-height", `${lyricsPaneHeight}px`);
+    } else {
+      root.style.removeProperty("--lyrics-pane-height");
+    }
+
     const pixelMetrics = {
       layoutHorizontalPadding: "--layout-padding-inline",
       lyricsPaneTopPadding: "--lyrics-pane-padding-top",

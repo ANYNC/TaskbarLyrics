@@ -85,6 +85,8 @@ internal sealed record LyricsLayoutMetrics
 
     public required double DesiredWindowHeight { get; init; }
 
+    public double? LyricsPaneHeight { get; init; }
+
     public bool IsVertical { get; init; }
 
     public bool IsSingleLine { get; init; }
@@ -106,17 +108,18 @@ internal sealed record LyricsLayoutMetrics
             AlignPixel(baseCornerRadius * scale, pixelsPerDip),
             AlignPixelDown(coverSize / 2, pixelsPerDip));
         var hostHorizontalPadding = AlignPixel(BaseHostHorizontalPadding * scale, pixelsPerDip);
+        var embeddedCoverVerticalSpacing = AlignPixel(BaseWindowVerticalSpacing * scale, pixelsPerDip);
         var coverVerticalSpacing = settings.UseFloatingWindow
             ? 2 * hostHorizontalPadding
-            : AlignPixel(BaseWindowVerticalSpacing * scale, pixelsPerDip);
+            : embeddedCoverVerticalSpacing;
         var minimumWindowHeight = AlignPixel(BaseWindowMinimumHeight * scale, pixelsPerDip);
         var textHeight = fontSize * (settings.SingleLineLyrics ? 1.15 : 2.15) + (BaseTextVerticalSpacing * scale);
-        var contentHeight = settings.ShowCover
-            ? Math.Max(textHeight, coverSize + coverVerticalSpacing)
-            : textHeight;
-        var desiredWindowHeight = AlignPixelUp(Math.Max(
-            minimumWindowHeight,
-            contentHeight), pixelsPerDip);
+        double CalculateWindowHeight(double verticalSpacing) => AlignPixelUp(Math.Max(minimumWindowHeight,
+            settings.ShowCover ? Math.Max(textHeight, coverSize + verticalSpacing) : textHeight), pixelsPerDip);
+        var desiredWindowHeight = CalculateWindowHeight(coverVerticalSpacing);
+        var hostVerticalPadding = AlignPixel(BaseHostVerticalPadding * scale, pixelsPerDip);
+        var minimumContentHeight = AlignPixel(BaseMinimumContentHeight * scale, pixelsPerDip);
+        var viewportDescenderBuffer = AlignPixel(BaseViewportDescenderBuffer * scale, pixelsPerDip);
 
         var metrics = new LyricsLayoutMetrics
         {
@@ -127,9 +130,14 @@ internal sealed record LyricsLayoutMetrics
             CoverGap = coverGap,
             CoverCornerRadius = coverCornerRadius,
             HostHorizontalPadding = hostHorizontalPadding,
-            HostVerticalPadding = AlignPixel(BaseHostVerticalPadding * scale, pixelsPerDip),
-            MinimumContentHeight = AlignPixel(BaseMinimumContentHeight * scale, pixelsPerDip),
-            ViewportDescenderBuffer = AlignPixel(BaseViewportDescenderBuffer * scale, pixelsPerDip),
+            HostVerticalPadding = hostVerticalPadding,
+            MinimumContentHeight = minimumContentHeight,
+            ViewportDescenderBuffer = viewportDescenderBuffer,
+            // Keep floating-card padding outside the same text viewport used by the embedded layout.
+            LyricsPaneHeight = settings.UseFloatingWindow && !settings.SingleLineLyrics
+                ? Math.Max(minimumContentHeight, CalculateWindowHeight(embeddedCoverVerticalSpacing) - 2 * hostVerticalPadding)
+                    + viewportDescenderBuffer
+                : null,
             LayoutHorizontalPadding = AlignPixel(BaseLayoutHorizontalPadding * scale, pixelsPerDip),
             LyricsPaneTopPadding = settings.SingleLineLyrics ? 0 : AlignPixel(BaseLyricsPaneTopPadding * scale, pixelsPerDip),
             LyricsPaneRightPadding = AlignPixel(BaseLyricsPaneRightPadding * scale, pixelsPerDip),

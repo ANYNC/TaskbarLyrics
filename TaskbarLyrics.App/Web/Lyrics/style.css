@@ -328,6 +328,11 @@ html, body {
   padding: var(--lyrics-pane-padding-top) var(--lyrics-pane-padding-right) 0 var(--lyrics-pane-padding-left);
 }
 
+/* The shell centers this text block while the floating card retains its artwork padding. */
+:root.floating-controls-enabled:not(.single-line):not(.vertical-taskbar) .lyrics-pane {
+  height: min(100%, var(--lyrics-pane-height, 100%));
+}
+
 .lyrics-layer,
 .spectrum-layer {
   position: absolute;
