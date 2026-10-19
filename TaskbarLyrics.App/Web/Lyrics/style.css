@@ -548,6 +548,33 @@ html, body {
   text-overflow: clip;
 }
 
+/* Paint into the existing floating pane padding without changing text geometry. */
+@supports (overflow: clip) and (overflow-clip-margin: 3px) {
+  :root.floating-controls-enabled:not(.vertical-taskbar) :is(.lyrics-pane, .lyrics-layer, .viewport, .line-text-viewport, .line-text) {
+    overflow: clip;
+    overflow-clip-margin: 3px;
+  }
+
+  /* Unlike hidden overflow, clip does not reset a grid item's automatic minimum. */
+  :root.floating-controls-enabled:not(.vertical-taskbar) .line-text {
+    min-width: 0;
+  }
+
+  :root.floating-controls-enabled:not(.vertical-taskbar) .line.horizontal-scrolling .line-text {
+    overflow: visible;
+  }
+
+  /* Scrolling letters must not enter the horizontal shadow-only space. */
+  :root.floating-controls-enabled:not(.vertical-taskbar) .line.horizontal-scrolling .line-text-viewport {
+    clip-path: inset(-3px 0 -3px 0);
+  }
+
+  /* Preserve the original cut-off and fading while lines roll between rows. */
+  :root.floating-controls-enabled:not(.vertical-taskbar) .viewport:has(> .track.animating) {
+    overflow: hidden;
+  }
+}
+
 .line.horizontal-scrolling.word-scan-smoothing .line-text-stack {
   transition: transform 90ms linear;
   will-change: transform;

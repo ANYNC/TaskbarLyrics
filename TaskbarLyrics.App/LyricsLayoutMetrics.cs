@@ -10,6 +10,7 @@ internal sealed record LyricsLayoutMetrics
     private const double BaseLyricsPaneTopPadding = 3;
     private const double BaseLyricsPaneRightPadding = 4;
     private const double BaseLyricsPaneLeftPadding = 2;
+    private const double BaseFloatingLyricsPaneHorizontalPadding = 3;
     private const double BasePrimaryOffsetY = 1;
     private const double BaseSecondaryOffsetY = 1;
     private const double BaseLineTextBottomPadding = 2;
@@ -140,8 +141,10 @@ internal sealed record LyricsLayoutMetrics
                 : null,
             LayoutHorizontalPadding = AlignPixel(BaseLayoutHorizontalPadding * scale, pixelsPerDip),
             LyricsPaneTopPadding = settings.SingleLineLyrics ? 0 : AlignPixel(BaseLyricsPaneTopPadding * scale, pixelsPerDip),
-            LyricsPaneRightPadding = AlignPixel(BaseLyricsPaneRightPadding * scale, pixelsPerDip),
-            LyricsPaneLeftPadding = AlignPixel(BaseLyricsPaneLeftPadding * scale, pixelsPerDip),
+            LyricsPaneRightPadding = AlignPixel((settings.UseFloatingWindow
+                ? BaseFloatingLyricsPaneHorizontalPadding : BaseLyricsPaneRightPadding) * scale, pixelsPerDip),
+            LyricsPaneLeftPadding = AlignPixel((settings.UseFloatingWindow
+                ? BaseFloatingLyricsPaneHorizontalPadding : BaseLyricsPaneLeftPadding) * scale, pixelsPerDip),
             PrimaryOffsetY = settings.SingleLineLyrics ? 0 : AlignPixel(BasePrimaryOffsetY * scale, pixelsPerDip),
             SecondaryOffsetY = settings.SingleLineLyrics ? 0 : AlignPixel(BaseSecondaryOffsetY * scale, pixelsPerDip),
             LineTextBottomPadding = AlignPixel(BaseLineTextBottomPadding * scale, pixelsPerDip),

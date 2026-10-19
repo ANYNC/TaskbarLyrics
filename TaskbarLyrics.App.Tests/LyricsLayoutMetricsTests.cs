@@ -5,6 +5,22 @@ namespace TaskbarLyrics.App.Tests;
 public sealed class LyricsLayoutMetricsTests
 {
     [Theory]
+    [InlineData(100, 1, 3)]
+    [InlineData(100, 1.5, 10.0 / 3)]
+    [InlineData(150, 1, 5)]
+    [InlineData(168, 1, 5)]
+    public void FloatingLyricsUseEqualHorizontalInsets(double scale, double dpi, double expected)
+    {
+        var metrics = LyricsLayoutMetrics.Create(new AppSettings
+        {
+            UseFloatingWindow = true,
+            FloatingLyricsLayoutScalePercent = scale
+        }, dpi);
+        Assert.Equal(expected, metrics.LyricsPaneLeftPadding, 6);
+        Assert.Equal(expected, metrics.LyricsPaneRightPadding, 6);
+    }
+
+    [Theory]
     [InlineData(100, 1, 14, 34, true)]
     [InlineData(100, 1.25, 14, 34, true)]
     [InlineData(125, 1.5, 14, 34, true)]

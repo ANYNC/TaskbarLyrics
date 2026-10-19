@@ -5,6 +5,18 @@ namespace TaskbarLyrics.App.Tests;
 public sealed class LyricsStyleScriptFactoryTests
 {
     [Theory]
+    [InlineData(false, false, "none")]
+    [InlineData(true, false, "none")]
+    [InlineData(false, true, "0 1px 2px rgba(0, 0, 0, 0.36)")]
+    [InlineData(true, true, "0 1px 3px rgba(0, 0, 0, 0.36)")]
+    public void CreatePreservesShadowSwitchWithFloatingBlur(bool floating, bool enabled, string expected)
+    {
+        var settings = new AppSettings { UseFloatingWindow = floating, ShowTextShadow = enabled };
+        var script = LyricsStyleScriptFactory.Create(settings, 1);
+        Assert.Contains($"\"textShadow\":\"{expected}\"", script);
+    }
+
+    [Theory]
     [InlineData(false, false, "null")]
     [InlineData(true, false, "40")]
     [InlineData(true, true, "null")]
