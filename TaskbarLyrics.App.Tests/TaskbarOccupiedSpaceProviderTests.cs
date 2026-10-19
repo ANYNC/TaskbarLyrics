@@ -24,12 +24,19 @@ public sealed class TaskbarOccupiedSpaceProviderTests
         var release = NewSignal();
         var clock = new ManualTimeProvider();
         var expected = new[] { new TaskbarHorizontalInterval(120, 300) };
+        var notifications = 0;
+        IReadOnlyList<TaskbarHorizontalInterval>? snapshotSeenByHandler = null;
         using var provider = new TaskbarOccupiedSpaceProvider((_, _, token) =>
         {
             entered.TrySetResult(true);
             release.Task.Wait(token);
             return expected;
         }, clock);
+        provider.SnapshotAvailable += (_, _) =>
+        {
+            Interlocked.Increment(ref notifications);
+            snapshotSeenByHandler = provider.GetOccupiedBounds(TaskbarHandle, TaskbarBounds);
+        };
 
         var pending = Task.CompletedTask;
         try
@@ -42,7 +49,10 @@ public sealed class TaskbarOccupiedSpaceProviderTests
             release.TrySetResult(true);
             await pending.WaitAsync(WaitTimeout);
 
+            Assert.Equal(1, Volatile.Read(ref notifications));
+            AssertIntervals(expected, snapshotSeenByHandler);
             AssertIntervals(expected, provider.GetOccupiedBounds(TaskbarHandle, TaskbarBounds));
+            Assert.Equal(1, Volatile.Read(ref notifications));
         }
         finally
         {
@@ -142,6 +152,7 @@ public sealed class TaskbarOccupiedSpaceProviderTests
     {
         var clock = new ManualTimeProvider();
         var reads = 0;
+        var notifications = 0;
         var expected = new[] { new TaskbarHorizontalInterval(200, 350) };
         using var provider = new TaskbarOccupiedSpaceProvider((_, _, _) =>
         {
@@ -158,22 +169,27 @@ public sealed class TaskbarOccupiedSpaceProviderTests
                 _ => throw new InvalidOperationException("Unknown test failure.")
             };
         }, clock);
+        provider.SnapshotAvailable += (_, _) => Interlocked.Increment(ref notifications);
 
         Assert.Null(provider.GetOccupiedBounds(TaskbarHandle, TaskbarBounds));
         await provider.PendingRead.WaitAsync(WaitTimeout);
+        Assert.Equal(1, Volatile.Read(ref notifications));
         AssertIntervals(expected, provider.GetOccupiedBounds(TaskbarHandle, TaskbarBounds));
 
         clock.Advance(TimeSpan.FromMilliseconds(500));
         AssertIntervals(expected, provider.GetOccupiedBounds(TaskbarHandle, TaskbarBounds));
         await provider.PendingRead.WaitAsync(WaitTimeout);
+        Assert.Equal(1, Volatile.Read(ref notifications));
 
         clock.Advance(TimeSpan.FromMilliseconds(1500));
         AssertIntervals(expected, provider.GetOccupiedBounds(TaskbarHandle, TaskbarBounds));
         await provider.PendingRead.WaitAsync(WaitTimeout);
+        Assert.Equal(1, Volatile.Read(ref notifications));
 
         clock.Advance(TimeSpan.FromMilliseconds(1));
         Assert.Null(provider.GetOccupiedBounds(TaskbarHandle, TaskbarBounds));
         Assert.Equal(3, Volatile.Read(ref reads));
+        Assert.Equal(1, Volatile.Read(ref notifications));
     }
 
     [Fact]
@@ -284,6 +300,7 @@ public sealed class TaskbarOccupiedSpaceProviderTests
         var release = NewSignal();
         var clock = new ManualTimeProvider();
         var reads = 0;
+        var notifications = 0;
         var readToken = CancellationToken.None;
         using var provider = new TaskbarOccupiedSpaceProvider((_, _, token) =>
         {
@@ -293,6 +310,7 @@ public sealed class TaskbarOccupiedSpaceProviderTests
             release.Task.Wait(CancellationToken.None);
             return [new TaskbarHorizontalInterval(100, 200)];
         }, clock);
+        provider.SnapshotAvailable += (_, _) => Interlocked.Increment(ref notifications);
 
         var pending = Task.CompletedTask;
         try
@@ -306,12 +324,14 @@ public sealed class TaskbarOccupiedSpaceProviderTests
             Assert.True(readToken.IsCancellationRequested);
             Assert.Null(provider.GetOccupiedBounds(TaskbarHandle, TaskbarBounds));
             Assert.Equal(1, Volatile.Read(ref reads));
+            Assert.Equal(0, Volatile.Read(ref notifications));
 
             release.TrySetResult(true);
             await pending.WaitAsync(WaitTimeout);
 
             Assert.Null(provider.GetOccupiedBounds(TaskbarHandle, TaskbarBounds));
             Assert.Equal(1, Volatile.Read(ref reads));
+            Assert.Equal(0, Volatile.Read(ref notifications));
         }
         finally
         {
@@ -405,6 +425,195 @@ public sealed class TaskbarOccupiedSpaceProviderTests
             await pending.WaitAsync(WaitTimeout);
         }
     }
+
+    [Fact]
+    public async Task DetachInvalidatesWarmCacheAndAllowsImmediateSameTargetRead()
+    {
+        var clock = new ManualTimeProvider();
+        var reads = 0;
+        var cached = new[] { new TaskbarHorizontalInterval(100, 200) };
+        var refreshed = new[] { new TaskbarHorizontalInterval(300, 400) };
+        var provider = new TaskbarOccupiedSpaceProvider((_, _, _) =>
+        {
+            return Interlocked.Increment(ref reads) == 1 ? cached : refreshed;
+        }, clock);
+        using var anchor = new EmbeddedTaskbarAnchor(provider);
+
+        Assert.Null(provider.GetOccupiedBounds(TaskbarHandle, TaskbarBounds));
+        await provider.PendingRead.WaitAsync(WaitTimeout);
+        AssertIntervals(cached, provider.GetOccupiedBounds(TaskbarHandle, TaskbarBounds));
+
+        anchor.Detach();
+        Assert.Null(provider.GetOccupiedBounds(TaskbarHandle, TaskbarBounds));
+        await provider.PendingRead.WaitAsync(WaitTimeout);
+
+        Assert.Equal(2, Volatile.Read(ref reads));
+        AssertIntervals(refreshed, provider.GetOccupiedBounds(TaskbarHandle, TaskbarBounds));
+    }
+
+    [Fact]
+    public async Task DetachDuringReadRejectsLateBoundsAndWaitsForTheSingleInFlightRead()
+    {
+        var entered = NewSignal();
+        var release = NewSignal();
+        var clock = new ManualTimeProvider();
+        var reads = 0;
+        var cached = new[] { new TaskbarHorizontalInterval(100, 200) };
+        var late = new[] { new TaskbarHorizontalInterval(300, 400) };
+        var refreshed = new[] { new TaskbarHorizontalInterval(500, 600) };
+        var notifications = 0;
+        var provider = new TaskbarOccupiedSpaceProvider((_, _, _) =>
+        {
+            var read = Interlocked.Increment(ref reads);
+            if (read == 1)
+            {
+                return cached;
+            }
+
+            if (read == 2)
+            {
+                entered.TrySetResult(true);
+                release.Task.Wait(CancellationToken.None);
+                return late;
+            }
+
+            return refreshed;
+        }, clock);
+        provider.SnapshotAvailable += (_, _) => Interlocked.Increment(ref notifications);
+        using var anchor = new EmbeddedTaskbarAnchor(provider);
+        var pending = Task.CompletedTask;
+        try
+        {
+            Assert.Null(provider.GetOccupiedBounds(TaskbarHandle, TaskbarBounds));
+            pending = provider.PendingRead;
+            await pending.WaitAsync(WaitTimeout);
+            Assert.Equal(1, Volatile.Read(ref notifications));
+            AssertIntervals(cached, provider.GetOccupiedBounds(TaskbarHandle, TaskbarBounds));
+
+            clock.Advance(TimeSpan.FromMilliseconds(500));
+            AssertIntervals(cached, provider.GetOccupiedBounds(TaskbarHandle, TaskbarBounds));
+            pending = provider.PendingRead;
+            await entered.Task.WaitAsync(WaitTimeout);
+
+            anchor.Detach();
+            Assert.Null(provider.GetOccupiedBounds(TaskbarHandle, TaskbarBounds));
+            Assert.Equal(2, Volatile.Read(ref reads));
+            Assert.Equal(1, Volatile.Read(ref notifications));
+
+            release.TrySetResult(true);
+            await pending.WaitAsync(WaitTimeout);
+            Assert.Equal(1, Volatile.Read(ref notifications));
+
+            Assert.Null(provider.GetOccupiedBounds(TaskbarHandle, TaskbarBounds));
+            pending = provider.PendingRead;
+            await pending.WaitAsync(WaitTimeout);
+            Assert.Equal(3, Volatile.Read(ref reads));
+            Assert.Equal(2, Volatile.Read(ref notifications));
+            AssertIntervals(refreshed, provider.GetOccupiedBounds(TaskbarHandle, TaskbarBounds));
+        }
+        finally
+        {
+            release.TrySetResult(true);
+            await pending.WaitAsync(WaitTimeout);
+        }
+    }
+
+    [Theory]
+    [InlineData("zero-hwnd")]
+    [InlineData("zero-width")]
+    public async Task InvalidTargetInvalidatesWarmCacheAndForcesImmediateRead(string invalidTarget)
+    {
+        var clock = new ManualTimeProvider();
+        var reads = 0;
+        var cached = new[] { new TaskbarHorizontalInterval(100, 200) };
+        var refreshed = new[] { new TaskbarHorizontalInterval(300, 400) };
+        var notifications = 0;
+        using var provider = new TaskbarOccupiedSpaceProvider((_, _, _) =>
+        {
+            return Interlocked.Increment(ref reads) == 1 ? cached : refreshed;
+        }, clock);
+        provider.SnapshotAvailable += (_, _) => Interlocked.Increment(ref notifications);
+
+        Assert.Null(provider.GetOccupiedBounds(TaskbarHandle, TaskbarBounds));
+        await provider.PendingRead.WaitAsync(WaitTimeout);
+        Assert.Equal(1, Volatile.Read(ref notifications));
+        AssertIntervals(cached, provider.GetOccupiedBounds(TaskbarHandle, TaskbarBounds));
+
+        Assert.Null(GetInvalidTarget(provider, invalidTarget));
+        Assert.Equal(1, Volatile.Read(ref reads));
+        Assert.Equal(1, Volatile.Read(ref notifications));
+        Assert.Null(provider.GetOccupiedBounds(TaskbarHandle, TaskbarBounds));
+        await provider.PendingRead.WaitAsync(WaitTimeout);
+
+        Assert.Equal(2, Volatile.Read(ref reads));
+        Assert.Equal(2, Volatile.Read(ref notifications));
+        AssertIntervals(refreshed, provider.GetOccupiedBounds(TaskbarHandle, TaskbarBounds));
+    }
+
+    [Theory]
+    [InlineData("zero-hwnd")]
+    [InlineData("zero-width")]
+    public async Task InvalidTargetDuringReadRejectsLateBoundsWithoutStartingParallelWork(string invalidTarget)
+    {
+        var entered = NewSignal();
+        var release = NewSignal();
+        var clock = new ManualTimeProvider();
+        var reads = 0;
+        var late = new[] { new TaskbarHorizontalInterval(100, 200) };
+        var refreshed = new[] { new TaskbarHorizontalInterval(300, 400) };
+        var notifications = 0;
+        using var provider = new TaskbarOccupiedSpaceProvider((_, _, _) =>
+        {
+            if (Interlocked.Increment(ref reads) == 1)
+            {
+                entered.TrySetResult(true);
+                release.Task.Wait(CancellationToken.None);
+                return late;
+            }
+
+            return refreshed;
+        }, clock);
+        provider.SnapshotAvailable += (_, _) => Interlocked.Increment(ref notifications);
+
+        var pending = Task.CompletedTask;
+        try
+        {
+            Assert.Null(provider.GetOccupiedBounds(TaskbarHandle, TaskbarBounds));
+            pending = provider.PendingRead;
+            await entered.Task.WaitAsync(WaitTimeout);
+
+            Assert.Null(GetInvalidTarget(provider, invalidTarget));
+            Assert.Null(provider.GetOccupiedBounds(TaskbarHandle, TaskbarBounds));
+            Assert.Equal(1, Volatile.Read(ref reads));
+            Assert.Equal(0, Volatile.Read(ref notifications));
+
+            release.TrySetResult(true);
+            await pending.WaitAsync(WaitTimeout);
+            Assert.Equal(0, Volatile.Read(ref notifications));
+
+            Assert.Null(provider.GetOccupiedBounds(TaskbarHandle, TaskbarBounds));
+            pending = provider.PendingRead;
+            await pending.WaitAsync(WaitTimeout);
+            Assert.Equal(2, Volatile.Read(ref reads));
+            Assert.Equal(1, Volatile.Read(ref notifications));
+            AssertIntervals(refreshed, provider.GetOccupiedBounds(TaskbarHandle, TaskbarBounds));
+        }
+        finally
+        {
+            release.TrySetResult(true);
+            await pending.WaitAsync(WaitTimeout);
+        }
+    }
+
+    private static IReadOnlyList<TaskbarHorizontalInterval>? GetInvalidTarget(
+        TaskbarOccupiedSpaceProvider provider,
+        string invalidTarget) =>
+        invalidTarget switch
+        {
+            "zero-hwnd" => provider.GetOccupiedBounds(IntPtr.Zero, TaskbarBounds),
+            "zero-width" => provider.GetOccupiedBounds(TaskbarHandle, new Rect(0, 0, 0, TaskbarBounds.Height)),
+            _ => throw new ArgumentOutOfRangeException(nameof(invalidTarget))
+        };
 
     [Theory]
     [InlineData(1, 0, 376, 368)]

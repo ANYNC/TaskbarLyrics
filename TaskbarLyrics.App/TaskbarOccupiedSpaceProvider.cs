@@ -40,15 +40,19 @@ internal sealed class TaskbarOccupiedSpaceProvider : IDisposable
         get { lock (_gate) { return _pendingRead; } }
     }
 
+    public event EventHandler? SnapshotAvailable;
+
     public IReadOnlyList<TaskbarHorizontalInterval>? GetOccupiedBounds(IntPtr taskbar, Rect bounds)
     {
         lock (_gate)
         {
-            if (_disposed || taskbar == IntPtr.Zero || bounds.IsEmpty ||
+            if (_disposed) return null;
+            if (taskbar == IntPtr.Zero || bounds.IsEmpty ||
                 !double.IsFinite(bounds.X) || !double.IsFinite(bounds.Y) ||
                 !double.IsFinite(bounds.Width) || !double.IsFinite(bounds.Height) ||
                 bounds.Width <= 0 || bounds.Height <= 0)
             {
+                InvalidateCache();
                 return null;
             }
 
@@ -80,6 +84,25 @@ internal sealed class TaskbarOccupiedSpaceProvider : IDisposable
         }
     }
 
+    public void Invalidate()
+    {
+        lock (_gate)
+        {
+            if (!_disposed) InvalidateCache();
+        }
+    }
+
+    // Called under _gate. Leave the in-flight read registered until it returns:
+    // native UIA calls cannot always be cancelled, but their old generation can
+    // never repopulate the cache after a detach or an invalid native target.
+    private void InvalidateCache()
+    {
+        _request = null;
+        _snapshot = null;
+        _hasRequested = false;
+        _generation++;
+    }
+
     public void Dispose()
     {
         lock (_gate)
@@ -107,6 +130,7 @@ internal sealed class TaskbarOccupiedSpaceProvider : IDisposable
         {
             token.ThrowIfCancellationRequested();
             var occupied = _read(request.Taskbar, request.Bounds, token);
+            var accepted = false;
             lock (_gate)
             {
                 if (!_disposed && _generation == generation && _request == request && occupied is not null)
@@ -114,8 +138,10 @@ internal sealed class TaskbarOccupiedSpaceProvider : IDisposable
                     // Age from query start: a delayed Explorer response must not
                     // make geometry captured several seconds ago appear fresh.
                     _snapshot = new Snapshot(occupied, started);
+                    accepted = true;
                 }
             }
+            if (accepted) SnapshotAvailable?.Invoke(this, EventArgs.Empty);
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { }
         catch (Exception exception) when (exception is ElementNotAvailableException or COMException or

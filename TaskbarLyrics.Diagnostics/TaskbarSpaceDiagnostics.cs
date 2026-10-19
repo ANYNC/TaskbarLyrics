@@ -198,15 +198,15 @@ internal static class TaskbarSpaceDiagnostics
             using var anchor = new EmbeddedTaskbarAnchor();
             anchor.Attach(fixture, settings, null);
             await Task.Delay(1200);
-            var before = CheckLive("Before", fixture, taskbar);
+            var before = await CheckLiveAsync("Before", fixture, taskbar);
             results.Add(before);
             icon = CreateWindow(showInTaskbar: true);
             await Task.Delay(1400);
-            results.Add(CheckLive("ExtraTaskbarIcon", fixture, taskbar));
+            results.Add(await CheckLiveAsync("ExtraTaskbarIcon", fixture, taskbar));
             icon.Close();
             icon = null;
             await Task.Delay(1400);
-            results.Add(CheckLive("IconClosed", fixture, taskbar));
+            results.Add(await CheckLiveAsync("IconClosed", fixture, taskbar));
         }
         finally { icon?.Close(); fixture.Close(); }
 
@@ -280,16 +280,30 @@ internal static class TaskbarSpaceDiagnostics
         return window;
     }
 
-    private static object CheckLive(string stage, Window window, IntPtr taskbar)
+    private static async Task<object> CheckLiveAsync(string stage, Window window, IntPtr taskbar)
     {
         GetWindowRect(taskbar, out var bar);
+        var readStarted = Stopwatch.GetTimestamp();
+        var occupied = await Task.Run(() => TaskbarOccupiedSpaceProvider.ReadOccupiedBounds(
+            taskbar, ToRect(bar), CancellationToken.None));
+        var readMilliseconds = Stopwatch.GetElapsedTime(readStarted).TotalMilliseconds;
         GetWindowRect(new WindowInteropHelper(window).Handle, out var lyric);
-        var occupied = TaskbarOccupiedSpaceProvider.ReadOccupiedBounds(taskbar, ToRect(bar), CancellationToken.None);
         Require(occupied is not null && lyric.Right > lyric.Left, "Live taskbar geometry unavailable.");
         var gap = 8 * TaskbarPlacementService.GetPixelsPerDip(window);
-        Require(occupied!.All(range => lyric.Right <= range.Start - gap + 1 || lyric.Left >= range.End + gap - 1),
-            "Live lyric window overlaps a taskbar control.");
-        return new { Stage = stage, Passed = true, Left = lyric.Left, Width = lyric.Right - lyric.Left, SafetyGapPixels = gap };
+        var minimumGap = occupied!.Min(range => Math.Max(range.Start - lyric.Right, lyric.Left - range.End));
+        Require(minimumGap >= gap - 1,
+            $"Live lyric safety gap was not preserved: Stage={stage}, ReadMs={readMilliseconds:F1}, " +
+            $"Lyric={lyric.Left}..{lyric.Right}, Gap={gap}, " +
+            $"Occupied={JsonSerializer.Serialize(occupied)}.");
+        return new
+        {
+            Stage = stage,
+            Passed = true,
+            Left = lyric.Left,
+            Width = lyric.Right - lyric.Left,
+            SafetyGapPixels = gap,
+            MinimumMeasuredGapPixels = minimumGap
+        };
     }
 
     private static void Require(bool value, string message)

@@ -156,6 +156,7 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
     internal EmbeddedTaskbarAnchor(TaskbarOccupiedSpaceProvider occupiedSpace)
     {
         _occupiedSpace = occupiedSpace;
+        _occupiedSpace.SnapshotAvailable += OnSnapshotAvailable;
     }
 
     public bool IsAttached => _windowHandle != IntPtr.Zero && _parentHandle != IntPtr.Zero;
@@ -248,6 +249,7 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
     public void Detach()
     {
         _spaceRefreshTimer?.Stop();
+        _occupiedSpace.Invalidate();
         _positionWindow = null;
         _positionSettings = null;
         _positionDisplay = null;
@@ -277,6 +279,7 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
             return;
         }
 
+        _occupiedSpace.SnapshotAvailable -= OnSnapshotAvailable;
         Detach();
         if (_spaceRefreshTimer is not null) _spaceRefreshTimer.Tick -= OnSpaceRefreshTick;
         _occupiedSpace.Dispose();
@@ -299,7 +302,18 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
         _spaceRefreshTimer.Start();
     }
 
-    private void OnSpaceRefreshTick(object? sender, EventArgs e)
+    private void OnSpaceRefreshTick(object? sender, EventArgs e) => RefreshAvailableSpace();
+
+    // The reader publishes from a worker. Apply fresh geometry on the owning
+    // dispatcher instead of keeping it unused until the next 500 ms timer tick.
+    private void OnSnapshotAvailable(object? sender, EventArgs e)
+    {
+        var dispatcher = Volatile.Read(ref _positionWindow)?.Dispatcher;
+        if (dispatcher is null || dispatcher.HasShutdownStarted || dispatcher.HasShutdownFinished) return;
+        dispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(RefreshAvailableSpace));
+    }
+
+    private void RefreshAvailableSpace()
     {
         if (!_disposed && _positionWindow is { IsVisible: true } window && _positionSettings is { } settings &&
             _windowHandle != IntPtr.Zero && _parentHandle != IntPtr.Zero && IsWindow(_parentHandle))
