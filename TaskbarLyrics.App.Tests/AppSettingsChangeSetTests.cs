@@ -5,6 +5,34 @@ namespace TaskbarLyrics.App.Tests;
 public sealed class AppSettingsChangeSetTests
 {
     [Theory]
+    [InlineData(nameof(AppSettings.EnableControlPanel), false)]
+    [InlineData(nameof(AppSettings.LyricsTextAlignment), false)]
+    [InlineData(nameof(AppSettings.FontSize), true)]
+    [InlineData(nameof(AppSettings.LyricsLayoutScalePercent), true)]
+    [InlineData(nameof(AppSettings.ShowCover), true)]
+    public void AppearanceChangesReapplyOnlyTheRequiredLayout(string field, bool layoutChanged)
+    {
+        var current = new AppSettings();
+        var next = current.Clone();
+        switch (field)
+        {
+            case nameof(AppSettings.EnableControlPanel): next.EnableControlPanel = false; break;
+            case nameof(AppSettings.LyricsTextAlignment): next.LyricsTextAlignment = LyricsTextAlignment.Right; break;
+            case nameof(AppSettings.FontSize): next.FontSize += 1; break;
+            case nameof(AppSettings.LyricsLayoutScalePercent): next.LyricsLayoutScalePercent = 125; break;
+            case nameof(AppSettings.ShowCover): next.ShowCover = false; break;
+            default: throw new ArgumentOutOfRangeException(nameof(field));
+        }
+        var change = AppSettingsChangeSet.Create(current, next);
+        Assert.True(change.VisualStyleChanged);
+        Assert.True(change.RequiresLyricsWindowApply);
+        Assert.Equal(layoutChanged, change.LyricsLayoutChanged);
+        Assert.False(change.WindowLayoutChanged);
+        Assert.False(change.LyricSyncServiceChanged);
+        Assert.False(change.GlobalMediaHotkeysChanged);
+    }
+
+    [Theory]
     [InlineData(false, false)]
     [InlineData(false, true)]
     [InlineData(true, false)]
@@ -18,84 +46,6 @@ public sealed class AppSettingsChangeSetTests
         var changes = AppSettingsChangeSet.Create(current, next);
         Assert.Equal(floating == changeFloatingWidth, changes.WindowLayoutChanged);
         Assert.Equal(floating == changeFloatingWidth, changes.RequiresLyricsWindowApply);
-    }
-
-    [Fact]
-    public void ControlPanelSwitchReappliesStyleWithoutChangingLayoutOrRebuildingServices()
-    {
-        var current = new AppSettings();
-        var next = current.Clone();
-        next.EnableControlPanel = false;
-
-        var changes = AppSettingsChangeSet.Create(current, next);
-
-        Assert.True(changes.VisualStyleChanged);
-        Assert.True(changes.RequiresLyricsWindowApply);
-        Assert.False(changes.LyricsLayoutChanged);
-        Assert.False(changes.WindowLayoutChanged);
-        Assert.False(changes.LyricSyncServiceChanged);
-    }
-
-    [Fact]
-    public void CreateWhenOnlyVisualStyleChangesDoesNotRebuildLyricsOrHotkeys()
-    {
-        var current = new AppSettings();
-        var next = current.Clone();
-        next.FontSize += 1;
-
-        var changes = AppSettingsChangeSet.Create(current, next);
-
-        Assert.True(changes.VisualStyleChanged);
-        Assert.True(changes.LyricsLayoutChanged);
-        Assert.True(changes.RequiresLyricsWindowApply);
-        Assert.False(changes.LyricSyncServiceChanged);
-        Assert.False(changes.GlobalMediaHotkeysChanged);
-    }
-
-    [Fact]
-    public void CreateWhenLyricsTextAlignmentChangesOnlyReappliesVisualStyle()
-    {
-        var current = new AppSettings();
-        var next = current.Clone();
-        next.LyricsTextAlignment = LyricsTextAlignment.Right;
-
-        var changes = AppSettingsChangeSet.Create(current, next);
-
-        Assert.True(changes.VisualStyleChanged);
-        Assert.True(changes.RequiresLyricsWindowApply);
-        Assert.False(changes.LyricsLayoutChanged);
-        Assert.False(changes.WindowLayoutChanged);
-        Assert.False(changes.LyricSyncServiceChanged);
-    }
-
-    [Fact]
-    public void CreateWhenLayoutScaleChangesReappliesStyleAndWindowLayout()
-    {
-        var current = new AppSettings();
-        var next = current.Clone();
-        next.LyricsLayoutScalePercent = 125;
-
-        var changes = AppSettingsChangeSet.Create(current, next);
-
-        Assert.True(changes.VisualStyleChanged);
-        Assert.True(changes.LyricsLayoutChanged);
-        Assert.True(changes.RequiresLyricsWindowApply);
-        Assert.False(changes.LyricSyncServiceChanged);
-    }
-
-    [Fact]
-    public void CreateWhenCoverVisibilityChangesReappliesStyleAndWindowLayout()
-    {
-        var current = new AppSettings();
-        var next = current.Clone();
-        next.ShowCover = false;
-
-        var changes = AppSettingsChangeSet.Create(current, next);
-
-        Assert.True(changes.VisualStyleChanged);
-        Assert.True(changes.LyricsLayoutChanged);
-        Assert.True(changes.RequiresLyricsWindowApply);
-        Assert.False(changes.LyricSyncServiceChanged);
     }
 
     [Fact]

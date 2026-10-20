@@ -1,91 +1,109 @@
 namespace TaskbarLyrics.App;
 
-internal readonly record struct TaskbarHorizontalInterval(double Start, double End)
+internal readonly record struct TaskbarInterval(double Start, double End)
 {
-    public double Width => End - Start;
+    public double Length => End - Start;
 }
 
 internal static class TaskbarFreeSpaceLayout
 {
-    public const double MinimumDisplayWidth = 100;
+    public const double MinimumDisplayLength = 100;
 
     public static bool TryPlace(
-        double taskbarWidth,
-        double requestedWidth,
-        double preferredLeft,
-        IReadOnlyList<TaskbarHorizontalInterval> occupied,
-        out TaskbarHorizontalInterval placement,
+        double taskbarLength,
+        double requestedLength,
+        double preferredStart,
+        IReadOnlyList<TaskbarInterval> occupied,
+        out TaskbarInterval placement,
         double safetyGap = 8,
-        double minimumWidth = MinimumDisplayWidth)
+        double minimumLength = MinimumDisplayLength)
     {
         placement = default;
-        if (!double.IsFinite(taskbarWidth) || taskbarWidth <= 0 ||
-            !double.IsFinite(requestedWidth) || requestedWidth <= 0 ||
-            !double.IsFinite(preferredLeft) ||
+        if (!double.IsFinite(taskbarLength) || taskbarLength <= 0 ||
+            !double.IsFinite(requestedLength) || requestedLength <= 0 ||
+            !double.IsFinite(preferredStart) ||
             !double.IsFinite(safetyGap) || safetyGap < 0 ||
-            !double.IsFinite(minimumWidth) || minimumWidth <= 0 ||
-            requestedWidth < minimumWidth ||
+            !double.IsFinite(minimumLength) || minimumLength <= 0 ||
+            requestedLength < minimumLength ||
             occupied is null)
         {
             return false;
         }
 
-        var blocked = new List<TaskbarHorizontalInterval>(occupied.Count);
+        var blocked = new List<TaskbarInterval>(occupied.Count);
         foreach (var interval in occupied)
         {
             if (!double.IsFinite(interval.Start) ||
                 !double.IsFinite(interval.End) ||
                 interval.End <= interval.Start ||
                 interval.End <= 0 ||
-                interval.Start >= taskbarWidth)
+                interval.Start >= taskbarLength)
             {
                 continue;
             }
 
-            var clippedStart = Math.Clamp(interval.Start, 0, taskbarWidth);
-            var clippedEnd = Math.Clamp(interval.End, 0, taskbarWidth);
+            var clippedStart = Math.Clamp(interval.Start, 0, taskbarLength);
+            var clippedEnd = Math.Clamp(interval.End, 0, taskbarLength);
             var expandedStart = Math.Max(0, clippedStart - safetyGap);
-            var expandedEnd = Math.Min(taskbarWidth, clippedEnd + safetyGap);
+            var expandedEnd = Math.Min(taskbarLength, clippedEnd + safetyGap);
             if (expandedEnd > expandedStart)
             {
-                blocked.Add(new TaskbarHorizontalInterval(expandedStart, expandedEnd));
+                blocked.Add(new TaskbarInterval(expandedStart, expandedEnd));
             }
         }
 
         blocked.Sort(static (left, right) => left.Start.CompareTo(right.Start));
         var merged = Merge(blocked);
 
-        var left = Math.Clamp(preferredLeft, 0, Math.Max(0, taskbarWidth - requestedWidth));
-        var availableEnd = taskbarWidth;
+        var found = false;
+        var bestPlacement = default(TaskbarInterval);
+        var gapStart = 0d;
         foreach (var interval in merged)
         {
-            if (interval.End <= left)
-            {
-                continue;
-            }
-            if (interval.Start <= left)
-            {
-                return false;
-            }
-            availableEnd = interval.Start;
-            break;
+            ConsiderGap(gapStart, interval.Start);
+            gapStart = interval.End;
         }
 
-        var width = Math.Min(requestedWidth, availableEnd - left);
-        if (width < minimumWidth) return false;
-        placement = new TaskbarHorizontalInterval(left, left + width);
+        ConsiderGap(gapStart, taskbarLength);
+        if (!found)
+        {
+            return false;
+        }
+
+        placement = bestPlacement;
         return true;
+
+        void ConsiderGap(double start, double end)
+        {
+            var gapLength = end - start;
+            if (gapLength < minimumLength)
+            {
+                return;
+            }
+
+            var length = Math.Min(requestedLength, gapLength);
+            var candidateStart = Math.Clamp(preferredStart, start, end - length);
+            var distanceComparison = found
+                ? CompareDistance(candidateStart, bestPlacement.Start, preferredStart, taskbarLength)
+                : -1;
+            if (!found || distanceComparison < 0 ||
+                (distanceComparison == 0 && length > bestPlacement.Length))
+            {
+                found = true;
+                bestPlacement = new TaskbarInterval(candidateStart, candidateStart + length);
+            }
+        }
     }
 
-    private static List<TaskbarHorizontalInterval> Merge(
-        List<TaskbarHorizontalInterval> sortedIntervals)
+    private static List<TaskbarInterval> Merge(
+        List<TaskbarInterval> sortedIntervals)
     {
         if (sortedIntervals.Count < 2)
         {
             return sortedIntervals;
         }
 
-        var merged = new List<TaskbarHorizontalInterval>(sortedIntervals.Count);
+        var merged = new List<TaskbarInterval>(sortedIntervals.Count);
         var current = sortedIntervals[0];
         for (var index = 1; index < sortedIntervals.Count; index++)
         {
@@ -102,5 +120,25 @@ internal static class TaskbarFreeSpaceLayout
 
         merged.Add(current);
         return merged;
+    }
+
+    private static int CompareDistance(
+        double candidateStart,
+        double otherStart,
+        double preferredStart,
+        double taskbarLength)
+    {
+        if (preferredStart < 0)
+        {
+            return candidateStart.CompareTo(otherStart);
+        }
+
+        if (preferredStart > taskbarLength)
+        {
+            return otherStart.CompareTo(candidateStart);
+        }
+
+        return Math.Abs(candidateStart - preferredStart)
+            .CompareTo(Math.Abs(otherStart - preferredStart));
     }
 }

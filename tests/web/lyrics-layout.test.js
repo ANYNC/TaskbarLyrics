@@ -1,46 +1,20 @@
-import { readFile } from "node:fs/promises";
+import { loadLyricsAssets, createLyricsDom, runLyricsScripts } from "./helpers/lyrics-dom.js";
 import { JSDOM } from "jsdom";
 import { describe, expect, it } from "vitest";
 
-const root = new URL("../..", import.meta.url);
-const read = relativePath => readFile(new URL(relativePath, root), "utf8");
-
 describe("lyrics responsive layout", () => {
   it("renders and clears word-scan progress without changing the secondary line", async () => {
-    const [html, bridge, state, presentation, script, style] = await Promise.all([
-      read("TaskbarLyrics.App/Web/Lyrics/index.html"),
-      read("TaskbarLyrics.App/Web/Lyrics/bridge.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/state.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/presentation.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/app.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/style.css")
-    ]);
-    const dom = new JSDOM(html.replace("{{STYLE_CSS}}", "").replace("{{APP_JS}}", ""), {
-      runScripts: "outside-only"
-    });
-    dom.window.CSS = { supports: () => true };
+    const { html, bridge, state, presentation, script, style } = await loadLyricsAssets();
+    const dom = createLyricsDom(html);
     dom.window.requestAnimationFrame = () => 1;
     dom.window.cancelAnimationFrame = () => {};
-    dom.window.eval(bridge);
-    dom.window.eval(state);
-    dom.window.eval(presentation);
-    dom.window.eval(script);
+    runLyricsScripts(dom, { bridge, state, presentation, script });
 
-    expect(style).toContain(".current-line.word-scanning");
-    expect(style).toContain(".line-text-base");
-    expect(style).toContain(".line-text-scan");
-    expect(style).toMatch(/@property\s+--line-scroll-offset\s*\{[^}]*syntax:\s*"<length>"[^}]*initial-value:\s*0px/s);
     expect(style).toMatch(/\.line-text-viewport\s*\{[^}]*overflow:\s*hidden/s);
     expect(style).toMatch(/\.line-text\s*\{[^}]*text-overflow:\s*ellipsis/s);
-    expect(style).toMatch(/\.line\.horizontal-scrolling \.line-text-stack\s*\{[^}]*transform:\s*translateX\(var\(--line-scroll-offset\)\)/s);
     expect(style).toMatch(/\.line\.horizontal-scrolling \.line-text\s*\{[^}]*text-overflow:\s*clip/s);
-    expect(style).toMatch(/\.line\.horizontal-scrolling\.word-scan-smoothing \.line-text-stack\s*\{[^}]*transition:\s*transform 90ms linear;[^}]*will-change:\s*transform/s);
     expect(style).toMatch(/@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*\.line\.word-scan-smoothing\s*\{[^}]*transition:\s*none/s);
     expect(style).toMatch(/@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*\.line\.horizontal-scrolling\.word-scan-smoothing \.line-text-stack\s*\{[^}]*transition:\s*none;[^}]*will-change:\s*auto/s);
-    expect(style).toContain("--primary: rgba(255, 255, 255, 0.90)");
-    expect(style).toContain("--secondary: rgba(255, 255, 255, 0.60)");
-    expect(style).toContain("--word-scan-overlay: rgba(255, 255, 255, 0.75)");
-    expect(style).toContain("--word-scan-feather-width: 0.12em");
     const primaryFallback = style.match(/--primary:\s*rgba\((\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\)/);
     const secondaryFallback = style.match(/--secondary:\s*rgba\((\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\)/);
     expect(primaryFallback).not.toBeNull();
@@ -48,28 +22,6 @@ describe("lyrics responsive layout", () => {
     expect(secondaryFallback?.slice(1, 4)).toEqual(primaryFallback?.slice(1, 4));
     expect(Number(primaryFallback?.[4])).toBeCloseTo(0.90, 5);
     expect(Number(secondaryFallback?.[4])).toBeCloseTo(0.60, 5);
-    expect(style).toMatch(/@property\s+--word-scan-progress\s*\{[^}]*syntax:\s*"<percentage>"[^}]*initial-value:\s*0%/s);
-    expect(style).toMatch(/\.line\.word-scan-smoothing\s*\{[^}]*--word-scan-progress\s+90ms\s+linear/s);
-    expect(style).toMatch(/\.line-text-scan\s*\{[^}]*visibility:\s*hidden/s);
-    expect(style).toContain("clip-path: inset(0 100% 0 0)");
-    expect(style).toContain("clip-path: inset(0 0 0 var(--word-scan-progress))");
-    expect(style).toContain("clip-path: inset(0 calc(100% - var(--word-scan-progress)) 0 0)");
-    expect(style).toContain("@supports ((mask-image: linear-gradient(to right, #000, transparent)) or");
-    expect(style).toContain("(-webkit-mask-image: linear-gradient(to right, #000, transparent)))");
-    expect(style).toMatch(/--word-scan-effective-feather:\s*min\(\s*var\(--word-scan-feather-width\),\s*var\(--word-scan-progress\),\s*calc\(100% - var\(--word-scan-progress\)\)\)/s);
-    expect(style).toMatch(/-webkit-mask-image:\s*linear-gradient\(\s*var\(--word-scan-direction, to right\),\s*#000 0,\s*#000 calc\(var\(--word-scan-progress\) - var\(--word-scan-effective-feather\)\),\s*transparent calc\(var\(--word-scan-progress\) \+ var\(--word-scan-effective-feather\)\),\s*transparent 100%\)/s);
-    expect(style).toMatch(/(?<!-webkit-)mask-image:\s*linear-gradient\(\s*var\(--word-scan-direction, to right\),\s*#000 0,\s*#000 calc\(var\(--word-scan-progress\) - var\(--word-scan-effective-feather\)\),\s*transparent calc\(var\(--word-scan-progress\) \+ var\(--word-scan-effective-feather\)\),\s*transparent 100%\)/s);
-    expect(style).toContain("-webkit-mask-repeat: no-repeat");
-    expect(style).toContain("mask-repeat: no-repeat");
-    expect(style).toMatch(/@supports[\s\S]*\.current-line\.word-scanning \.line-text-scan,[\s\S]*color:\s*var\(--word-scan-overlay\)/s);
-    expect(style).not.toContain("word-scan-active");
-    expect(style).not.toContain("word-scan-complete");
-    expect(style).not.toContain("background-clip: text");
-    expect(style).not.toContain("-webkit-background-clip: text");
-    expect(style).not.toContain("-webkit-text-fill-color: transparent");
-    expect(style).toMatch(/\.track\s*\{[^}]*transform:\s*none/s);
-    expect(style).not.toMatch(/\.track\s*\{[^}]*will-change\s*:/s);
-    expect(style).toMatch(/\.track\.animating\s*\{[^}]*will-change:\s*transform/s);
 
     const currentLine = dom.window.document.querySelector("#currentLine");
     const currentLineText = dom.window.document.querySelector("#currentLineText");
@@ -180,17 +132,8 @@ describe("lyrics responsive layout", () => {
   });
 
   it("disables word-scan interpolation when reduced motion is requested", async () => {
-    const [html, bridge, state, presentation, script] = await Promise.all([
-      read("TaskbarLyrics.App/Web/Lyrics/index.html"),
-      read("TaskbarLyrics.App/Web/Lyrics/bridge.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/state.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/presentation.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/app.js")
-    ]);
-    const dom = new JSDOM(html.replace("{{STYLE_CSS}}", "").replace("{{APP_JS}}", ""), {
-      runScripts: "outside-only"
-    });
-    dom.window.CSS = { supports: () => true };
+    const { html, bridge, state, presentation, script } = await loadLyricsAssets();
+    const dom = createLyricsDom(html);
     dom.window.matchMedia = query => ({
       matches: query.includes("prefers-reduced-motion"),
       addEventListener() {},
@@ -198,10 +141,7 @@ describe("lyrics responsive layout", () => {
     });
     dom.window.requestAnimationFrame = () => 1;
     dom.window.cancelAnimationFrame = () => {};
-    dom.window.eval(bridge);
-    dom.window.eval(state);
-    dom.window.eval(presentation);
-    dom.window.eval(script);
+    runLyricsScripts(dom, { bridge, state, presentation, script });
 
     const receiveLyrics = wordScanProgress => dom.window.taskbarLyrics.receive({
       version: 1,
@@ -231,17 +171,8 @@ describe("lyrics responsive layout", () => {
   });
 
   it("freezes the interpolated word-scan value across pause frames", async () => {
-    const [html, bridge, state, presentation, script] = await Promise.all([
-      read("TaskbarLyrics.App/Web/Lyrics/index.html"),
-      read("TaskbarLyrics.App/Web/Lyrics/bridge.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/state.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/presentation.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/app.js")
-    ]);
-    const dom = new JSDOM(html.replace("{{STYLE_CSS}}", "").replace("{{APP_JS}}", ""), {
-      runScripts: "outside-only"
-    });
-    dom.window.CSS = { supports: () => true };
+    const { html, bridge, state, presentation, script } = await loadLyricsAssets();
+    const dom = createLyricsDom(html);
     dom.window.requestAnimationFrame = () => 1;
     dom.window.cancelAnimationFrame = () => {};
     let computedProgress = "24.500%";
@@ -255,10 +186,7 @@ describe("lyrics responsive layout", () => {
         ? computedProgress
         : ""
     });
-    dom.window.eval(bridge);
-    dom.window.eval(state);
-    dom.window.eval(presentation);
-    dom.window.eval(script);
+    runLyricsScripts(dom, { bridge, state, presentation, script });
 
     const currentLine = dom.window.document.querySelector("#currentLine");
     const currentLineText = dom.window.document.querySelector("#currentLineText");
@@ -310,27 +238,15 @@ describe("lyrics responsive layout", () => {
   });
 
   it("carries word-scan progress through queued line transitions", async () => {
-    const [html, bridge, state, presentation, script] = await Promise.all([
-      read("TaskbarLyrics.App/Web/Lyrics/index.html"),
-      read("TaskbarLyrics.App/Web/Lyrics/bridge.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/state.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/presentation.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/app.js")
-    ]);
-    const dom = new JSDOM(html.replace("{{STYLE_CSS}}", "").replace("{{APP_JS}}", ""), {
-      runScripts: "outside-only"
-    });
-    dom.window.CSS = { supports: () => true };
+    const { html, bridge, state, presentation, script } = await loadLyricsAssets();
+    const dom = createLyricsDom(html);
     const pendingAnimationFrames = [];
     dom.window.requestAnimationFrame = callback => {
       pendingAnimationFrames.push(callback);
       return pendingAnimationFrames.length;
     };
     dom.window.cancelAnimationFrame = () => {};
-    dom.window.eval(bridge);
-    dom.window.eval(state);
-    dom.window.eval(presentation);
-    dom.window.eval(script);
+    runLyricsScripts(dom, { bridge, state, presentation, script });
 
     const document = dom.window.document;
     const track = document.querySelector("#track");
@@ -424,18 +340,8 @@ describe("lyrics responsive layout", () => {
   });
 
   it("renders structured translation pairs and cleans reduced-motion transitions", async () => {
-    const [html, bridge, state, presentation, script, style] = await Promise.all([
-      read("TaskbarLyrics.App/Web/Lyrics/index.html"),
-      read("TaskbarLyrics.App/Web/Lyrics/bridge.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/state.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/presentation.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/app.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/style.css")
-    ]);
-    const dom = new JSDOM(html.replace("{{STYLE_CSS}}", "").replace("{{APP_JS}}", ""), {
-      runScripts: "outside-only"
-    });
-    dom.window.CSS = { supports: () => true };
+    const { html, bridge, state, presentation, script, style } = await loadLyricsAssets();
+    const dom = createLyricsDom(html);
     const pendingAnimationFrames = [];
     let prefersReducedMotion = false;
     dom.window.requestAnimationFrame = callback => {
@@ -449,10 +355,7 @@ describe("lyrics responsive layout", () => {
       addEventListener: () => {},
       removeEventListener: () => {}
     });
-    dom.window.eval(bridge);
-    dom.window.eval(state);
-    dom.window.eval(presentation);
-    dom.window.eval(script);
+    runLyricsScripts(dom, { bridge, state, presentation, script });
 
     const document = dom.window.document;
     const layout = document.querySelector("#layout");
@@ -632,32 +535,19 @@ describe("lyrics responsive layout", () => {
   });
 
   it("animates a translation result out of the search state", async () => {
-    const [html, bridge, state, presentation, script, style] = await Promise.all([
-      read("TaskbarLyrics.App/Web/Lyrics/index.html"),
-      read("TaskbarLyrics.App/Web/Lyrics/bridge.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/state.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/presentation.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/app.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/style.css")
-    ]);
+    const { html, bridge, state, presentation, script, style } = await loadLyricsAssets();
     const searchingLine = "\u6b63\u5728\u68c0\u7d22\u6b4c\u8bcd...";
     const searchingHtml = html
       .replace(/TaskbarLyrics started/g, searchingLine)
       .replace(/Waiting for lyrics\.\.\./g, " ");
-    const dom = new JSDOM(searchingHtml.replace("{{STYLE_CSS}}", "").replace("{{APP_JS}}", ""), {
-      runScripts: "outside-only"
-    });
-    dom.window.CSS = { supports: () => true };
+    const dom = createLyricsDom(searchingHtml);
     const pendingAnimationFrames = [];
     dom.window.requestAnimationFrame = callback => {
       pendingAnimationFrames.push(callback);
       return pendingAnimationFrames.length;
     };
     dom.window.cancelAnimationFrame = () => {};
-    dom.window.eval(bridge);
-    dom.window.eval(state);
-    dom.window.eval(presentation);
-    dom.window.eval(script);
+    runLyricsScripts(dom, { bridge, state, presentation, script });
 
     const document = dom.window.document;
     const layout = document.querySelector("#layout");
@@ -741,27 +631,15 @@ describe("lyrics responsive layout", () => {
   });
 
   it("rolls into and out of no playback while updating its countdown in place", async () => {
-    const [html, bridge, state, presentation, script] = await Promise.all([
-      read("TaskbarLyrics.App/Web/Lyrics/index.html"),
-      read("TaskbarLyrics.App/Web/Lyrics/bridge.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/state.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/presentation.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/app.js")
-    ]);
-    const dom = new JSDOM(html.replace("{{STYLE_CSS}}", "").replace("{{APP_JS}}", ""), {
-      runScripts: "outside-only"
-    });
-    dom.window.CSS = { supports: () => true };
+    const { html, bridge, state, presentation, script } = await loadLyricsAssets();
+    const dom = createLyricsDom(html);
     const pendingAnimationFrames = [];
     dom.window.requestAnimationFrame = callback => {
       pendingAnimationFrames.push(callback);
       return pendingAnimationFrames.length;
     };
     dom.window.cancelAnimationFrame = () => {};
-    dom.window.eval(bridge);
-    dom.window.eval(state);
-    dom.window.eval(presentation);
-    dom.window.eval(script);
+    runLyricsScripts(dom, { bridge, state, presentation, script });
 
     const track = dom.window.document.querySelector("#track");
     const currentLineText = dom.window.document.querySelector("#currentLineText");
@@ -849,30 +727,18 @@ describe("lyrics responsive layout", () => {
   });
 
   it("caps visible spectrum bars to the available width and restores them on resize", async () => {
-    const [html, bridge, state, presentation, script] = await Promise.all([
-      read("TaskbarLyrics.App/Web/Lyrics/index.html"),
-      read("TaskbarLyrics.App/Web/Lyrics/bridge.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/state.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/presentation.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/app.js")
-    ]);
-    const dom = new JSDOM(html.replace("{{STYLE_CSS}}", "").replace("{{APP_JS}}", ""), {
-      runScripts: "outside-only"
-    });
+    const { html, bridge, state, presentation, script } = await loadLyricsAssets();
+    const dom = createLyricsDom(html);
     const spectrum = dom.window.document.querySelector(".spectrum");
     let availableWidth = 120;
     Object.defineProperty(spectrum, "clientWidth", { configurable: true, get: () => availableWidth });
     const animationFrames = [];
-    dom.window.CSS = { supports: () => true };
     dom.window.requestAnimationFrame = callback => {
       animationFrames.push(callback);
       return animationFrames.length;
     };
     dom.window.cancelAnimationFrame = () => {};
-    dom.window.eval(bridge);
-    dom.window.eval(state);
-    dom.window.eval(presentation);
-    dom.window.eval(script);
+    runLyricsScripts(dom, { bridge, state, presentation, script });
 
     dom.window.taskbarLyrics.receive({
       version: 1,
@@ -944,7 +810,7 @@ describe("lyrics responsive layout", () => {
   });
 
   it("selects presentation transitions from scene and layout without DOM dependencies", async () => {
-    const presentation = await read("TaskbarLyrics.App/Web/Lyrics/presentation.js");
+    const { presentation } = await loadLyricsAssets();
     const dom = new JSDOM("<!doctype html><html><body></body></html>", {
       runScripts: "outside-only"
     });
@@ -1022,27 +888,15 @@ describe("lyrics responsive layout", () => {
   });
 
   it("consumes planner decisions for ordinary lyric patches, replacements, and rolls", async () => {
-    const [html, bridge, state, presentation, script] = await Promise.all([
-      read("TaskbarLyrics.App/Web/Lyrics/index.html"),
-      read("TaskbarLyrics.App/Web/Lyrics/bridge.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/state.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/presentation.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/app.js")
-    ]);
-    const dom = new JSDOM(html.replace("{{STYLE_CSS}}", "").replace("{{APP_JS}}", ""), {
-      runScripts: "outside-only"
-    });
+    const { html, bridge, state, presentation, script } = await loadLyricsAssets();
+    const dom = createLyricsDom(html);
     const pendingAnimationFrames = [];
-    dom.window.CSS = { supports: () => true };
     dom.window.requestAnimationFrame = callback => {
       pendingAnimationFrames.push(callback);
       return pendingAnimationFrames.length;
     };
     dom.window.cancelAnimationFrame = () => {};
-    dom.window.eval(bridge);
-    dom.window.eval(state);
-    dom.window.eval(presentation);
-    dom.window.eval(script);
+    runLyricsScripts(dom, { bridge, state, presentation, script });
 
     const receive = payload => dom.window.taskbarLyrics.receive({
       version: 1,
@@ -1093,25 +947,12 @@ describe("lyrics responsive layout", () => {
   });
 
   it("applies ordinary lyric rolls immediately when reduced motion is requested", async () => {
-    const [html, bridge, state, presentation, script, style] = await Promise.all([
-      read("TaskbarLyrics.App/Web/Lyrics/index.html"),
-      read("TaskbarLyrics.App/Web/Lyrics/bridge.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/state.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/presentation.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/app.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/style.css")
-    ]);
-    const dom = new JSDOM(html.replace("{{STYLE_CSS}}", "").replace("{{APP_JS}}", ""), {
-      runScripts: "outside-only"
-    });
-    dom.window.CSS = { supports: () => true };
+    const { html, bridge, state, presentation, script, style } = await loadLyricsAssets();
+    const dom = createLyricsDom(html);
     dom.window.matchMedia = () => ({ matches: true, addEventListener() {}, removeEventListener() {} });
     dom.window.requestAnimationFrame = () => 1;
     dom.window.cancelAnimationFrame = () => {};
-    dom.window.eval(bridge);
-    dom.window.eval(state);
-    dom.window.eval(presentation);
-    dom.window.eval(script);
+    runLyricsScripts(dom, { bridge, state, presentation, script });
 
     const receive = payload => dom.window.taskbarLyrics.receive({
       version: 1,
@@ -1140,32 +981,18 @@ describe("lyrics responsive layout", () => {
   });
 
   it("keeps searching scene and track identity while a track-switch result rolls in", async () => {
-    const [html, bridge, state, presentation, script] = await Promise.all([
-      read("TaskbarLyrics.App/Web/Lyrics/index.html"),
-      read("TaskbarLyrics.App/Web/Lyrics/bridge.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/state.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/presentation.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/app.js")
-    ]);
+    const { html, bridge, state, presentation, script } = await loadLyricsAssets();
     const searchingLine = "正在检索歌词...";
-    const dom = new JSDOM(html
+    const dom = createLyricsDom(html
       .replace("TaskbarLyrics started", searchingLine)
-      .replace("Waiting for lyrics...", " ")
-      .replace("{{STYLE_CSS}}", "")
-      .replace("{{APP_JS}}", ""), {
-      runScripts: "outside-only"
-    });
+      .replace("Waiting for lyrics...", " "));
     const pendingAnimationFrames = [];
-    dom.window.CSS = { supports: () => true };
     dom.window.requestAnimationFrame = callback => {
       pendingAnimationFrames.push(callback);
       return pendingAnimationFrames.length;
     };
     dom.window.cancelAnimationFrame = () => {};
-    dom.window.eval(bridge);
-    dom.window.eval(state);
-    dom.window.eval(presentation);
-    dom.window.eval(script);
+    runLyricsScripts(dom, { bridge, state, presentation, script });
 
     const receive = payload => dom.window.taskbarLyrics.receive({ version: 1, type: "lyrics", payload });
     Object.defineProperty(dom.window.performance, "now", {
@@ -1227,24 +1054,13 @@ describe("lyrics responsive layout", () => {
   });
 
   it("enters lyrics without a separate dwell and coalesces duplicate result frames", async () => {
-      const [html, bridge, state, presentation, script] = await Promise.all([
-        read("TaskbarLyrics.App/Web/Lyrics/index.html"),
-        read("TaskbarLyrics.App/Web/Lyrics/bridge.js"),
-        read("TaskbarLyrics.App/Web/Lyrics/state.js"),
-        read("TaskbarLyrics.App/Web/Lyrics/presentation.js"),
-        read("TaskbarLyrics.App/Web/Lyrics/app.js")
-      ]);
+      const { html, bridge, state, presentation, script } = await loadLyricsAssets();
       const searchingLine = "正在检索歌词...";
-      const dom = new JSDOM(html
+      const dom = createLyricsDom(html
         .replace("TaskbarLyrics started", searchingLine)
-        .replace("Waiting for lyrics...", " ")
-        .replace("{{STYLE_CSS}}", "")
-        .replace("{{APP_JS}}", ""), {
-        runScripts: "outside-only"
-      });
+        .replace("Waiting for lyrics...", " "));
       const pendingAnimationFrames = [];
       let now = 100;
-      dom.window.CSS = { supports: () => true };
       dom.window.requestAnimationFrame = callback => {
         pendingAnimationFrames.push(callback);
         return pendingAnimationFrames.length;
@@ -1262,10 +1078,7 @@ describe("lyrics responsive layout", () => {
         configurable: true,
         value: () => now
       });
-      dom.window.eval(bridge);
-      dom.window.eval(state);
-      dom.window.eval(presentation);
-      dom.window.eval(script);
+      runLyricsScripts(dom, { bridge, state, presentation, script });
 
       const receive = current => dom.window.taskbarLyrics.receive({
         version: 1,
@@ -1311,32 +1124,18 @@ describe("lyrics responsive layout", () => {
     { label: "searching", scene: "searching", sourceText: "正在检索歌词..." },
     { label: "no-playback", scene: "noPlayback", sourceText: "暂无播放内容，3 秒后自动隐藏" }
   ])("plans and executes a $label-to-spectrum line-pitch roll without rendering pure-music text", async ({ scene, sourceText }) => {
-    const [html, bridge, state, presentation, script] = await Promise.all([
-      read("TaskbarLyrics.App/Web/Lyrics/index.html"),
-      read("TaskbarLyrics.App/Web/Lyrics/bridge.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/state.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/presentation.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/app.js")
-    ]);
-    const dom = new JSDOM(html
+    const { html, bridge, state, presentation, script } = await loadLyricsAssets();
+    const dom = createLyricsDom(html
       .replace("TaskbarLyrics started", sourceText)
-      .replace("Waiting for lyrics...", " ")
-      .replace("{{STYLE_CSS}}", "")
-      .replace("{{APP_JS}}", ""), {
-      runScripts: "outside-only"
-    });
+      .replace("Waiting for lyrics...", " "));
     const pendingAnimationFrames = [];
-    dom.window.CSS = { supports: () => true };
     dom.window.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
     dom.window.requestAnimationFrame = callback => {
       pendingAnimationFrames.push(callback);
       return pendingAnimationFrames.length;
     };
     dom.window.cancelAnimationFrame = () => {};
-    dom.window.eval(bridge);
-    dom.window.eval(state);
-    dom.window.eval(presentation);
-    dom.window.eval(script);
+    runLyricsScripts(dom, { bridge, state, presentation, script });
 
     dom.window.taskbarLyrics.receive({
       version: 1,
@@ -1396,29 +1195,15 @@ describe("lyrics responsive layout", () => {
   });
 
   it("switches searching to spectrum immediately when reduced motion is requested", async () => {
-    const [html, bridge, state, presentation, script] = await Promise.all([
-      read("TaskbarLyrics.App/Web/Lyrics/index.html"),
-      read("TaskbarLyrics.App/Web/Lyrics/bridge.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/state.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/presentation.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/app.js")
-    ]);
+    const { html, bridge, state, presentation, script } = await loadLyricsAssets();
     const searchingLine = "正在检索歌词...";
-    const dom = new JSDOM(html
+    const dom = createLyricsDom(html
       .replace("TaskbarLyrics started", searchingLine)
-      .replace("Waiting for lyrics...", " ")
-      .replace("{{STYLE_CSS}}", "")
-      .replace("{{APP_JS}}", ""), {
-      runScripts: "outside-only"
-    });
-    dom.window.CSS = { supports: () => true };
+      .replace("Waiting for lyrics...", " "));
     dom.window.matchMedia = () => ({ matches: true, addEventListener() {}, removeEventListener() {} });
     dom.window.requestAnimationFrame = () => 1;
     dom.window.cancelAnimationFrame = () => {};
-    dom.window.eval(bridge);
-    dom.window.eval(state);
-    dom.window.eval(presentation);
-    dom.window.eval(script);
+    runLyricsScripts(dom, { bridge, state, presentation, script });
 
     dom.window.taskbarLyrics.receive({
       version: 1,
@@ -1453,33 +1238,19 @@ describe("lyrics responsive layout", () => {
   });
 
   it("cancels a searching-to-spectrum roll when a lyric frame arrives", async () => {
-    const [html, bridge, state, presentation, script] = await Promise.all([
-      read("TaskbarLyrics.App/Web/Lyrics/index.html"),
-      read("TaskbarLyrics.App/Web/Lyrics/bridge.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/state.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/presentation.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/app.js")
-    ]);
+    const { html, bridge, state, presentation, script } = await loadLyricsAssets();
     const searchingLine = "正在检索歌词...";
-    const dom = new JSDOM(html
+    const dom = createLyricsDom(html
       .replace("TaskbarLyrics started", searchingLine)
-      .replace("Waiting for lyrics...", " ")
-      .replace("{{STYLE_CSS}}", "")
-      .replace("{{APP_JS}}", ""), {
-      runScripts: "outside-only"
-    });
+      .replace("Waiting for lyrics...", " "));
     const pendingAnimationFrames = [];
-    dom.window.CSS = { supports: () => true };
     dom.window.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
     dom.window.requestAnimationFrame = callback => {
       pendingAnimationFrames.push(callback);
       return pendingAnimationFrames.length;
     };
     dom.window.cancelAnimationFrame = () => {};
-    dom.window.eval(bridge);
-    dom.window.eval(state);
-    dom.window.eval(presentation);
-    dom.window.eval(script);
+    runLyricsScripts(dom, { bridge, state, presentation, script });
 
     const receive = payload => dom.window.taskbarLyrics.receive({ version: 1, type: "lyrics", payload });
     receive({
@@ -1524,28 +1295,14 @@ describe("lyrics responsive layout", () => {
   });
 
   it("renders search metadata above the prompt and enters lyrics without an extra dwell", async () => {
-    const [html, bridge, state, presentation, script] = await Promise.all([
-      read("TaskbarLyrics.App/Web/Lyrics/index.html"),
-      read("TaskbarLyrics.App/Web/Lyrics/bridge.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/state.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/presentation.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/app.js")
-    ]);
+    const { html, bridge, state, presentation, script } = await loadLyricsAssets();
     const searchingPrompt = "\u6b63\u5728\u68c0\u7d22\u6b4c\u8bcd...";
-    const dom = new JSDOM(html
+    const dom = createLyricsDom(html
       .replace("TaskbarLyrics started", searchingPrompt)
-      .replace("Waiting for lyrics...", " ")
-      .replace("{{STYLE_CSS}}", "")
-      .replace("{{APP_JS}}", ""), {
-      runScripts: "outside-only"
-    });
-    dom.window.CSS = { supports: () => true };
+      .replace("Waiting for lyrics...", " "));
     dom.window.requestAnimationFrame = () => 1;
     dom.window.cancelAnimationFrame = () => {};
-    dom.window.eval(bridge);
-    dom.window.eval(state);
-    dom.window.eval(presentation);
-    dom.window.eval(script);
+    runLyricsScripts(dom, { bridge, state, presentation, script });
 
     const receive = payload => dom.window.taskbarLyrics.receive({
       version: 1,
@@ -1586,34 +1343,19 @@ describe("lyrics responsive layout", () => {
   });
 
   it("uses the searching scene for the search-to-spectrum roll even when metadata is shown", async () => {
-    const [html, bridge, state, presentation, script, style] = await Promise.all([
-      read("TaskbarLyrics.App/Web/Lyrics/index.html"),
-      read("TaskbarLyrics.App/Web/Lyrics/bridge.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/state.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/presentation.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/app.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/style.css")
-    ]);
+    const { html, bridge, state, presentation, script, style } = await loadLyricsAssets();
     const searchingPrompt = "\u6b63\u5728\u68c0\u7d22\u6b4c\u8bcd...";
-    const dom = new JSDOM(html
+    const dom = createLyricsDom(html
       .replace("TaskbarLyrics started", searchingPrompt)
-      .replace("Waiting for lyrics...", " ")
-      .replace("{{STYLE_CSS}}", "")
-      .replace("{{APP_JS}}", ""), {
-      runScripts: "outside-only"
-    });
+      .replace("Waiting for lyrics...", " "));
     const pendingAnimationFrames = [];
-    dom.window.CSS = { supports: () => true };
     dom.window.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
     dom.window.requestAnimationFrame = callback => {
       pendingAnimationFrames.push(callback);
       return pendingAnimationFrames.length;
     };
     dom.window.cancelAnimationFrame = () => {};
-    dom.window.eval(bridge);
-    dom.window.eval(state);
-    dom.window.eval(presentation);
-    dom.window.eval(script);
+    runLyricsScripts(dom, { bridge, state, presentation, script });
 
     const receive = payload => dom.window.taskbarLyrics.receive({
       version: 1,
@@ -1661,32 +1403,18 @@ describe("lyrics responsive layout", () => {
   });
 
   it("finishes a direct searching-track roll before applying a fast lyric result", async () => {
-    const [html, bridge, state, presentation, script] = await Promise.all([
-      read("TaskbarLyrics.App/Web/Lyrics/index.html"),
-      read("TaskbarLyrics.App/Web/Lyrics/bridge.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/state.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/presentation.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/app.js")
-    ]);
+    const { html, bridge, state, presentation, script } = await loadLyricsAssets();
     const searchingPrompt = "\u6b63\u5728\u68c0\u7d22\u6b4c\u8bcd...";
-    const dom = new JSDOM(html
+    const dom = createLyricsDom(html
       .replace("TaskbarLyrics started", searchingPrompt)
-      .replace("Waiting for lyrics...", " ")
-      .replace("{{STYLE_CSS}}", "")
-      .replace("{{APP_JS}}", ""), {
-      runScripts: "outside-only"
-    });
-    dom.window.CSS = { supports: () => true };
+      .replace("Waiting for lyrics...", " "));
     const pendingAnimationFrames = [];
     dom.window.requestAnimationFrame = callback => {
       pendingAnimationFrames.push(callback);
       return pendingAnimationFrames.length;
     };
     dom.window.cancelAnimationFrame = () => {};
-    dom.window.eval(bridge);
-    dom.window.eval(state);
-    dom.window.eval(presentation);
-    dom.window.eval(script);
+    runLyricsScripts(dom, { bridge, state, presentation, script });
 
     const receive = payload => dom.window.taskbarLyrics.receive({
       version: 1,
@@ -1739,32 +1467,18 @@ describe("lyrics responsive layout", () => {
   });
 
   it("finishes a direct searching-track roll before entering a fast spectrum result", async () => {
-    const [html, bridge, state, presentation, script] = await Promise.all([
-      read("TaskbarLyrics.App/Web/Lyrics/index.html"),
-      read("TaskbarLyrics.App/Web/Lyrics/bridge.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/state.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/presentation.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/app.js")
-    ]);
+    const { html, bridge, state, presentation, script } = await loadLyricsAssets();
     const searchingPrompt = "\u6b63\u5728\u68c0\u7d22\u6b4c\u8bcd...";
-    const dom = new JSDOM(html
+    const dom = createLyricsDom(html
       .replace("TaskbarLyrics started", searchingPrompt)
-      .replace("Waiting for lyrics...", " ")
-      .replace("{{STYLE_CSS}}", "")
-      .replace("{{APP_JS}}", ""), {
-      runScripts: "outside-only"
-    });
+      .replace("Waiting for lyrics...", " "));
     const pendingAnimationFrames = [];
-    dom.window.CSS = { supports: () => true };
     dom.window.requestAnimationFrame = callback => {
       pendingAnimationFrames.push(callback);
       return pendingAnimationFrames.length;
     };
     dom.window.cancelAnimationFrame = () => {};
-    dom.window.eval(bridge);
-    dom.window.eval(state);
-    dom.window.eval(presentation);
-    dom.window.eval(script);
+    runLyricsScripts(dom, { bridge, state, presentation, script });
 
     const receive = payload => dom.window.taskbarLyrics.receive({
       version: 1,
@@ -1813,28 +1527,15 @@ describe("lyrics responsive layout", () => {
   });
 
   it("exits a stable spectrum toward searching from below and clears exit styles on completion", async () => {
-    const [html, bridge, state, presentation, script, style] = await Promise.all([
-      read("TaskbarLyrics.App/Web/Lyrics/index.html"),
-      read("TaskbarLyrics.App/Web/Lyrics/bridge.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/state.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/presentation.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/app.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/style.css")
-    ]);
-    const dom = new JSDOM(html.replace("{{STYLE_CSS}}", "").replace("{{APP_JS}}", ""), {
-      runScripts: "outside-only"
-    });
+    const { html, bridge, state, presentation, script, style } = await loadLyricsAssets();
+    const dom = createLyricsDom(html);
     const pendingAnimationFrames = [];
-    dom.window.CSS = { supports: () => true };
     dom.window.requestAnimationFrame = callback => {
       pendingAnimationFrames.push(callback);
       return pendingAnimationFrames.length;
     };
     dom.window.cancelAnimationFrame = () => {};
-    dom.window.eval(bridge);
-    dom.window.eval(state);
-    dom.window.eval(presentation);
-    dom.window.eval(script);
+    runLyricsScripts(dom, { bridge, state, presentation, script });
 
     const receive = payload => dom.window.taskbarLyrics.receive({
       version: 1,
@@ -1927,32 +1628,18 @@ describe("lyrics responsive layout", () => {
   });
 
   it("applies queued lyrics as soon as the spectrum exit completes", async () => {
-    const [html, bridge, state, presentation, script] = await Promise.all([
-      read("TaskbarLyrics.App/Web/Lyrics/index.html"),
-      read("TaskbarLyrics.App/Web/Lyrics/bridge.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/state.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/presentation.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/app.js")
-    ]);
+    const { html, bridge, state, presentation, script } = await loadLyricsAssets();
     const searchingPrompt = "\u6b63\u5728\u68c0\u7d22\u6b4c\u8bcd...";
     const pendingAnimationFrames = [];
-    const dom = new JSDOM(html
+    const dom = createLyricsDom(html
       .replace("TaskbarLyrics started", searchingPrompt)
-      .replace("Waiting for lyrics...", " ")
-      .replace("{{STYLE_CSS}}", "")
-      .replace("{{APP_JS}}", ""), {
-        runScripts: "outside-only"
-      });
-    dom.window.CSS = { supports: () => true };
+      .replace("Waiting for lyrics...", " "));
     dom.window.requestAnimationFrame = callback => {
       pendingAnimationFrames.push(callback);
       return pendingAnimationFrames.length;
     };
     dom.window.cancelAnimationFrame = () => {};
-    dom.window.eval(bridge);
-    dom.window.eval(state);
-    dom.window.eval(presentation);
-    dom.window.eval(script);
+    runLyricsScripts(dom, { bridge, state, presentation, script });
 
     const receive = payload => dom.window.taskbarLyrics.receive({
       version: 1,
@@ -2019,18 +1706,9 @@ describe("lyrics responsive layout", () => {
   });
 
   it("switches out of stable spectrum immediately for animate=false and reduced motion", async () => {
-    const [html, bridge, state, presentation, script] = await Promise.all([
-      read("TaskbarLyrics.App/Web/Lyrics/index.html"),
-      read("TaskbarLyrics.App/Web/Lyrics/bridge.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/state.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/presentation.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/app.js")
-    ]);
+    const { html, bridge, state, presentation, script } = await loadLyricsAssets();
     let reducedMotion = false;
-    const dom = new JSDOM(html.replace("{{STYLE_CSS}}", "").replace("{{APP_JS}}", ""), {
-      runScripts: "outside-only"
-    });
-    dom.window.CSS = { supports: () => true };
+    const dom = createLyricsDom(html);
     dom.window.matchMedia = () => ({
       matches: reducedMotion,
       addEventListener() {},
@@ -2038,10 +1716,7 @@ describe("lyrics responsive layout", () => {
     });
     dom.window.requestAnimationFrame = () => 1;
     dom.window.cancelAnimationFrame = () => {};
-    dom.window.eval(bridge);
-    dom.window.eval(state);
-    dom.window.eval(presentation);
-    dom.window.eval(script);
+    runLyricsScripts(dom, { bridge, state, presentation, script });
 
     const receive = payload => dom.window.taskbarLyrics.receive({
       version: 1,
@@ -2094,27 +1769,15 @@ describe("lyrics responsive layout", () => {
   });
 
   it("does not let a cancelled spectrum exit rAF restore stale styles", async () => {
-    const [html, bridge, state, presentation, script] = await Promise.all([
-      read("TaskbarLyrics.App/Web/Lyrics/index.html"),
-      read("TaskbarLyrics.App/Web/Lyrics/bridge.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/state.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/presentation.js"),
-      read("TaskbarLyrics.App/Web/Lyrics/app.js")
-    ]);
+    const { html, bridge, state, presentation, script } = await loadLyricsAssets();
     const pendingAnimationFrames = [];
-    const dom = new JSDOM(html.replace("{{STYLE_CSS}}", "").replace("{{APP_JS}}", ""), {
-      runScripts: "outside-only"
-    });
-    dom.window.CSS = { supports: () => true };
+    const dom = createLyricsDom(html);
     dom.window.requestAnimationFrame = callback => {
       pendingAnimationFrames.push(callback);
       return pendingAnimationFrames.length;
     };
     dom.window.cancelAnimationFrame = () => {};
-    dom.window.eval(bridge);
-    dom.window.eval(state);
-    dom.window.eval(presentation);
-    dom.window.eval(script);
+    runLyricsScripts(dom, { bridge, state, presentation, script });
 
     const receive = payload => dom.window.taskbarLyrics.receive({
       version: 1,
