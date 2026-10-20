@@ -24,14 +24,17 @@
   演示使用内置的 Source Han Sans SC 字体，无需单独安装。
 </p>
 
-## 播放器支持，重要！！
+## 播放器支持，重要！！！
 
 | 播放器 | 支持情况 | 使用提示 |
 | --- | --- | --- |
-| QQ 音乐 | 支持 | 通常可获得较完整的歌曲信息和播放进度 |
-| 网易云音乐 | 支持 | 歌曲信息或进度不完整时，可安装 [inflink-rs](https://github.com/apoint123/inflink-rs) 改善识别与同步 |
-| 酷狗音乐 | 有限支持 | 部分版本无法提供可靠进度，歌词可能无法滚动；也可尝试 [MoeKoeMusic](https://github.com/MoeKoeMusic/MoeKoeMusic) |
-| Spotify | 支持 | 歌词由可用的在线来源自动匹配 |
+| QQ 音乐 | 支持 |  |
+| 网易云音乐 | 支持 | 时间轴信息不完整，歌词无法滚动，需配置 [inflink-rs](https://github.com/apoint123/inflink-rs) 补全识别与同步；应用内提供配置说明 |
+| 酷狗音乐 | 有限支持 | 时间轴信息不完整，歌词无法滚动；可尝试第三方酷狗播放器 [MoeKoeMusic](https://github.com/MoeKoeMusic/MoeKoeMusic) |
+| Spotify | 支持 |  |
+| Apple Music | 支持 | 时间轴信息不精准 |
+| 汽水音乐 | 支持 |  |
+| Foobar 2000 | 支持 | 需要安装 [ungive/foo_mediacontrol](https://github.com/ungive/foo_mediacontrol) 插件补全时间轴信息|
 | 其他播放器 | 视播放器而定 | 需要向 Windows 提供可用的歌曲信息和播放进度 |
 
 歌词与翻译的可用性取决于具体歌曲和歌词来源。
@@ -45,6 +48,10 @@
 1. **解压**：下载版本压缩包，并完整解压到一个普通文件夹。
 2. **启动**：运行 `TaskbarLyrics.exe`，程序会常驻系统托盘。
 3. **播放**：打开受支持的播放器播放音乐，歌词会自动显示在任务栏。
+
+首次使用会自动打开“开始使用”，以歌曲信息、时间轴信息、使用准备三个指标展示兼容性；可随时跳过，并从设置左侧重新查看。各播放器的齿轮设置中也提供同一组指标，配置步骤直接展示。指标仅供兼容性参考，应用不会自动检测或安装第三方插件。
+
+Apple Music、汽水音乐和 foobar2000 沿用“播放源 → 添加播放器”接入；已有自定义播放源不需要重新添加。
 
 请保留发布包中的 `Assets`、`Web` 等目录，不要只复制或单独运行 EXE。
 
@@ -146,16 +153,11 @@ powershell -ExecutionPolicy Bypass -File scripts/publish-release.ps1
 
 喜欢 TaskbarLyrics，欢迎 [Star 项目](https://github.com/ANYNC/TaskbarLyrics)、[提交问题或建议](https://github.com/ANYNC/TaskbarLyrics/issues)，或赞助支持持续开发。
 
-<details>
 <summary><strong>微信赞赏</strong></summary>
-
-<p align="center">
-  <img src="docs/images/weixin-payment-code.png" alt="微信赞赏码" width="200">
-</p>
+<img src="docs/images/weixin-payment-code.png" alt="微信赞赏码" width="200">
 
 感谢你的支持！
 
-</details>
 
 ## 许可证
 

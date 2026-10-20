@@ -122,6 +122,10 @@ public partial class App : System.Windows.Application, IDisposable
         SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
         SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
         TaskObserver.Observe(RunAutomaticUpdateCheckAsync(), "automatic update check");
+        if (!Settings.HasSeenGettingStarted)
+        {
+            OpenSettingsWindow("gettingStarted", focusCurrentTrack: false);
+        }
     }
 
     protected override void OnExit(ExitEventArgs e)

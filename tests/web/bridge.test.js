@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 const root = new URL("../..", import.meta.url);
 const read = relativePath => readFile(new URL(relativePath, root), "utf8");
-const settingsPages = ["sources", "shortcuts", "lyrics", "trackOffsets", "displayArea", "general", "advanced", "lyricDiagnostics", "about"];
+const settingsPages = ["gettingStarted", "sources", "shortcuts", "lyrics", "trackOffsets", "displayArea", "general", "advanced", "lyricDiagnostics", "about"];
 const persistedSettings = [
   "enableLocalLyrics", "localMusicFolders", "enableGlobalMediaHotkeys", "showLyricsOnStartup", "autoHideWhenNoPlayback",
   "showLyricTranslation", "enableWordScanning", "spectrumDisplayMode", "lyricsLayoutScalePercent", "fontSize", "showCover", "singleLineLyrics",
@@ -14,12 +14,13 @@ const persistedSettings = [
 ];
 
 async function createSettingsDom({ deferAnimationFrames = false, reducedMotion = false } = {}) {
-  const [html, bridge, hotkeys, state, presentation, script] = await Promise.all([
+  const [html, bridge, hotkeys, state, presentation, compatibility, script] = await Promise.all([
     read("TaskbarLyrics.App/Web/Settings/settings.html"),
     read("TaskbarLyrics.App/Web/Settings/bridge.js"),
     read("TaskbarLyrics.App/Web/Settings/hotkeys.js"),
     read("TaskbarLyrics.App/Web/Settings/state.js"),
     read("TaskbarLyrics.App/Web/Settings/display-presentation.js"),
+    read("TaskbarLyrics.App/Web/Settings/player-compatibility.js"),
     read("TaskbarLyrics.App/Web/Settings/settings.js")
   ]);
   const dom = new JSDOM(html, { runScripts: "outside-only" });
@@ -42,6 +43,7 @@ async function createSettingsDom({ deferAnimationFrames = false, reducedMotion =
   dom.window.HTMLMediaElement.prototype.play = () => Promise.resolve();
   dom.window.eval(state);
   dom.window.eval(presentation);
+  dom.window.eval(compatibility);
   return {
     dom,
     sent,
@@ -64,6 +66,110 @@ function enableDialogDomSupport(dom) {
 }
 
 describe("settings WebView bridge", () => {
+  it("shows player-specific onboarding without changing playback settings or claiming a plugin is installed", async () => {
+    const { dom, sent, script } = await createSettingsDom();
+    dom.window.eval(script);
+    const document = dom.window.document;
+    dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings: { enableNetease: false } } });
+    dom.window.settingsApp.receive({ version: 1, type: "navigate", payload: { page: "gettingStarted" } });
+    const initialCount = sent.length;
+    const guidance = document.querySelector("#gettingStartedGuidance");
+    expect(guidance.hidden).toBe(true);
+    for (const [player, content] of [["netease", "inflink-rs"], ["kugou", "不支持"], ["qqmusic", "完美支持，直接播放即可"], ["spotify", "完美支持，直接播放即可"], ["applemusic", "时间轴信息不精准"], ["sodamusic", "完美支持，直接播放即可"], ["foobar2000", "foo_mediacontrol"], ["browser", "视网站而定"], ["other", "待确认"]]) {
+      const radio = document.querySelector(`input[name="gettingStartedPlayer"][value="${player}"]`);
+      radio.click();
+      expect(guidance.hidden).toBe(false);
+      expect(guidance.textContent).toContain(content);
+      expect(guidance.textContent).not.toContain("未安装插件");
+    }
+    expect(sent).toHaveLength(initialCount);
+    document.querySelector('input[name="gettingStartedPlayer"][value="netease"]').click();
+    guidance.querySelector("[data-compatibility-link]").click();
+    expect(sent.at(-1)).toEqual({ version: 1, type: "openExternalLink", payload: "https://github.com/apoint123/inflink-rs" });
+    document.querySelector('input[name="gettingStartedPlayer"][value="kugou"]').click();
+    guidance.querySelector("[data-compatibility-link]").click();
+    expect(sent.at(-1)).toEqual({ version: 1, type: "openExternalLink", payload: "https://github.com/MoeKoeMusic/MoeKoeMusic" });
+    expect(document.querySelector('[data-player-card="netease"] .source-info small').textContent).toContain("已停用");
+    dom.window.close();
+  });
+
+  it("lets users skip onboarding and revisit it without posting configuration changes", async () => {
+    const { dom, sent, script } = await createSettingsDom();
+    dom.window.eval(script);
+    const document = dom.window.document;
+    dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings: {} } });
+    document.querySelector('[data-nav="gettingStarted"]').click();
+    const initialCount = sent.length;
+    document.querySelector("[data-getting-started-later]").click();
+    expect(document.querySelector('[data-page="sources"]').classList.contains("active")).toBe(true);
+    expect(sent.slice(initialCount)).toEqual([{ version: 1, type: "settingsPageChanged", payload: "sources" }]);
+    document.querySelector('[data-nav="gettingStarted"]').click();
+    expect(document.querySelector('[data-page="gettingStarted"]').classList.contains("active")).toBe(true);
+    document.querySelector("[data-getting-started-done]").click();
+    expect(sent.slice(-2)).toEqual([
+      { version: 1, type: "showLyricsWindow", payload: {} },
+      { version: 1, type: "settingsPageChanged", payload: "sources" }
+    ]);
+    expect(document.querySelector('[data-page="sources"]').classList.contains("active")).toBe(true);
+    dom.window.close();
+  });
+
+  it("keeps source cards compact without compatibility notices or extra actions", async () => {
+    const { dom, sent, script } = await createSettingsDom();
+    dom.window.eval(script);
+    const document = dom.window.document;
+    dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings: { enableNetease: false, enableKugou: false } } });
+    const initialCount = sent.length;
+    for (const card of document.querySelectorAll("[data-player-card]")) {
+      expect(card.children).toHaveLength(2);
+      expect(card.querySelector("[data-player-drag-id]")).not.toBeNull();
+      expect(card.querySelector("[data-player-settings]")).not.toBeNull();
+      expect(card.querySelector(".source-guidance, [data-player-help]")).toBeNull();
+    }
+    expect(document.querySelector("#playerGuidanceDialog")).toBeNull();
+    expect(sent).toHaveLength(initialCount);
+    dom.window.close();
+  });
+
+  it("reuses the same compatibility indicators in onboarding and every player drawer without changing settings", async () => {
+    const { dom, sent, script } = await createSettingsDom();
+    enableDialogDomSupport(dom);
+    dom.window.eval(script);
+    const document = dom.window.document;
+    dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings: {
+      enableQQMusic: true, enableNetease: true, enableKugou: true, enableSpotify: true, enableBrowser: true,
+      customPlayerSources: [
+        { sourceAppUserModelId: "Example.Player", displayName: "Apple Music", enabled: true },
+        { sourceAppUserModelId: "AppleInc.AppleMusicWin_nzyj5cx40ttqa!App", displayName: "自定义名称", enabled: true },
+        { sourceAppUserModelId: "汽水音乐", displayName: "汽水音乐", enabled: true },
+        { sourceAppUserModelId: "foobar2000.exe", displayName: "foobar2000", enabled: true }
+      ]
+    } } });
+    const initialCount = sent.length;
+    const guide = document.querySelector("#gettingStartedGuidance");
+    const section = document.querySelector("#playerCompatibilitySection");
+    const dialog = document.querySelector("#playerSettingsDialog");
+    const customIds = { applemusic: "AppleInc.AppleMusicWin_nzyj5cx40ttqa!App", sodamusic: "汽水音乐", foobar2000: "foobar2000.exe", other: "Example.Player" };
+    for (const player of ["qqmusic", "netease", "kugou", "spotify", "applemusic", "sodamusic", "foobar2000", "browser", "other"]) {
+      document.querySelector(`input[name="gettingStartedPlayer"][value="${player}"]`).click();
+      const sourceId = customIds[player] ? `custom-${encodeURIComponent(customIds[player])}` : player;
+      document.querySelector(`[data-player-settings="${sourceId}"]`).click();
+      expect(section.hidden).toBe(false);
+      expect(section.querySelector(".player-compatibility").outerHTML).toBe(guide.querySelector(".player-compatibility").outerHTML);
+      expect(section.querySelectorAll("dl > div")).toHaveLength(3);
+      dialog.close();
+    }
+    expect(sent).toHaveLength(initialCount);
+    document.querySelector('[data-player-settings="netease"]').click();
+    section.querySelector("[data-compatibility-link]").click();
+    expect(sent.at(-1)).toEqual({ version: 1, type: "openExternalLink", payload: "https://github.com/apoint123/inflink-rs" });
+    dialog.close();
+    document.querySelector("#addPlayerSourceButton").click();
+    expect(section.hidden).toBe(true);
+    expect(section.children).toHaveLength(0);
+    dom.window.close();
+  });
+
   it("refreshes single-line zoom and its upper bound in both taskbar resize directions without posting edits", async () => {
     const { dom, sent, script } = await createSettingsDom();
     dom.window.eval(script);
@@ -354,7 +460,7 @@ describe("settings WebView bridge", () => {
     document.querySelector('[data-player-settings="browser"]').click();
     const drawerBody = document.querySelector("#playerDrawerBody");
     expect([...drawerBody.children].filter(element => element.classList.contains("player-setting-section")).map(element => element.id))
-      .toEqual(["playerDiscoverySection", "playerRecognitionSection", "playerCardInfoSection", "playerAdvancedSettings", "playerTrustSection"]);
+      .toEqual(["playerCompatibilitySection", "playerDiscoverySection", "playerRecognitionSection", "playerCardInfoSection", "playerAdvancedSettings", "playerTrustSection"]);
     expect(document.querySelector("#playerAdvancedSettings").parentElement).toBe(drawerBody);
     expect(document.querySelector("#playerRemoveActions").parentElement).toBe(drawerBody);
     expect(document.querySelector("#playerAdvancedSettings").hidden).toBe(false);

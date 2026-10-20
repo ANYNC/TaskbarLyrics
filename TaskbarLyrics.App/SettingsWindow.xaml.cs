@@ -28,6 +28,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
     private readonly Action _clearLyricCache;
     private readonly DispatcherTimer _trackOffsetRefreshTimer;
     private bool _isWebReady;
+    private bool _isNavigationReady;
     private bool _isClosed;
     private bool _isTrackOffsetRefreshRunning;
     private bool _isRuntimeStateRefreshRunning;
@@ -236,6 +237,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         switch (message.Type)
         {
             case "ready":
+                _isNavigationReady = true;
                 await PushSettingsToWebAsync();
                 await PushWindowStateToWebAsync();
                 await PushPendingNavigationAsync();
@@ -389,11 +391,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 await PushTrackOffsetEntriesToWebAsync(_trackOffsetQuery);
                 break;
             case "settingsPageChanged":
-                _isTrackOffsetsPageActive = message.Value.HasValue &&
-                    string.Equals(
-                        ReadString(message.Value.Value, string.Empty),
-                        "trackOffsets",
-                        StringComparison.Ordinal);
+                await HandleSettingsPageChangedAsync(message.Value);
                 break;
             case "setCurrentTrackOffset":
                 await SetCurrentTrackOffsetAsync(message.Value);
@@ -1008,7 +1006,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
 
     private async Task PushPendingNavigationAsync()
     {
-        if (!_isWebReady || SettingsWebView.CoreWebView2 is null || string.IsNullOrWhiteSpace(_pendingPage))
+        if (!_isNavigationReady || !_isWebReady || SettingsWebView.CoreWebView2 is null || string.IsNullOrWhiteSpace(_pendingPage))
         {
             return;
         }
@@ -1023,6 +1021,17 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 page,
                 focusCurrentTrack
             }));
+    }
+
+    private async Task HandleSettingsPageChangedAsync(JsonElement? value)
+    {
+        var page = value is { ValueKind: JsonValueKind.String } ? value.Value.GetString() : null;
+        _isTrackOffsetsPageActive = page == "trackOffsets";
+        if (page == "gettingStarted" && !_settings.HasSeenGettingStarted)
+        {
+            _settings.HasSeenGettingStarted = true;
+            _hasPendingPreviewChanges = !await SaveSettingsAndNotifyWebAsync();
+        }
     }
 
     private async Task PushPendingSpectrumDisplayModeAsync()
@@ -2139,6 +2148,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
 
     private static void CopySettings(AppSettings source, AppSettings target)
     {
+        target.HasSeenGettingStarted = source.HasSeenGettingStarted;
         target.SourceRecognitionOrder = source.SourceRecognitionOrder.ToList();
         target.CustomPlayerSources = source.CustomPlayerSources.ToList();
         target.EnableNetease = source.EnableNetease;

@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>TaskbarLyrics 设置</title>
   <link rel="stylesheet" href="settings.css">
+  <link rel="stylesheet" href="player-compatibility.css">
 </head>
 <body>
 
@@ -27,6 +28,7 @@
       </div>
 
       <nav class="nav">
+        <button class="nav-item" data-nav="gettingStarted" data-tooltip="开始使用" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 10 7-10 7Z"/></svg><span>开始使用</span></button>
         <button class="nav-item active" aria-current="page" data-nav="sources" data-tooltip="播放源" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4v16M10 7h8M10 12h8M10 17h5"/></svg><span>播放源</span></button>
         <button class="nav-item" data-nav="lyrics" data-tooltip="歌词" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M4 12h16M4 17h12"/></svg><span>歌词</span></button>
         <button class="nav-item" data-nav="displayArea" data-tooltip="显示与外观" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg><span>显示与外观</span></button>
@@ -55,6 +57,30 @@
       </header>
 
       <div class="page-stack">
+        <section class="page" data-page="gettingStarted" aria-labelledby="gettingStartedHeading">
+          <div class="page-inner">
+            <section class="panel getting-started-panel">
+              <div class="panel-head"><div><h2 id="gettingStartedHeading" tabindex="-1">选择播放器，开始显示歌词</h2><p>查看兼容性和必要配置。</p></div></div>
+              <div class="panel-body getting-started-body">
+                <fieldset class="getting-started-players">
+                  <legend>你主要使用哪个播放器？</legend>
+                  <label><input type="radio" name="gettingStartedPlayer" value="netease"><span>网易云音乐</span></label>
+                  <label><input type="radio" name="gettingStartedPlayer" value="qqmusic"><span>QQ 音乐</span></label>
+                  <label><input type="radio" name="gettingStartedPlayer" value="kugou"><span>酷狗音乐</span></label>
+                  <label><input type="radio" name="gettingStartedPlayer" value="spotify"><span>Spotify</span></label>
+                  <label><input type="radio" name="gettingStartedPlayer" value="applemusic"><span>Apple Music</span></label>
+                  <label><input type="radio" name="gettingStartedPlayer" value="sodamusic"><span>汽水音乐</span></label>
+                  <label><input type="radio" name="gettingStartedPlayer" value="foobar2000"><span>foobar2000</span></label>
+                  <label><input type="radio" name="gettingStartedPlayer" value="browser"><span>浏览器</span></label>
+                  <label><input type="radio" name="gettingStartedPlayer" value="other"><span>其他播放器</span></label>
+                </fieldset>
+                <section id="gettingStartedGuidance" aria-live="polite" hidden></section>
+                <p class="getting-started-note">未列出的播放器需先在“播放源”中添加。选择仅用于查看说明，不改变设置；指标非实时检测。</p>
+                <div class="getting-started-actions"><button class="btn" type="button" data-getting-started-done>开始使用</button><button class="btn ghost" type="button" data-getting-started-later>稍后配置</button></div>
+              </div>
+            </section>
+          </div>
+        </section>
         <section class="page active" data-page="sources" aria-labelledby="sourcesHeading">
           <div class="page-inner">
             <section class="panel">
@@ -363,6 +389,7 @@
       <button class="icon-button" type="button" data-dialog-cancel="playerSettingsDialog" aria-label="关闭播放器设置"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
     </div>
     <div id="playerDrawerBody" class="player-drawer-body">
+      <section id="playerCompatibilitySection" class="player-setting-section player-compatibility-section" hidden></section>
       <section id="playerDiscoverySection" class="player-setting-section player-drawer-discovery" aria-labelledby="playerDiscoveryTitle" hidden>
         <div class="player-discovery-head"><strong id="playerDiscoveryTitle">检测到的媒体会话</strong><button id="refreshPlayerSessionsButton" class="btn ghost small" type="button">刷新</button></div>
         <div id="availablePlayerSessions" class="available-player-sessions" role="group" aria-label="检测到的媒体会话"></div>
@@ -431,6 +458,7 @@
   <script src="state.js"></script>
   <script src="track-offsets-page.js"></script>
   <script src="display-presentation.js"></script>
+  <script src="player-compatibility.js"></script>
   <script src="settings.js"></script>
 </body>
 </html>

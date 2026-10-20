@@ -23,6 +23,7 @@
     const presetColors = ["#FFFFFF", "#A1A1AA", "#18181B", "#EF4444", "#F97316", "#EAB308", "#22C55E", "#06B6D4", "#3B82F6", "#A855F7"];
 
     const pageMeta = {
+      gettingStarted: ["开始使用", "先了解播放器的准备事项，再开始显示歌词。"],
       sources: ["播放源", "选择需要监听的音乐软件，并配置各播放器的歌词设置。"],
       shortcuts: ["快捷键", "设置在其他应用前台时控制播放器的全局组合键。"],
       lyrics: ["歌词", "控制歌词显示、翻译和频谱策略。"],
@@ -176,6 +177,11 @@
         presetIconColor: preset ? selectedPlayerPresetColor : "",
         ...(playerDrawerMode === "add" ? { enabled: newPlayerEnabled, lyricProviders: newPlayerLyricProviders } : {})
       };
+    }
+
+    function renderPlayerCompatibility(container, playerId) {
+      window.taskbarLyricsPlayerCompatibility.render(container, playerId,
+        url => bridge.post({ type: "openExternalLink", value: url }));
     }
 
     function renderSources() {
@@ -772,6 +778,9 @@
 
     function renderPlayerSettings() {
       const adding = playerDrawerMode === "add";
+      const source = sourceCatalog.find(item => item.id === activePlayerSourceId);
+      $("#playerCompatibilitySection").hidden = adding || !source;
+      if (adding || !source) $("#playerCompatibilitySection").replaceChildren();
       $("#playerDiscoverySection").hidden = !adding;
       $("#playerRecognitionSection").hidden = false;
       $("#playerCardInfoSection").hidden = !adding && !sourceCatalog.find(item => item.id === activePlayerSourceId)?.custom;
@@ -788,8 +797,10 @@
         renderLyricProviders();
         return;
       }
-      const source = sourceCatalog.find(item => item.id === activePlayerSourceId);
       if (!source) return;
+      const compatibilityProfile = source.custom
+        ? window.taskbarLyricsPlayerCompatibility.resolveSourceProfile(source.adapter) : source.id;
+      renderPlayerCompatibility($("#playerCompatibilitySection"), compatibilityProfile);
       $("#playerSettingsTitle").textContent = source.name;
       $("#playerSettingsAdapter").textContent = source.adapter;
       $("#playerSettingsLogo").innerHTML = playerIcon(source);
@@ -1786,6 +1797,15 @@
     }
 
     document.addEventListener("click", event => {
+      if (event.target.closest("[data-getting-started-done]")) {
+        bridge.post({ type: "showLyricsWindow" });
+        navigateToPage("sources");
+        return;
+      }
+      if (event.target.closest("[data-getting-started-later]")) {
+        navigateToPage("sources");
+        return;
+      }
       const hotkeyBinding = event.target.closest("[data-hotkey-binding]");
       if (hotkeyBinding) { beginHotkeyRecording(hotkeyBinding); return; }
 
@@ -2155,6 +2175,10 @@
     });
 
     document.addEventListener("change", event => {
+      if (event.target.matches('input[name="gettingStartedPlayer"]')) {
+        renderPlayerCompatibility($("#gettingStartedGuidance"), event.target.value);
+        return;
+      }
       const lyricToggle = event.target.closest("[data-lyric-provider-toggle]");
       if (lyricToggle) {
         const provider = currentLyricProviders()

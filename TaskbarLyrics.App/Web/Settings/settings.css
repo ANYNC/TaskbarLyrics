@@ -289,6 +289,16 @@
     .source-count { color: var(--subtle); font-size: 11px; white-space: nowrap; }
     .source-panel-actions { display: flex; align-items: center; gap: 10px; }
     .source-panel-actions .btn { white-space: nowrap; }
+    .getting-started-body { display: grid; gap: 14px; }
+    .getting-started-players { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr)); gap: 8px; min-width: 0; margin: 0; padding: 0; border: 0; }
+    .getting-started-players legend { padding: 0 0 10px; font-size: 13px; font-weight: 600; }
+    .getting-started-players label { display: flex; align-items: center; gap: 8px; padding: 12px; border: 1px solid var(--input); border-radius: var(--radius-sm); cursor: pointer; font-size: 12px; }
+    .getting-started-players label:hover { background: var(--surface-hover); }
+    .getting-started-players label:has(:checked) { border-color: var(--primary); background: var(--accent); }
+    .getting-started-players label:has(:focus-visible) { outline: 2px solid var(--ring); outline-offset: 2px; }
+    .getting-started-players input { margin: 0; accent-color: var(--primary); }
+    .getting-started-note { margin: 0; color: var(--muted-foreground); font-size: 11px; line-height: 1.65; }
+    .getting-started-actions { display: flex; flex-wrap: wrap; gap: 8px; }
     .source-logo.custom-player-icon { font-size: 22px; }
     .source-logo svg { width: 22px; height: 22px; }
     .default-player-icon { filter: invert(1); }

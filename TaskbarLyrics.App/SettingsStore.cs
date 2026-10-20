@@ -25,7 +25,7 @@ public sealed class SettingsStore
         {
             if (!File.Exists(_filePath))
             {
-                return new AppSettings();
+                return new AppSettings { HasSeenGettingStarted = false };
             }
 
             var json = File.ReadAllText(_filePath);

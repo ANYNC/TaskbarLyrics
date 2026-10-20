@@ -135,6 +135,8 @@ public sealed class AppSettings
 
     public List<string> LocalMusicFolders { get; set; } = new();
 
+    public bool HasSeenGettingStarted { get; set; } = true;
+
     public bool ShowLyricsOnStartup { get; set; } = true;
 
     public bool AutoHideWhenNoPlayback { get; set; } = true;

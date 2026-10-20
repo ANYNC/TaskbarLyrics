@@ -1,0 +1,20 @@
+.player-compatibility { min-width: 0; overflow-wrap: anywhere; }
+.compatibility-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+.compatibility-heading strong { font-size: 12px; font-weight: 600; }
+.compatibility-level { display: inline-flex; align-items: center; gap: 4px; padding: 3px 7px; border: 1px solid var(--input); border-radius: var(--radius-sm); color: var(--foreground); background: var(--secondary); font-size: 11px; line-height: 1.4; }
+.player-compatibility[data-support-level="supported"] .compatibility-level { color: var(--success); border-color: color-mix(in oklch, var(--success) 35%, var(--border)); background: color-mix(in oklch, var(--success) 8%, var(--background)); }
+.compatibility-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 12px 0 10px; }
+.compatibility-metrics > div { min-width: 0; padding: 9px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.compatibility-metrics dt { margin: 0 0 5px; color: var(--muted-foreground); font-size: 11px; }
+.compatibility-metrics dd { margin: 0; color: var(--foreground); font-size: 12px; font-weight: 500; line-height: 1.5; }
+.compatibility-summary { margin: 0; color: var(--muted-foreground); font-size: 12px; line-height: 1.6; }
+.compatibility-details { margin-top: 10px; }
+.compatibility-details-title { margin: 0; color: var(--foreground); font-size: 12px; font-weight: 600; line-height: 1.6; }
+.compatibility-details ol { margin: 10px 0; padding-left: 20px; color: var(--muted-foreground); font-size: 12px; line-height: 1.7; }
+.compatibility-details li + li { margin-top: 5px; }
+.compatibility-details .compatibility-note { margin: 8px 0 0; color: var(--muted-foreground); font-size: 11px; line-height: 1.5; }
+.compatibility-resource { margin-top: 10px; color: var(--muted-foreground); font-size: 12px; line-height: 1.7; }
+.compatibility-link { padding: 0; border: 0; background: transparent; color: var(--foreground); font: inherit; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.compatibility-link:hover { color: var(--primary); }
+.compatibility-link:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: var(--radius-sm); }
+.player-compatibility-section { padding: 12px 14px; }
