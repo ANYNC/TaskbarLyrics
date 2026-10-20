@@ -2,6 +2,7 @@ using System.Runtime.CompilerServices;
 using System.Windows;
 
 [assembly: InternalsVisibleTo("TaskbarLyrics.App.Tests")]
+[assembly: InternalsVisibleTo("TaskbarLyrics.Diagnostics")]
 
 [assembly: ThemeInfo(
     ResourceDictionaryLocation.None,            //where theme specific resource dictionaries are located

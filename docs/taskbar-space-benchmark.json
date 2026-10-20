@@ -1,0 +1,73 @@
+{
+  "Scope": "Isolated geometry-query client, not whole-application or Explorer CPU",
+  "LogicalProcessors": 32,
+  "OccupiedRegions": 39,
+  "Trials": [
+    {
+      "Mode": "idle",
+      "Seconds": 15.04,
+      "Queries": 29,
+      "Attempts": 29,
+      "TransientErrors": {},
+      "MedianQueryMs": 0.002,
+      "P95QueryMs": 0.003,
+      "CpuPercent": 0.026,
+      "AllocatedMB": 0.081
+    },
+    {
+      "Mode": "full-tree",
+      "Seconds": 15.06,
+      "Queries": 29,
+      "Attempts": 29,
+      "TransientErrors": {},
+      "MedianQueryMs": 178.503,
+      "P95QueryMs": 321.361,
+      "CpuPercent": 0.2173,
+      "AllocatedMB": 5.081
+    },
+    {
+      "Mode": "scoped",
+      "Seconds": 15.06,
+      "Queries": 29,
+      "Attempts": 29,
+      "TransientErrors": {},
+      "MedianQueryMs": 54.903,
+      "P95QueryMs": 110.123,
+      "CpuPercent": 0.1297,
+      "AllocatedMB": 3.144
+    },
+    {
+      "Mode": "scoped",
+      "Seconds": 15.05,
+      "Queries": 28,
+      "Attempts": 28,
+      "TransientErrors": {},
+      "MedianQueryMs": 35.305,
+      "P95QueryMs": 57.029,
+      "CpuPercent": 0.0389,
+      "AllocatedMB": 3.042
+    },
+    {
+      "Mode": "full-tree",
+      "Seconds": 15.02,
+      "Queries": 28,
+      "Attempts": 28,
+      "TransientErrors": {},
+      "MedianQueryMs": 41.343,
+      "P95QueryMs": 116.417,
+      "CpuPercent": 0.0813,
+      "AllocatedMB": 4.893
+    },
+    {
+      "Mode": "idle",
+      "Seconds": 15.07,
+      "Queries": 28,
+      "Attempts": 28,
+      "TransientErrors": {},
+      "MedianQueryMs": 0.001,
+      "P95QueryMs": 0.001,
+      "CpuPercent": 0.0097,
+      "AllocatedMB": 0.082
+    }
+  ]
+}

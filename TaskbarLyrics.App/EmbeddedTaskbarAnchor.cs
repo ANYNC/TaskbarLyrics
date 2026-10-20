@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
+using System.Windows.Threading;
 using TaskbarLyrics.Core.Utilities;
 
 namespace TaskbarLyrics.App;
@@ -143,8 +144,25 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
     private bool _taskListSqueezed;
     private bool _disposed;
     private string? _lastAttachDiagnostic;
+    private readonly TaskbarOccupiedSpaceProvider _occupiedSpace;
+    private DispatcherTimer? _spaceRefreshTimer;
+    private Window? _positionWindow;
+    private AppSettings? _positionSettings;
+    private DisplayMonitor? _positionDisplay;
+    private string? _lastSpaceDiagnostic;
+
+    public EmbeddedTaskbarAnchor() : this(new TaskbarOccupiedSpaceProvider()) { }
+
+    internal EmbeddedTaskbarAnchor(TaskbarOccupiedSpaceProvider occupiedSpace)
+    {
+        _occupiedSpace = occupiedSpace;
+        _occupiedSpace.SnapshotAvailable += OnSnapshotAvailable;
+    }
 
     public bool IsAttached => _windowHandle != IntPtr.Zero && _parentHandle != IntPtr.Zero;
+
+    public bool IsSurfaceHidden { get; private set; }
+    public event EventHandler? SurfaceHidden;
 
     public bool IsAttachedToDifferentTarget(DisplayMonitor? targetDisplay) =>
         EmbeddedTaskbarEmbeddingPolicy.RequiresWindowReplacement(_attachedDisplayTarget, targetDisplay);
@@ -218,6 +236,8 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
 
         _attachedDisplayTarget = EmbeddedTaskbarDisplayTarget.Create(targetDisplay);
 
+        if (isWindows11) MonitorAvailableSpace(window, settings, targetDisplay);
+
         if (!isWindows11)
         {
             SqueezeTaskList(parent, settings);
@@ -231,6 +251,12 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
 
     public void Detach()
     {
+        IsSurfaceHidden = false;
+        _spaceRefreshTimer?.Stop();
+        _occupiedSpace.Invalidate();
+        _positionWindow = null;
+        _positionSettings = null;
+        _positionDisplay = null;
         RestoreTaskList();
 
         if (_windowHandle != IntPtr.Zero && IsWindow(_windowHandle))
@@ -257,11 +283,48 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
             return;
         }
 
+        _occupiedSpace.SnapshotAvailable -= OnSnapshotAvailable;
         Detach();
+        if (_spaceRefreshTimer is not null) _spaceRefreshTimer.Tick -= OnSpaceRefreshTick;
+        _occupiedSpace.Dispose();
         _disposed = true;
     }
 
-    private static bool Position(
+    private void MonitorAvailableSpace(Window window, AppSettings settings, DisplayMonitor? display)
+    {
+        _positionWindow = window;
+        _positionSettings = settings;
+        _positionDisplay = display;
+        if (_spaceRefreshTimer is null)
+        {
+            _spaceRefreshTimer = new DispatcherTimer(DispatcherPriority.Background, window.Dispatcher)
+            {
+                Interval = TimeSpan.FromMilliseconds(500)
+            };
+            _spaceRefreshTimer.Tick += OnSpaceRefreshTick;
+        }
+        _spaceRefreshTimer.Start();
+    }
+
+    private void OnSpaceRefreshTick(object? sender, EventArgs e) => RefreshAvailableSpace();
+
+    // The reader publishes from a worker. Apply fresh geometry on the owning
+    // dispatcher instead of keeping it unused until the next 500 ms timer tick.
+    private void OnSnapshotAvailable(object? sender, EventArgs e)
+    {
+        var dispatcher = Volatile.Read(ref _positionWindow)?.Dispatcher;
+        if (dispatcher is null || dispatcher.HasShutdownStarted || dispatcher.HasShutdownFinished) return;
+        dispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(RefreshAvailableSpace));
+    }
+
+    private void RefreshAvailableSpace()
+    {
+        if (!_disposed && _positionWindow is { IsVisible: true } window && _positionSettings is { } settings &&
+            _windowHandle != IntPtr.Zero && _parentHandle != IntPtr.Zero && IsWindow(_parentHandle))
+            Position(_windowHandle, _parentHandle, window, settings, _positionDisplay);
+    }
+
+    internal bool Position(
         IntPtr hwnd,
         IntPtr parent,
         Window window,
@@ -284,6 +347,41 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
         var height = metrics.DesiredWindowHeight;
         height = Math.Min(height, taskbarHeight);
 
+        var clientLeft = EmbeddedTaskbarLayoutCalculator.CalculateHorizontalLeft(
+            taskbarWidth, width, settings.HorizontalAnchor, settings.XOffset);
+        // The upstream vertical layout uses height as its lyric axis. Preserve it
+        // rather than applying a horizontal free-space policy to a vertical bar.
+        if (IsWindows11() && !metrics.IsVertical)
+        {
+            var occupied = _occupiedSpace.GetOccupiedBounds(parent, new Rect(
+                parentRect.Left, parentRect.Top,
+                parentRect.Right - parentRect.Left, parentRect.Bottom - parentRect.Top));
+            var logical = occupied is null ? null : TaskbarOccupiedSpaceProvider.ToLogicalBounds(
+                occupied, parentRect.Left, pixelsPerDip);
+            if (logical is null || !TaskbarFreeSpaceLayout.TryPlace(
+                    taskbarWidth, width, clientLeft, logical, out var available,
+                    minimumWidth: TaskbarFreeSpaceLayout.MinimumDisplayWidth))
+            {
+                ReportSpaceDiagnostic(logical is null ? "WaitingForTaskbarBounds" : "NoFreeSpace");
+                if (!IsSurfaceHidden)
+                {
+                    IsSurfaceHidden = true;
+                    SurfaceHidden?.Invoke(this, EventArgs.Empty);
+                }
+                var current = GetCurrentWindowBounds(hwnd, parentRect);
+                // Keep the logical visibility and parent: zero native area cannot
+                // obscure buttons and can recover without re-parenting the HWND.
+                return current is { Width: 0, Height: 0 } || TaskbarNativeMethods.SetWindowPos(
+                    hwnd, IntPtr.Zero, 0, 0, 0, 0,
+                    TaskbarNativeMethods.SWP_NOMOVE | TaskbarNativeMethods.SWP_NOZORDER |
+                    TaskbarNativeMethods.SWP_NOACTIVATE);
+            }
+            clientLeft = available.Start;
+            width = available.Width;
+            ReportSpaceDiagnostic($"Left={clientLeft:F1} Width={width:F1} Scale={pixelsPerDip:F2}");
+        }
+
+        IsSurfaceHidden = false;
         if (window.Width != width)
         {
             window.Width = width;
@@ -294,11 +392,6 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
             window.Height = height;
         }
 
-        var clientLeft = EmbeddedTaskbarLayoutCalculator.CalculateHorizontalLeft(
-            taskbarWidth,
-            width,
-            settings.HorizontalAnchor,
-            settings.XOffset);
         var clientTop = EmbeddedTaskbarLayoutCalculator.CalculateVerticalTop(
             taskbarHeight,
             height,
@@ -343,6 +436,13 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
             bounds.Width,
             bounds.Height,
             TaskbarNativeMethods.SWP_NOZORDER | TaskbarNativeMethods.SWP_NOACTIVATE);
+    }
+
+    private void ReportSpaceDiagnostic(string message)
+    {
+        if (_lastSpaceDiagnostic == message) return;
+        _lastSpaceDiagnostic = message;
+        Log.Diagnostic("TASKBAR_SPACE", message);
     }
 
     private static EmbeddedTaskbarNativeBounds? GetCurrentWindowBounds(

@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using TaskbarLyrics.App;
@@ -19,6 +20,9 @@ internal static class Program
 
     public static async Task<int> Main(string[] args)
     {
+        if (args.Length > 0 && args[0] == "--taskbar-space")
+            return await TaskbarSpaceDiagnostics.RunAsync(args[1..]);
+
         DiagnosticOptions options;
         try
         {

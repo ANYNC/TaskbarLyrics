@@ -422,7 +422,8 @@ internal sealed class LyricsWindowHost : IDisposable
             if (!_mirrorWindows.TryGetValue(display.Id, out var mirrorWindow))
             {
                 mirrorWindow = new LyricsMirrorWindow(display, (owner, bounds, monitor, setExpanded, area, activation) =>
-                    _window?.ToggleControlPanelNear(bounds, monitor, setExpanded, owner, area, activation), _compositionRoot!);
+                    _window?.ToggleControlPanelNear(bounds, monitor, setExpanded, owner, area, activation), _compositionRoot!,
+                    () => _window?.CloseControlPanel());
                 _mirrorWindows.Add(display.Id, mirrorWindow);
                 _window?.RegisterFloatingLyricsHost(mirrorWindow);
             }

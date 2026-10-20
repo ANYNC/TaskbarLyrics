@@ -14,6 +14,7 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
     private static readonly string[] InitialScriptSlots = ["style", "lyrics", "cover", "spectrumTuning", "spectrum"];
     private readonly Dictionary<string, string> _pendingScripts = new(StringComparer.Ordinal);
     private readonly EmbeddedTaskbarAnchor _embeddedTaskbarAnchor = new();
+    private readonly Action? _onSurfaceHidden;
     private readonly SmartTopmostController _smartTopmostController;
     private readonly Action<Window, Rect, DisplayMonitor, Action<bool>, ControlPanelTriggerArea, ControlPanelActivation> _onCoverClicked;
     private readonly FloatingWindowPlacement _floatingPlacement;
@@ -27,9 +28,11 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
     private bool _isContentVisible = true;
 
     public LyricsMirrorWindow(DisplayMonitor displayMonitor, Action<Window, Rect, DisplayMonitor, Action<bool>, ControlPanelTriggerArea, ControlPanelActivation> onCoverClicked,
-        IAppCompositionRoot compositionRoot)
+        IAppCompositionRoot compositionRoot, Action? onSurfaceHidden = null)
     {
         InitializeComponent();
+        _onSurfaceHidden = onSurfaceHidden;
+        _embeddedTaskbarAnchor.SurfaceHidden += OnEmbeddedSurfaceHidden;
         _regionVisibility = new LyricsRegionVisibilityController(Dispatcher,
             (generation, phase) => TaskObserver.Observe(SendRegionVisibilityAsync(generation, phase), "mirror region visibility"),
             (visible, interactive) =>
@@ -54,8 +57,11 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
     }
 
     internal bool IsEmbeddedInTaskbar => _embeddedTaskbarAnchor.IsAttached;
+    internal bool IsEmbeddedSurfaceHidden => _embeddedTaskbarAnchor.IsSurfaceHidden;
     internal DisplayMonitor DisplayMonitor => _settings.UseFloatingWindow ? _floatingPlacement.Display ?? _displayMonitor : _displayMonitor;
-    internal bool IsContentVisible => _isContentVisible && _isWebReady && _regionVisibility.IsInteractive;
+    internal bool IsContentVisible => _isContentVisible && _isWebReady && _regionVisibility.IsInteractive && !IsEmbeddedSurfaceHidden;
+
+    private void OnEmbeddedSurfaceHidden(object? sender, EventArgs e) => _onSurfaceHidden?.Invoke();
 
     private async Task SendRegionVisibilityAsync(int generation, LyricsRegionVisibilityPhase phase) =>
         await LyricsWebView.ExecuteScriptAsync(LyricsWebViewScriptFactory.SetRegionVisibility(
@@ -206,6 +212,7 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
             core.WebMessageReceived -= OnWebMessageReceived;
         }
         LyricsWebView.Dispose();
+        _embeddedTaskbarAnchor.SurfaceHidden -= OnEmbeddedSurfaceHidden;
         _embeddedTaskbarAnchor.Dispose();
         _smartTopmostController.Dispose();
     }
@@ -256,7 +263,7 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
                 _regionVisibility.Complete(generation, visible);
                 return;
             }
-            if (!_isContentVisible || !_regionVisibility.IsInteractive || !(_settings.UseFloatingWindow || _settings.GetEnableControlPanel())) return;
+            if (!_isContentVisible || IsEmbeddedSurfaceHidden || !_regionVisibility.IsInteractive || !(_settings.UseFloatingWindow || _settings.GetEnableControlPanel())) return;
             if (!LyricsWebMessageRouter.TryGetControlPanelTrigger(
                     message, out var click, out var area, out var activation) ||
                 !_settings.CanTriggerControlPanel(area, activation))
