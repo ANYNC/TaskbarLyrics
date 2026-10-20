@@ -25,6 +25,7 @@ internal static class LyricsStyleScriptFactory
             singleLine = metrics.IsSingleLine,
             showCover = settings.ShowCover,
             coverPosition = settings.CoverPosition,
+            coverTheme = NativeWindowTheme.IsLight ? "light" : "dark",
             enableControlPanel = settings.UseFloatingWindow || settings.GetEnableControlPanel(),
             floatingControlPanel = settings.UseFloatingWindow,
             floatingInputPassthrough = settings.UseFloatingWindow && !settings.EnableFloatingControlPanel,

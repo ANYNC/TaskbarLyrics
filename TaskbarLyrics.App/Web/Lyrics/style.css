@@ -54,6 +54,8 @@
   --surface-radius: 8px;
   --layer-transition-offset: 2px;
   --cover-fallback-font-size: 13px;
+  --cover-placeholder-background: #f3f4f6;
+  --cover-placeholder-foreground: #1c1d20;
   --spectrum-width: 210px;
   --spectrum-height: 22px;
   --spectrum-gap: 3px;
@@ -66,6 +68,18 @@
   --surface-shadow: none;
   --text-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
   --line-transform-origin: left center;
+}
+
+:root[data-cover-theme="dark"] {
+  --cover-placeholder-background: #202124;
+  --cover-placeholder-foreground: #f6f7f8;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-cover-theme="light"]) {
+    --cover-placeholder-background: #202124;
+    --cover-placeholder-foreground: #f6f7f8;
+  }
 }
 
 * {
@@ -286,6 +300,20 @@ html, body {
 .floating-controls-enabled.floating-locked.floating-lock-hovered .cover:not(:disabled) .cover-interaction { opacity: 1; }
 .floating-input-passthrough .layout { pointer-events: none; }
 .floating-input-passthrough .cover-interaction { visibility: hidden; }
+
+.cover.tl-placeholder {
+  background: var(--cover-placeholder-background);
+  transition-property: opacity, filter;
+}
+
+.cover.tl-placeholder .cover-fallback {
+  color: var(--cover-placeholder-foreground);
+}
+
+@media (forced-colors: active) {
+  .cover.tl-placeholder { background: Canvas; }
+  .cover.tl-placeholder .cover-fallback { color: CanvasText; }
+}
 
 .cover-fallback {
   position: absolute;

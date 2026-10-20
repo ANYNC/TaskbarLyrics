@@ -74,6 +74,8 @@ internal sealed class FloatingMaterialFallbackWindow : Window, IFloatingPanelMat
         _shadow.Opacity = SystemParameters.HighContrast ? 0 : light ? 0.16 : 0.30;
         _shadowLayer.Visibility = SystemParameters.HighContrast ? Visibility.Hidden : Visibility.Visible;
     }
+    public Task PrepareAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
     public void SetVisible(bool visible, bool immediate = false)
     {
         var from = _visualRoot.Opacity;

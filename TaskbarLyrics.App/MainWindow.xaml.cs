@@ -1,6 +1,5 @@
 using System.ComponentModel;
 using System.Diagnostics;
-using System.Globalization;
 using System.IO;
 using System.Reflection;
 using System.Text.Json;
@@ -51,8 +50,6 @@ public partial class MainWindow : Window, IDisposable
     private readonly CoverVisualTransitionState _coverVisualTransition = new();
     private readonly CoverFallbackIconResolver _coverFallbackIconResolver = new();
     private string? _currentCoverDataUri;
-    private string _currentCoverFallbackText = "N";
-    private string _currentCoverFallbackColorCss = "rgba(67, 160, 71, 1)";
     private string _currentCoverFallbackIconDataUri = string.Empty;
     private LyricsControlPanelWindow? _controlPanelWindow;
     private Action<bool>? _setControlPanelOpen;
@@ -163,6 +160,7 @@ public partial class MainWindow : Window, IDisposable
         Closing += OnClosing;
         Closed += OnClosed;
         SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
+        NativeWindowTheme.ThemeChanged += OnCoverThemeChanged;
 
         if (System.Windows.Application.Current is App app)
         {
@@ -642,6 +640,7 @@ public partial class MainWindow : Window, IDisposable
         _timer.Tick -= OnTimerTick;
         _spectrumTimer.Tick -= OnSpectrumTimerTick;
         SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
+        NativeWindowTheme.ThemeChanged -= OnCoverThemeChanged;
         Loaded -= OnLoaded;
         SourceInitialized -= OnSourceInitialized;
         Closing -= OnClosing;
@@ -718,6 +717,15 @@ public partial class MainWindow : Window, IDisposable
     private void OnDisplaySettingsChanged(object? sender, EventArgs e)
     {
         QueueDisplayLayoutRefresh();
+    }
+
+    private void OnCoverThemeChanged(object? sender, EventArgs e)
+    {
+        if (Dispatcher.HasShutdownStarted) return;
+        Dispatcher.BeginInvoke(() =>
+        {
+            if (Volatile.Read(ref _isDisposed) == 0) PushStyleToWebView(_currentSettings);
+        });
     }
 
     private async void OnTimerTick(object? sender, EventArgs e)
@@ -1141,9 +1149,6 @@ public partial class MainWindow : Window, IDisposable
             return;
         }
 
-        var sourceApp = snapshot.Track?.SourceApp ?? string.Empty;
-        (_currentCoverFallbackText, var fallbackColor) = GetCoverFallback(sourceApp);
-        _currentCoverFallbackColorCss = ToCssColor(fallbackColor);
         if (snapshot.CoverImageBytes is { Length: > 0 } bytes)
         {
             _currentCoverDataUri = BuildCoverDataUri(bytes);
@@ -1254,31 +1259,6 @@ public partial class MainWindow : Window, IDisposable
         return cover;
     }
 
-    private static (string Text, Media.Color Color) GetCoverFallback(string sourceApp)
-    {
-        if (sourceApp.Equals("QQMusic", StringComparison.OrdinalIgnoreCase))
-        {
-            return ("Q", Media.Color.FromRgb(41, 182, 246));
-        }
-
-        if (sourceApp.Equals("Spotify", StringComparison.OrdinalIgnoreCase))
-        {
-            return ("S", Media.Color.FromRgb(30, 215, 96));
-        }
-
-        if (sourceApp.Equals("Netease", StringComparison.OrdinalIgnoreCase))
-        {
-            return ("N", Media.Color.FromRgb(229, 57, 53));
-        }
-
-        if (sourceApp.Equals("Kugou", StringComparison.OrdinalIgnoreCase))
-        {
-            return ("K", Media.Color.FromRgb(52, 152, 219));
-        }
-
-        return ("♫", Media.Color.FromRgb(99, 102, 241));
-    }
-
     private async Task EnsureLyricsWebViewReadyAsync()
     {
         if (_isWebViewReady || _isWebViewInitializing)
@@ -1367,8 +1347,8 @@ public partial class MainWindow : Window, IDisposable
 
         var script = LyricsWebViewScriptFactory.SetCover(
             _currentCoverDataUri,
-            _currentCoverFallbackText,
-            _currentCoverFallbackColorCss,
+            "TL",
+            string.Empty,
             _currentCoverFallbackIconDataUri,
             _coverVisualTransition.VisualIdentity);
         PublishPresentationCommand("cover", script, "lyrics cover update");
@@ -1844,12 +1824,6 @@ public partial class MainWindow : Window, IDisposable
         }
     }
 
-    private static string ToCssColor(Media.Color color)
-    {
-        var alpha = Math.Round(color.A / 255.0, 4, MidpointRounding.AwayFromZero);
-        return $"rgba({color.R}, {color.G}, {color.B}, {alpha.ToString(CultureInfo.InvariantCulture)})";
-    }
-
     internal static string GetLyricsWebUiHtml()
     {
         try
@@ -1865,6 +1839,7 @@ public partial class MainWindow : Window, IDisposable
             ]);
 
             return template
+                .Replace("{{COVER_THEME}}", NativeWindowTheme.IsLight ? "light" : "dark", StringComparison.Ordinal)
                 .Replace("{{STYLE_CSS}}", style, StringComparison.Ordinal)
                 .Replace("{{APP_JS}}", script, StringComparison.Ordinal);
         }

@@ -20,7 +20,7 @@ using KeyEventArgs = System.Windows.Input.KeyEventArgs;
 
 namespace TaskbarLyrics.App;
 
-public partial class LyricsControlPanelWindow : Window
+public partial class LyricsControlPanelWindow : Window, IDisposable
 {
     public static readonly DependencyProperty ShowKeyboardFocusProperty = DependencyProperty.Register(
         nameof(ShowKeyboardFocus), typeof(bool), typeof(LyricsControlPanelWindow), new PropertyMetadata(false));
@@ -37,6 +37,7 @@ public partial class LyricsControlPanelWindow : Window
     private readonly DispatcherTimer _hideTimer;
     private FloatingMaterialCompositor? _compositor;
     private IFloatingPanelMaterial? _material;
+    private bool _retryMaterialOnNextOpen;
     private double _materialBrightness = AppSettings.DefaultEmbeddedPanelBrightness;
     private double _materialTintOpacity = AppSettings.DefaultEmbeddedPanelTintOpacity;
     private double _materialBlurAmount = AppSettings.DefaultEmbeddedPanelBlurAmount;
@@ -56,9 +57,10 @@ public partial class LyricsControlPanelWindow : Window
     private bool _canSeek;
     private DateTimeOffset _lastTimelinePaintUtc;
     private int _showVersion;
+    private CancellationTokenSource? _showCancellation;
     internal bool IsOpening { get; private set; }
     internal bool IsClosing { get; private set; }
-    private bool CanInteract => IsVisible && !IsClosing && !_disposed;
+    private bool CanInteract => IsVisible && !IsOpening && !IsClosing && !_disposed;
     internal event EventHandler? Hiding;
     internal event EventHandler? Hidden;
 
@@ -206,6 +208,9 @@ public partial class LyricsControlPanelWindow : Window
     {
         if (_disposed) return;
         var version = ++_showVersion;
+        _showCancellation?.Cancel();
+        using var cancellation = new CancellationTokenSource();
+        _showCancellation = cancellation;
         IsOpening = true;
         IsClosing = false;
         _hideTimer.Stop();
@@ -223,17 +228,25 @@ public partial class LyricsControlPanelWindow : Window
             Left = approximate.X / scale; Top = approximate.Y / scale;
             Show();
             var hwnd = new WindowInteropHelper(this).Handle;
+            NativeWindowInteraction.SetClickThrough(hwnd, true);
+            VisualRoot.IsHitTestVisible = false;
             scale = TaskbarNativeMethods.GetDpiForWindow(hwnd) / 96.0;
             if (scale <= 0) scale = display.PixelsPerDip;
             var size = new Size(ActualWidth * scale, ActualHeight * scale);
             var position = LyricsControlPanelPlacement.Place(anchor, area, size, scale, coverPosition);
             TaskbarNativeMethods.SetWindowPos(hwnd, IntPtr.Zero, (int)Math.Round(position.X), (int)Math.Round(position.Y),
                 (int)Math.Round(size.Width), (int)Math.Round(size.Height), TaskbarNativeMethods.SWP_NOZORDER | TaskbarNativeMethods.SWP_NOACTIVATE);
+            if (_retryMaterialOnNextOpen)
+            {
+                _material?.Dispose();
+                _material = null;
+                _retryMaterialOnNextOpen = false;
+            }
             _material ??= CreateMaterial();
             // The material is decorative and must not receive focus or control input.
             _ = EnableWindow(_material.Handle, false);
-            _material.Configure(NativeWindowTheme.IsLight, _materialBrightness, _materialTintOpacity, _materialBlurAmount);
-            _material.Position(new Rect(position, size), scale, hwnd);
+            await PrepareMaterialAsync(new Rect(position, size), scale, hwnd, cancellation.Token);
+            if (_disposed || version != _showVersion) return;
             if (!_material.EnsureBelow(hwnd)) throw new InvalidOperationException("Cannot position taskbar panel material.");
             _material.SetVisible(true);
             NativeWindowInteraction.SetClickThrough(hwnd, false);
@@ -243,8 +256,47 @@ public partial class LyricsControlPanelWindow : Window
             _canDismissOnDeactivate = activate;
             if (activate) Activate();
         }
-        catch { HidePanel(immediate: true); throw; }
-        finally { if (version == _showVersion) IsOpening = false; }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+        catch { if (version == _showVersion) HidePanel(immediate: true); throw; }
+        finally
+        {
+            if (ReferenceEquals(_showCancellation, cancellation)) _showCancellation = null;
+            if (version == _showVersion) IsOpening = false;
+        }
+    }
+
+    private async Task PrepareMaterialAsync(Rect bounds, double scale, IntPtr hwnd, CancellationToken cancellationToken)
+    {
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var appearance = (Light: NativeWindowTheme.IsLight, Brightness: _materialBrightness,
+                TintOpacity: _materialTintOpacity, BlurAmount: _materialBlurAmount);
+            var material = _material!;
+            material.Configure(appearance.Light, appearance.Brightness, appearance.TintOpacity, appearance.BlurAmount);
+            material.Position(bounds, scale, hwnd);
+            using var preparation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            // A deadline selects the ordinary themed surface; it is not an opening delay.
+            preparation.CancelAfter(TimeSpan.FromMilliseconds(250));
+            try
+            {
+                await material.PrepareAsync(preparation.Token).WaitAsync(preparation.Token);
+            }
+            catch (Exception ex) when ((ex is OperationCanceledException && !cancellationToken.IsCancellationRequested) ||
+                ex is COMException or InvalidOperationException or NotSupportedException)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                _retryMaterialOnNextOpen = ex is OperationCanceledException;
+                material.Dispose();
+                _material = new FloatingMaterialFallbackWindow();
+                _ = EnableWindow(_material.Handle, false);
+                Log.Diagnostic("CONTROL_PANEL", $"Material preparation unavailable; using themed fallback: {ex.GetType().Name}");
+                continue;
+            }
+            cancellationToken.ThrowIfCancellationRequested();
+            // Settings or system theme can change while the commit is pending.
+            if (appearance == (NativeWindowTheme.IsLight, _materialBrightness, _materialTintOpacity, _materialBlurAmount)) return;
+        }
     }
 
     private IFloatingPanelMaterial CreateMaterial()
@@ -269,6 +321,7 @@ public partial class LyricsControlPanelWindow : Window
         _hoverTimer.Stop(); _hoverSource = null; _hoverLeftAt = null;
         if (IsClosing && !immediate) return;
         ++_showVersion;
+        _showCancellation?.Cancel();
         var opening = IsOpening;
         IsOpening = false;
         _canDismissOnDeactivate = false;
@@ -383,9 +436,17 @@ public partial class LyricsControlPanelWindow : Window
         AutomationProperties.SetHelpText(SeekSlider, $"{ElapsedText.Text} / {DurationText.Text}");
     }
     private static string FormatTime(TimeSpan value) => value.ToString(value.TotalHours >= 1 ? @"h\:mm\:ss" : @"m\:ss", System.Globalization.CultureInfo.InvariantCulture);
+    public void Dispose()
+    {
+        if (_disposed) return;
+        Close();
+        GC.SuppressFinalize(this);
+    }
+
     protected override void OnClosed(EventArgs e)
     {
         _disposed = true; ++_showVersion;
+        _showCancellation?.Cancel();
         _hoverTimer.Stop(); _hideTimer.Stop();
         _hoverTimer.Tick -= OnHoverTick; _hideTimer.Tick -= OnHideTick;
         SourceInitialized -= OnSourceInitialized; Deactivated -= OnDeactivated;

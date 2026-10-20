@@ -55,6 +55,7 @@ public sealed partial class FloatingPanelInputTests
         public void Position(Rect cardBounds, double scale, IntPtr lyricsHandle) { }
         public bool EnsureBelow(IntPtr lyricsHandle) => true;
         public void Configure(bool light, double brightness, double tintOpacity, double blurAmount) => LastConfiguration = (brightness, tintOpacity, blurAmount);
+        public Task PrepareAsync(CancellationToken cancellationToken) => Task.CompletedTask;
         public void SetVisible(bool visible, bool immediate = false) { }
         public void Dispose() => Disposed = true;
     }

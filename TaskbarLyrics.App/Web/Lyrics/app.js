@@ -1403,6 +1403,7 @@ function applyCoverSurfaceMode(isAppIcon) {
   }
 
   // App icons fill the cover area without the album art background.
+  coverEl.classList.remove("tl-placeholder");
   coverEl.classList.toggle("app-icon", isAppIcon === true);
   if (isAppIcon) {
     coverEl.style.backgroundColor = "";
@@ -1412,13 +1413,15 @@ function applyCoverSurfaceMode(isAppIcon) {
 function applyFallbackCover(text, fallbackColor) {
   if (coverEl) {
     coverEl.classList.remove("app-icon");
+    coverEl.classList.toggle("tl-placeholder", text === "TL");
+    if (text === "TL") coverEl.style.backgroundColor = "";
   }
 
   if (coverFallbackEl) {
     coverFallbackEl.textContent = text;
   }
 
-  if (coverEl && fallbackColor && CSS.supports("color", fallbackColor)) {
+  if (coverEl && text !== "TL" && fallbackColor && CSS.supports("color", fallbackColor)) {
     coverEl.style.backgroundColor = fallbackColor;
   }
 }
@@ -2471,7 +2474,8 @@ const lyricsApi = {
   setCover(dataUri, fallbackText, fallbackColor, fallbackIconDataUri, diagnosticTrackId) {
     const uri = (dataUri ?? "").toString().trim();
     const iconUri = (fallbackIconDataUri ?? "").toString().trim();
-    const text = toDisplayLine(fallbackText, "N").slice(0, 1).toUpperCase();
+    const requestedText = toDisplayLine(fallbackText, "TL").toUpperCase();
+    const text = requestedText === "TL" ? "TL" : requestedText.slice(0, 1);
     const trackId = (diagnosticTrackId ?? "").toString();
     const isAppIcon = uri.length === 0 && iconUri.length > 0;
     const visualUri = isAppIcon ? iconUri : uri;
@@ -2534,6 +2538,10 @@ const lyricsApi = {
   applyStyle(payload) {
     if (!payload || typeof payload !== "object") {
       return;
+    }
+
+    if (payload.coverTheme === "light" || payload.coverTheme === "dark") {
+      root.dataset.coverTheme = payload.coverTheme;
     }
 
     if (root.classList.contains("single-line") !== (payload.singleLine === true) ||

@@ -436,6 +436,63 @@ describe("embedded control panel triggers", () => {
 });
 
 describe("lyrics cover fallback", () => {
+  it("starts with the complete TL placeholder before any cover message", async () => {
+    const { dom, style } = await createHarness();
+    const cover = dom.window.document.querySelector("#cover");
+    expect(cover.classList.contains("tl-placeholder")).toBe(true);
+    expect(dom.window.document.querySelector("#coverFallback").textContent).toBe("TL");
+    expect(style).toContain(":root[data-cover-theme=\"dark\"]");
+    expect(style).toContain("@media (prefers-color-scheme: dark)");
+    expect(style).toContain("--cover-placeholder-foreground");
+    dom.window.close();
+  });
+
+  it("uses TL for missing payloads and image failures without retaining an old player color", async () => {
+    const { dom, showCover, receive, flushTimers, preloaders } = await createHarness();
+    const cover = dom.window.document.querySelector("#cover");
+    const fallback = dom.window.document.querySelector("#coverFallback");
+    showCover({ fallbackText: "N", fallbackColor: "red" });
+    expect(cover.style.backgroundColor).toBe("red");
+    showCover({});
+    expect(fallback.textContent).toBe("TL");
+    expect(cover.classList.contains("tl-placeholder")).toBe(true);
+    expect(cover.style.backgroundColor).toBe("");
+    receive({ dataUri: artworkUri, fallbackText: "TL", fallbackColor: "red" });
+    flushTimers();
+    preloaders.at(-1).onerror();
+    flushTimers();
+    expect(fallback.textContent).toBe("TL");
+    expect(fallback.style.display).toBe("flex");
+    expect(cover.style.backgroundColor).toBe("");
+    expect(cover.classList.contains("tl-placeholder")).toBe(true);
+    dom.window.close();
+  });
+
+  it("updates placeholder theme without reloading artwork or truncating TL", async () => {
+    const { dom, showCover, preloaders } = await createHarness();
+    const document = dom.window.document;
+    const cover = document.querySelector("#cover");
+    const style = coverTheme => dom.window.taskbarLyrics.receive({ version: 1, type: "style", payload: { coverTheme } });
+    showCover({ fallbackText: "tl" });
+    style("light");
+    expect(document.documentElement.dataset.coverTheme).toBe("light");
+    style("dark");
+    expect(document.documentElement.dataset.coverTheme).toBe("dark");
+    expect(document.querySelector("#coverFallback").textContent).toBe("TL");
+    style("invalid");
+    expect(document.documentElement.dataset.coverTheme).toBe("dark");
+    showCover({ dataUri: artworkUri });
+    expect(cover.classList.contains("tl-placeholder")).toBe(false);
+    const imageCount = preloaders.length;
+    style("light");
+    expect(preloaders.length).toBe(imageCount);
+    expect(document.querySelector("#coverImageNext").getAttribute("src")).toBe(artworkUri);
+    showCover({ fallbackIconDataUri: appIconUri });
+    expect(cover.classList.contains("app-icon")).toBe(true);
+    expect(cover.classList.contains("tl-placeholder")).toBe(false);
+    dom.window.close();
+  });
+
   it("makes floating cover and lyrics passive while retaining lock state and restoring interaction on enable", async () => {
     const { dom, style } = await createHarness();
     const sent = [];

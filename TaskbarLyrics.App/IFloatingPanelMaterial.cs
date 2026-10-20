@@ -8,5 +8,6 @@ internal interface IFloatingPanelMaterial : IDisposable
     void Position(Rect cardBounds, double scale, IntPtr lyricsHandle);
     bool EnsureBelow(IntPtr lyricsHandle);
     void Configure(bool light, double brightness, double tintOpacity, double blurAmount);
+    Task PrepareAsync(CancellationToken cancellationToken);
     void SetVisible(bool visible, bool immediate = false);
 }

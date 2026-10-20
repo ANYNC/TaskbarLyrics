@@ -28,7 +28,6 @@ internal sealed class FloatingMaterialWindow : IFloatingPanelMaterial
     private readonly CompositionColorBrush _tintBrush;
     private readonly CompositionRoundedRectangleGeometry _geometry;
     private readonly CompositionGeometricClip _clip;
-    private readonly ScalarKeyFrameAnimation _fade;
     private readonly Compositor _compositor;
     private bool _visible;
     private bool _disposed;
@@ -63,7 +62,9 @@ internal sealed class FloatingMaterialWindow : IFloatingPanelMaterial
             try { _target = MarshalInterface<DesktopWindowTarget>.FromAbi(pointer); }
             finally { Marshal.Release(pointer); }
             _root = _compositor.CreateContainerVisual();
-            _root.Opacity = 0;
+            // This HWND is not layered: transparent Composition content exposes a black client area.
+            // Keep the material opaque and control visibility through the HWND instead.
+            _root.Opacity = 1;
             _target.Root = _root;
             _surfaceLayer = _compositor.CreateLayerVisual();
             _blur = _compositor.CreateSpriteVisual();
@@ -95,8 +96,6 @@ internal sealed class FloatingMaterialWindow : IFloatingPanelMaterial
             _surfaceLayer.Children.InsertAtTop(_blur);
             _surfaceLayer.Children.InsertAtTop(_tint);
             _root.Children.InsertAtTop(_surfaceLayer);
-            _fade = _compositor.CreateScalarKeyFrameAnimation();
-            _fade.Duration = TimeSpan.FromMilliseconds(180);
         }
         catch { Dispose(); throw; }
     }
@@ -152,27 +151,27 @@ internal sealed class FloatingMaterialWindow : IFloatingPanelMaterial
         _blurBrush?.Properties.InsertScalar(CompositionGaussianBlurEffect.AmountProperty, (float)Math.Min(250, _blurAmount * _scale));
     }
 
+    public Task PrepareAsync(CancellationToken cancellationToken) =>
+        _compositor.RequestCommitAsync().AsTask(cancellationToken);
+
     public void SetVisible(bool visible, bool immediate = false)
     {
         _visible = visible;
         _hideTimer.Stop();
         _shadowWindow.SetVisible(visible, immediate);
         if (visible)
+        {
             TaskbarNativeMethods.SetWindowPos(Handle, IntPtr.Zero, 0, 0, 0, 0,
                 TaskbarNativeMethods.SWP_NOMOVE | TaskbarNativeMethods.SWP_NOSIZE |
                 TaskbarNativeMethods.SWP_NOZORDER | TaskbarNativeMethods.SWP_NOACTIVATE | 0x0040);
+        }
         if (_blurFactory?.LoadStatus is CompositionEffectFactoryLoadStatus.Other or CompositionEffectFactoryLoadStatus.EffectTooComplex)
             DisableEnhancedBlur(_blurFactory.ExtendedError);
-        if (immediate || !SystemParameters.ClientAreaAnimation || SystemParameters.HighContrast)
+        if (!visible && (immediate || !SystemParameters.ClientAreaAnimation || SystemParameters.HighContrast))
         {
-            _root.StopAnimation("Opacity");
-            _root.Opacity = visible ? 1 : 0;
-            if (!visible) TaskbarNativeMethods.ShowWindow(Handle, 0);
+            TaskbarNativeMethods.ShowWindow(Handle, 0);
             return;
         }
-        _fade.InsertExpressionKeyFrame(0, "this.StartingValue");
-        _fade.InsertKeyFrame(1, visible ? 1 : 0);
-        _root.StartAnimation("Opacity", _fade);
         if (!visible) _hideTimer.Start();
     }
 
@@ -218,7 +217,7 @@ internal sealed class FloatingMaterialWindow : IFloatingPanelMaterial
         if (_target is not null) _target.Root = null;
         _root?.Children.RemoveAll();
         _surfaceLayer?.Children.RemoveAll();
-        _fade?.Dispose(); _clip?.Dispose(); _geometry?.Dispose();
+        _clip?.Dispose(); _geometry?.Dispose();
         _tint?.Dispose(); _blur?.Dispose(); _tintBrush?.Dispose();
         _blurBrush?.Dispose(); _blurFactory?.Dispose();
         _backdrop?.Dispose();
