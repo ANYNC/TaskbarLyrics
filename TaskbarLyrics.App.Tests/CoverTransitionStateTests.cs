@@ -6,6 +6,36 @@ namespace TaskbarLyrics.App.Tests;
 public sealed class CoverTransitionStateTests
 {
     [Fact]
+    public void ArtworkHashUsesSha256AndIncludesAllBytes()
+    {
+        Assert.Equal("BA7816BF8F01CFEA414140DE5DAE2223B00361A396177A9CB410FF61F20015AD", CoverContentHash.Compute("abc"u8.ToArray()));
+        Assert.NotEqual(CoverContentHash.Compute([1, 2, 3]), CoverContentHash.Compute([1, 2, 4]));
+    }
+
+    [Fact]
+    public void CorrectedArtworkForTheSameSongReplacesTheFirstImageButEqualContentDoesNot()
+    {
+        var state = new CoverVisualTransitionState();
+        state.Begin("song");
+        Assert.True(state.AcceptArtwork("song", [1, 2]));
+        Assert.False(state.AcceptArtwork("song", [1, 2]));
+        Assert.True(state.AcceptArtwork("song", [3, 4]));
+        Assert.False(state.AcceptArtwork("song", [3, 4]));
+    }
+
+    [Fact]
+    public void SameAlbumArtworkCanBeReusedForANewTrackAndAfterAFallback()
+    {
+        var state = new CoverVisualTransitionState();
+        byte[] cover = [1, 2];
+        Assert.True(state.AcceptArtwork("A", cover));
+        Assert.True(state.AcceptArtwork("B", cover));
+        Assert.True(state.IsVisualFor("B"));
+        state.MarkVisual("B");
+        Assert.True(state.AcceptArtwork("B", cover));
+    }
+
+    [Fact]
     public void FromMetadataPrefersSongIdOverTitleArtistAndAlbum()
     {
         var first = CoverIdentity.FromMetadata(" Netease ", " 123 ", "Title", "Artist", "Album A");

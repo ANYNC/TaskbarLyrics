@@ -1132,27 +1132,23 @@ public partial class MainWindow : Window, IDisposable
         var coverIdentity = CoverIdentity.FromTrack(snapshot.Track);
         var isSameRequestedTrack = !_coverVisualTransition.Begin(coverIdentity);
         var isCurrentTrackVisual = _coverVisualTransition.IsVisualFor(coverIdentity);
-        if (isSameRequestedTrack && isCurrentTrackVisual)
+        var hasSmtcCover = snapshot.CoverImageBytes is { Length: > 0 };
+        // SMTC may correct its artwork after the first successful read, including a local fallback.
+        if (hasSmtcCover && !_coverVisualTransition.AcceptArtwork(coverIdentity, snapshot.CoverImageBytes!)) return;
+        if (!hasSmtcCover && isSameRequestedTrack && isCurrentTrackVisual &&
+            (_currentCoverDataUri != null || snapshot.Track is null || _localMediaCoverProvider is null))
         {
-            // Proceed only if we previously had no cover for this track but now we have bytes.
-            if (_currentCoverDataUri != null ||
-                snapshot.Track is null ||
-                (snapshot.CoverImageBytes == null && _localMediaCoverProvider is null))
-            {
-                return;
-            }
+            return;
         }
 
         var sourceApp = snapshot.Track?.SourceApp ?? string.Empty;
         (_currentCoverFallbackText, var fallbackColor) = GetCoverFallback(sourceApp);
         _currentCoverFallbackColorCss = ToCssColor(fallbackColor);
-
         if (snapshot.CoverImageBytes is { Length: > 0 } bytes)
         {
             _currentCoverDataUri = BuildCoverDataUri(bytes);
             _currentCoverFallbackIconDataUri = string.Empty;
             _lastPushedFallbackCoverIdentity = string.Empty;
-            _coverVisualTransition.MarkVisual(coverIdentity);
             LogCoverVisualState(coverIdentity, "SMTC", bytes.Length, DetectImageMimeType(bytes));
             PushCoverToWebView();
             return;
@@ -1171,7 +1167,7 @@ public partial class MainWindow : Window, IDisposable
             _currentCoverDataUri = BuildCoverDataUri(localCoverBytes);
             _currentCoverFallbackIconDataUri = string.Empty;
             _lastPushedFallbackCoverIdentity = string.Empty;
-            _coverVisualTransition.MarkVisual(coverIdentity);
+            _coverVisualTransition.AcceptArtwork(coverIdentity, localCoverBytes);
             LogCoverVisualState(coverIdentity, "Local", localCoverBytes.Length, DetectImageMimeType(localCoverBytes));
             PushCoverToWebView();
             return;
@@ -1208,7 +1204,8 @@ public partial class MainWindow : Window, IDisposable
 
     private void LogCoverVisualState(string? trackId, string visualSource, int byteLength, string mime)
     {
-        var diagnosticsKey = $"{trackId}|{visualSource}|{byteLength}|{mime}";
+        var hash = _coverVisualTransition.ArtworkHash;
+        var diagnosticsKey = $"{trackId}|{visualSource}|{byteLength}|{mime}|{hash}";
         if (string.Equals(diagnosticsKey, _lastCoverVisualDiagnosticsKey, StringComparison.Ordinal))
         {
             return;
@@ -1220,7 +1217,7 @@ public partial class MainWindow : Window, IDisposable
             "COVER-UI",
             $"VisualChanged Track='{ToDiagnosticLogValue(trackId)}' Source='{ToDiagnosticLogValue(track?.SourceApp)}' " +
             $"Title='{ToDiagnosticLogValue(track?.Title)}' Visual='{visualSource}' Bytes={byteLength} " +
-            $"Mime='{ToDiagnosticLogValue(mime)}'");
+            $"Mime='{ToDiagnosticLogValue(mime)}' Hash='{hash}'");
     }
 
     private static string ToDiagnosticLogValue(string? value)

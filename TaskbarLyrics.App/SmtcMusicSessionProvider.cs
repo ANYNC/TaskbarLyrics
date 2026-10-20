@@ -98,6 +98,18 @@ internal sealed class CoverVisualTransitionState
     internal string RequestedIdentity { get; private set; } = string.Empty;
 
     internal string VisualIdentity { get; private set; } = string.Empty;
+    internal string ArtworkHash { get; private set; } = string.Empty;
+    private byte[]? _artworkBytes;
+
+    internal bool AcceptArtwork(string identity, byte[] bytes)
+    {
+        var hash = ReferenceEquals(bytes, _artworkBytes) ? ArtworkHash : CoverContentHash.Compute(bytes);
+        var changed = !IsVisualFor(identity) || hash != ArtworkHash;
+        VisualIdentity = identity;
+        ArtworkHash = hash;
+        _artworkBytes = bytes;
+        return changed;
+    }
 
     internal bool Begin(string? identity)
     {
@@ -146,6 +158,8 @@ internal sealed class CoverVisualTransitionState
     internal void MarkVisual(string? identity)
     {
         VisualIdentity = (identity ?? string.Empty).Trim();
+        ArtworkHash = string.Empty;
+        _artworkBytes = null;
     }
 }
 
@@ -191,8 +205,6 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
 {
     private static readonly string[] DefaultEnabledSources = { "QQMusic", "Netease", "Kugou", "Spotify" };
     private static readonly string[] DefaultRecognitionOrder = { "QQMusic", "Netease", "Kugou", "Spotify", "Browser" };
-    private static readonly TimeSpan MissingCoverRetryInterval = TimeSpan.FromSeconds(5);
-    private static readonly TimeSpan CoverReadTimeout = TimeSpan.FromSeconds(5);
     private static readonly Regex TitleArtistRegex = new(
         @"^(?<title>.+?)\s*[-|—]\s*(?<artist>.+)$",
         RegexOptions.Compiled);
@@ -209,13 +221,8 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
     private string[] _recognitionOrder = DefaultRecognitionOrder;
     private HashSet<string> _enabledSources = new(DefaultEnabledSources, StringComparer.OrdinalIgnoreCase);
     private HashSet<string> _configuredCustomSources = new(StringComparer.OrdinalIgnoreCase);
-    private string _lastCoverMetadataKey = string.Empty;
     private string _lastQqMetadataDiagnosticsKey = string.Empty;
-    private byte[]? _lastCoverImageBytes;
-    private DateTimeOffset _nextMissingCoverRetryUtc;
-    private readonly object _coverLock = new();
-    private Task? _coverReadTask;
-    private string _coverReadMetadataKey = string.Empty;
+    private readonly CoverRefreshCache _coverCache = new();
     private int _coverReadSequence;
     private string _lastCoverThumbnailDiagnosticsKey = string.Empty;
     private string _lastMediaPropertiesErrorKey = string.Empty;
@@ -413,6 +420,7 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
 
         _activeSessionCache.Clear();
         _manager = null;
+        _coverCache.Dispose();
         _managerLock.Dispose();
         GC.SuppressFinalize(this);
     }
@@ -531,8 +539,7 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
                 artist,
                 album,
                 songId,
-                media?.Thumbnail,
-                nowUtc);
+                media?.Thumbnail);
 
             // 从 Genres 流派元数据列表中解析播放器写入的 SongId (例如网易云 NCM-, QQ音乐 QQ-)
             if (media?.Genres != null && sourceApp.Equals("QQMusic", StringComparison.OrdinalIgnoreCase))
@@ -624,6 +631,7 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
 
     private PlaybackSnapshot BuildProcessFallbackSnapshot()
     {
+        _coverCache.Reset();
         var preferredSource = DetectRunningSource();
         if (string.Equals(preferredSource, "Netease", StringComparison.OrdinalIgnoreCase))
         {
@@ -1310,98 +1318,39 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
         string artist,
         string album,
         string? songId,
-        IRandomAccessStreamReference? thumbnail,
-        DateTimeOffset nowUtc)
+        IRandomAccessStreamReference? thumbnail)
     {
         var metadataKey = CoverIdentity.FromMetadata(sourceApp, songId, title, artist, album);
-        byte[]? cachedCover;
-        var isLoading = false;
-        var thumbnailStateChanged = false;
+        // A player may briefly reuse its previous SongId while publishing a new title or album.
+        var refreshMetadataKey = CoverIdentity.FromMetadata(sourceApp, null, title, artist, album);
         var thumbnailState = thumbnail is null ? "Missing" : "Provided";
-
-        lock (_coverLock)
+        var thumbnailDiagnosticsKey = $"{metadataKey}|{refreshMetadataKey}|{thumbnailState}";
+        if (!string.Equals(thumbnailDiagnosticsKey, _lastCoverThumbnailDiagnosticsKey, StringComparison.Ordinal))
         {
-            var trackChanged = !string.Equals(metadataKey, _lastCoverMetadataKey, StringComparison.Ordinal);
-            if (trackChanged)
-            {
-                _lastCoverMetadataKey = metadataKey;
-                _lastCoverImageBytes = null;
-                _nextMissingCoverRetryUtc = nowUtc;
-            }
-
-            var thumbnailDiagnosticsKey = $"{metadataKey}|{thumbnailState}";
-            if (!string.Equals(thumbnailDiagnosticsKey, _lastCoverThumbnailDiagnosticsKey, StringComparison.Ordinal))
-            {
-                _lastCoverThumbnailDiagnosticsKey = thumbnailDiagnosticsKey;
-                thumbnailStateChanged = true;
-            }
-
-            cachedCover = _lastCoverImageBytes;
-            var shouldRetryMissingCover = cachedCover is null && nowUtc >= _nextMissingCoverRetryUtc;
-            var isReadingCurrentCover =
-                _coverReadTask is { IsCompleted: false } &&
-                string.Equals(_coverReadMetadataKey, metadataKey, StringComparison.Ordinal);
-
-            if (thumbnail is not null && shouldRetryMissingCover && !isReadingCurrentCover)
-            {
-                var readSequence = Interlocked.Increment(ref _coverReadSequence);
-                _coverReadMetadataKey = metadataKey;
-                _coverReadTask = ReadCoverBytesInBackgroundAsync(metadataKey, thumbnail, readSequence);
-                _nextMissingCoverRetryUtc = DateTimeOffset.MaxValue;
-                isLoading = true;
-            }
-            else
-            {
-                isLoading = cachedCover is null && isReadingCurrentCover;
-            }
+            _lastCoverThumbnailDiagnosticsKey = thumbnailDiagnosticsKey;
+            Log.Diagnostic("COVER-SMTC", $"Thumbnail{thumbnailState} Track='{ToLogValue(metadataKey)}'");
         }
 
-        if (thumbnailStateChanged)
-        {
-            Log.Diagnostic(
-                "COVER-SMTC",
-                $"Thumbnail{thumbnailState} Track='{ToLogValue(metadataKey)}'");
-        }
-
-        return (cachedCover, isLoading);
+        return _coverCache.GetCover(metadataKey, refreshMetadataKey, thumbnail is null
+            ? null
+            : cancellationToken => ReadCoverForCacheAsync(metadataKey, thumbnail, cancellationToken));
     }
 
-    private async Task ReadCoverBytesInBackgroundAsync(
+    private async Task<byte[]?> ReadCoverForCacheAsync(
         string metadataKey,
         IRandomAccessStreamReference thumbnail,
-        int readSequence)
+        CancellationToken cancellationToken)
     {
+        var readSequence = Interlocked.Increment(ref _coverReadSequence);
         Log.Diagnostic(
             "COVER-SMTC",
             $"ReadStarted Sequence={readSequence} Track='{ToLogValue(metadataKey)}'");
 
-        using var timeoutSource = new CancellationTokenSource(CoverReadTimeout);
-        var result = await ReadCoverBytesAsync(thumbnail, timeoutSource.Token);
-        var nowUtc = DateTimeOffset.UtcNow;
-        var isStale = false;
-
-        lock (_coverLock)
+        var result = await ReadCoverBytesAsync(thumbnail, cancellationToken).ConfigureAwait(false);
+        if (cancellationToken.IsCancellationRequested)
         {
-            if (!string.Equals(metadataKey, _lastCoverMetadataKey, StringComparison.Ordinal))
-            {
-                isStale = true;
-            }
-            else
-            {
-                _lastCoverImageBytes = result.Bytes;
-                _nextMissingCoverRetryUtc = result.Bytes is null
-                    ? nowUtc + MissingCoverRetryInterval
-                    : DateTimeOffset.MaxValue;
-            }
-        }
-
-        if (isStale)
-        {
-            Log.Diagnostic(
-                "COVER-SMTC",
-                $"ReadDiscarded Sequence={readSequence} Reason='Track changed' Track='{ToLogValue(metadataKey)}' " +
-                $"ElapsedMs={result.ElapsedMilliseconds}");
-            return;
+            Log.Diagnostic("COVER-SMTC", $"ReadDiscarded Sequence={readSequence} Reason='Cancelled or expired' Track='{ToLogValue(metadataKey)}'");
+            cancellationToken.ThrowIfCancellationRequested();
         }
 
         if (result.Bytes is { Length: > 0 } bytes)
@@ -1411,7 +1360,7 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
                 $"ReadSucceeded Sequence={readSequence} Track='{ToLogValue(metadataKey)}' Bytes={bytes.Length} " +
                 $"ContentType='{ToLogValue(result.ContentType)}' Signature='{GetByteSignature(bytes)}' " +
                 $"ElapsedMs={result.ElapsedMilliseconds}");
-            return;
+            return bytes;
         }
 
         var exceptionText = result.Exception is null
@@ -1421,8 +1370,8 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
             "COVER-SMTC",
             $"ReadFailed Sequence={readSequence} Track='{ToLogValue(metadataKey)}' " +
             $"ContentType='{ToLogValue(result.ContentType)}' LoadedBytes={result.LoadedBytes} " +
-            $"Reason='{ToLogValue(result.FailureReason)}'{exceptionText} ElapsedMs={result.ElapsedMilliseconds} " +
-            $"RetryAfterMs={(int)MissingCoverRetryInterval.TotalMilliseconds}");
+            $"Reason='{ToLogValue(result.FailureReason)}'{exceptionText} ElapsedMs={result.ElapsedMilliseconds}");
+        return null;
     }
 
     private static string GetByteSignature(byte[] bytes)

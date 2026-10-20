@@ -44,12 +44,15 @@
                 <Grid><Track x:Name="PART_Track">
                     <Track.DecreaseRepeatButton><RepeatButton Command="Slider.DecreaseLarge" Style="{StaticResource ProgressButton}" Background="{DynamicResource PanelForeground}"/></Track.DecreaseRepeatButton>
                     <Track.IncreaseRepeatButton><RepeatButton Command="Slider.IncreaseLarge" Style="{StaticResource ProgressButton}" Background="{DynamicResource PanelLine}"/></Track.IncreaseRepeatButton>
-                    <Track.Thumb><Thumb Width="12" Height="12"><Thumb.Template><ControlTemplate TargetType="Thumb">
+                    <Track.Thumb><Thumb x:Name="SeekThumb" Width="12" Height="12"><Thumb.Template><ControlTemplate TargetType="Thumb">
                         <Grid Background="Transparent"><Ellipse Width="10" Height="10" HorizontalAlignment="Center" VerticalAlignment="Center" Fill="{DynamicResource PanelForeground}"/></Grid>
                     </ControlTemplate></Thumb.Template></Thumb></Track.Thumb>
                 </Track></Grid>
                 <ControlTemplate.Triggers>
-                    <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.4"/></Trigger>
+                    <Trigger Property="IsEnabled" Value="False">
+                        <Setter Property="Opacity" Value="0.4"/>
+                        <Setter TargetName="SeekThumb" Property="Visibility" Value="Collapsed"/>
+                    </Trigger>
                     <Trigger Property="IsKeyboardFocused" Value="True"><Setter Property="Background" Value="{DynamicResource PanelLine}"/></Trigger>
                 </ControlTemplate.Triggers>
             </ControlTemplate></Setter.Value></Setter>
