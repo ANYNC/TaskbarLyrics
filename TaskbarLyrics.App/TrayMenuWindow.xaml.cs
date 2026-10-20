@@ -6,6 +6,7 @@ using System.Windows.Threading;
 using System.Runtime.InteropServices;
 using Media = System.Windows.Media;
 using Controls = System.Windows.Controls;
+using SystemColors = System.Windows.SystemColors;
 
 namespace TaskbarLyrics.App;
 
@@ -42,6 +43,10 @@ public partial class TrayMenuWindow : Window
     private readonly Action _openSmtcMonitor;
     private readonly Action _openSpectrumTuning;
     private readonly Action _exitApp;
+    private readonly Action<bool> _setUseFloatingWindow;
+    private readonly bool _useFloatingWindow;
+    private bool _initializingDisplayMode = true;
+    private bool _commandInvoked;
     private readonly DispatcherTimer _spectrumPopupCloseTimer;
     private readonly LowLevelMouseProc _mouseHookCallback;
     private IntPtr _mouseHook;
@@ -61,7 +66,9 @@ public partial class TrayMenuWindow : Window
         Action openSettings,
         Action openSmtcMonitor,
         Action openSpectrumTuning,
-        Action exitApp)
+        Action exitApp,
+        Action<bool> setUseFloatingWindow,
+        bool useFloatingWindow)
     {
         InitializeComponent();
         AppIconProvider.ApplyWindowIcon(this);
@@ -88,6 +95,11 @@ public partial class TrayMenuWindow : Window
         _openSmtcMonitor = openSmtcMonitor;
         _openSpectrumTuning = openSpectrumTuning;
         _exitApp = exitApp;
+        _setUseFloatingWindow = setUseFloatingWindow;
+        _useFloatingWindow = useFloatingWindow;
+        TaskbarModeButton.IsChecked = !useFloatingWindow;
+        FloatingModeButton.IsChecked = useFloatingWindow;
+        _initializingDisplayMode = false;
         _mouseHookCallback = OnLowLevelMouseEvent;
         SyncSpectrumModeChecks(spectrumDisplayMode);
         SourceInitialized += OnSourceInitialized;
@@ -99,6 +111,7 @@ public partial class TrayMenuWindow : Window
         _spectrumPopupCloseTimer.Tick += OnSpectrumPopupCloseTimerTick;
         Closed += (_, _) =>
         {
+            _commandInvoked = true;
             NativeWindowTheme.ThemeChanged -= OnWindowThemeChanged;
             UninstallMouseHook();
             _spectrumPopupCloseTimer.Stop();
@@ -127,6 +140,12 @@ public partial class TrayMenuWindow : Window
         Resources["TrayMenuSeparatorBrush"] = new Media.SolidColorBrush(light
             ? Media.Color.FromRgb(218, 226, 237)
             : Media.Color.FromRgb(74, 74, 74));
+        Resources["TrayModeTrackBrush"] = SystemParameters.HighContrast ? SystemColors.WindowBrush
+            : new Media.SolidColorBrush(light ? Media.Color.FromRgb(229, 231, 235) : Media.Color.FromRgb(20, 20, 20));
+        Resources["TrayModeSelectedBrush"] = SystemParameters.HighContrast ? SystemColors.HighlightBrush
+            : new Media.SolidColorBrush(light ? Media.Colors.White : Media.Color.FromRgb(66, 66, 66));
+        Resources["TrayModeForegroundBrush"] = SystemParameters.HighContrast ? SystemColors.WindowTextBrush : Resources["TrayMenuTextBrush"];
+        Resources["TrayModeSelectedForegroundBrush"] = SystemParameters.HighContrast ? SystemColors.HighlightTextBrush : Resources["TrayMenuTextBrush"];
         if (!SystemParameters.ClientAreaAnimation || SystemParameters.HighContrast)
         {
             SpectrumModePopup.PopupAnimation = PopupAnimation.None;
@@ -161,6 +180,7 @@ public partial class TrayMenuWindow : Window
         MenuSurface.Opacity = animateOpening ? 0 : 1;
         Show();
         PositionWindow(hwnd, placement.Bounds);
+        // Keep focus with the shell: activating this menu dismisses the tray overflow flyout.
         if (animateOpening)
         {
             var animation = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(120))
@@ -347,6 +367,38 @@ public partial class TrayMenuWindow : Window
             point.Y <= topLeft.Y + height;
     }
 
+    private void DisplayModeButton_Click(object sender, RoutedEventArgs e) =>
+        SelectDisplayMode(ReferenceEquals(sender, FloatingModeButton));
+
+    private void DisplayModeButton_Checked(object sender, RoutedEventArgs e)
+    {
+        if (!_initializingDisplayMode) SelectDisplayMode(ReferenceEquals(sender, FloatingModeButton));
+    }
+
+    private void SelectDisplayMode(bool useFloatingWindow) => InvokeCommand(() =>
+    {
+        if (useFloatingWindow != _useFloatingWindow) _setUseFloatingWindow(useFloatingWindow);
+    });
+
+    private void DisplayModeButton_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key is System.Windows.Input.Key.Left or System.Windows.Input.Key.Right)
+        {
+            (e.Key == System.Windows.Input.Key.Left ? TaskbarModeButton : FloatingModeButton).Focus();
+            e.Handled = true;
+        }
+        else if (e.Key == System.Windows.Input.Key.Enter)
+        {
+            SelectDisplayMode(ReferenceEquals(sender, FloatingModeButton));
+            e.Handled = true;
+        }
+        else if (e.Key == System.Windows.Input.Key.Escape)
+        {
+            InvokeCommand(() => { });
+            e.Handled = true;
+        }
+    }
+
     private void ToggleLyricsButton_Click(object sender, RoutedEventArgs e)
     {
         InvokeCommand(_toggleLyricsWindow);
@@ -446,6 +498,8 @@ public partial class TrayMenuWindow : Window
 
     private void InvokeCommand(Action command)
     {
+        if (_commandInvoked) return;
+        _commandInvoked = true;
         var trayOverflowWindow = _trayOverflowWindow;
         var trayOverflowInputWindow = _trayOverflowInputWindow;
         SpectrumModePopup.IsOpen = false;

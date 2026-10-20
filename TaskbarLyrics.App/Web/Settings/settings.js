@@ -803,11 +803,14 @@
       renderLyricProviders(source.adapter);
     }
 
-    function normalizeLyricProviders(items) {
+    function normalizeLyricProviders(items, sourceApp) {
       if (!Array.isArray(items) || items.length !== lyricProviderDefaults.length ||
           new Set(items.map(item => item?.providerId)).size !== lyricProviderDefaults.length ||
           items.some(item => !lyricProviderDefaults.some(known => known.providerId === item?.providerId))) {
-        return lyricProviderDefaults.map(item => ({ providerId: item.providerId, enabled: true }));
+        const officialProvider = ["QQMusic", "Netease", "Kugou"].includes(sourceApp) ? sourceApp : undefined;
+        return [...lyricProviderDefaults]
+          .sort((a, b) => Number(b.providerId === officialProvider) - Number(a.providerId === officialProvider))
+          .map(item => ({ providerId: item.providerId, enabled: true }));
       }
       return items.map(item => ({ providerId: item.providerId, enabled: item.enabled === true }));
     }
@@ -815,7 +818,7 @@
     function currentLyricProviders() {
       if (playerDrawerMode === "add") return newPlayerLyricProviders;
       const source = sourceCatalog.find(item => item.id === activePlayerSourceId);
-      return state?.playerLyricProviders?.[source?.adapter] ?? normalizeLyricProviders();
+      return state?.playerLyricProviders?.[source?.adapter] ?? normalizeLyricProviders(undefined, source?.adapter);
     }
 
     function renderLyricProviders() {
@@ -1289,7 +1292,7 @@
         return [source.adapter, Number.isFinite(value) ? Math.max(-5000, Math.min(5000, Math.round(value))) : defaultOffsetFor(source)];
       }));
       state.playerLyricProviders = Object.fromEntries(allSources.map(source => [
-        source.adapter, normalizeLyricProviders(nextState.playerLyricProviders?.[source.adapter])
+        source.adapter, normalizeLyricProviders(nextState.playerLyricProviders?.[source.adapter], source.adapter)
       ]));
       state.customForegroundColor = nextState.foregroundColorMode === "Custom"
         ? foregroundColor

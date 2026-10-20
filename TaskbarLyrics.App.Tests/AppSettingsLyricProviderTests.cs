@@ -7,6 +7,82 @@ namespace TaskbarLyrics.App.Tests;
 
 public sealed class AppSettingsLyricProviderTests
 {
+    [Theory]
+    [InlineData("QQMusic", "QQMusic,Kugou,Netease,LRCLIB")]
+    [InlineData("Netease", "Netease,QQMusic,Kugou,LRCLIB")]
+    [InlineData("Kugou", "Kugou,QQMusic,Netease,LRCLIB")]
+    [InlineData("Spotify", "QQMusic,Kugou,Netease,LRCLIB")]
+    [InlineData("Browser", "QQMusic,Kugou,Netease,LRCLIB")]
+    public void PlayerDefaultsPreferTheirOfficialSourceAndPreserveFallbackOrder(string source, string order)
+    {
+        var expected = order.Split(',');
+        var settings = new AppSettings();
+        Assert.Equal(expected, settings.GetLyricSourceSelection(source).Order.Select(item => item.Value));
+        Assert.All(settings.GetPlayerLyricProviders(source), item => Assert.True(item.Enabled));
+        Assert.Equal(expected, settings.Clone().GetPlayerLyricProviders(source).Select(item => item.ProviderId));
+
+        // Missing and malformed lists both fall back to the owning player's defaults.
+        foreach (var list in new[] { "", ",\"LyricProviders\":null", ",\"LyricProviders\":[]" })
+        {
+            var legacy = JsonSerializer.Deserialize<AppSettings>(
+                """{"PlayerSources":{"$source":{"LyricOffsetMilliseconds":120$list}}}"""
+                    .Replace("$source", source).Replace("$list", list))!;
+            legacy.NormalizePlayerSources();
+            legacy.NormalizePlayerSources();
+            Assert.Equal(expected, legacy.GetLyricSourceSelection(source).Order.Select(item => item.Value));
+            Assert.Equal(120, legacy.GetPlayerLyricOffsetMilliseconds(source));
+        }
+
+        settings.PlayerSources.Remove(source);
+        Assert.Equal(expected, settings.GetPlayerLyricProviders(source).Select(item => item.ProviderId));
+    }
+
+    [Theory]
+    [InlineData("QQMusic")]
+    [InlineData("Netease")]
+    [InlineData("Kugou")]
+    public void StoredOrdersAndDisabledSourcesSurviveNewDefaults(string source)
+    {
+        var directory = Path.Combine(AppContext.BaseDirectory, $"official-source-settings-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        var path = Path.Combine(directory, "settings.json");
+        try
+        {
+            var store = new SettingsStore(path);
+            var settings = store.Load();
+            Assert.Equal(source, settings.GetPlayerLyricProviders(source)[0].ProviderId);
+            var before = settings.GetLyricSourceSelection(source).CacheContext;
+            var providers = PlayerSourceSettings.CreateDefaultLyricProviders();
+            providers[2] = providers[2] with { Enabled = false };
+            Assert.True(settings.SetPlayerLyricProviders(source, providers));
+            Assert.True(store.Save(settings));
+            var loaded = store.Load();
+            Assert.Equal(providers, loaded.GetPlayerLyricProviders(source));
+            Assert.NotNull(loaded.GetLyricSourceSelection(source).CacheContext);
+            Assert.NotEqual(before, loaded.GetLyricSourceSelection(source).CacheContext);
+
+            // An explicitly stored old shared order must also remain unchanged.
+            var shared = PlayerSourceSettings.CreateDefaultLyricProviders();
+            Assert.True(loaded.SetPlayerLyricProviders(source, shared));
+            Assert.True(store.Save(loaded));
+            Assert.Equal(shared, store.Load().GetPlayerLyricProviders(source));
+        }
+        finally { File.Delete(path); Directory.Delete(directory); }
+    }
+
+    [Fact]
+    public void CustomPlayerDefaultsAndLegacyCacheScopesRemainUnchanged()
+    {
+        var settings = new AppSettings();
+        Assert.True(settings.AddCustomPlayerSource("LRCLIB", "自定义播放器"));
+        Assert.Equal(PlayerSourceSettings.CreateDefaultLyricProviders(), settings.GetPlayerLyricProviders("LRCLIB"));
+        Assert.Null(settings.GetLyricSourceSelection("QQMusic").CacheContext);
+        Assert.NotNull(settings.GetLyricSourceSelection("Netease").CacheContext);
+        Assert.NotNull(settings.GetLyricSourceSelection("Kugou").CacheContext);
+        Assert.Equal(settings.GetLyricSourceSelection("Netease").CacheContext,
+            settings.GetLyricSourceSelection("NeteaseMusic").CacheContext);
+    }
+
     [Fact]
     public void SettingsStoreRoundTripsPlayerSpecificTrustOrder()
     {

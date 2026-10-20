@@ -676,6 +676,44 @@ describe("settings WebView bridge", () => {
     expect(sent.at(-1).payload).toMatchObject({ iconDataUrl, presetIconId: "", presetIconColor: "" });
   });
 
+  it.each([
+    ["qqmusic", "QQMusic", ["QQMusic", "Kugou", "Netease", "LRCLIB"]],
+    ["netease", "Netease", ["Netease", "QQMusic", "Kugou", "LRCLIB"]],
+    ["kugou", "Kugou", ["Kugou", "QQMusic", "Netease", "LRCLIB"]],
+    ["spotify", "Spotify", ["QQMusic", "Kugou", "Netease", "LRCLIB"]]
+  ])("uses player defaults without overwriting stored lyric preferences: %s", async (id, adapter, expected) => {
+    const { dom, script } = await createSettingsDom();
+    enableDialogDomSupport(dom);
+    const document = dom.window.document;
+    dom.window.eval(script);
+    const receive = providers => dom.window.settingsApp.receive({
+      version: 1,
+      type: "settingsState",
+      payload: { settings: {
+        sourceRecognitionOrder: [adapter],
+        playerLyricOffsets: {}, defaultPlayerLyricOffsets: {},
+        playerLyricProviders: providers === undefined ? {} : { [adapter]: providers },
+        mediaHotkeys: [], mediaHotkeyStatuses: {}
+      }, fonts: [] }
+    });
+    for (const missing of [undefined, null, []]) {
+      receive(missing);
+      document.querySelector(`[data-player-settings="${id}"]`).click();
+      expect([...document.querySelectorAll('[data-lyric-provider-item]')].map(item => item.dataset.lyricProviderItem))
+        .toEqual(expected);
+    }
+
+    const stored = ["LRCLIB", "QQMusic", "Kugou", "Netease"]
+      .map(providerId => ({ providerId, enabled: providerId !== adapter }));
+    receive(stored);
+    expect([...document.querySelectorAll('[data-lyric-provider-item]')].map(item => item.dataset.lyricProviderItem))
+      .toEqual(stored.map(item => item.providerId));
+    for (const provider of stored) {
+      expect(document.querySelector(`[data-lyric-provider-toggle="${provider.providerId}"]`).checked)
+        .toBe(provider.enabled);
+    }
+  });
+
   it("edits online lyric trust order and switches per player", async () => {
     const { dom, sent, script } = await createSettingsDom();
     enableDialogDomSupport(dom);

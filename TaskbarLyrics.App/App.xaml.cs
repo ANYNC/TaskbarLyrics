@@ -115,7 +115,9 @@ public partial class App : System.Windows.Application, IDisposable
             OpenSettingsWindow,
             OpenSmtcTimelineMonitorWindow,
             OpenSpectrumTuningWindow,
-            ExitApplication);
+            ExitApplication,
+            SetDisplayMode,
+            () => Settings.UseFloatingWindow);
         StartActivationServer();
         SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
         SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
@@ -384,6 +386,26 @@ public partial class App : System.Windows.Application, IDisposable
             UserWantsLyricsVisible = true;
             _lyricsWindowHost.Show();
         }
+    }
+
+    internal static AppSettings CreateDisplayModeSettings(AppSettings current, bool useFloatingWindow,
+        TaskbarEmbeddingConstraints constraints, out string message)
+    {
+        var next = current.Clone();
+        next.UseFloatingWindow = useFloatingWindow;
+        message = string.Empty;
+        if (!useFloatingWindow) NormalizeStartupWindowPresentation(next, constraints, out message);
+        return next;
+    }
+
+    private void SetDisplayMode(bool useFloatingWindow)
+    {
+        if (IsExiting || Settings.UseFloatingWindow == useFloatingWindow) return;
+        var next = CreateDisplayModeSettings(Settings, useFloatingWindow, GetTaskbarScaleConstraints(Settings), out var message);
+        if (next.UseFloatingWindow != Settings.UseFloatingWindow && !SaveSettings(next))
+            Log.Warn("Display mode could not be saved.");
+        if (!string.IsNullOrEmpty(message))
+            _trayService?.ShowNotification("显示模式", message, System.Windows.Forms.ToolTipIcon.Info);
     }
 
     private void SetSpectrumDisplayMode(SpectrumDisplayMode mode)

@@ -69,6 +69,8 @@ public enum FloatingWindowLayer
 
 public sealed class AppSettings
 {
+    private static readonly string[] BuiltInPlayerSources = ["QQMusic", "Netease", "Kugou", "Spotify", "Browser"];
+
     public const int MinimumPlayerLyricOffsetMilliseconds = -5000;
     public const int MaximumPlayerLyricOffsetMilliseconds = 5000;
     public const double ExtendedFontSizeMin = 6;
@@ -382,7 +384,7 @@ public sealed class AppSettings
                 normalized[source] = new PlayerSourceSettings
                 {
                     LyricOffsetMilliseconds = ClampPlayerLyricOffset(sourceSettings.LyricOffsetMilliseconds),
-                    LyricProviders = PlayerSourceSettings.NormalizeLyricProviders(sourceSettings.LyricProviders)
+                    LyricProviders = PlayerSourceSettings.NormalizeLyricProviders(sourceSettings.LyricProviders, source)
                 };
             }
         }
@@ -600,8 +602,8 @@ public sealed class AppSettings
         var source = ResolvePlayerSourceName(sourceApp);
         return source is not null && PlayerSources is not null &&
             PlayerSources.TryGetValue(source, out var settings) && settings is not null
-                ? PlayerSourceSettings.NormalizeLyricProviders(settings.LyricProviders)
-                : PlayerSourceSettings.CreateDefaultLyricProviders();
+                ? PlayerSourceSettings.NormalizeLyricProviders(settings.LyricProviders, source)
+                : PlayerSourceSettings.CreateDefaultLyricProviders(source);
     }
 
     public bool SetPlayerLyricProviders(string? sourceApp, IReadOnlyList<LyricProviderPreference>? providers)
@@ -623,6 +625,7 @@ public sealed class AppSettings
         var providers = GetPlayerLyricProviders(sourceApp);
         var enabledOrder = providers.Where(item => item.Enabled)
             .Select(item => new LyricProviderId(item.ProviderId)).ToArray();
+        // Keep the original shared-order cache scope; other orders already have their own context.
         var defaults = PlayerSourceSettings.CreateDefaultLyricProviders();
         var isDefault = source is null || providers.SequenceEqual(defaults);
         var context = isDefault ? null : $"{source}:{string.Join(',', providers.Select(item => $"{item.ProviderId}:{(item.Enabled ? 1 : 0)}"))}";
@@ -648,14 +651,14 @@ public sealed class AppSettings
 
     private static Dictionary<string, PlayerSourceSettings> CreateDefaultPlayerSources()
     {
-        return new Dictionary<string, PlayerSourceSettings>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["QQMusic"] = new() { LyricOffsetMilliseconds = GetDefaultPlayerLyricOffsetMilliseconds("QQMusic") },
-            ["Netease"] = new() { LyricOffsetMilliseconds = GetDefaultPlayerLyricOffsetMilliseconds("Netease") },
-            ["Kugou"] = new() { LyricOffsetMilliseconds = GetDefaultPlayerLyricOffsetMilliseconds("Kugou") },
-            ["Spotify"] = new() { LyricOffsetMilliseconds = GetDefaultPlayerLyricOffsetMilliseconds("Spotify") },
-            ["Browser"] = new() { LyricOffsetMilliseconds = GetDefaultPlayerLyricOffsetMilliseconds("Browser") }
-        };
+        return BuiltInPlayerSources.ToDictionary(
+            source => source,
+            source => new PlayerSourceSettings
+            {
+                LyricOffsetMilliseconds = GetDefaultPlayerLyricOffsetMilliseconds(source),
+                LyricProviders = PlayerSourceSettings.CreateDefaultLyricProviders(source)
+            },
+            StringComparer.OrdinalIgnoreCase);
     }
 
     private static string? NormalizePlayerSourceName(string? sourceApp)
@@ -729,10 +732,13 @@ public sealed class PlayerSourceSettings
 {
     public int LyricOffsetMilliseconds { get; set; }
 
-    public List<LyricProviderPreference> LyricProviders { get; set; } = CreateDefaultLyricProviders();
+    // An absent list is filled with the owning player's defaults during normalization.
+    public List<LyricProviderPreference> LyricProviders { get; set; } = [];
 
-    public static List<LyricProviderPreference> CreateDefaultLyricProviders() =>
+    public static List<LyricProviderPreference> CreateDefaultLyricProviders(string? sourceApp = null) =>
         KnownLyricProviders.OnlineTrustOrder
+            .OrderBy(provider => provider != KnownLyricProviders.LrcLib &&
+                string.Equals(provider.Value, sourceApp, StringComparison.OrdinalIgnoreCase) ? 0 : 1)
             .Select(provider => new LyricProviderPreference(provider.Value, true)).ToList();
 
     public static bool IsValidLyricProviders(IReadOnlyList<LyricProviderPreference>? providers) =>
@@ -741,10 +747,11 @@ public sealed class PlayerSourceSettings
             known => string.Equals(known.Value, item.ProviderId, StringComparison.Ordinal))) &&
         providers.Select(item => item.ProviderId).Distinct(StringComparer.Ordinal).Count() == providers.Count;
 
-    public static List<LyricProviderPreference> NormalizeLyricProviders(IReadOnlyList<LyricProviderPreference>? providers) =>
+    public static List<LyricProviderPreference> NormalizeLyricProviders(
+        IReadOnlyList<LyricProviderPreference>? providers, string? sourceApp = null) =>
         IsValidLyricProviders(providers)
             ? providers!.Select(item => item with { }).ToList()
-            : CreateDefaultLyricProviders();
+            : CreateDefaultLyricProviders(sourceApp);
 
     public PlayerSourceSettings Clone()
     {
