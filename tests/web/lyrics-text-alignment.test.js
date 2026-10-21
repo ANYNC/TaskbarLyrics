@@ -1,36 +1,19 @@
-import { readFile } from "node:fs/promises";
-import { JSDOM } from "jsdom";
+import { loadLyricsAssets, createLyricsDom, runLyricsScripts } from "./helpers/lyrics-dom.js";
 import { describe, expect, it } from "vitest";
 
-const root = new URL("../..", import.meta.url);
-const read = relativePath => readFile(new URL(relativePath, root), "utf8");
-
-async function createLyricsDom() {
-  const [html, bridge, state, presentation, script, style] = await Promise.all([
-    read("TaskbarLyrics.App/Web/Lyrics/index.html"),
-    read("TaskbarLyrics.App/Web/Lyrics/bridge.js"),
-    read("TaskbarLyrics.App/Web/Lyrics/state.js"),
-    read("TaskbarLyrics.App/Web/Lyrics/presentation.js"),
-    read("TaskbarLyrics.App/Web/Lyrics/app.js"),
-    read("TaskbarLyrics.App/Web/Lyrics/style.css")
-  ]);
-  const dom = new JSDOM(html.replace("{{STYLE_CSS}}", "").replace("{{APP_JS}}", ""), {
-    runScripts: "outside-only"
-  });
-  dom.window.CSS = { supports: () => true };
+async function createAlignmentDom() {
+  const { html, bridge, state, presentation, script, style } = await loadLyricsAssets();
+  const dom = createLyricsDom(html);
   dom.window.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
   dom.window.requestAnimationFrame = () => 1;
   dom.window.cancelAnimationFrame = () => {};
-  dom.window.eval(bridge);
-  dom.window.eval(state);
-  dom.window.eval(presentation);
-  dom.window.eval(script);
+  runLyricsScripts(dom, { bridge, state, presentation, script });
   return { dom, style };
 }
 
 describe("lyrics text alignment", () => {
   it("accepts the three style values and safely falls back to left", async () => {
-    const { dom } = await createLyricsDom();
+    const { dom } = await createAlignmentDom();
     const layout = dom.window.document.querySelector("#layout");
     const receiveStyle = textAlignment => dom.window.taskbarLyrics.receive({
       version: 1,
@@ -52,7 +35,7 @@ describe("lyrics text alignment", () => {
   });
 
   it("keeps short lines aligned while horizontal scanning always starts from the sentence head", async () => {
-    const { dom, style } = await createLyricsDom();
+    const { dom, style } = await createAlignmentDom();
     const document = dom.window.document;
     const currentLine = document.querySelector("#currentLine");
     const viewport = currentLine.querySelector(".line-text-viewport");
@@ -88,7 +71,7 @@ describe("lyrics text alignment", () => {
   });
 
   it("uses the same alignment container for translation and incoming transition rows", async () => {
-    const { dom, style } = await createLyricsDom();
+    const { dom, style } = await createAlignmentDom();
     const layout = dom.window.document.querySelector("#layout");
 
     dom.window.taskbarLyrics.receive({

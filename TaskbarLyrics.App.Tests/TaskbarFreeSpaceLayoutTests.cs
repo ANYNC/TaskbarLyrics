@@ -5,36 +5,38 @@ namespace TaskbarLyrics.App.Tests;
 public sealed class TaskbarFreeSpaceLayoutTests
 {
     [Theory]
-    [InlineData(360, true, 352)]
-    [InlineData(180, true, 172)]
-    [InlineData(90, false, 0)]
-    [InlineData(600, true, 420)]
-    public void LeftRegionShrinksHidesAndRestoresWithoutMovingToRightSide(double iconsLeft, bool expectedVisible, double expectedWidth)
+    [InlineData(360, 800, true, 0, 352)]
+    [InlineData(180, 800, true, 0, 172)]
+    [InlineData(90, 800, true, 808, 420)]
+    [InlineData(0, 1440, false, 0, 0)]
+    [InlineData(600, 800, true, 0, 420)]
+    public void LeftAnchorUsesTheNearestAvailableRegion(
+        double occupiedStart, double occupiedEnd, bool visible, double expectedStart, double expectedLength)
     {
         var placed = TaskbarFreeSpaceLayout.TryPlace(1440, 420, 0,
-            [new TaskbarHorizontalInterval(iconsLeft, 800)], out var placement);
-
-        Assert.Equal(expectedVisible, placed);
-        Assert.Equal(0, placement.Start);
-        Assert.Equal(expectedWidth, placement.Width);
+            [new TaskbarInterval(occupiedStart, occupiedEnd)], out var placement);
+        Assert.Equal(visible, placed);
+        Assert.Equal(new TaskbarInterval(expectedStart, expectedStart + expectedLength), placement);
     }
 
     [Fact]
-    public void PreservesCustomOffsetInsteadOfMovingLeftToGainWidth()
+    public void CustomOffsetCanMoveLeftToFitRequestedWidth()
     {
         Assert.True(TaskbarFreeSpaceLayout.TryPlace(1440, 420, 120,
-            [new TaskbarHorizontalInterval(360, 800)], out var placement));
+            [new TaskbarInterval(360, 800)], out var placement));
 
-        Assert.Equal(new TaskbarHorizontalInterval(120, 352), placement);
+        Assert.Equal(new TaskbarInterval(0, 352), placement);
     }
 
-    [Fact]
-    public void ChangingPreferredPositionSelectsTheNewRegion()
+    [Theory]
+    [InlineData(0, 808)]
+    [InlineData(900, 900)]
+    public void ChangingPreferredPositionRecomputesTheNearestPlacement(double preferredStart, double expectedLeft)
     {
-        TaskbarHorizontalInterval[] occupied = [new(50, 800)];
-        Assert.False(TaskbarFreeSpaceLayout.TryPlace(1440, 420, 0, occupied, out _));
-        Assert.True(TaskbarFreeSpaceLayout.TryPlace(1440, 420, 900, occupied, out var placement));
-        Assert.Equal(new TaskbarHorizontalInterval(900, 1320), placement);
+        Assert.True(TaskbarFreeSpaceLayout.TryPlace(1440, 420, preferredStart,
+            [new TaskbarInterval(50, 800)], out var placement));
+
+        Assert.Equal(new TaskbarInterval(expectedLeft, expectedLeft + 420), placement);
     }
 
     [Theory]
@@ -43,45 +45,46 @@ public sealed class TaskbarFreeSpaceLayoutTests
     public void AppliesMinimumDisplayWidthAfterSafetyGap(double iconsLeft, bool expectedVisible)
     {
         Assert.Equal(expectedVisible, TaskbarFreeSpaceLayout.TryPlace(1440, 420, 0,
-            [new TaskbarHorizontalInterval(iconsLeft, 800)], out _));
+            [new TaskbarInterval(iconsLeft, 1440)], out var placement));
+        Assert.Equal(expectedVisible ? new TaskbarInterval(0, 100) : default, placement);
+    }
+
+    [Theory]
+    [InlineData(0, 0, 120)]
+    [InlineData(400, 700, 900)]
+    [InlineData(800, 700, 900)]
+    public void SelectsNearestPlacementRatherThanAlwaysMovingRightOrPreferringFullWidth(
+        double preferredStart, double expectedStart, double expectedEnd)
+    {
+        Assert.True(TaskbarFreeSpaceLayout.TryPlace(1000, 200, preferredStart,
+            [new TaskbarInterval(120, 700), new TaskbarInterval(900, 1000)],
+            out var placement, safetyGap: 0));
+
+        Assert.Equal(new TaskbarInterval(expectedStart, expectedEnd), placement);
     }
 
     [Fact]
-    public void FitsLongLyricsBeforeStartAndSearchControls()
+    public void MovesLyricsLeftWhenPreferredAreaIsCrowded()
     {
         var placed = TaskbarFreeSpaceLayout.TryPlace(
-            taskbarWidth: 1440,
-            requestedWidth: 420,
-            preferredLeft: 0,
-            occupied: [new TaskbarHorizontalInterval(360, 600)],
+            taskbarLength: 1000,
+            requestedLength: 250,
+            preferredStart: 360,
+            occupied: [new TaskbarInterval(340, 900)],
             out var placement);
 
         Assert.True(placed);
-        Assert.Equal(new TaskbarHorizontalInterval(0, 352), placement);
-    }
-
-    [Fact]
-    public void HidesWhenPreferredStartIsOccupiedInsteadOfMovingToAnotherRegion()
-    {
-        var placed = TaskbarFreeSpaceLayout.TryPlace(
-            taskbarWidth: 1000,
-            requestedWidth: 250,
-            preferredLeft: 360,
-            occupied: [new TaskbarHorizontalInterval(340, 900)],
-            out var placement);
-
-        Assert.False(placed);
-        Assert.Equal(default, placement);
+        Assert.Equal(new TaskbarInterval(82, 332), placement);
     }
 
     [Fact]
     public void ReturnsFalseWhenNoGapCanHoldMinimumWidth()
     {
         var placed = TaskbarFreeSpaceLayout.TryPlace(
-            taskbarWidth: 300,
-            requestedWidth: 200,
-            preferredLeft: 0,
-            occupied: [new TaskbarHorizontalInterval(50, 250)],
+            taskbarLength: 300,
+            requestedLength: 200,
+            preferredStart: 0,
+            occupied: [new TaskbarInterval(50, 250)],
             out var placement);
 
         Assert.False(placed);
@@ -92,210 +95,154 @@ public sealed class TaskbarFreeSpaceLayoutTests
     public void MergesMultipleAndOverlappingControlsBeforeSelectingGap()
     {
         var placed = TaskbarFreeSpaceLayout.TryPlace(
-            taskbarWidth: 1000,
-            requestedWidth: 200,
-            preferredLeft: 660,
+            taskbarLength: 1000,
+            requestedLength: 200,
+            preferredStart: 450,
             occupied:
             [
-                new TaskbarHorizontalInterval(500, 650),
-                new TaskbarHorizontalInterval(300, 520),
-                new TaskbarHorizontalInterval(800, 850)
+                new TaskbarInterval(500, 650),
+                new TaskbarInterval(300, 520),
+                new TaskbarInterval(800, 850)
             ],
             out var placement);
 
         Assert.True(placed);
-        Assert.Equal(new TaskbarHorizontalInterval(660, 792), placement);
+        Assert.Equal(new TaskbarInterval(658, 792), placement);
     }
 
     [Theory]
     [InlineData(0, 0)]
     [InlineData(400, 400)]
     [InlineData(900, 800)]
-    public void ClampsLeftCenterAndRightPreferredPositions(double preferredLeft, double expectedLeft)
+    public void ClampsLeftCenterAndRightPreferredPositions(double preferredStart, double expectedLeft)
     {
         var placed = TaskbarFreeSpaceLayout.TryPlace(
-            taskbarWidth: 1000,
-            requestedWidth: 200,
-            preferredLeft,
+            taskbarLength: 1000,
+            requestedLength: 200,
+            preferredStart,
             occupied: [],
             out var placement);
 
         Assert.True(placed);
         Assert.Equal(expectedLeft, placement.Start);
-        Assert.Equal(200, placement.Width);
+        Assert.Equal(200, placement.Length);
     }
 
     [Fact]
-    public void HidesWhenPreferredRegionIsTooNarrowEvenIfAnotherRegionIsWider()
+    public void TiePrefersTheWiderSafeGap()
     {
         var placed = TaskbarFreeSpaceLayout.TryPlace(
-            taskbarWidth: 1000,
-            requestedWidth: 250,
-            preferredLeft: 0,
+            taskbarLength: 1000,
+            requestedLength: 250,
+            preferredStart: 100,
             occupied:
             [
-                new TaskbarHorizontalInterval(40, 200),
-                new TaskbarHorizontalInterval(400, 1000)
+                new TaskbarInterval(100, 200),
+                new TaskbarInterval(400, 1000)
             ],
             out var placement,
             safetyGap: 0,
-            minimumWidth: 50);
+            minimumLength: 50);
 
-        Assert.False(placed);
-        Assert.Equal(default, placement);
+        Assert.True(placed);
+        Assert.Equal(new TaskbarInterval(200, 400), placement);
     }
 
     [Fact]
     public void NegativePreferredPositionAndOutOfBoundsControlsAreClampedOrIgnored()
     {
         var placed = TaskbarFreeSpaceLayout.TryPlace(
-            taskbarWidth: 1000,
-            requestedWidth: 100,
-            preferredLeft: -50,
+            taskbarLength: 1000,
+            requestedLength: 100,
+            preferredStart: -50,
             occupied:
             [
-                new TaskbarHorizontalInterval(-20, 0),
-                new TaskbarHorizontalInterval(900, 1200),
-                new TaskbarHorizontalInterval(-100, -1),
-                new TaskbarHorizontalInterval(1100, 1200)
+                new TaskbarInterval(-20, 100),
+                new TaskbarInterval(900, 1200),
+                new TaskbarInterval(-100, -1),
+                new TaskbarInterval(1100, 1200)
             ],
             out var placement,
             safetyGap: 0,
-            minimumWidth: 50);
+            minimumLength: 50);
 
         Assert.True(placed);
-        Assert.Equal(new TaskbarHorizontalInterval(0, 100), placement);
+        Assert.Equal(new TaskbarInterval(100, 200), placement);
     }
 
     [Fact]
     public void IgnoresMalformedAndNonFiniteOccupiedIntervals()
     {
         var placed = TaskbarFreeSpaceLayout.TryPlace(
-            taskbarWidth: 500,
-            requestedWidth: 200,
-            preferredLeft: 100,
+            taskbarLength: 500,
+            requestedLength: 200,
+            preferredStart: 100,
             occupied:
             [
-                new TaskbarHorizontalInterval(200, 100),
-                new TaskbarHorizontalInterval(100, 100),
-                new TaskbarHorizontalInterval(double.NaN, 200),
-                new TaskbarHorizontalInterval(200, double.PositiveInfinity)
+                new TaskbarInterval(200, 100),
+                new TaskbarInterval(100, 100),
+                new TaskbarInterval(double.NaN, 200),
+                new TaskbarInterval(200, double.PositiveInfinity)
             ],
             out var placement);
 
         Assert.True(placed);
-        Assert.Equal(new TaskbarHorizontalInterval(100, 300), placement);
+        Assert.Equal(new TaskbarInterval(100, 300), placement);
     }
 
     [Fact]
     public void SelectsRightSideGapWhenControlsCoverTheLeftSide()
     {
         var placed = TaskbarFreeSpaceLayout.TryPlace(
-            taskbarWidth: 1000,
-            requestedWidth: 200,
-            preferredLeft: 700,
-            occupied: [new TaskbarHorizontalInterval(0, 600)],
+            taskbarLength: 1000,
+            requestedLength: 200,
+            preferredStart: 700,
+            occupied: [new TaskbarInterval(0, 600)],
             out var placement);
 
         Assert.True(placed);
-        Assert.Equal(new TaskbarHorizontalInterval(700, 900), placement);
+        Assert.Equal(new TaskbarInterval(700, 900), placement);
     }
 
     [Fact]
     public void SelectsCenterGapBetweenControlsOnBothSides()
     {
         var placed = TaskbarFreeSpaceLayout.TryPlace(
-            taskbarWidth: 1000,
-            requestedWidth: 200,
-            preferredLeft: 400,
+            taskbarLength: 1000,
+            requestedLength: 200,
+            preferredStart: 400,
             occupied:
             [
-                new TaskbarHorizontalInterval(0, 300),
-                new TaskbarHorizontalInterval(700, 1000)
+                new TaskbarInterval(0, 300),
+                new TaskbarInterval(700, 1000)
             ],
             out var placement);
 
         Assert.True(placed);
-        Assert.Equal(new TaskbarHorizontalInterval(400, 600), placement);
-    }
-
-    [Fact]
-    public void IgnoresFiniteOccupiedIntervalsFarOutsideTaskbarCoordinates()
-    {
-        var placed = TaskbarFreeSpaceLayout.TryPlace(
-            taskbarWidth: 1000,
-            requestedWidth: 200,
-            preferredLeft: 100,
-            occupied:
-            [
-                new TaskbarHorizontalInterval(-double.MaxValue, -double.MaxValue / 2),
-                new TaskbarHorizontalInterval(double.MaxValue / 2, double.MaxValue)
-            ],
-            out var placement);
-
-        Assert.True(placed);
-        Assert.Equal(new TaskbarHorizontalInterval(100, 300), placement);
-    }
-
-    [Fact]
-    public void ExtremelyNegativePreferenceDoesNotJumpAcrossOccupiedRegions()
-    {
-        var taskbarWidth = Math.ScaleB(1d, 1023);
-        var firstGapStart = taskbarWidth / 4;
-        var requestedWidth = Math.ScaleB(1d, 970);
-        var placed = TaskbarFreeSpaceLayout.TryPlace(
-            taskbarWidth,
-            requestedWidth,
-            -double.MaxValue,
-            [
-                new TaskbarHorizontalInterval(0, firstGapStart),
-                new TaskbarHorizontalInterval(taskbarWidth / 2, firstGapStart * 3)
-            ],
-            out var placement,
-            safetyGap: 0,
-            minimumWidth: requestedWidth);
-
-        Assert.False(placed);
-        Assert.Equal(default, placement);
-    }
-
-    [Fact]
-    public void VeryLargeFiniteSafetyGapClampsToTheBarWithoutWrapping()
-    {
-        var taskbarWidth = Math.ScaleB(1d, 1023);
-        var placed = TaskbarFreeSpaceLayout.TryPlace(
-            taskbarWidth,
-            requestedWidth: 100,
-            preferredLeft: 0,
-            occupied: [new TaskbarHorizontalInterval(taskbarWidth / 4, taskbarWidth / 2)],
-            out var placement,
-            safetyGap: double.MaxValue);
-
-        Assert.False(placed);
-        Assert.Equal(default, placement);
+        Assert.Equal(new TaskbarInterval(400, 600), placement);
     }
 
     [Fact]
     public void NarrowBarFitsByShrinkingWithoutEnlargingTheRequestedWidth()
     {
         var placed = TaskbarFreeSpaceLayout.TryPlace(
-            taskbarWidth: 180,
-            requestedWidth: 420,
-            preferredLeft: 50,
+            taskbarLength: 180,
+            requestedLength: 420,
+            preferredStart: 50,
             occupied: [],
             out var placement);
 
         Assert.True(placed);
-        Assert.Equal(new TaskbarHorizontalInterval(0, 180), placement);
+        Assert.Equal(new TaskbarInterval(0, 180), placement);
     }
 
     [Fact]
     public void NarrowBarWithoutMinimumSafeWidthReturnsFalse()
     {
         var placed = TaskbarFreeSpaceLayout.TryPlace(
-            taskbarWidth: 99,
-            requestedWidth: 420,
-            preferredLeft: 0,
+            taskbarLength: 99,
+            requestedLength: 420,
+            preferredStart: 0,
             occupied: [],
             out var placement);
 
@@ -320,20 +267,20 @@ public sealed class TaskbarFreeSpaceLayoutTests
     [InlineData(500, 200, 0, 8, double.PositiveInfinity)]
     [InlineData(500, 50, 0, 8, 100)]
     public void RejectsInvalidEssentialArguments(
-        double taskbarWidth,
-        double requestedWidth,
-        double preferredLeft,
+        double taskbarLength,
+        double requestedLength,
+        double preferredStart,
         double safetyGap,
-        double minimumWidth)
+        double minimumLength)
     {
         var placed = TaskbarFreeSpaceLayout.TryPlace(
-            taskbarWidth,
-            requestedWidth,
-            preferredLeft,
+            taskbarLength,
+            requestedLength,
+            preferredStart,
             [],
             out var placement,
             safetyGap,
-            minimumWidth);
+            minimumLength);
 
         Assert.False(placed);
         Assert.Equal(default, placement);
@@ -359,42 +306,41 @@ public sealed class TaskbarFreeSpaceLayoutTests
         var random = new Random(0x5EED);
         for (var iteration = 0; iteration < 250; iteration++)
         {
-            var taskbarWidth = random.Next(1000, 2001);
-            var minimumWidth = random.Next(80, 181);
-            var requestedWidth = random.Next(minimumWidth, 451);
-            var preferredLeft = random.Next(0, 181);
+            var taskbarLength = random.Next(1000, 2001);
+            var minimumLength = random.Next(80, 181);
+            var requestedLength = random.Next(minimumLength, 451);
+            var preferredStart = random.Next(-200, taskbarLength + 201);
             var safetyGap = random.Next(0, 17);
-            var occupied = new List<TaskbarHorizontalInterval>();
+            var occupied = new List<TaskbarInterval>();
             var occupiedCount = random.Next(0, 21);
             for (var intervalIndex = 0; intervalIndex < occupiedCount; intervalIndex++)
             {
-                var start = random.Next(630, taskbarWidth + 101);
+                var start = random.Next(630, taskbarLength + 101);
                 var end = start + random.Next(1, 251);
-                occupied.Add(new TaskbarHorizontalInterval(start, end));
+                occupied.Add(new TaskbarInterval(start, end));
             }
 
             var placed = TaskbarFreeSpaceLayout.TryPlace(
-                taskbarWidth,
-                requestedWidth,
-                preferredLeft,
+                taskbarLength,
+                requestedLength,
+                preferredStart,
                 occupied,
                 out var placement,
                 safetyGap,
-                minimumWidth);
+                minimumLength);
 
-            Assert.True(placed, $"Iteration {iteration} should retain its configured left-side region.");
-            Assert.Equal(Math.Clamp(preferredLeft, 0, Math.Max(0, taskbarWidth - requestedWidth)), placement.Start);
-            Assert.InRange(placement.Start, 0, taskbarWidth);
-            Assert.InRange(placement.End, placement.Start, taskbarWidth);
-            Assert.InRange(placement.Width, minimumWidth, requestedWidth);
-            AssertDoesNotIntersectOccupiedIntervals(placement, taskbarWidth, occupied, safetyGap);
+            Assert.True(placed, $"Iteration {iteration} should retain the reserved left-side gap.");
+            Assert.InRange(placement.Start, 0, taskbarLength);
+            Assert.InRange(placement.End, placement.Start, taskbarLength);
+            Assert.InRange(placement.Length, minimumLength, requestedLength);
+            AssertDoesNotIntersectOccupiedIntervals(placement, taskbarLength, occupied, safetyGap);
         }
     }
 
     private static void AssertDoesNotIntersectOccupiedIntervals(
-        TaskbarHorizontalInterval placement,
-        double taskbarWidth,
-        IReadOnlyList<TaskbarHorizontalInterval> occupied,
+        TaskbarInterval placement,
+        double taskbarLength,
+        IReadOnlyList<TaskbarInterval> occupied,
         double safetyGap)
     {
         foreach (var interval in occupied)
@@ -403,13 +349,13 @@ public sealed class TaskbarFreeSpaceLayoutTests
                 !double.IsFinite(interval.End) ||
                 interval.End <= interval.Start ||
                 interval.End <= 0 ||
-                interval.Start >= taskbarWidth)
+                interval.Start >= taskbarLength)
             {
                 continue;
             }
 
-            var expandedStart = Math.Max(0, Math.Clamp(interval.Start, 0, taskbarWidth) - safetyGap);
-            var expandedEnd = Math.Min(taskbarWidth, Math.Clamp(interval.End, 0, taskbarWidth) + safetyGap);
+            var expandedStart = Math.Max(0, Math.Clamp(interval.Start, 0, taskbarLength) - safetyGap);
+            var expandedEnd = Math.Min(taskbarLength, Math.Clamp(interval.End, 0, taskbarLength) + safetyGap);
             Assert.True(
                 placement.End <= expandedStart || placement.Start >= expandedEnd,
                 $"Placement {placement} intersects expanded occupied interval [{expandedStart}, {expandedEnd}].");

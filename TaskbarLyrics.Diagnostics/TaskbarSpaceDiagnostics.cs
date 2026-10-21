@@ -66,7 +66,7 @@ internal static class TaskbarSpaceDiagnostics
             var errors = new ConcurrentDictionary<string, int>();
             var attempts = 0;
             var unexpected = 0;
-            TaskbarHorizontalInterval[]? Reader(IntPtr handle, Rect rect, CancellationToken token)
+            TaskbarInterval[]? Reader(IntPtr handle, Rect rect, CancellationToken token)
             {
                 var started = Stopwatch.GetTimestamp();
                 Interlocked.Increment(ref attempts);
@@ -136,12 +136,12 @@ internal static class TaskbarSpaceDiagnostics
         };
     }
 
-    private static TaskbarHorizontalInterval[] Canonical(IEnumerable<TaskbarHorizontalInterval> ranges) =>
+    private static TaskbarInterval[] Canonical(IEnumerable<TaskbarInterval> ranges) =>
         ranges.Distinct().OrderBy(range => range.Start).ThenBy(range => range.End).ToArray();
 
     // A reproducible reference for the initial broad scan; used only by the
     // developer benchmark, never by the production positioning path.
-    private static TaskbarHorizontalInterval[]? ReadFullTree(IntPtr taskbar, Rect bounds, CancellationToken token)
+    private static TaskbarInterval[]? ReadFullTree(IntPtr taskbar, Rect bounds, CancellationToken token)
     {
         var root = AutomationElement.FromHandle(taskbar);
         var condition = new AndCondition(
@@ -153,13 +153,15 @@ internal static class TaskbarSpaceDiagnostics
         cache.Add(AutomationElement.BoundingRectangleProperty);
         using var activation = cache.Activate();
         var controls = root.FindAll(TreeScope.Descendants, condition);
-        var ranges = new List<TaskbarHorizontalInterval>();
+        var ranges = new List<TaskbarInterval>();
         for (var index = 0; index < controls.Count; index++)
         {
             token.ThrowIfCancellationRequested();
             var rect = controls[index].Cached.BoundingRectangle;
             if (!rect.IsEmpty && rect.Width > 0 && rect.Height > 0 && rect.IntersectsWith(bounds))
-                ranges.Add(new TaskbarHorizontalInterval(rect.Left, rect.Right));
+                ranges.Add(bounds.Height > bounds.Width
+                    ? new TaskbarInterval(rect.Top, rect.Bottom)
+                    : new TaskbarInterval(rect.Left, rect.Right));
         }
         return ranges.Count > 0 ? ranges.ToArray() : null;
     }
@@ -222,23 +224,43 @@ internal static class TaskbarSpaceDiagnostics
             var style = TaskbarNativeMethods.GetWindowLongPtr(childHandle, -16).ToInt64();
             TaskbarNativeMethods.SetWindowLongPtr(childHandle, -16, new IntPtr((style & ~0x80000000L) | 0x40000000L));
             var clock = new ProbeClock();
-            var blocked = true;
-            var reads = 0;
+            var spaceStage = 0;
+            var sidebarScale = TaskbarPlacementService.GetPixelsPerDip(child);
             using var provider = new TaskbarOccupiedSpaceProvider((_, rect, token) =>
             {
                 token.ThrowIfCancellationRequested();
-                reads++;
-                return blocked ? [new(rect.Left + 90, rect.Left + 300)] : [new(rect.Left + 400, rect.Right)];
+                var vertical = rect.Height > rect.Width;
+                var origin = vertical ? rect.Top : rect.Left;
+                var end = vertical ? rect.Bottom : rect.Right;
+                var scale = vertical ? sidebarScale : 1;
+                return spaceStage switch
+                {
+                    0 => [new(origin + 90 * scale, origin + 300 * scale)],
+                    1 => [new(origin, end)],
+                    _ => [new(origin + 400 * scale, end)]
+                };
             }, clock);
             using var anchor = new EmbeddedTaskbarAnchor(provider);
             GetWindowRect(parentHandle, out var parentRect);
             provider.GetOccupiedBounds(parentHandle, ToRect(parentRect));
             await provider.PendingRead;
             anchor.Position(childHandle, parentHandle, child, settings, null);
+            GetWindowRect(childHandle, out var relocated);
+            var safetyGapPixels = 8 * TaskbarPlacementService.GetPixelsPerDip(child);
+            Require(relocated.Right > relocated.Left && relocated.Left >= parentRect.Left + 300 + safetyGapPixels - 1 &&
+                relocated.Right <= parentRect.Right && !anchor.IsSurfaceHidden,
+                "Narrow left region did not relocate to the available right region.");
+            results.Add(new { Stage = "RelocateAcrossControls", Passed = true, Left = relocated.Left, Width = relocated.Right - relocated.Left });
+
+            spaceStage = 1;
+            clock.Advance(TimeSpan.FromMilliseconds(500));
+            provider.GetOccupiedBounds(parentHandle, ToRect(parentRect));
+            await provider.PendingRead;
+            anchor.Position(childHandle, parentHandle, child, settings, null);
             GetWindowRect(childHandle, out var hidden);
             Require(hidden.Right == hidden.Left && hidden.Bottom == hidden.Top && anchor.IsSurfaceHidden,
-                "Narrow preferred region moved to another region instead of hiding.");
-            blocked = false;
+                "Fully occupied taskbar did not hide the native surface.");
+            spaceStage = 2;
             clock.Advance(TimeSpan.FromMilliseconds(500));
             provider.GetOccupiedBounds(parentHandle, ToRect(parentRect));
             await provider.PendingRead;
@@ -248,13 +270,34 @@ internal static class TaskbarSpaceDiagnostics
                 "Negative-origin surface did not recover into the free interval.");
             results.Add(new { Stage = "NoSpaceAndNegativeOriginRecovery", Passed = true, RestoredWidth = restored.Right - restored.Left });
 
-            TaskbarNativeMethods.SetWindowPos(parentHandle, IntPtr.Zero, 0, 40, 60, 900,
-                TaskbarNativeMethods.SWP_NOZORDER | TaskbarNativeMethods.SWP_NOACTIVATE);
-            var previousReads = reads;
-            anchor.Position(childHandle, parentHandle, child, settings, null);
-            GetWindowRect(childHandle, out var vertical);
-            Require(vertical.Right - vertical.Left == 60 && reads == previousReads, "Vertical positioning was changed by horizontal avoidance.");
-            results.Add(new { Stage = "VerticalBypass", Passed = true, Width = vertical.Right - vertical.Left });
+            settings.YOffset = 40;
+            foreach (var (side, left, top) in new[] { ("Left", -1400, -600), ("Right", 1900, 40) })
+            {
+                TaskbarNativeMethods.SetWindowPos(parentHandle, IntPtr.Zero, left, top,
+                    (int)Math.Round(60 * sidebarScale), (int)Math.Round(900 * sidebarScale),
+                    TaskbarNativeMethods.SWP_NOZORDER | TaskbarNativeMethods.SWP_NOACTIVATE);
+                GetWindowRect(parentHandle, out parentRect);
+                spaceStage = 0;
+                clock.Advance(TimeSpan.FromMilliseconds(500));
+                provider.GetOccupiedBounds(parentHandle, ToRect(parentRect));
+                await provider.PendingRead;
+                Require(anchor.Position(childHandle, parentHandle, child, settings, null), "Sidebar positioning failed.");
+                GetWindowRect(childHandle, out var relocatedSidebar);
+                Require(relocatedSidebar.Right - relocatedSidebar.Left == parentRect.Right - parentRect.Left &&
+                    relocatedSidebar.Left == parentRect.Left && relocatedSidebar.Bottom <= parentRect.Bottom &&
+                    relocatedSidebar.Top >= parentRect.Top + 308 * sidebarScale - 1 && !anchor.IsSurfaceHidden,
+                    $"{side} sidebar did not relocate below the occupied controls.");
+
+                results.Add(new
+                {
+                    Stage = $"{side}SidebarPlacement",
+                    Passed = true,
+                    Scale = sidebarScale,
+                    Top = relocatedSidebar.Top,
+                    Height = relocatedSidebar.Bottom - relocatedSidebar.Top
+                });
+
+            }
         }
         finally { child.Close(); parent.Close(); }
         return new { Platform = Environment.OSVersion.VersionString, Results = results };
@@ -293,7 +336,10 @@ internal static class TaskbarSpaceDiagnostics
             $"Live taskbar geometry unavailable: Stage={stage}, Lyric={lyric.Left}..{lyric.Right}, " +
             $"Taskbar={bar.Left}..{bar.Right}, Occupied={JsonSerializer.Serialize(occupied)}.");
         var gap = 8 * TaskbarPlacementService.GetPixelsPerDip(window);
-        var minimumGap = occupied!.Min(range => Math.Max(range.Start - lyric.Right, lyric.Left - range.End));
+        var vertical = bar.Bottom - bar.Top > bar.Right - bar.Left;
+        var minimumGap = occupied!.Min(range => vertical
+            ? Math.Max(range.Start - lyric.Bottom, lyric.Top - range.End)
+            : Math.Max(range.Start - lyric.Right, lyric.Left - range.End));
         Require(minimumGap >= gap - 1,
             $"Live lyric safety gap was not preserved: Stage={stage}, ReadMs={readMilliseconds:F1}, " +
             $"Lyric={lyric.Left}..{lyric.Right}, Gap={gap}, " +

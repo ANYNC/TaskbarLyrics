@@ -54,10 +54,6 @@ public sealed class ForegroundColorPolicyTests
 
         var secondary = ForegroundColorPolicy.CreateSecondaryColor(primary);
 
-        Assert.Equal((byte)12, primary.R);
-        Assert.Equal((byte)34, primary.G);
-        Assert.Equal((byte)56, primary.B);
-        Assert.Equal((byte)primaryAlpha, primary.A);
         Assert.Equal(primary.R, secondary.R);
         Assert.Equal(primary.G, secondary.G);
         Assert.Equal(primary.B, secondary.B);

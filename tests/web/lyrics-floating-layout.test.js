@@ -1,28 +1,19 @@
-import { readFile } from "node:fs/promises";
-import { JSDOM } from "jsdom";
+import { loadLyricsAssets, createLyricsDom, runLyricsScripts } from "./helpers/lyrics-dom.js";
 import { describe, expect, it } from "vitest";
 
-const root = new URL("../..", import.meta.url);
-const read = relativePath => readFile(new URL(relativePath, root), "utf8");
-
-async function createLyricsDom() {
-  const [html, ...scripts] = await Promise.all([
-    read("TaskbarLyrics.App/Web/Lyrics/index.html"),
-    ...["bridge", "state", "presentation", "app"].map(name => read(`TaskbarLyrics.App/Web/Lyrics/${name}.js`))
-  ]);
-  const dom = new JSDOM(html.replace("{{STYLE_CSS}}", "").replace("{{APP_JS}}", ""), {
-    runScripts: "outside-only"
-  });
-  dom.window.CSS = { supports: () => true };
+async function createFloatingLyricsDom() {
+  const sources = await loadLyricsAssets();
+  const { html } = sources;
+  const dom = createLyricsDom(html);
   dom.window.requestAnimationFrame = () => 1;
   dom.window.cancelAnimationFrame = () => {};
-  scripts.forEach(script => dom.window.eval(script));
+  runLyricsScripts(dom, sources);
   return dom;
 }
 
 describe("floating lyrics block height", () => {
   it("applies and replaces the host height without changing typography or artwork", async () => {
-    const dom = await createLyricsDom();
+    const dom = await createFloatingLyricsDom();
     try {
       const root = dom.window.document.documentElement;
       const style = payload => dom.window.taskbarLyrics.receive({ version: 1, type: "style", payload });
@@ -38,7 +29,7 @@ describe("floating lyrics block height", () => {
   });
 
   it.each([undefined, null, 0, -2, "invalid", Infinity])("clears a previous height for invalid or absent value %s", async value => {
-    const dom = await createLyricsDom();
+    const dom = await createFloatingLyricsDom();
     try {
       const style = payload => dom.window.taskbarLyrics.receive({ version: 1, type: "style", payload });
       style({ floatingControlPanel: true, lyricsPaneHeight: 40 });

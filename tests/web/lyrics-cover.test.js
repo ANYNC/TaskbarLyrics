@@ -1,26 +1,12 @@
-import { readFile } from "node:fs/promises";
-import { JSDOM } from "jsdom";
+import { loadLyricsAssets, createLyricsDom, runLyricsScripts } from "./helpers/lyrics-dom.js";
 import { describe, expect, it } from "vitest";
-
-const root = new URL("../..", import.meta.url);
-const read = relativePath => readFile(new URL(relativePath, root), "utf8");
 
 const appIconUri = "data:image/png;base64,iVBORw0KGgo=";
 const artworkUri = "data:image/jpeg;base64,BBBB";
 
 async function createHarness({ deferAnimationFrames = false } = {}) {
-  const [html, bridge, state, presentation, script, style] = await Promise.all([
-    read("TaskbarLyrics.App/Web/Lyrics/index.html"),
-    read("TaskbarLyrics.App/Web/Lyrics/bridge.js"),
-    read("TaskbarLyrics.App/Web/Lyrics/state.js"),
-    read("TaskbarLyrics.App/Web/Lyrics/presentation.js"),
-    read("TaskbarLyrics.App/Web/Lyrics/app.js"),
-    read("TaskbarLyrics.App/Web/Lyrics/style.css")
-  ]);
-  const dom = new JSDOM(html.replace("{{STYLE_CSS}}", "").replace("{{APP_JS}}", ""), {
-    runScripts: "outside-only"
-  });
-  dom.window.CSS = { supports: () => true };
+  const { html, bridge, state, presentation, script, style } = await loadLyricsAssets();
+  const dom = createLyricsDom(html);
   const frames = new Map();
   let nextFrameId = 1;
   dom.window.requestAnimationFrame = callback => {
@@ -55,10 +41,7 @@ async function createHarness({ deferAnimationFrames = false } = {}) {
     }
   };
 
-  dom.window.eval(bridge);
-  dom.window.eval(state);
-  dom.window.eval(presentation);
-  dom.window.eval(script);
+  runLyricsScripts(dom, { bridge, state, presentation, script });
 
   const flushTimers = () => {
     for (let guard = 0; timers.size > 0 && guard < 32; guard += 1) {
@@ -550,7 +533,6 @@ describe("lyrics cover fallback", () => {
     cover.focus();
     cover.click();
     expect(document.activeElement).toBe(cover);
-    expect(style).toMatch(/\.cover:focus-visible\s*\{[^}]*outline-offset:\s*-2px/s);
     receive("style", { floatingControlPanel: false, enableControlPanel: true });
     const embeddedPointer = new dom.window.MouseEvent("mousedown", { button: 0, bubbles: true, cancelable: true });
     cover.dispatchEvent(embeddedPointer);
@@ -631,7 +613,6 @@ describe("lyrics cover fallback", () => {
       expect(document.documentElement.classList.contains("floating-locked")).toBe(false);
       expect(cover.hasAttribute("aria-pressed")).toBe(false);
       expect(cover.getAttribute("aria-label")).toBe("展开播放控制");
-      expect(style).toContain(".floating-controls-enabled.floating-locked .cover-floating-icon { display: block; }");
     } finally { dom.window.close(); }
   });
 

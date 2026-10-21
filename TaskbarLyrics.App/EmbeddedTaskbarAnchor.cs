@@ -349,18 +349,20 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
 
         var clientLeft = EmbeddedTaskbarLayoutCalculator.CalculateHorizontalLeft(
             taskbarWidth, width, settings.HorizontalAnchor, settings.XOffset);
-        // The upstream vertical layout uses height as its lyric axis. Preserve it
-        // rather than applying a horizontal free-space policy to a vertical bar.
-        if (IsWindows11() && !metrics.IsVertical)
+        var clientTop = EmbeddedTaskbarLayoutCalculator.CalculateVerticalTop(
+            taskbarHeight, height, settings.YOffset, alignTop: metrics.IsVertical);
+        if (IsWindows11())
         {
             var occupied = _occupiedSpace.GetOccupiedBounds(parent, new Rect(
                 parentRect.Left, parentRect.Top,
                 parentRect.Right - parentRect.Left, parentRect.Bottom - parentRect.Top));
             var logical = occupied is null ? null : TaskbarOccupiedSpaceProvider.ToLogicalBounds(
-                occupied, parentRect.Left, pixelsPerDip);
+                occupied, metrics.IsVertical ? parentRect.Top : parentRect.Left, pixelsPerDip);
             if (logical is null || !TaskbarFreeSpaceLayout.TryPlace(
-                    taskbarWidth, width, clientLeft, logical, out var available,
-                    minimumWidth: TaskbarFreeSpaceLayout.MinimumDisplayWidth))
+                    metrics.IsVertical ? taskbarHeight : taskbarWidth,
+                    metrics.IsVertical ? height : width,
+                    metrics.IsVertical ? clientTop : clientLeft,
+                    logical, out var available))
             {
                 ReportSpaceDiagnostic(logical is null ? "WaitingForTaskbarBounds" : "NoFreeSpace");
                 if (!IsSurfaceHidden)
@@ -376,9 +378,17 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
                     TaskbarNativeMethods.SWP_NOMOVE | TaskbarNativeMethods.SWP_NOZORDER |
                     TaskbarNativeMethods.SWP_NOACTIVATE);
             }
-            clientLeft = available.Start;
-            width = available.Width;
-            ReportSpaceDiagnostic($"Left={clientLeft:F1} Width={width:F1} Scale={pixelsPerDip:F2}");
+            if (metrics.IsVertical)
+            {
+                clientTop = available.Start;
+                height = available.Length;
+            }
+            else
+            {
+                clientLeft = available.Start;
+                width = available.Length;
+            }
+            ReportSpaceDiagnostic($"Left={clientLeft:F1} Top={clientTop:F1} Width={width:F1} Height={height:F1} Scale={pixelsPerDip:F2}");
         }
 
         IsSurfaceHidden = false;
@@ -391,12 +401,6 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
         {
             window.Height = height;
         }
-
-        var clientTop = EmbeddedTaskbarLayoutCalculator.CalculateVerticalTop(
-            taskbarHeight,
-            height,
-            settings.YOffset,
-            alignTop: metrics.IsVertical);
 
         clientLeft = EmbeddedTaskbarLayoutCalculator.ClampHorizontalLeft(
             clientLeft,

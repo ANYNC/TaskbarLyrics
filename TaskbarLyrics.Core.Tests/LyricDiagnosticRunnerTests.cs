@@ -193,7 +193,7 @@ public sealed class LyricDiagnosticRunnerTests
         new(
             sources,
             Array.Empty<ILyricPayloadDecoder>(),
-            [new PlainTextParser()],
+            [new PlainTextLyricParser()],
             trustPolicy: new LyricProviderTrustPolicy(
                 KnownLyricProviders.OnlineTrustOrder.Where(providerId => sources.Any(source => source.ProviderId == providerId)),
                 sources.Select(source => source.ProviderId)),
@@ -267,16 +267,8 @@ public sealed class LyricDiagnosticRunnerTests
             "TestPlayer",
             TimeSpan.FromMinutes(3));
 
-    private sealed class TestSource(LyricProviderId providerId) : ILyricSource
+    private sealed class TestSource(LyricProviderId providerId) : StubLyricSource(providerId)
     {
-        public LyricProviderId ProviderId { get; } = providerId;
-
-        public Func<LyricSearchPlan, CancellationToken, Task<IReadOnlyList<SourceTrackCandidate>>> SearchHandler { get; set; } =
-            (_, _) => Task.FromResult<IReadOnlyList<SourceTrackCandidate>>([]);
-
-        public Func<SourceTrackCandidate, CancellationToken, Task<RawLyricPayload?>> FetchHandler { get; set; } =
-            (_, _) => Task.FromResult<RawLyricPayload?>(null);
-
         public TaskCompletionSource<bool> SearchStarted { get; } =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -286,7 +278,7 @@ public sealed class LyricDiagnosticRunnerTests
         public int SearchCalls { get; private set; }
         public int FetchCalls { get; private set; }
 
-        public async Task<IReadOnlyList<SourceTrackCandidate>> SearchAsync(
+        public override async Task<IReadOnlyList<SourceTrackCandidate>> SearchAsync(
             LyricSearchPlan plan,
             CancellationToken cancellationToken = default)
         {
@@ -294,7 +286,7 @@ public sealed class LyricDiagnosticRunnerTests
             SearchStarted.TrySetResult(true);
             try
             {
-                return await SearchHandler(plan, cancellationToken);
+                return await base.SearchAsync(plan, cancellationToken);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -303,29 +295,13 @@ public sealed class LyricDiagnosticRunnerTests
             }
         }
 
-        public async Task<RawLyricPayload?> FetchAsync(
+        public override async Task<RawLyricPayload?> FetchAsync(
             SourceTrackCandidate candidate,
             CancellationToken cancellationToken = default)
         {
             FetchCalls++;
-            return await FetchHandler(candidate, cancellationToken);
+            return await base.FetchAsync(candidate, cancellationToken);
         }
     }
 
-    private sealed class PlainTextParser : ILyricPayloadParser
-    {
-        public bool CanParse(LyricPayloadFormat format) => format == LyricPayloadFormat.PlainText;
-
-        public Task<ParsedLyrics> ParseAsync(
-            DecodedLyricPayload payload,
-            CancellationToken cancellationToken = default)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            return Task.FromResult(new ParsedLyrics(
-                [new ParsedLyricLine(TimeSpan.Zero, null, payload.OriginalLyrics ?? "")],
-                LyricTimingKind.LineTimed,
-                LyricTimingProvenance.ProviderSupplied,
-                payload.Format));
-        }
-    }
 }

@@ -23,9 +23,9 @@ public sealed class TaskbarOccupiedSpaceProviderTests
         var entered = NewSignal();
         var release = NewSignal();
         var clock = new ManualTimeProvider();
-        var expected = new[] { new TaskbarHorizontalInterval(120, 300) };
+        var expected = new[] { new TaskbarInterval(120, 300) };
         var notifications = 0;
-        IReadOnlyList<TaskbarHorizontalInterval>? snapshotSeenByHandler = null;
+        IReadOnlyList<TaskbarInterval>? snapshotSeenByHandler = null;
         using var provider = new TaskbarOccupiedSpaceProvider((_, _, token) =>
         {
             entered.TrySetResult(true);
@@ -65,8 +65,8 @@ public sealed class TaskbarOccupiedSpaceProviderTests
     public async Task FreshCacheAndRefreshThrottleWorkWhenTheFirstTimestampIsZero()
     {
         var clock = new ManualTimeProvider();
-        var first = new[] { new TaskbarHorizontalInterval(100, 200) };
-        var second = new[] { new TaskbarHorizontalInterval(300, 400) };
+        var first = new[] { new TaskbarInterval(100, 200) };
+        var second = new[] { new TaskbarInterval(300, 400) };
         var reads = 0;
         using var provider = new TaskbarOccupiedSpaceProvider((_, _, _) =>
         {
@@ -74,7 +74,7 @@ public sealed class TaskbarOccupiedSpaceProviderTests
             {
                 1 => first,
                 2 => second,
-                _ => [new TaskbarHorizontalInterval(500, 600)]
+                _ => [new TaskbarInterval(500, 600)]
             };
         }, clock);
 
@@ -110,7 +110,7 @@ public sealed class TaskbarOccupiedSpaceProviderTests
         var release = NewSignal();
         var clock = new ManualTimeProvider();
         var reads = 0;
-        var expected = new[] { new TaskbarHorizontalInterval(150, 250) };
+        var expected = new[] { new TaskbarInterval(150, 250) };
         using var provider = new TaskbarOccupiedSpaceProvider((_, _, token) =>
         {
             Interlocked.Increment(ref reads);
@@ -153,7 +153,7 @@ public sealed class TaskbarOccupiedSpaceProviderTests
         var clock = new ManualTimeProvider();
         var reads = 0;
         var notifications = 0;
-        var expected = new[] { new TaskbarHorizontalInterval(200, 350) };
+        var expected = new[] { new TaskbarInterval(200, 350) };
         using var provider = new TaskbarOccupiedSpaceProvider((_, _, _) =>
         {
             if (Interlocked.Increment(ref reads) == 1)
@@ -199,7 +199,7 @@ public sealed class TaskbarOccupiedSpaceProviderTests
         var release = NewSignal();
         var clock = new ManualTimeProvider();
         var reads = 0;
-        var expected = new[] { new TaskbarHorizontalInterval(100, 200) };
+        var expected = new[] { new TaskbarInterval(100, 200) };
         using var provider = new TaskbarOccupiedSpaceProvider((_, _, _) =>
         {
             if (Interlocked.Increment(ref reads) == 1)
@@ -236,17 +236,18 @@ public sealed class TaskbarOccupiedSpaceProviderTests
     }
 
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task ChangingHandleOrBoundsInvalidatesCacheAndRejectsLateResults(bool changeHandle)
+    [InlineData(true, false)]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    public async Task ChangingHandleBoundsOrOrientationInvalidatesCacheAndRejectsLateResults(bool changeHandle, bool rotate)
     {
         var oldRefreshEntered = NewSignal();
         var releaseOldRefresh = NewSignal();
         var clock = new ManualTimeProvider();
         var reads = 0;
-        var cached = new[] { new TaskbarHorizontalInterval(100, 200) };
-        var lateOld = new[] { new TaskbarHorizontalInterval(300, 400) };
-        var current = new[] { new TaskbarHorizontalInterval(500, 600) };
+        var cached = new[] { new TaskbarInterval(100, 200) };
+        var lateOld = new[] { new TaskbarInterval(300, 400) };
+        var current = new[] { new TaskbarInterval(500, 600) };
         using var provider = new TaskbarOccupiedSpaceProvider((_, _, token) =>
         {
             var read = Interlocked.Increment(ref reads);
@@ -274,7 +275,8 @@ public sealed class TaskbarOccupiedSpaceProviderTests
             await oldRefreshEntered.Task.WaitAsync(WaitTimeout);
 
             var changedHandle = changeHandle ? new IntPtr(43) : TaskbarHandle;
-            var changedBounds = changeHandle ? TaskbarBounds : new Rect(10, 0, 1000, 48);
+            var changedBounds = rotate ? new Rect(0, 0, 48, 1000)
+                : changeHandle ? TaskbarBounds : new Rect(10, 0, 1000, 48);
             Assert.Null(provider.GetOccupiedBounds(changedHandle, changedBounds));
 
             releaseOldRefresh.TrySetResult(true);
@@ -308,7 +310,7 @@ public sealed class TaskbarOccupiedSpaceProviderTests
             readToken = token;
             entered.TrySetResult(true);
             release.Task.Wait(CancellationToken.None);
-            return [new TaskbarHorizontalInterval(100, 200)];
+            return [new TaskbarInterval(100, 200)];
         }, clock);
         provider.SnapshotAvailable += (_, _) => Interlocked.Increment(ref notifications);
 
@@ -354,9 +356,9 @@ public sealed class TaskbarOccupiedSpaceProviderTests
             {
                 entered.TrySetResult(true);
                 release.Task.Wait(token);
-                return [new TaskbarHorizontalInterval(100, 200)];
+                return [new TaskbarInterval(100, 200)];
             }
-            return [new TaskbarHorizontalInterval(500, 600)];
+            return [new TaskbarInterval(500, 600)];
         }, clock);
         var pending = Task.CompletedTask;
         try
@@ -371,7 +373,7 @@ public sealed class TaskbarOccupiedSpaceProviderTests
             Assert.Null(provider.GetOccupiedBounds(TaskbarHandle, TaskbarBounds));
             pending = provider.PendingRead;
             await pending.WaitAsync(WaitTimeout);
-            AssertIntervals([new TaskbarHorizontalInterval(500, 600)], provider.GetOccupiedBounds(TaskbarHandle, TaskbarBounds));
+            AssertIntervals([new TaskbarInterval(500, 600)], provider.GetOccupiedBounds(TaskbarHandle, TaskbarBounds));
         }
         finally
         {
@@ -431,8 +433,8 @@ public sealed class TaskbarOccupiedSpaceProviderTests
     {
         var clock = new ManualTimeProvider();
         var reads = 0;
-        var cached = new[] { new TaskbarHorizontalInterval(100, 200) };
-        var refreshed = new[] { new TaskbarHorizontalInterval(300, 400) };
+        var cached = new[] { new TaskbarInterval(100, 200) };
+        var refreshed = new[] { new TaskbarInterval(300, 400) };
         var provider = new TaskbarOccupiedSpaceProvider((_, _, _) =>
         {
             return Interlocked.Increment(ref reads) == 1 ? cached : refreshed;
@@ -458,9 +460,9 @@ public sealed class TaskbarOccupiedSpaceProviderTests
         var release = NewSignal();
         var clock = new ManualTimeProvider();
         var reads = 0;
-        var cached = new[] { new TaskbarHorizontalInterval(100, 200) };
-        var late = new[] { new TaskbarHorizontalInterval(300, 400) };
-        var refreshed = new[] { new TaskbarHorizontalInterval(500, 600) };
+        var cached = new[] { new TaskbarInterval(100, 200) };
+        var late = new[] { new TaskbarInterval(300, 400) };
+        var refreshed = new[] { new TaskbarInterval(500, 600) };
         var notifications = 0;
         var provider = new TaskbarOccupiedSpaceProvider((_, _, _) =>
         {
@@ -525,8 +527,8 @@ public sealed class TaskbarOccupiedSpaceProviderTests
     {
         var clock = new ManualTimeProvider();
         var reads = 0;
-        var cached = new[] { new TaskbarHorizontalInterval(100, 200) };
-        var refreshed = new[] { new TaskbarHorizontalInterval(300, 400) };
+        var cached = new[] { new TaskbarInterval(100, 200) };
+        var refreshed = new[] { new TaskbarInterval(300, 400) };
         var notifications = 0;
         using var provider = new TaskbarOccupiedSpaceProvider((_, _, _) =>
         {
@@ -559,8 +561,8 @@ public sealed class TaskbarOccupiedSpaceProviderTests
         var release = NewSignal();
         var clock = new ManualTimeProvider();
         var reads = 0;
-        var late = new[] { new TaskbarHorizontalInterval(100, 200) };
-        var refreshed = new[] { new TaskbarHorizontalInterval(300, 400) };
+        var late = new[] { new TaskbarInterval(100, 200) };
+        var refreshed = new[] { new TaskbarInterval(300, 400) };
         var notifications = 0;
         using var provider = new TaskbarOccupiedSpaceProvider((_, _, _) =>
         {
@@ -605,7 +607,7 @@ public sealed class TaskbarOccupiedSpaceProviderTests
         }
     }
 
-    private static IReadOnlyList<TaskbarHorizontalInterval>? GetInvalidTarget(
+    private static IReadOnlyList<TaskbarInterval>? GetInvalidTarget(
         TaskbarOccupiedSpaceProvider provider,
         string invalidTarget) =>
         invalidTarget switch
@@ -625,11 +627,11 @@ public sealed class TaskbarOccupiedSpaceProviderTests
         double scale, int taskbarLeft, int buttonLeft, int expectedWidth)
     {
         var occupied = TaskbarOccupiedSpaceProvider.ToLogicalBounds(
-            [new TaskbarHorizontalInterval(buttonLeft, taskbarLeft + 2560)], taskbarLeft, scale);
+            [new TaskbarInterval(buttonLeft, taskbarLeft + 2560)], taskbarLeft, scale);
 
         Assert.True(TaskbarFreeSpaceLayout.TryPlace(2560 / scale, 420, 0, occupied, out var placement));
         var native = EmbeddedTaskbarLayoutCalculator.ToTaskbarClientBounds(
-            placement.Start, 0, placement.Width, 40, scale);
+            placement.Start, 0, placement.Length, 40, scale);
 
         Assert.Equal(expectedWidth, native.Width);
         Assert.True(taskbarLeft + native.Left + native.Width <= buttonLeft - (8 * scale));
@@ -641,23 +643,23 @@ public sealed class TaskbarOccupiedSpaceProviderTests
     public void InvalidDpiFallsBackToPhysicalUnits(double scale)
     {
         var occupied = TaskbarOccupiedSpaceProvider.ToLogicalBounds(
-            [new TaskbarHorizontalInterval(-1600, -1200)], -1920, scale);
+            [new TaskbarInterval(-1600, -1200)], -1920, scale);
 
-        Assert.Equal(new TaskbarHorizontalInterval(320, 720), Assert.Single(occupied));
+        Assert.Equal(new TaskbarInterval(320, 720), Assert.Single(occupied));
     }
 
     private static TaskCompletionSource<bool> NewSignal() =>
         new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     private static void AssertIntervals(
-        TaskbarHorizontalInterval[] expected,
-        IReadOnlyList<TaskbarHorizontalInterval>? actual)
+        TaskbarInterval[] expected,
+        IReadOnlyList<TaskbarInterval>? actual)
     {
         Assert.NotNull(actual);
         Assert.Equal(expected, actual);
     }
 
-    private static TaskbarHorizontalInterval[]? ThrowInteropFailure()
+    private static TaskbarInterval[]? ThrowInteropFailure()
     {
         Marshal.ThrowExceptionForHR(unchecked((int)0x80004005));
         throw new InvalidOperationException("Expected E_FAIL to produce an interop exception.");

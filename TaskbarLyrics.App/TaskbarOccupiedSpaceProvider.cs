@@ -12,7 +12,7 @@ internal sealed class TaskbarOccupiedSpaceProvider : IDisposable
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromMilliseconds(500);
     private static readonly TimeSpan SnapshotLifetime = TimeSpan.FromSeconds(2);
     private readonly object _gate = new();
-    private readonly Func<IntPtr, Rect, CancellationToken, TaskbarHorizontalInterval[]?> _read;
+    private readonly Func<IntPtr, Rect, CancellationToken, TaskbarInterval[]?> _read;
     private readonly TimeProvider _clock;
     private readonly CancellationTokenSource _stop = new();
     private Request? _request;
@@ -27,7 +27,7 @@ internal sealed class TaskbarOccupiedSpaceProvider : IDisposable
     public TaskbarOccupiedSpaceProvider() : this(ReadOccupiedBounds, TimeProvider.System) { }
 
     internal TaskbarOccupiedSpaceProvider(
-        Func<IntPtr, Rect, CancellationToken, TaskbarHorizontalInterval[]?> read, TimeProvider clock)
+        Func<IntPtr, Rect, CancellationToken, TaskbarInterval[]?> read, TimeProvider clock)
     {
         ArgumentNullException.ThrowIfNull(read);
         ArgumentNullException.ThrowIfNull(clock);
@@ -42,7 +42,7 @@ internal sealed class TaskbarOccupiedSpaceProvider : IDisposable
 
     public event EventHandler? SnapshotAvailable;
 
-    public IReadOnlyList<TaskbarHorizontalInterval>? GetOccupiedBounds(IntPtr taskbar, Rect bounds)
+    public IReadOnlyList<TaskbarInterval>? GetOccupiedBounds(IntPtr taskbar, Rect bounds)
     {
         lock (_gate)
         {
@@ -115,13 +115,13 @@ internal sealed class TaskbarOccupiedSpaceProvider : IDisposable
         _stop.Dispose();
     }
 
-    internal static TaskbarHorizontalInterval[] ToLogicalBounds(
-        IReadOnlyList<TaskbarHorizontalInterval> physicalBounds, double taskbarLeft, double pixelsPerDip)
+    internal static TaskbarInterval[] ToLogicalBounds(
+        IReadOnlyList<TaskbarInterval> physicalBounds, double taskbarOrigin, double pixelsPerDip)
     {
         pixelsPerDip = double.IsFinite(pixelsPerDip) && pixelsPerDip > 0 ? pixelsPerDip : 1;
-        return physicalBounds.Select(interval => new TaskbarHorizontalInterval(
-            (interval.Start - taskbarLeft) / pixelsPerDip,
-            (interval.End - taskbarLeft) / pixelsPerDip)).ToArray();
+        return physicalBounds.Select(interval => new TaskbarInterval(
+            (interval.Start - taskbarOrigin) / pixelsPerDip,
+            (interval.End - taskbarOrigin) / pixelsPerDip)).ToArray();
     }
 
     private void Refresh(Request request, long started, long generation, CancellationToken token)
@@ -155,7 +155,7 @@ internal sealed class TaskbarOccupiedSpaceProvider : IDisposable
         }
     }
 
-    internal static TaskbarHorizontalInterval[]? ReadOccupiedBounds(
+    internal static TaskbarInterval[]? ReadOccupiedBounds(
         IntPtr taskbar, Rect taskbarBounds, CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
@@ -172,7 +172,7 @@ internal sealed class TaskbarOccupiedSpaceProvider : IDisposable
         // Inspect Explorer-owned immediate children first. Searching the entire
         // taskbar subtree also walks embedded third-party/WebView windows.
         var hosts = root.FindAll(TreeScope.Children, explorerOnly);
-        var occupied = new HashSet<TaskbarHorizontalInterval>();
+        var occupied = new HashSet<TaskbarInterval>();
         var cache = new CacheRequest
         {
             AutomationElementMode = AutomationElementMode.None,
@@ -200,10 +200,14 @@ internal sealed class TaskbarOccupiedSpaceProvider : IDisposable
         void Add(Rect rect)
         {
             if (!rect.IsEmpty && rect.Width > 0 && rect.Height > 0 && rect.IntersectsWith(taskbarBounds))
-                occupied.Add(new TaskbarHorizontalInterval(rect.Left, rect.Right));
+                occupied.Add(taskbarBounds.Height > taskbarBounds.Width
+                    ? new TaskbarInterval(rect.Top, rect.Bottom)
+                    : new TaskbarInterval(rect.Left, rect.Right));
         }
     }
 
+    // Orientation is derived from Bounds, just as in LyricsLayoutMetrics. A turn
+    // between horizontal and vertical necessarily changes this request identity.
     private readonly record struct Request(IntPtr Taskbar, Rect Bounds);
-    private sealed record Snapshot(TaskbarHorizontalInterval[] Occupied, long Timestamp);
+    private sealed record Snapshot(TaskbarInterval[] Occupied, long Timestamp);
 }

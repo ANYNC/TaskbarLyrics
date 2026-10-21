@@ -11,7 +11,7 @@ public sealed class LyricResolutionCoordinatorTests
     public async Task InvalidCachedQrcIsRemovedAndRefetchedWithinTheSameRequest()
     {
         var source = CreateValidSource(KnownLyricProviders.QQMusic);
-        var cache = new RecordingCache();
+        var cache = new RecordingLyricPipelineCache();
         var track = CreateTrack("Corrupted Cache");
         var candidate = CreateCandidate(source.ProviderId,
             LyricSearchPlanner.CreatePlan(TrackIdentity.FromTrackInfo(track)));
@@ -41,7 +41,7 @@ public sealed class LyricResolutionCoordinatorTests
                 candidate.CandidateId, LyricPayloadFormat.Qrc, "AA", null,
                 true, false, new Dictionary<string, string>()))
             : validFetch(candidate, token);
-        var cache = new RecordingCache();
+        var cache = new RecordingLyricPipelineCache();
         using var coordinator = new LyricResolutionCoordinator(
             [source], [new LyricifyPayloadDecoder()],
             [new PlainTextParser(), new LyricifyPayloadParser()], cache,
@@ -67,7 +67,7 @@ public sealed class LyricResolutionCoordinatorTests
             LyricSearchPlanner.CreatePlan(TrackIdentity.FromTrackInfo(track)));
         var raw = QqMusicResponseMapper.MapLyricDownload(candidate,
             QqMusicLyricSourceTests.ReadFixture("qq-lyric-download.xml"))!;
-        var cache = new RecordingCache();
+        var cache = new RecordingLyricPipelineCache();
         cache.StoreRaw(raw, DateTimeOffset.UtcNow);
         cache.StoreParsed(raw, new ParsedLyrics(
             [new ParsedLyricLine(TimeSpan.Zero, null, "stale")],
@@ -678,7 +678,7 @@ public sealed class LyricResolutionCoordinatorTests
             sources,
             Array.Empty<ILyricPayloadDecoder>(),
             [new PlainTextParser()],
-            new RecordingCache(),
+            new RecordingLyricPipelineCache(),
             mappingResolver ?? new TestMappingResolver(),
             localProvider,
             trustPolicy,
@@ -816,21 +816,8 @@ public sealed class LyricResolutionCoordinatorTests
         }
     }
 
-    private sealed class TestSource : ILyricSource, IDisposable
+    private sealed class TestSource(LyricProviderId providerId) : StubLyricSource(providerId), IDisposable
     {
-        public TestSource(LyricProviderId providerId)
-        {
-            ProviderId = providerId;
-        }
-
-        public LyricProviderId ProviderId { get; }
-
-        public Func<LyricSearchPlan, CancellationToken, Task<IReadOnlyList<SourceTrackCandidate>>> SearchHandler { get; set; } =
-            (_, _) => Task.FromResult<IReadOnlyList<SourceTrackCandidate>>([]);
-
-        public Func<SourceTrackCandidate, CancellationToken, Task<RawLyricPayload?>> FetchHandler { get; set; } =
-            (_, _) => Task.FromResult<RawLyricPayload?>(null);
-
         public TaskCompletionSource<bool> SearchStarted { get; } =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -841,22 +828,22 @@ public sealed class LyricResolutionCoordinatorTests
 
         private int _isDisposed;
 
-        public Task<IReadOnlyList<SourceTrackCandidate>> SearchAsync(
+        public override Task<IReadOnlyList<SourceTrackCandidate>> SearchAsync(
             LyricSearchPlan plan,
             CancellationToken cancellationToken = default)
         {
             SearchCalls++;
             LastPlan = plan;
             SearchStarted.TrySetResult(true);
-            return SearchHandler(plan, cancellationToken);
+            return base.SearchAsync(plan, cancellationToken);
         }
 
-        public Task<RawLyricPayload?> FetchAsync(
+        public override Task<RawLyricPayload?> FetchAsync(
             SourceTrackCandidate candidate,
             CancellationToken cancellationToken = default)
         {
             FetchCalls++;
-            return FetchHandler(candidate, cancellationToken);
+            return base.FetchAsync(candidate, cancellationToken);
         }
 
         public void Dispose() => Interlocked.Exchange(ref _isDisposed, 1);
@@ -910,98 +897,4 @@ public sealed class LyricResolutionCoordinatorTests
         }
     }
 
-    private sealed class RecordingCache : ILyricPipelineCache
-    {
-        private readonly object _syncRoot = new();
-        private readonly Dictionary<string, RawLyricPayload> _raw = new(StringComparer.Ordinal);
-        private readonly Dictionary<string, ParsedLyrics> _parsed = new(StringComparer.Ordinal);
-
-        public bool TryGetRaw(
-            LyricProviderId providerId,
-            string candidateId,
-            out RawLyricPayload? payload,
-            out LyricAcquisitionKind acquisition)
-        {
-            lock (_syncRoot)
-            {
-                if (_raw.TryGetValue(GetRawKey(providerId, candidateId), out payload))
-                {
-                    acquisition = LyricAcquisitionKind.MemoryCache;
-                    return true;
-                }
-            }
-
-            payload = null;
-            acquisition = LyricAcquisitionKind.Unknown;
-            return false;
-        }
-
-        public void StoreRaw(RawLyricPayload payload, DateTimeOffset fetchedAtUtc)
-        {
-            lock (_syncRoot)
-            {
-                _raw[GetRawKey(payload.ProviderId, payload.CandidateId)] = payload;
-            }
-        }
-
-        public void Invalidate(LyricProviderId providerId, string candidateId)
-        {
-            lock (_syncRoot)
-            {
-                var key = GetRawKey(providerId, candidateId);
-                _raw.Remove(key);
-                foreach (var parsedKey in _parsed.Keys.Where(value => value.StartsWith(key + "\u001f", StringComparison.Ordinal)).ToArray())
-                {
-                    _parsed.Remove(parsedKey);
-                }
-            }
-        }
-
-        public bool TryGetParsed(
-            RawLyricPayload rawPayload,
-            string parserId,
-            string parserVersion,
-            string normalizationVersion,
-            out ParsedLyrics? parsedLyrics,
-            out LyricAcquisitionKind acquisition)
-        {
-            lock (_syncRoot)
-            {
-                if (_parsed.TryGetValue(
-                        GetParsedKey(rawPayload, parserId, parserVersion, normalizationVersion),
-                        out parsedLyrics))
-                {
-                    acquisition = LyricAcquisitionKind.MemoryCache;
-                    return true;
-                }
-            }
-
-            parsedLyrics = null;
-            acquisition = LyricAcquisitionKind.Unknown;
-            return false;
-        }
-
-        public void StoreParsed(
-            RawLyricPayload rawPayload,
-            ParsedLyrics parsedLyrics,
-            string parserId,
-            string parserVersion,
-            string normalizationVersion)
-        {
-            lock (_syncRoot)
-            {
-                _parsed[GetParsedKey(rawPayload, parserId, parserVersion, normalizationVersion)] = parsedLyrics;
-            }
-        }
-
-        private static string GetRawKey(LyricProviderId providerId, string candidateId) =>
-            $"{providerId.Value}\u001f{candidateId}";
-
-        private static string GetParsedKey(
-            RawLyricPayload rawPayload,
-            string parserId,
-            string parserVersion,
-            string normalizationVersion) =>
-            $"{GetRawKey(rawPayload.ProviderId, rawPayload.CandidateId)}\u001f{parserId}\u001f{parserVersion}\u001f{normalizationVersion}";
-    }
 }
