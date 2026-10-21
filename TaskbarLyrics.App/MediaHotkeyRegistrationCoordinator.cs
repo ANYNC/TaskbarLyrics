@@ -14,6 +14,7 @@ internal static class MediaHotkeyRegistrationStatus
     public const string Registered = "registered";
     public const string Occupied = "occupied";
     public const string NotRegistered = "notRegistered";
+    public const string Unassigned = "unassigned";
 }
 
 internal sealed class MediaHotkeyRegistrationCoordinator : IDisposable
@@ -47,6 +48,16 @@ internal sealed class MediaHotkeyRegistrationCoordinator : IDisposable
         var seenBindings = new Dictionary<MediaHotkeyBinding, MediaHotkeyAction>();
         foreach (var definition in MediaHotkeyCatalog.Definitions)
         {
+            if (!snapshot.IsActionEnabled(definition.Action))
+            {
+                _statuses[definition.Action] = MediaHotkeyRegistrationStatus.Disabled;
+                continue;
+            }
+            if (string.IsNullOrWhiteSpace(definition.ReadBinding(snapshot)))
+            {
+                _statuses[definition.Action] = MediaHotkeyRegistrationStatus.Unassigned;
+                continue;
+            }
             if (!MediaHotkeyBindingParser.TryParse(definition.ReadBinding(snapshot), out var binding))
             {
                 _statuses[definition.Action] = MediaHotkeyRegistrationStatus.Invalid;

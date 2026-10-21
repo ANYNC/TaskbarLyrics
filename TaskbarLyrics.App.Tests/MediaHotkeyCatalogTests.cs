@@ -9,6 +9,7 @@ public sealed class MediaHotkeyCatalogTests
     [InlineData(MediaHotkeyAction.PreviousTrack, "Alt+Shift+Left")]
     [InlineData(MediaHotkeyAction.NextTrack, "Alt+Shift+Right")]
     [InlineData(MediaHotkeyAction.ToggleLyricsVisibility, "Alt+Shift+D")]
+    [InlineData(MediaHotkeyAction.ToggleDisplayMode, "Alt+Shift+C")]
     public void DefinitionsUseExpectedDefaultBindings(MediaHotkeyAction action, string expectedBinding)
     {
         Assert.Equal(expectedBinding, MediaHotkeyCatalog.Get(action).DefaultBinding);

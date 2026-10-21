@@ -30,12 +30,12 @@
     const pageMeta = {
       gettingStarted: ["开始使用", "先了解播放器的准备事项，再开始显示歌词。"],
       sources: ["播放源", "选择需要监听的音乐软件，并配置各播放器的歌词设置。"],
-      shortcuts: ["快捷键", "设置在其他应用前台时控制播放器的全局组合键。"],
+      shortcuts: ["快捷键", "设置播放器控制和歌词显示的全局组合键。"],
       lyrics: ["歌词", "控制歌词显示、翻译和频谱策略。"],
       trackOffsets: ["单曲偏移", "调整当前歌曲同步，并管理按歌词源保存的偏移。"],
       displayArea: ["显示与外观", "调整歌词显示的尺寸、文字、窗口外观与位置，并在歌词窗口中即时检查效果。"],
       general: ["常规", "管理启动行为与界面主题。"],
-      advanced: ["高级", "用于诊断播放同步问题和维护缓存数据。"],
+      advanced: ["高级", "管理歌词提示、诊断工具和缓存数据。"],
       lyricDiagnostics: ["歌词匹配", "查找当前 SMTC 歌曲的歌词候选，比较匹配分并选择结果。"],
       about: ["关于", "查看版本、许可证与项目技术信息。"]
     };
@@ -1231,18 +1231,33 @@
 
     function renderMediaHotkeys() {
       if (!state) return;
+      const focusAttributes = ["data-hotkey-binding", "data-hotkey-enabled", "data-hotkey-clear", "data-hotkey-reset"];
+      const focusAttribute = focusAttributes.find(attribute => document.activeElement?.hasAttribute(attribute));
+      const focusKey = focusAttribute ? document.activeElement.getAttribute(focusAttribute) : null;
+      const recordingKey = activeHotkeyRecorder?.dataset.hotkeyBinding;
       const enabled = Boolean(state.enableGlobalMediaHotkeys);
       $("#mediaHotkeyMasterStatus").textContent = enabled ? "已启用" : "已关闭";
       $("#mediaHotkeyList").innerHTML = (state.mediaHotkeys ?? []).map(definition => `
-        <div class="media-hotkey-row"><div class="setting-label"><strong>${escapeHtml(definition.displayName)}</strong></div><div class="media-hotkey-controls"><button class="control media-hotkey-recorder" type="button" data-hotkey-binding="${escapeHtml(definition.settingKey)}" aria-label="录制${escapeHtml(definition.displayName)}快捷键"></button><output class="media-hotkey-status" data-hotkey-status="${escapeHtml(definition.statusKey)}"></output><button class="btn ghost small media-hotkey-reset" type="button" data-hotkey-reset="${escapeHtml(definition.action)}">恢复</button></div></div>`).join("");
+        <div class="media-hotkey-row"><div class="setting-label"><strong>${escapeHtml(definition.displayName)}</strong></div><div class="media-hotkey-controls"><button class="control media-hotkey-recorder" type="button" data-hotkey-binding="${escapeHtml(definition.settingKey)}" aria-label="录制${escapeHtml(definition.displayName)}快捷键"></button><output class="media-hotkey-status" data-hotkey-status="${escapeHtml(definition.statusKey)}" aria-live="polite"></output><div class="media-hotkey-actions"><label class="switch"><input type="checkbox" data-hotkey-enabled="${escapeHtml(definition.settingKey)}" aria-label="启用${escapeHtml(definition.displayName)}快捷键" ${definition.isEnabled !== false ? "checked" : ""}><span class="switch-track"></span></label><button class="btn ghost small" type="button" data-hotkey-clear="${escapeHtml(definition.settingKey)}" aria-label="清空${escapeHtml(definition.displayName)}快捷键">清空</button><button class="btn ghost small media-hotkey-reset" type="button" data-hotkey-reset="${escapeHtml(definition.action)}" aria-label="恢复${escapeHtml(definition.displayName)}默认快捷键">恢复</button></div></div></div>`).join("");
+      activeHotkeyRecorder = recordingKey
+        ? [...$$('[data-hotkey-binding]')].find(button => button.dataset.hotkeyBinding === recordingKey) ?? null : null;
+      if (activeHotkeyRecorder) {
+        activeHotkeyRecorder.classList.add("recording");
+        activeHotkeyRecorder.textContent = "按下组合键…";
+      }
       $$('[data-hotkey-binding]').forEach(button => {
         if (button !== activeHotkeyRecorder) button.textContent = state[button.dataset.hotkeyBinding] || "未设置";
       });
       $$('[data-hotkey-status]').forEach(output => {
-        const status = state.mediaHotkeyStatuses?.[output.dataset.hotkeyStatus] || "notRegistered";
+        const definition = state.mediaHotkeys.find(item => item.statusKey === output.dataset.hotkeyStatus);
+        const status = !enabled || definition.isEnabled === false ? "disabled"
+          : !state[definition.settingKey] ? "unassigned"
+            : state.mediaHotkeyStatuses?.[output.dataset.hotkeyStatus] || "notRegistered";
         output.textContent = window.taskbarLyricsHotkeys.label(status);
         output.dataset.state = window.taskbarLyricsHotkeys.visualState(status);
       });
+      if (focusAttribute) [...document.querySelectorAll(`[${focusAttribute}]`)]
+        .find(control => control.getAttribute(focusAttribute) === focusKey)?.focus({ preventScroll: true });
     }
 
     function renderDisplayMonitorOption(display, mode, selected) {
@@ -1318,6 +1333,8 @@
     function commitHotkeyBinding(key, binding) {
       if (!state) return;
       state[key] = binding;
+      const definition = state.mediaHotkeys?.find(item => item.settingKey === key);
+      if (definition) (state.mediaHotkeyStatuses ??= {})[definition.statusKey] = "notRegistered";
       bridge.post({ type: "update", key, value: binding });
       markSaved();
       renderMediaHotkeys();
@@ -1905,8 +1922,16 @@
 
       const hotkeyReset = event.target.closest("[data-hotkey-reset]");
       if (hotkeyReset) {
+        cancelHotkeyRecording();
         bridge.post({ type: "resetMediaHotkey", value: hotkeyReset.dataset.hotkeyReset });
         markSaved();
+        return;
+      }
+
+      const hotkeyClear = event.target.closest("[data-hotkey-clear]");
+      if (hotkeyClear) {
+        cancelHotkeyRecording();
+        commitHotkeyBinding(hotkeyClear.dataset.hotkeyClear, "");
         return;
       }
 
@@ -2097,6 +2122,13 @@
         event.preventDefault();
         event.stopPropagation();
         if (event.key === "Escape") { cancelHotkeyRecording(); return; }
+        if (!event.ctrlKey && !event.altKey && !event.shiftKey && !event.metaKey &&
+            ["Backspace", "Delete"].includes(event.key)) {
+          const key = activeHotkeyRecorder.dataset.hotkeyBinding;
+          activeHotkeyRecorder = null;
+          commitHotkeyBinding(key, "");
+          return;
+        }
         const binding = getRecordedHotkey(event);
         if (!binding) {
           if (!["Control", "Alt", "Shift", "Meta"].includes(event.key)) activeHotkeyRecorder.textContent = "请使用 Ctrl、Alt 或 Shift";
@@ -2269,6 +2301,18 @@
     });
 
     document.addEventListener("change", event => {
+      const hotkeyToggle = event.target.closest("[data-hotkey-enabled]");
+      if (hotkeyToggle) {
+        const definition = state?.mediaHotkeys?.find(item => item.settingKey === hotkeyToggle.dataset.hotkeyEnabled);
+        if (!definition) return;
+        definition.isEnabled = hotkeyToggle.checked;
+        (state.mediaHotkeyStatuses ??= {})[definition.statusKey] = "notRegistered";
+        bridge.post({ type: "update", key: definition.enabledSettingKey || definition.settingKey + "Enabled", value: hotkeyToggle.checked });
+        cancelHotkeyRecording();
+        renderMediaHotkeys();
+        markSaved();
+        return;
+      }
       if (event.target.matches('input[name="gettingStartedPlayer"]')) {
         gettingStartedPlayer = event.target.value;
         syncGettingStartedTabStops();

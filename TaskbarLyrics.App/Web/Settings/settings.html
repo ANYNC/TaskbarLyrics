@@ -102,9 +102,9 @@
         <section class="page" data-page="shortcuts" aria-labelledby="shortcutsHeading">
           <div class="page-inner">
             <section class="panel">
-              <div class="panel-head"><div><h2 id="shortcutsHeading" tabindex="-1">全局播放器快捷键</h2><p>在其他应用前台时，控制当前用于歌词显示的播放器。</p></div><span id="mediaHotkeyMasterStatus" class="source-count"></span></div>
+              <div class="panel-head"><div><h2 id="shortcutsHeading" tabindex="-1">全局快捷键</h2><p>控制播放器和歌词显示。单项关闭保留组合键，清空后不再注册；录制时可按 Backspace 或 Delete 清空。</p></div><span id="mediaHotkeyMasterStatus" class="source-count"></span></div>
               <div class="settings">
-                <div class="setting-row compact"><div class="setting-label"><strong>启用全局快捷键</strong><small>关闭后保留现有组合键，但不会向 Windows 注册。</small></div><label class="switch"><input type="checkbox" data-setting="enableGlobalMediaHotkeys" aria-label="启用全局播放器快捷键"><span class="switch-track"></span></label></div>
+                <div class="setting-row compact"><div class="setting-label"><strong>启用全局快捷键</strong><small>关闭后保留现有组合键，但不会向 Windows 注册。</small></div><label class="switch"><input type="checkbox" data-setting="enableGlobalMediaHotkeys" aria-label="启用全局快捷键"><span class="switch-track"></span></label></div>
                 <div id="mediaHotkeyList" class="media-hotkey-list"></div>
               </div>
             </section>
@@ -318,6 +318,9 @@
             <section class="panel"><div class="panel-head"><div><h2 id="advancedHeading" tabindex="-1">诊断工具</h2><p>这些选项仅用于定位播放同步和频谱问题。</p></div></div><div class="settings">
               <div class="setting-row compact"><div class="setting-label"><strong>SMTC 时间轴监视器</strong><small>打开一次性监视窗口，关闭后不会在后台继续运行。</small></div><button id="smtcMonitorButton" class="btn secondary" type="button">打开监视</button></div>
               <div class="setting-row compact"><div class="setting-label"><strong>频谱调试</strong><small id="spectrumTuningDescription">打开滑块面板，实时调节频谱参数（自动保存）。</small></div><button id="spectrumTuningButton" class="btn secondary" type="button" aria-describedby="spectrumTuningDescription">打开调试</button></div>
+            </div></section>
+            <section class="panel"><div class="panel-head"><div><h2>歌词提示</h2></div></div><div class="settings">
+              <div class="setting-row compact"><div class="setting-label"><strong>显示歌词检索提示</strong><small>关闭后，仅隐藏“正在检索歌词...”提示，歌名、歌手与封面正常显示。</small></div><label class="switch"><input type="checkbox" data-setting="showLyricSearchStatus" aria-label="显示歌词检索提示"><span class="switch-track"></span></label></div>
             </div></section>
             <section class="panel"><div class="panel-head"><div><h2>数据维护</h2><p>清理缓存不会删除应用设置。</p></div></div><div class="settings"><div class="setting-row compact"><div class="setting-label"><strong>歌词与封面缓存</strong><small>清理后首次重新匹配可能稍慢，并会删除歌词匹配中“使用并记住”的指定记录。</small></div><button id="clearCacheButton" class="btn destructive" type="button">清除缓存</button></div></div></section>
           </div>

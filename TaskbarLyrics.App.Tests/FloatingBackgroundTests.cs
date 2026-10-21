@@ -103,9 +103,12 @@ public sealed partial class FloatingPanelInputTests
 
                 controller.Open(display.Id, owner);
                 Assert.True(controller.Panel!.IsPanelVisible);
+                PumpMessages(TimeSpan.FromMilliseconds(240));
                 Assert.True(ReadFloatingBackgroundBounds(material).Height > compact.Height);
+                var expanded = ReadFloatingBackgroundBounds(material);
                 controller.Close();
-                PumpMessages();
+                if (FloatingPanelAnimation.IsEnabled) Assert.Equal(expanded, ReadFloatingBackgroundBounds(material));
+                PumpMessages(TimeSpan.FromMilliseconds(260));
                 Assert.Null(controller.Panel);
                 Assert.True(IsFloatingBackgroundVisible(material));
                 Assert.Equal(compact, ReadFloatingBackgroundBounds(material));
@@ -127,6 +130,105 @@ public sealed partial class FloatingPanelInputTests
                 owner.Hide();
                 PumpMessages();
                 Assert.Empty(controller.Panels);
+            }
+            finally { controller.Enabled = false; owner.Close(); }
+        });
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ReopeningDuringFadeCancelsTheOldBackgroundContraction(bool background)
+    {
+        RunSta(() =>
+        {
+            var owner = CreateOwner(layered: true);
+            using var controller = new FloatingLyricsPanelController(owner.Dispatcher,
+                () => new FloatingLyricsControlWindow(_ => { }, _ => { }), () => null);
+            try
+            {
+                var display = DisplayMonitorService.GetDisplays().First(item => item.IsPrimary);
+                controller.Register(owner, () => display, () => true, (_, _) => { });
+                controller.ShowBackground = background;
+                controller.Enabled = true;
+                controller.Open(display.Id, owner);
+                var panel = controller.Panel!;
+                var visual = (FrameworkElement)panel.FindName("VisualRoot");
+                PumpMessages(TimeSpan.FromMilliseconds(240));
+                var material = ReadFloatingBackground(controller);
+                var expanded = ReadFloatingBackgroundBounds(material);
+                controller.Close(suppressUntilLeave: false);
+                Assert.False(panel.IsPanelVisible);
+                Assert.False(visual.IsHitTestVisible);
+                PumpMessages(TimeSpan.FromMilliseconds(60));
+                var fadingOpacity = visual.Opacity;
+                if (FloatingPanelAnimation.IsEnabled) Assert.InRange(fadingOpacity, 0.001, 0.999);
+                controller.Open(display.Id, owner);
+                Assert.Same(panel, controller.Panel);
+                Assert.InRange(Math.Abs(visual.Opacity - fadingOpacity), 0, FloatingPanelAnimation.IsEnabled ? 0.02 : 1);
+                PumpMessages(TimeSpan.FromMilliseconds(300));
+                Assert.True(panel.IsPanelVisible);
+                Assert.Equal(1, visual.Opacity);
+                Assert.Equal(expanded, ReadFloatingBackgroundBounds(material));
+                controller.Close();
+                controller.Close(immediate: true);
+                Assert.Equal(0, visual.Opacity);
+                if (background) Assert.Equal(FloatingLyricsPanelController.GetBounds(owner), ReadFloatingBackgroundBounds(material));
+                else Assert.False(IsFloatingBackgroundVisible(material));
+                controller.Open(display.Id, owner);
+                PumpMessages(TimeSpan.FromMilliseconds(300));
+                Assert.True(IsFloatingBackgroundVisible(material));
+                Assert.Equal(expanded, ReadFloatingBackgroundBounds(material));
+            }
+            finally { controller.Enabled = false; owner.Close(); }
+        });
+    }
+
+    [Fact]
+    public void BackgroundFollowsTheAnimatedRegionSurfaceWithoutEnablingControlsEarly()
+    {
+        RunSta(() =>
+        {
+            var owner = CreateOwner(layered: true);
+            var generation = 0;
+            using var region = new LyricsRegionVisibilityController(owner.Dispatcher,
+                (current, _) => generation = current, (_, _) => { });
+            using var controller = new FloatingLyricsPanelController(owner.Dispatcher,
+                () => new FloatingLyricsControlWindow(_ => { }, _ => { }), () => null);
+            try
+            {
+                var display = DisplayMonitorService.GetDisplays().First(item => item.IsPrimary);
+                controller.Register(owner, () => display, () => region.IsInteractive, (_, _) => { }, regionVisibility: region);
+                controller.ShowBackground = true;
+                controller.Enabled = true;
+                region.OnDocumentReady();
+                Assert.Empty(controller.Panels);
+                region.OnFrameDispatched();
+                var material = ReadFloatingBackground(controller);
+                Assert.True(IsFloatingBackgroundVisible(material));
+                controller.Open(display.Id, owner);
+                Assert.Null(controller.Panel);
+                region.Complete(generation, true);
+                controller.Open(display.Id, owner);
+                Assert.True(controller.Panel!.IsPanelVisible);
+                region.SetVisible(false);
+                Assert.Null(controller.Panel);
+                Assert.Same(material, ReadFloatingBackground(controller));
+                Assert.True(IsFloatingBackgroundVisible(material));
+                region.SetVisible(true);
+                var returningGeneration = generation;
+                region.Complete(returningGeneration - 1, false);
+                Assert.Same(material, ReadFloatingBackground(controller));
+                region.OnFrameDispatched();
+                region.Complete(generation, true);
+                region.SetVisible(false);
+                region.Complete(generation, false);
+                Assert.Empty(controller.Panels);
+                Assert.False(region.IsSurfaceVisible);
+                region.SetVisible(true);
+                Assert.Empty(controller.Panels);
+                region.OnFrameDispatched();
+                Assert.True(IsFloatingBackgroundVisible(ReadFloatingBackground(controller)));
             }
             finally { controller.Enabled = false; owner.Close(); }
         });

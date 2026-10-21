@@ -60,6 +60,7 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
     internal bool IsEmbeddedSurfaceHidden => _embeddedTaskbarAnchor.IsSurfaceHidden;
     internal DisplayMonitor DisplayMonitor => _settings.UseFloatingWindow ? _floatingPlacement.Display ?? _displayMonitor : _displayMonitor;
     internal bool IsContentVisible => _isContentVisible && _isWebReady && _regionVisibility.IsInteractive && !IsEmbeddedSurfaceHidden;
+    internal LyricsRegionVisibilityController RegionVisibility => _regionVisibility;
 
     private void OnEmbeddedSurfaceHidden(object? sender, EventArgs e) => _onSurfaceHidden?.Invoke();
 

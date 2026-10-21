@@ -2,7 +2,6 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Media;
-using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
 
 namespace TaskbarLyrics.App;
@@ -22,6 +21,7 @@ internal sealed class FloatingMaterialFallbackWindow : Window, IFloatingPanelMat
     };
     private HwndSource? _source;
     private bool _disposed;
+    private bool _visible;
     public IntPtr Handle => new WindowInteropHelper(this).EnsureHandle();
 
     internal FloatingMaterialFallbackWindow(bool shadowOnly = false)
@@ -78,11 +78,9 @@ internal sealed class FloatingMaterialFallbackWindow : Window, IFloatingPanelMat
 
     public void SetVisible(bool visible, bool immediate = false)
     {
-        var from = _visualRoot.Opacity;
-        _visualRoot.BeginAnimation(OpacityProperty, null);
-        _visualRoot.Opacity = visible ? 1 : 0;
-        if (!immediate && SystemParameters.ClientAreaAnimation && !SystemParameters.HighContrast)
-            _visualRoot.BeginAnimation(OpacityProperty, new DoubleAnimation(from, visible ? 1 : 0, TimeSpan.FromMilliseconds(180)));
+        if (_visible == visible && !immediate) return;
+        _visible = visible;
+        FloatingPanelAnimation.Fade(_visualRoot, visible, immediate);
     }
     private void OnSourceInitialized(object? sender, EventArgs e)
     {

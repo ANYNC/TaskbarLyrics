@@ -23,6 +23,7 @@ let panelTriggerMethod = "Click";
 let panelTriggerCover = true;
 let panelTriggerLyrics = false;
 let panelTriggerEnabled = true;
+let showLyricSearchStatus = true;
 let panelHoverTimer = 0;
 const coverImageEl = document.getElementById("coverImage");
 const coverImageNextEl = document.getElementById("coverImageNext");
@@ -70,6 +71,8 @@ const coverSwapDelayMs = 180;
 const coverSwitchMinVisibleMs = 420;
 const horizontalScrollAnchorRatio = 0.65;
 const SEARCHING_TEXT = "\u6b63\u5728\u68c0\u7d22\u6b4c\u8bcd...";
+// A regular space is trimmed into the fallback prompt by toDisplayLine.
+const BLANK_SEARCH_TEXT = "\u200b";
 const LEGACY_SEARCHING_TEXT = "\u6b63\u5728\u5339\u914d\u6b4c\u8bcd...";
 let trackSwitchSearchTransitionActive = false;
 let spectrumExitState = null;
@@ -1730,7 +1733,7 @@ function resetForTrackSwitch(
     ? target
     : presentationApi.normalizeFrame({
       scene: presentationApi.SCENES.SEARCHING,
-      current: SEARCHING_TEXT,
+      current: showLyricSearchStatus ? SEARCHING_TEXT : BLANK_SEARCH_TEXT,
       next: " ",
       progress: 0,
       currentLineIndex: -1,
@@ -2326,8 +2329,12 @@ const lyricsApi = {
     scene = null) {
     const wasPlaying = isPlaybackPlaying;
     const nextIsPlaying = Boolean(isPlaying);
-    const safeCurrent = toDisplayLine(current, SEARCHING_TEXT);
-    const safeNext = toDisplayLine(next, " ");
+    const displayCurrent = toDisplayLine(current, SEARCHING_TEXT);
+    const displayNext = toDisplayLine(next, " ");
+    const suppressSearchPrompt = !showLyricSearchStatus &&
+      (scene === presentationApi.SCENES.SEARCHING || (!scene && isSearchingLine(displayCurrent)));
+    const safeCurrent = suppressSearchPrompt && isSearchingLine(displayCurrent) ? BLANK_SEARCH_TEXT : displayCurrent;
+    const safeNext = suppressSearchPrompt && isSearchingLine(displayNext) ? BLANK_SEARCH_TEXT : displayNext;
     const safeCurrentTranslation = toDisplayLine(currentTranslation, " ");
     const safeNextTranslation = toDisplayLine(nextTranslation, " ");
     const useTranslationPair = Boolean(translationMode);
@@ -2342,7 +2349,7 @@ const lyricsApi = {
       wordScanProgress);
     isPlaybackPlaying = nextIsPlaying;
     const targetFrame = createPresentationFrame({
-      scene,
+      scene: suppressSearchPrompt ? presentationApi.SCENES.SEARCHING : scene,
       current: safeCurrent,
       next: safeNext,
       progress: p,
@@ -2366,7 +2373,7 @@ const lyricsApi = {
       return;
     }
 
-    if (shouldKeepStableContentForSameTrackSearch(targetFrame)) {
+    if (!suppressSearchPrompt && shouldKeepStableContentForSameTrackSearch(targetFrame)) {
       return;
     }
     latestRegionFrame = targetFrame;
@@ -2539,6 +2546,8 @@ const lyricsApi = {
     if (!payload || typeof payload !== "object") {
       return;
     }
+
+    showLyricSearchStatus = payload.showLyricSearchStatus !== false;
 
     if (payload.coverTheme === "light" || payload.coverTheme === "dark") {
       root.dataset.coverTheme = payload.coverTheme;

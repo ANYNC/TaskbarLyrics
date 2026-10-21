@@ -12,12 +12,15 @@ public enum MediaHotkeyAction
     SeekForward,
     ToggleLyricsVisibility,
     ToggleTranslation,
-    ToggleWordScanning
+    ToggleWordScanning,
+    ToggleDisplayMode
 }
 
 public sealed class GlobalMediaHotkeySettings
 {
     public bool Enabled { get; set; } = true;
+
+    public Dictionary<string, bool> ActionEnabled { get; set; } = new(StringComparer.Ordinal);
 
     public string TogglePlayPause { get; set; } = MediaHotkeyCatalog.Get(MediaHotkeyAction.TogglePlayPause).DefaultBinding;
 
@@ -35,9 +38,12 @@ public sealed class GlobalMediaHotkeySettings
 
     public string ToggleWordScanning { get; set; } = MediaHotkeyCatalog.Get(MediaHotkeyAction.ToggleWordScanning).DefaultBinding;
 
+    public string ToggleDisplayMode { get; set; } = MediaHotkeyCatalog.Get(MediaHotkeyAction.ToggleDisplayMode).DefaultBinding;
+
     public GlobalMediaHotkeySettings Clone() => new()
     {
         Enabled = Enabled,
+        ActionEnabled = ActionEnabled is null ? new(StringComparer.Ordinal) : new(ActionEnabled, StringComparer.Ordinal),
         TogglePlayPause = TogglePlayPause,
         PreviousTrack = PreviousTrack,
         NextTrack = NextTrack,
@@ -45,8 +51,18 @@ public sealed class GlobalMediaHotkeySettings
         SeekForward = SeekForward,
         ToggleLyricsVisibility = ToggleLyricsVisibility,
         ToggleTranslation = ToggleTranslation,
-        ToggleWordScanning = ToggleWordScanning
+        ToggleWordScanning = ToggleWordScanning,
+        ToggleDisplayMode = ToggleDisplayMode
     };
+
+    public bool IsActionEnabled(MediaHotkeyAction action) =>
+        ActionEnabled is null || !ActionEnabled.TryGetValue(action.ToString(), out var enabled) || enabled;
+
+    public void SetActionEnabled(MediaHotkeyAction action, bool enabled)
+    {
+        ActionEnabled ??= new(StringComparer.Ordinal);
+        ActionEnabled[action.ToString()] = enabled;
+    }
 
     public string GetBinding(MediaHotkeyAction action) => MediaHotkeyCatalog.Get(action).ReadBinding(this);
 

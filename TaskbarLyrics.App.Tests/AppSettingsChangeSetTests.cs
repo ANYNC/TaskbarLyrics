@@ -209,6 +209,7 @@ public sealed class AppSettingsChangeSetTests
         Assert.True(changes.SpectrumDisplayChanged);
         Assert.True(changes.AutoHideWhenNoPlaybackChanged);
         Assert.True(changes.VisualStyleChanged);
+        Assert.True(changes.SearchStatusDisplayChanged);
         Assert.True(changes.LyricsLayoutChanged);
         Assert.True(changes.WindowLayoutChanged);
         Assert.True(changes.TaskbarEmbeddingChanged);

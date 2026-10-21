@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Windows;
 using TaskbarLyrics.Core.Services;
 using Xunit;
 
@@ -6,6 +7,90 @@ namespace TaskbarLyrics.App.Tests;
 
 public sealed partial class FloatingPanelInputTests
 {
+    [Fact]
+    public void TaskbarPanelReopeningFromPartialOpacityDoesNotFlashTheEndpoint()
+    {
+        RunSta(() =>
+        {
+            var panel = new LyricsControlPanelWindow(_ => { }, _ => { });
+            var hidden = 0;
+            panel.Hidden += (_, _) => hidden++;
+            try
+            {
+                ShowNativePanel(panel);
+                var visual = (FrameworkElement)panel.FindName("VisualRoot");
+                PumpMessages(TimeSpan.FromMilliseconds(250));
+                panel.HidePanel();
+                Assert.False(visual.IsHitTestVisible);
+                PumpMessages(TimeSpan.FromMilliseconds(60));
+                if (FloatingPanelAnimation.IsEnabled) Assert.InRange(visual.Opacity, 0.001, 0.60);
+                var hiddenBeforeReopening = hidden;
+                ShowNativePanel(panel);
+                if (FloatingPanelAnimation.IsEnabled) Assert.InRange(visual.Opacity, 0, 0.95);
+                PumpMessages(TimeSpan.FromMilliseconds(300));
+                Assert.True(panel.IsVisible);
+                Assert.False(panel.IsClosing);
+                Assert.True(visual.IsHitTestVisible);
+                Assert.Equal(1, visual.Opacity);
+                Assert.Equal(hiddenBeforeReopening, hidden);
+            }
+            finally { panel.Close(); }
+        });
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void TaskbarPanelPartialFadeFinishesOnceAndLeavesNoBackground(bool immediate)
+    {
+        RunSta(() =>
+        {
+            var panel = new LyricsControlPanelWindow(_ => { }, _ => { });
+            var hidden = 0;
+            panel.Hidden += (_, _) => hidden++;
+            try
+            {
+                ShowNativePanel(panel);
+                PumpMessages(TimeSpan.FromMilliseconds(250));
+                var visual = (FrameworkElement)panel.FindName("VisualRoot");
+                var material = Assert.IsAssignableFrom<IFloatingPanelMaterial>(GetStartupMaterial(panel));
+                panel.HidePanel();
+                PumpMessages(TimeSpan.FromMilliseconds(60));
+                if (immediate) panel.HidePanel(immediate: true);
+                PumpMessages(TimeSpan.FromMilliseconds(300));
+                Assert.False(panel.IsVisible);
+                Assert.False(panel.IsClosing);
+                Assert.Equal(0, visual.Opacity);
+                Assert.False(IsWindowVisible(material.Handle));
+                Assert.Equal(1, hidden);
+            }
+            finally { panel.Close(); }
+        });
+    }
+
+    [Fact]
+    public void ClosingTaskbarPanelCancelsItsPendingFadeCompletion()
+    {
+        RunSta(() =>
+        {
+            var panel = new LyricsControlPanelWindow(_ => { }, _ => { });
+            var hidden = 0;
+            panel.Hidden += (_, _) => hidden++;
+            try
+            {
+                ShowNativePanel(panel);
+                PumpMessages(TimeSpan.FromMilliseconds(250));
+                panel.HidePanel();
+                panel.Close();
+                var hiddenWhenClosed = hidden;
+                PumpMessages(TimeSpan.FromMilliseconds(300));
+                Assert.Equal(hiddenWhenClosed, hidden);
+                Assert.False(panel.IsVisible);
+            }
+            finally { panel.Dispose(); }
+        });
+    }
+
     [Fact]
     public void TaskbarPanelReopeningCancelsTheOldDismissalCompletion()
     {

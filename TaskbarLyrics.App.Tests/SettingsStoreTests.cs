@@ -6,6 +6,23 @@ namespace TaskbarLyrics.App.Tests;
 public sealed class SettingsStoreTests
 {
     [Theory]
+    [InlineData("{}", true)]
+    [InlineData("{\"ShowLyricSearchStatus\":false}", false)]
+    [InlineData("{\"ShowLyricSearchStatus\":true}", true)]
+    public void SearchStatusPreferenceDefaultsOnAndRoundTrips(string json, bool expected)
+    {
+        using var files = new TestDirectory();
+        var path = Path.Combine(files.Path, "settings.json");
+        File.WriteAllText(path, json);
+        var store = new SettingsStore(path);
+        var loaded = store.Load();
+        Assert.Equal(expected, loaded.ShowLyricSearchStatus);
+        Assert.Equal(expected, loaded.Clone().ShowLyricSearchStatus);
+        Assert.True(store.Save(loaded));
+        Assert.Equal(expected, store.Load().ShowLyricSearchStatus);
+    }
+
+    [Theory]
     [InlineData(false, false)]
     [InlineData(true, false)]
     [InlineData(false, true)]

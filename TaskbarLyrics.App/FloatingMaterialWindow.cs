@@ -19,7 +19,7 @@ internal sealed class FloatingMaterialWindow : IFloatingPanelMaterial
     private readonly ContainerVisual _root;
     private readonly LayerVisual _surfaceLayer;
     private readonly FloatingMaterialFallbackWindow _shadowWindow;
-    private readonly DispatcherTimer _hideTimer;
+    private CompositionScopedBatch? _fadeBatch;
     private readonly SpriteVisual _blur;
     private readonly SpriteVisual _tint;
     private readonly CompositionBrush _backdrop;
@@ -54,17 +54,15 @@ internal sealed class FloatingMaterialWindow : IFloatingPanelMaterial
             _source.DpiChanged += OnDpiChanged;
             _source.CompositionTarget.BackgroundColor = System.Windows.Media.Colors.Transparent;
             _shadowWindow = new FloatingMaterialFallbackWindow(shadowOnly: true);
-            _hideTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(180) };
-            _hideTimer.Tick += HideAfterFade;
             var enabled = 1;
             UsesBackdrop = !SystemParameters.HighContrast && DwmSetWindowAttribute(Handle, 17, ref enabled, 4) >= 0;
             _compositor.As<IDesktopInterop>().CreateDesktopWindowTarget(Handle, true, out var pointer);
             try { _target = MarshalInterface<DesktopWindowTarget>.FromAbi(pointer); }
             finally { Marshal.Release(pointer); }
             _root = _compositor.CreateContainerVisual();
-            // This HWND is not layered: transparent Composition content exposes a black client area.
-            // Keep the material opaque and control visibility through the HWND instead.
-            _root.Opacity = 1;
+            // Keep the non-layered host-backdrop HWND; fade its Composition content instead.
+            // Layering the HWND would change backdrop sampling and input behavior.
+            _root.Opacity = 0;
             _target.Root = _root;
             _surfaceLayer = _compositor.CreateLayerVisual();
             _blur = _compositor.CreateSpriteVisual();
@@ -156,8 +154,9 @@ internal sealed class FloatingMaterialWindow : IFloatingPanelMaterial
 
     public void SetVisible(bool visible, bool immediate = false)
     {
+        if (_visible == visible && !immediate) return;
         _visible = visible;
-        _hideTimer.Stop();
+        CancelFadeCompletion();
         _shadowWindow.SetVisible(visible, immediate);
         if (visible)
         {
@@ -167,18 +166,48 @@ internal sealed class FloatingMaterialWindow : IFloatingPanelMaterial
         }
         if (_blurFactory?.LoadStatus is CompositionEffectFactoryLoadStatus.Other or CompositionEffectFactoryLoadStatus.EffectTooComplex)
             DisableEnhancedBlur(_blurFactory.ExtendedError);
-        if (!visible && (immediate || !SystemParameters.ClientAreaAnimation || SystemParameters.HighContrast))
+        if (immediate || !FloatingPanelAnimation.IsEnabled)
         {
-            TaskbarNativeMethods.ShowWindow(Handle, 0);
+            _root.Opacity = visible ? 1 : 0;
+            if (!visible) TaskbarNativeMethods.ShowWindow(Handle, 0);
             return;
         }
-        if (!visible) _hideTimer.Start();
+        _fadeBatch = _compositor.CreateScopedBatch(CompositionBatchTypes.Animation);
+        _fadeBatch.Completed += FadeCompleted;
+        using var animation = _compositor.CreateScalarKeyFrameAnimation();
+        using var easing = _compositor.CreateCubicBezierEasingFunction(new Vector2(1f / 3, 1), new Vector2(2f / 3, 1));
+        animation.Duration = FloatingPanelAnimation.Duration;
+        // Sample the compositor's current presentation value when replacing an in-flight fade.
+        animation.InsertExpressionKeyFrame(0, "this.StartingValue");
+        animation.InsertKeyFrame(1, visible ? 1 : 0, easing);
+        _root.StartAnimation(nameof(Visual.Opacity), animation);
+        _fadeBatch.End();
     }
 
-    private void HideAfterFade(object? sender, EventArgs e)
+    private void FadeCompleted(object sender, CompositionBatchCompletedEventArgs args)
     {
-        _hideTimer.Stop();
+        if (!_source.Dispatcher.CheckAccess())
+        {
+            _source.Dispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(() => FinishFade(sender)));
+            return;
+        }
+        FinishFade(sender);
+    }
+
+    private void FinishFade(object sender)
+    {
+        if (_disposed || !ReferenceEquals(sender, _fadeBatch)) return;
+        CancelFadeCompletion();
+        _root.Opacity = _visible ? 1 : 0;
         if (!_visible) TaskbarNativeMethods.ShowWindow(Handle, 0);
+    }
+
+    private void CancelFadeCompletion()
+    {
+        if (_fadeBatch is not { } batch) return;
+        _fadeBatch = null;
+        batch.Completed -= FadeCompleted;
+        batch.Dispose();
     }
 
     private static void OnDpiChanged(object sender, HwndDpiChangedEventArgs e)
@@ -216,7 +245,7 @@ internal sealed class FloatingMaterialWindow : IFloatingPanelMaterial
     {
         if (_disposed) return;
         _disposed = true;
-        if (_hideTimer is not null) { _hideTimer.Stop(); _hideTimer.Tick -= HideAfterFade; }
+        CancelFadeCompletion();
         _shadowWindow?.Dispose();
         if (_source is not null) _source.DpiChanged -= OnDpiChanged;
         _source?.RemoveHook(WndProc);

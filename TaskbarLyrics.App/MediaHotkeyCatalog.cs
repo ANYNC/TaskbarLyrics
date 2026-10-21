@@ -8,7 +8,10 @@ internal sealed record MediaHotkeyDefinition(
     string DefaultBinding,
     int RegistrationId,
     Func<GlobalMediaHotkeySettings, string> ReadBinding,
-    Action<GlobalMediaHotkeySettings, string> WriteBinding);
+    Action<GlobalMediaHotkeySettings, string> WriteBinding)
+{
+    public string EnabledSettingKey => SettingKey + "Enabled";
+}
 
 internal static class MediaHotkeyCatalog
 {
@@ -87,7 +90,16 @@ internal static class MediaHotkeyCatalog
             "Alt+Shift+S",
             RegistrationIdBase + (int)MediaHotkeyAction.ToggleWordScanning,
             settings => settings.ToggleWordScanning,
-            (settings, value) => settings.ToggleWordScanning = value)
+            (settings, value) => settings.ToggleWordScanning = value),
+        new(
+            MediaHotkeyAction.ToggleDisplayMode,
+            "hotkeyToggleDisplayMode",
+            "toggleDisplayMode",
+            "切换歌词显示方式（嵌入 / 浮窗）",
+            "Alt+Shift+C",
+            RegistrationIdBase + (int)MediaHotkeyAction.ToggleDisplayMode,
+            settings => settings.ToggleDisplayMode,
+            (settings, value) => settings.ToggleDisplayMode = value)
     ];
 
     public static MediaHotkeyDefinition Get(MediaHotkeyAction action) =>

@@ -20,7 +20,7 @@ public partial class MainWindow
         _floatingControls = new FloatingLyricsPanelController(Dispatcher, CreateFloatingControls);
         _floatingControls.Register(this, () => PlacementDisplay, () => _isLyricsContentVisible && _isWebDocumentReady && _regionVisibility.IsInteractive,
             SetFloatingControlSurface, DragFloatingWindow,
-            () => NativeWindowInteraction.GetScreenBounds(CoverHitSurface), SetFloatingLockState);
+            () => NativeWindowInteraction.GetScreenBounds(CoverHitSurface), SetFloatingLockState, _regionVisibility);
         _floatingControls.RegisterSizeAdjustment(this, () => FloatingWindowSize.FromSettings(_currentSettings),
             (size, anchor) => FloatingSizePreviewRequested?.Invoke(size, this, anchor), size =>
             {
@@ -33,7 +33,7 @@ public partial class MainWindow
     {
         _floatingControls?.Register(mirror, () => mirror.DisplayMonitor, () => mirror.IsContentVisible,
             (open, above) => mirror.SetFloatingControlSurface(open, above, FloatingControlsLight), mirror.DragFloatingWindow,
-            mirror.GetCoverBounds, mirror.SetFloatingLockState);
+            mirror.GetCoverBounds, mirror.SetFloatingLockState, mirror.RegionVisibility);
         _floatingControls?.RegisterSizeAdjustment(mirror, mirror.GetFloatingSize,
             (size, anchor) => FloatingSizePreviewRequested?.Invoke(size, mirror, anchor), size =>
             {

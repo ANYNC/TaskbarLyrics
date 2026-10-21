@@ -5,7 +5,6 @@ using System.Windows.Automation;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
-using System.Windows.Media.Animation;
 using System.Windows.Threading;
 using TaskbarLyrics.Core.Models;
 using TaskbarLyrics.Core.Services;
@@ -34,7 +33,6 @@ public partial class LyricsControlPanelWindow : Window, IDisposable
     private readonly Action<TimeSpan> _seek;
     private readonly TimeProvider _timeProvider = TimeProvider.System;
     private readonly DispatcherTimer _hoverTimer;
-    private readonly DispatcherTimer _hideTimer;
     private FloatingMaterialCompositor? _compositor;
     private IFloatingPanelMaterial? _material;
     private bool _retryMaterialOnNextOpen;
@@ -72,9 +70,7 @@ public partial class LyricsControlPanelWindow : Window, IDisposable
         var fontFolder = new Uri(Path.Combine(AppContext.BaseDirectory, "Assets", "Fonts") + Path.DirectorySeparatorChar);
         FontFamily = new FontFamily(fontFolder, $"./#{AppSettings.BundledFontFamily}");
         _hoverTimer = new DispatcherTimer(DispatcherPriority.Background, Dispatcher) { Interval = TimeSpan.FromMilliseconds(50) };
-        _hideTimer = new DispatcherTimer(DispatcherPriority.Background, Dispatcher) { Interval = TimeSpan.FromMilliseconds(180) };
         _hoverTimer.Tick += OnHoverTick;
-        _hideTimer.Tick += OnHideTick;
         SourceInitialized += OnSourceInitialized;
         Deactivated += OnDeactivated;
         PreviewKeyDown += OnPreviewKeyDown;
@@ -213,7 +209,6 @@ public partial class LyricsControlPanelWindow : Window, IDisposable
         _showCancellation = cancellation;
         IsOpening = true;
         IsClosing = false;
-        _hideTimer.Stop();
         _canDismissOnDeactivate = false;
         try
         {
@@ -336,24 +331,23 @@ public partial class LyricsControlPanelWindow : Window, IDisposable
         if (IsKeyboardFocusWithin) Keyboard.ClearFocus();
         ShowKeyboardFocus = false;
         _material?.SetVisible(false, immediate);
-        if (immediate || !Animate) { FinishHide(); return; }
-        FadeTo(0);
-        _hideTimer.Start();
+        if (immediate) { FinishHide(); return; }
+        FadeTo(0, FinishHide);
     }
 
-    private static bool Animate => SystemParameters.ClientAreaAnimation && !SystemParameters.HighContrast;
-    private void FadeTo(double opacity)
+    private void FadeTo(double opacity, Action? completed = null)
     {
-        var from = VisualRoot.Opacity;
-        VisualRoot.BeginAnimation(OpacityProperty, null);
-        VisualRoot.Opacity = opacity;
-        if (Animate) VisualRoot.BeginAnimation(OpacityProperty, new DoubleAnimation(from, opacity, TimeSpan.FromMilliseconds(180)));
+        var version = _showVersion;
+        // Even a zero-opacity exit must retain the source-click dismissal guard for its duration.
+        FloatingPanelAnimation.Fade(VisualRoot, opacity > 0, immediate: false, () =>
+        {
+            if (!_disposed && version == _showVersion) completed?.Invoke();
+        }, preserveDuration: true);
     }
-    private void OnHideTick(object? sender, EventArgs e) => FinishHide();
     private void FinishHide()
     {
-        _hideTimer.Stop();
-        VisualRoot.BeginAnimation(OpacityProperty, null); VisualRoot.Opacity = 0;
+        FloatingPanelAnimation.Fade(VisualRoot, visible: false, immediate: true);
+        _material?.SetVisible(false, immediate: true);
         if (!IsVisible) return;
         Hide(); IsClosing = false; Hidden?.Invoke(this, EventArgs.Empty);
     }
@@ -447,8 +441,9 @@ public partial class LyricsControlPanelWindow : Window, IDisposable
     {
         _disposed = true; ++_showVersion;
         _showCancellation?.Cancel();
-        _hoverTimer.Stop(); _hideTimer.Stop();
-        _hoverTimer.Tick -= OnHoverTick; _hideTimer.Tick -= OnHideTick;
+        _hoverTimer.Stop();
+        _hoverTimer.Tick -= OnHoverTick;
+        FloatingPanelAnimation.Fade(VisualRoot, visible: false, immediate: true);
         SourceInitialized -= OnSourceInitialized; Deactivated -= OnDeactivated;
         PreviewKeyDown -= OnPreviewKeyDown; PreviewMouseDown -= OnPreviewMouseDown;
         NativeWindowTheme.ThemeChanged -= OnThemeChanged;

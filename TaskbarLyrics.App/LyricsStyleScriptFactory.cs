@@ -23,6 +23,7 @@ internal static class LyricsStyleScriptFactory
             fontSize = metrics.FontSize,
             verticalTaskbar = metrics.IsVertical,
             singleLine = metrics.IsSingleLine,
+            showLyricSearchStatus = settings.ShowLyricSearchStatus,
             showCover = settings.ShowCover,
             coverPosition = settings.CoverPosition,
             coverTheme = NativeWindowTheme.IsLight ? "light" : "dark",

@@ -147,6 +147,8 @@ public sealed class AppSettings
 
     public bool ShowLyricTranslation { get; set; }
 
+    public bool ShowLyricSearchStatus { get; set; } = true;
+
     public bool EnableWordScanning { get; set; } = true;
 
     public ToolWindowTheme ToolWindowTheme { get; set; } = ToolWindowTheme.System;

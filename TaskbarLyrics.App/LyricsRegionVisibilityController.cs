@@ -19,6 +19,8 @@ internal sealed class LyricsRegionVisibilityController : IDisposable
 
     public LyricsRegionVisibilityPhase Phase { get; private set; } = LyricsRegionVisibilityPhase.Visible;
     public bool IsInteractive => Phase == LyricsRegionVisibilityPhase.Visible;
+    public bool IsSurfaceVisible => _documentReady && _surfaceVisible;
+    internal event EventHandler? SurfaceChanged;
 
     public LyricsRegionVisibilityController(Dispatcher dispatcher,
         Action<int, LyricsRegionVisibilityPhase> send, Action<bool, bool> setSurface)
@@ -87,6 +89,7 @@ internal sealed class LyricsRegionVisibilityController : IDisposable
     {
         _surfaceVisible = visible;
         _setSurface(visible, interactive);
+        SurfaceChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private void OnFallback(object? sender, EventArgs e)

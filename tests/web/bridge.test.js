@@ -7,7 +7,7 @@ const read = relativePath => readFile(new URL(relativePath, root), "utf8");
 const settingsPages = ["gettingStarted", "sources", "shortcuts", "lyrics", "trackOffsets", "displayArea", "general", "advanced", "lyricDiagnostics", "about"];
 const persistedSettings = [
   "enableLocalLyrics", "localMusicFolders", "enableGlobalMediaHotkeys", "showLyricsOnStartup", "autoHideWhenNoPlayback",
-  "showLyricTranslation", "enableWordScanning", "spectrumDisplayMode", "lyricsLayoutScalePercent", "fontSize", "showCover", "singleLineLyrics",
+  "showLyricTranslation", "showLyricSearchStatus", "enableWordScanning", "spectrumDisplayMode", "lyricsLayoutScalePercent", "fontSize", "showCover", "singleLineLyrics",
   "enableControlPanel", "controlPanelTriggerMethod", "controlPanelTriggerCover", "controlPanelTriggerLyrics", "enableFloatingControlPanel", "floatingPanelBrightness", "floatingPanelTintOpacity", "floatingPanelBlurAmount", "embeddedPanelBrightness", "embeddedPanelTintOpacity", "embeddedPanelBlurAmount", "coverPosition", "coverSize", "coverGap", "coverCornerRadius", "fontFamily", "fontWeight", "lyricsTextAlignment", "foregroundColorMode",
   "showTextShadow", "toolWindowTheme", "showBackground", "showFloatingBackground", "backgroundOpacity", "showBorder", "windowWidth",
   "xOffset", "yOffset", "floatingWindowLayer", "startWithWindows", "autoCheckUpdates"
@@ -66,6 +66,24 @@ function enableDialogDomSupport(dom) {
 }
 
 describe("settings WebView bridge", () => {
+  it("keeps the advanced search-status switch on for old settings and posts persisted V1 updates", async () => {
+    const { dom, sent, script } = await createSettingsDom();
+    dom.window.eval(script);
+    const document = dom.window.document;
+    dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings: {}, fonts: [] } });
+    dom.window.settingsApp.receive({ version: 1, type: "navigate", payload: { page: "advanced" } });
+    const toggle = document.querySelector('input[data-setting="showLyricSearchStatus"]');
+    expect(toggle.closest('[data-page="advanced"]')).not.toBeNull();
+    expect(toggle.checked).toBe(true);
+    expect(toggle.getAttribute("aria-label")).toBe("显示歌词检索提示");
+    toggle.checked = false;
+    toggle.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+    expect(sent.at(-1)).toEqual({ version: 1, type: "update", payload: { key: "showLyricSearchStatus", value: false } });
+    dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings: { showLyricSearchStatus: false }, fonts: [] } });
+    expect(toggle.checked).toBe(false);
+    dom.window.close();
+  });
+
   it("shows player-specific onboarding without changing playback settings or claiming a plugin is installed", async () => {
     const { dom, sent, script } = await createSettingsDom();
     dom.window.eval(script);

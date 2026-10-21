@@ -1237,6 +1237,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             HotkeyToggleLyricsVisibility = mediaHotkeys.ToggleLyricsVisibility,
             HotkeyToggleTranslation = mediaHotkeys.ToggleTranslation,
             HotkeyToggleWordScanning = mediaHotkeys.ToggleWordScanning,
+            HotkeyToggleDisplayMode = mediaHotkeys.ToggleDisplayMode,
             MediaHotkeyStatuses = (System.Windows.Application.Current as App)?.GetMediaHotkeyStatuses()
                 .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal)
                 ?? new Dictionary<string, string>(StringComparer.Ordinal),
@@ -1245,7 +1246,9 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 Action = definition.Action.ToString(),
                 SettingKey = definition.SettingKey,
                 StatusKey = definition.StatusKey,
-                DisplayName = definition.DisplayName
+                DisplayName = definition.DisplayName,
+                EnabledSettingKey = definition.EnabledSettingKey,
+                IsEnabled = mediaHotkeys.IsActionEnabled(definition.Action)
             })
             .ToList(),
             ShowLyricsOnStartup = _settings.ShowLyricsOnStartup,
@@ -1253,6 +1256,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             StartWithWindows = _settings.StartWithWindows,
             AutoCheckUpdates = _settings.AutoCheckUpdates,
             ShowLyricTranslation = _settings.ShowLyricTranslation,
+            ShowLyricSearchStatus = _settings.ShowLyricSearchStatus,
             EnableWordScanning = _settings.EnableWordScanning,
             ToolWindowTheme = _settings.ToolWindowTheme,
             SpectrumDisplayMode = _settings.SpectrumDisplayMode.ToString(),
@@ -1484,6 +1488,16 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             return;
         }
 
+        var hotkeyToggle = MediaHotkeyCatalog.Definitions
+            .FirstOrDefault(definition => string.Equals(definition.EnabledSettingKey, key, StringComparison.Ordinal));
+        if (hotkeyToggle is not null)
+        {
+            var hotkeySettings = EnsureMediaHotkeySettings();
+            hotkeySettings.SetActionEnabled(hotkeyToggle.Action,
+                ReadBool(element, hotkeySettings.IsActionEnabled(hotkeyToggle.Action)));
+            return;
+        }
+
         if (_settings.UseFloatingWindow && key is "windowWidth" or "lyricsLayoutScalePercent" or
             "horizontalAnchor" or "xOffset" or "yOffset" or "showBackground" or "backgroundOpacity" or
             "showBorder" or "enableControlPanel" or "controlPanelTriggerMethod" or "controlPanelTriggerCover" or "controlPanelTriggerLyrics" or
@@ -1541,6 +1555,9 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 break;
             case "showLyricTranslation":
                 _settings.ShowLyricTranslation = ReadBool(element, _settings.ShowLyricTranslation);
+                break;
+            case "showLyricSearchStatus":
+                _settings.ShowLyricSearchStatus = ReadBool(element, _settings.ShowLyricSearchStatus);
                 break;
             case "enableWordScanning":
                 _settings.EnableWordScanning = ReadBool(element, _settings.EnableWordScanning);
@@ -1794,7 +1811,8 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
     {
         return key == "enableGlobalMediaHotkeys" ||
             MediaHotkeyCatalog.Definitions.Any(definition =>
-                string.Equals(definition.SettingKey, key, StringComparison.Ordinal));
+                string.Equals(definition.SettingKey, key, StringComparison.Ordinal) ||
+                string.Equals(definition.EnabledSettingKey, key, StringComparison.Ordinal));
     }
 
     private static bool RequiresSettingsStateRefresh(string? key)
@@ -2168,6 +2186,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         target.LastUpdateCheckUtc = source.LastUpdateCheckUtc;
         target.LastNotifiedUpdateVersion = source.LastNotifiedUpdateVersion;
         target.ShowLyricTranslation = source.ShowLyricTranslation;
+        target.ShowLyricSearchStatus = source.ShowLyricSearchStatus;
         target.EnableWordScanning = source.EnableWordScanning;
         target.ToolWindowTheme = source.ToolWindowTheme;
         target.SpectrumDisplayMode = source.SpectrumDisplayMode;
@@ -2317,6 +2336,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         public string HotkeyToggleLyricsVisibility { get; set; } = "";
         public string HotkeyToggleTranslation { get; set; } = "";
         public string HotkeyToggleWordScanning { get; set; } = "";
+        public string HotkeyToggleDisplayMode { get; set; } = "";
         public Dictionary<string, string> MediaHotkeyStatuses { get; set; } = new(StringComparer.Ordinal);
         public List<WebMediaHotkeyDefinition> MediaHotkeys { get; set; } = [];
         public bool ShowLyricsOnStartup { get; set; }
@@ -2324,6 +2344,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         public bool StartWithWindows { get; set; }
         public bool AutoCheckUpdates { get; set; }
         public bool ShowLyricTranslation { get; set; }
+        public bool ShowLyricSearchStatus { get; set; }
         public bool EnableWordScanning { get; set; }
         public ToolWindowTheme ToolWindowTheme { get; set; }
         public string SpectrumDisplayMode { get; set; } = TaskbarLyrics.App.SpectrumDisplayMode.Disabled.ToString();
@@ -2416,6 +2437,10 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         public string StatusKey { get; set; } = "";
 
         public string DisplayName { get; set; } = "";
+
+        public string EnabledSettingKey { get; set; } = "";
+
+        public bool IsEnabled { get; set; }
     }
 
     private sealed class UpdateStatusPayload

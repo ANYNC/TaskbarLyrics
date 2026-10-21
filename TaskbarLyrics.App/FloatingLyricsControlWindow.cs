@@ -4,7 +4,6 @@ using System.Windows.Automation;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
-using System.Windows.Media.Animation;
 using TaskbarLyrics.Core.Models;
 using TaskbarLyrics.Core.Services;
 using Color = System.Windows.Media.Color;
@@ -172,7 +171,9 @@ internal partial class FloatingLyricsControlWindow : Window
         if (!IsVisible) Show();
     }
 
-    internal void SetPanelVisible(bool visible, bool immediate = false)
+    private int _visibilityGeneration;
+
+    internal void SetPanelVisible(bool visible, bool immediate = false, Action? completed = null)
     {
         if (IsClosed) return;
         IsPanelVisible = visible;
@@ -190,11 +191,11 @@ internal partial class FloatingLyricsControlWindow : Window
             if (IsKeyboardFocusWithin) Keyboard.ClearFocus();
             if (SeekSlider.IsMouseCaptureWithin) System.Windows.Input.Mouse.Capture(null);
         }
-        var current = VisualRoot.Opacity;
-        VisualRoot.BeginAnimation(OpacityProperty, null);
-        VisualRoot.Opacity = visible ? 1 : 0;
-        if (!immediate && SystemParameters.ClientAreaAnimation && !SystemParameters.HighContrast)
-            VisualRoot.BeginAnimation(OpacityProperty, new DoubleAnimation(current, visible ? 1 : 0, TimeSpan.FromMilliseconds(180)));
+        var generation = ++_visibilityGeneration;
+        FloatingPanelAnimation.Fade(VisualRoot, visible, immediate, () =>
+        {
+            if (!IsClosed && generation == _visibilityGeneration) completed?.Invoke();
+        });
     }
 
     internal void FocusControls()

@@ -5,6 +5,18 @@ namespace TaskbarLyrics.App.Tests;
 public sealed class LyricsStyleScriptFactoryTests
 {
     [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void SearchStatusPreferenceIsSharedAcrossWindowModes(bool floating, bool enabled)
+    {
+        var settings = new AppSettings { UseFloatingWindow = floating, ShowLyricSearchStatus = enabled };
+        var script = LyricsStyleScriptFactory.Create(settings, 1);
+        Assert.Contains($"\"showLyricSearchStatus\":{enabled.ToString().ToLowerInvariant()}", script);
+    }
+
+    [Theory]
     [InlineData(false, false, "none")]
     [InlineData(true, false, "none")]
     [InlineData(false, true, "0 1px 3px rgba(0, 0, 0, 0.2)")]

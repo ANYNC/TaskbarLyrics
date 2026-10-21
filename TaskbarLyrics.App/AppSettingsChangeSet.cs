@@ -7,6 +7,7 @@ internal readonly record struct AppSettingsChangeSet(
     bool LyricSyncServiceChanged,
     bool WordScanningChanged,
     bool TranslationDisplayChanged,
+    bool SearchStatusDisplayChanged,
     bool AutoHideWhenNoPlaybackChanged,
     bool SpectrumDisplayChanged,
     bool VisualStyleChanged,
@@ -22,6 +23,7 @@ internal readonly record struct AppSettingsChangeSet(
         LyricSyncServiceChanged ||
         WordScanningChanged ||
         TranslationDisplayChanged ||
+        SearchStatusDisplayChanged ||
         AutoHideWhenNoPlaybackChanged ||
         SpectrumDisplayChanged ||
         VisualStyleChanged ||
@@ -62,6 +64,9 @@ internal readonly record struct AppSettingsChangeSet(
 
         var translationDisplayChanged = isInitialApplication ||
             current.ShowLyricTranslation != next.ShowLyricTranslation;
+
+        var searchStatusDisplayChanged = isInitialApplication ||
+            current.ShowLyricSearchStatus != next.ShowLyricSearchStatus;
 
         var autoHideWhenNoPlaybackChanged = isInitialApplication ||
             current.AutoHideWhenNoPlayback != next.AutoHideWhenNoPlayback;
@@ -133,6 +138,7 @@ internal readonly record struct AppSettingsChangeSet(
             lyricSyncServiceChanged,
             wordScanningChanged,
             translationDisplayChanged,
+            searchStatusDisplayChanged,
             autoHideWhenNoPlaybackChanged,
             spectrumDisplayChanged,
             visualStyleChanged,
@@ -207,6 +213,9 @@ internal readonly record struct AppSettingsChangeSet(
             string.Equals(currentSettings.SeekForward, nextSettings.SeekForward, StringComparison.Ordinal) &&
             string.Equals(currentSettings.ToggleLyricsVisibility, nextSettings.ToggleLyricsVisibility, StringComparison.Ordinal) &&
             string.Equals(currentSettings.ToggleTranslation, nextSettings.ToggleTranslation, StringComparison.Ordinal) &&
-            string.Equals(currentSettings.ToggleWordScanning, nextSettings.ToggleWordScanning, StringComparison.Ordinal);
+            string.Equals(currentSettings.ToggleWordScanning, nextSettings.ToggleWordScanning, StringComparison.Ordinal) &&
+            string.Equals(currentSettings.ToggleDisplayMode, nextSettings.ToggleDisplayMode, StringComparison.Ordinal) &&
+            MediaHotkeyCatalog.Definitions.All(definition =>
+                currentSettings.IsActionEnabled(definition.Action) == nextSettings.IsActionEnabled(definition.Action));
     }
 }

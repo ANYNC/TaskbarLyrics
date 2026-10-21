@@ -98,15 +98,15 @@ public partial class App : System.Windows.Application, IDisposable
         _lyricsWindowHost.ApplySpectrumTuning(_spectrumTuningSettings);
         _trayService = new TrayService(
             ToggleLyricsWindow,
-            () => Settings.GlobalMediaHotkeys is { Enabled: true } hotkeys
+            () => Settings.GlobalMediaHotkeys is { Enabled: true } hotkeys && hotkeys.IsActionEnabled(MediaHotkeyAction.ToggleLyricsVisibility)
                 ? hotkeys.ToggleLyricsVisibility
                 : string.Empty,
             () => ToggleMediaHotkeyAction(MediaHotkeyAction.ToggleTranslation),
-            () => Settings.GlobalMediaHotkeys is { Enabled: true } hotkeys
+            () => Settings.GlobalMediaHotkeys is { Enabled: true } hotkeys && hotkeys.IsActionEnabled(MediaHotkeyAction.ToggleTranslation)
                 ? hotkeys.ToggleTranslation
                 : string.Empty,
             () => ToggleMediaHotkeyAction(MediaHotkeyAction.ToggleWordScanning),
-            () => Settings.GlobalMediaHotkeys is { Enabled: true } hotkeys
+            () => Settings.GlobalMediaHotkeys is { Enabled: true } hotkeys && hotkeys.IsActionEnabled(MediaHotkeyAction.ToggleWordScanning)
                 ? hotkeys.ToggleWordScanning
                 : string.Empty,
             SetSpectrumDisplayMode,
@@ -467,6 +467,11 @@ public partial class App : System.Windows.Application, IDisposable
     private Task ExecuteMediaHotkeyOnUiThreadAsync(MediaHotkeyAction action, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        if (action == MediaHotkeyAction.ToggleDisplayMode)
+        {
+            SetDisplayMode(!Settings.UseFloatingWindow);
+            return Task.CompletedTask;
+        }
         if (action == MediaHotkeyAction.ToggleLyricsVisibility)
         {
             ToggleLyricsWindow();
