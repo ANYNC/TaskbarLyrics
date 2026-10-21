@@ -6,6 +6,8 @@ public sealed class TimelinePositionStrategyRegistry
 
     private readonly IReadOnlyList<ITimelinePositionStrategy> _strategies;
     private readonly ITimelinePositionStrategy _defaultStrategy;
+    private readonly object _sync = new();
+    private ITimelinePositionStrategy? _activeStrategy;
     private string _lastTrackIdentity = string.Empty;
     private DateTimeOffset _lastTimelineUpdatedAtUtc;
     private TimeSpan _lastSelectedPosition;
@@ -23,24 +25,45 @@ public sealed class TimelinePositionStrategyRegistry
 
     public (string StrategyName, TimeSpan Position) Select(SmtcTimelineDiagnostics diagnostics)
     {
-        var selection = SelectCore(diagnostics);
-        var position = PreservePositionWhilePlaybackTransitionIsStale(diagnostics, selection.Position);
-        return (selection.StrategyName, position);
+        lock (_sync)
+        {
+            var selection = SelectCore(diagnostics);
+            var position = PreservePositionWhilePlaybackTransitionIsStale(diagnostics, selection.Position);
+            return (selection.StrategyName, position);
+        }
     }
 
     private (string StrategyName, TimeSpan Position) SelectCore(SmtcTimelineDiagnostics diagnostics)
     {
-        foreach (var strategy in _strategies)
+        var strategy = _strategies.FirstOrDefault(strategy => strategy.CanApply(diagnostics)) ?? _defaultStrategy;
+        if (_activeStrategy != strategy)
         {
-            if (!strategy.CanApply(diagnostics))
-            {
-                continue;
-            }
-
-            return (strategy.Name, strategy.SelectPosition(diagnostics));
+            _activeStrategy?.Reset();
+            strategy.Reset();
+            _activeStrategy = strategy;
         }
+        return (strategy.Name, strategy.SelectPosition(diagnostics));
+    }
 
-        return (_defaultStrategy.Name, _defaultStrategy.SelectPosition(diagnostics));
+    internal void NotifySeek(string sourceAppUserModelId, TimeSpan position, DateTimeOffset timelineUpdatedAtUtc)
+    {
+        lock (_sync)
+        {
+            if (_activeStrategy?.TryApplySeek(sourceAppUserModelId, position, timelineUpdatedAtUtc) != true) return;
+            _lastSelectedPosition = position;
+            _lastTimelineUpdatedAtUtc = timelineUpdatedAtUtc;
+            _timelineRefreshWaitState = TimelineRefreshWaitState.None;
+        }
+    }
+
+    public void Reset()
+    {
+        lock (_sync)
+        {
+            _activeStrategy?.Reset();
+            _activeStrategy = null;
+            _hasTimelineState = false;
+        }
     }
 
     private TimeSpan PreservePositionWhilePlaybackTransitionIsStale(
@@ -115,12 +138,13 @@ public sealed class TimelinePositionStrategyRegistry
         return advance > TimeSpan.Zero && advance <= MaximumDeferredPausedAdvance;
     }
 
-    public static TimelinePositionStrategyRegistry CreateDefault()
+    public static TimelinePositionStrategyRegistry CreateDefault(TimeProvider? timeProvider = null)
     {
         var fallback = new DefaultExtrapolatedTimelinePositionStrategy();
         return new TimelinePositionStrategyRegistry(
             new ITimelinePositionStrategy[]
             {
+                new AppleMusicTimelinePositionStrategy(timeProvider),
                 new CommonExtrapolatedTimelinePositionStrategy()
             },
             fallback);

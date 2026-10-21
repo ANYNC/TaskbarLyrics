@@ -248,6 +248,7 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
         _recognitionOrder = normalized.ToArray();
         _activeSessionCache.Clear();
         _processFallbackDetectionCache.Invalidate();
+        _timelineStrategyRegistry.Reset();
     }
 
     public SmtcTimelineDiagnostics? GetLastTimelineDiagnostics()
@@ -399,7 +400,8 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
 
             var target = TimeSpan.FromTicks(Math.Clamp(position.Ticks, timeline.StartTime.Ticks, timeline.EndTime.Ticks));
             cancellationToken.ThrowIfCancellationRequested();
-            await session.TryChangePlaybackPositionAsync(target.Ticks);
+            if (await session.TryChangePlaybackPositionAsync(target.Ticks))
+                _timelineStrategyRegistry.NotifySeek(session.SourceAppUserModelId, target, timeline.LastUpdatedTime);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -425,7 +427,7 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
         GC.SuppressFinalize(this);
     }
 
-    private static async Task TrySeekAsync(
+    private async Task TrySeekAsync(
         GlobalSystemMediaTransportControlsSession session,
         TimeSpan offset,
         CancellationToken cancellationToken)
@@ -449,7 +451,8 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
         }
 
         cancellationToken.ThrowIfCancellationRequested();
-        await session.TryChangePlaybackPositionAsync(target.Ticks);
+        if (await session.TryChangePlaybackPositionAsync(target.Ticks))
+            _timelineStrategyRegistry.NotifySeek(session.SourceAppUserModelId, target, timeline.LastUpdatedTime);
     }
 
     public Task<PlaybackSnapshot> GetCurrentAsync(CancellationToken cancellationToken = default) =>
@@ -748,6 +751,7 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
         string title,
         string artist)
     {
+        _timelineStrategyRegistry.Reset();
         PublishDiagnostics(new SmtcTimelineDiagnostics(
             CapturedAtUtc: DateTimeOffset.UtcNow,
             SourceAppUserModelId: sourceAppUserModelId,

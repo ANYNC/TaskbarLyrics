@@ -7,4 +7,8 @@ public interface ITimelinePositionStrategy
     bool CanApply(SmtcTimelineDiagnostics diagnostics);
 
     TimeSpan SelectPosition(SmtcTimelineDiagnostics diagnostics);
+
+    void Reset() { }
+
+    bool TryApplySeek(string sourceAppUserModelId, TimeSpan position, DateTimeOffset timelineUpdatedAtUtc) => false;
 }
