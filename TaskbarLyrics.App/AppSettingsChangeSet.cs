@@ -82,7 +82,8 @@ internal readonly record struct AppSettingsChangeSet(
                 current.EmbeddedPanelBrightness != next.EmbeddedPanelBrightness ||
                 current.EmbeddedPanelTintOpacity != next.EmbeddedPanelTintOpacity ||
                 current.EmbeddedPanelBlurAmount != next.EmbeddedPanelBlurAmount)) ||
-            (next.UseFloatingWindow && (current.FloatingPanelBrightness != next.FloatingPanelBrightness ||
+            (next.UseFloatingWindow && (current.ShowFloatingBackground != next.ShowFloatingBackground ||
+                current.FloatingPanelBrightness != next.FloatingPanelBrightness ||
                 current.FloatingPanelTintOpacity != next.FloatingPanelTintOpacity ||
                 current.FloatingPanelBlurAmount != next.FloatingPanelBlurAmount)) ||
             current.CoverPosition != next.CoverPosition ||

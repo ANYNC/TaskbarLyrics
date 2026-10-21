@@ -34,6 +34,7 @@
           ? nextState.floatingWindowLayer : nextState?.forceAlwaysOnTop === false ? "Window" : "Fullscreen",
         floatingWindowWidth: nextState?.floatingWindowWidth ?? nextState?.windowWidth ?? 420,
         enableFloatingControlPanel: nextState?.enableFloatingControlPanel ?? nextState?.enableControlPanel ?? true,
+        showFloatingBackground: nextState?.showFloatingBackground === true,
         floatingLyricsLayoutScalePercent: nextState?.floatingLyricsLayoutScalePercent ?? nextState?.lyricsLayoutScalePercent ?? 100,
         lyricsTextAlignment: normalizeLyricsTextAlignment(nextState?.lyricsTextAlignment),
         singleLineLyrics: nextState?.singleLineLyrics === true,

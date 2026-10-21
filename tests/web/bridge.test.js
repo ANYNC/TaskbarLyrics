@@ -9,7 +9,7 @@ const persistedSettings = [
   "enableLocalLyrics", "localMusicFolders", "enableGlobalMediaHotkeys", "showLyricsOnStartup", "autoHideWhenNoPlayback",
   "showLyricTranslation", "enableWordScanning", "spectrumDisplayMode", "lyricsLayoutScalePercent", "fontSize", "showCover", "singleLineLyrics",
   "enableControlPanel", "controlPanelTriggerMethod", "controlPanelTriggerCover", "controlPanelTriggerLyrics", "enableFloatingControlPanel", "floatingPanelBrightness", "floatingPanelTintOpacity", "floatingPanelBlurAmount", "embeddedPanelBrightness", "embeddedPanelTintOpacity", "embeddedPanelBlurAmount", "coverPosition", "coverSize", "coverGap", "coverCornerRadius", "fontFamily", "fontWeight", "lyricsTextAlignment", "foregroundColorMode",
-  "showTextShadow", "toolWindowTheme", "showBackground", "backgroundOpacity", "showBorder", "windowWidth",
+  "showTextShadow", "toolWindowTheme", "showBackground", "showFloatingBackground", "backgroundOpacity", "showBorder", "windowWidth",
   "xOffset", "yOffset", "floatingWindowLayer", "startWithWindows", "autoCheckUpdates"
 ];
 
@@ -497,7 +497,7 @@ describe("settings WebView bridge", () => {
     dom.window.close();
   });
 
-  it.each([false, true])("keeps material sliders expanded inside the control panel group for floating=%s", async floating => {
+  it.each([false, true])("keeps shared floating material separate from the playback switch for floating=%s", async floating => {
     const { dom, script } = await createSettingsDom();
     dom.window.eval(script);
     dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings: {
@@ -510,7 +510,7 @@ describe("settings WebView bridge", () => {
       for (const suffix of ["BlurAmount", "Brightness", "TintOpacity"]) {
         const slider = document.querySelector(`[data-setting="${prefix}Panel${suffix}"][type="range"]`);
         expect(slider.closest("details")).toBeNull();
-        expect(slider.closest('[data-display-group="controls"]')).toBe(group);
+        expect(slider.closest("[data-display-group]").dataset.displayGroup).toBe(prefix === "floating" ? "floating-background" : "controls");
         expect(slider.closest("[data-presentation-mode]").hidden).toBe((prefix === "floating") !== floating);
         // Embedded material requires its panel; floating material also belongs to the lyric card.
         expect(slider.disabled).toBe(prefix === "embedded" || !floating);
@@ -518,6 +518,29 @@ describe("settings WebView bridge", () => {
     }
     expect(document.querySelector('[data-material-summary]')).toBeNull();
     expect(document.querySelector('[data-embedded-appearance-summary]').closest("details")).not.toBeNull();
+    dom.window.close();
+  });
+
+  it("saves the persistent floating background independently and retains it when switching modes", async () => {
+    const { dom, script, sent } = await createSettingsDom();
+    dom.window.eval(script);
+    const receive = settings => dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings } });
+    receive({ useFloatingWindow: true, enableFloatingControlPanel: false });
+    const document = dom.window.document;
+    const toggle = document.querySelector('[data-setting="showFloatingBackground"]');
+    expect(toggle.checked).toBe(false);
+    expect(toggle.disabled).toBe(false);
+    toggle.click();
+    expect(sent.at(-1)).toEqual({ version: 1, type: "update", payload: { key: "showFloatingBackground", value: true } });
+    expect(document.querySelector("#floatingControlPanelToggle").checked).toBe(false);
+    expect(document.querySelector('[data-setting="floatingPanelBrightness"]').disabled).toBe(false);
+    receive({ useFloatingWindow: false, showFloatingBackground: true });
+    expect(toggle.checked).toBe(true);
+    expect(toggle.disabled).toBe(true);
+    expect(toggle.closest("[data-display-group]").hidden).toBe(true);
+    receive({ useFloatingWindow: true, showFloatingBackground: true, enableFloatingControlPanel: false });
+    expect(toggle.checked).toBe(true);
+    expect(toggle.disabled).toBe(false);
     dom.window.close();
   });
 

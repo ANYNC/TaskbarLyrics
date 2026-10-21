@@ -190,6 +190,12 @@ internal sealed class FloatingMaterialWindow : IFloatingPanelMaterial
 
     private IntPtr WndProc(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
+        if (message == 0x0021) // WM_MOUSEACTIVATE
+        {
+            // Keep a background click from raising this HWND above the lyrics until the next order repair.
+            handled = true;
+            return new IntPtr(3); // MA_NOACTIVATE
+        }
         if (message == 0x0084)
         {
             handled = true;

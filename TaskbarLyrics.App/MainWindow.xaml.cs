@@ -372,6 +372,7 @@ public partial class MainWindow : Window, IDisposable
         _floatingControls?.Configure(FloatingControlsLight, settings.FloatingPanelBrightness, settings.FloatingPanelTintOpacity, settings.FloatingPanelBlurAmount);
         _controlPanelWindow?.ConfigureMaterial(settings.EmbeddedPanelBrightness, settings.EmbeddedPanelTintOpacity, settings.EmbeddedPanelBlurAmount);
         _floatingControls!.ShowPlaybackControls = settings.EnableFloatingControlPanel;
+        _floatingControls.ShowBackground = settings.ShowFloatingBackground;
         _floatingControls.Enabled = settings.UseFloatingWindow;
         if (!keepControlPanelOpen) SetFloatingControlSurface(false, false);
     }

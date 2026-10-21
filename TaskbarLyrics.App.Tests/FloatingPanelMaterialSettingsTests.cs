@@ -6,6 +6,43 @@ namespace TaskbarLyrics.App.Tests;
 public sealed class FloatingPanelMaterialSettingsTests
 {
     [Theory]
+    [InlineData("{}", false)]
+    [InlineData("{\"ShowBackground\":true}", false)]
+    [InlineData("{\"ShowFloatingBackground\":true,\"EnableFloatingControlPanel\":false}", true)]
+    public void PersistentBackgroundDefaultsOffAndRoundTripsIndependently(string json, bool expected)
+    {
+        using var files = new TestDirectory();
+        var file = Path.Combine(files.Path, "settings.json");
+        File.WriteAllText(file, json);
+        var store = new SettingsStore(file);
+        var settings = store.Load();
+        Assert.Equal(expected, settings.ShowFloatingBackground);
+        Assert.Equal(expected, settings.Clone().ShowFloatingBackground);
+        settings.ShowFloatingBackground = !expected;
+        Assert.True(store.Save(settings));
+        var loaded = store.Load();
+        Assert.Equal(!expected, loaded.ShowFloatingBackground);
+        Assert.Equal(settings.ShowBackground, loaded.ShowBackground);
+        Assert.Equal(settings.EnableFloatingControlPanel, loaded.EnableFloatingControlPanel);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void PersistentBackgroundReappliesOnlyTheActiveFloatingAppearance(bool floating)
+    {
+        var current = new AppSettings { UseFloatingWindow = floating };
+        var next = current.Clone();
+        next.ShowFloatingBackground = true;
+        var changes = AppSettingsChangeSet.Create(current, next);
+        Assert.Equal(floating, changes.RequiresLyricsWindowApply);
+        Assert.Equal(floating, changes.VisualStyleChanged);
+        Assert.False(changes.LyricsLayoutChanged);
+        Assert.False(changes.WindowLayoutChanged);
+        Assert.False(changes.LyricSyncServiceChanged);
+    }
+
+    [Theory]
     [InlineData(-1, 0, 0)]
     [InlineData(2, 1, 1)]
     [InlineData(0.7, 0.7, 0.7)]

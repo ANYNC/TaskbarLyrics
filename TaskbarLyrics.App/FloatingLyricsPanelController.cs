@@ -20,6 +20,8 @@ internal sealed class FloatingLyricsPanelController : IDisposable
         internal IFloatingPanelMaterial? Material;
         internal Rect LyricsBounds = Rect.Empty;
         internal Rect CardBounds = Rect.Empty;
+        internal Rect MaterialBounds = Rect.Empty;
+        internal bool CanExpand;
         internal Rect WorkArea = Rect.Empty;
         internal bool Above;
         internal double Scale;
@@ -94,6 +96,22 @@ internal sealed class FloatingLyricsPanelController : IDisposable
     internal FloatingLyricsControlWindow? Panel => _active?.Panel;
     internal IEnumerable<FloatingLyricsControlWindow> Panels => _targets.Select(target => target.Panel).OfType<FloatingLyricsControlWindow>();
     internal bool IsAdjustingSize => _resizing is not null;
+
+    private bool _showBackground;
+    internal bool ShowBackground
+    {
+        get => _showBackground;
+        set
+        {
+            if (_showBackground == value) return;
+            _showBackground = value;
+            foreach (var target in _targets)
+            {
+                target.LyricsBounds = Rect.Empty;
+                if (_enabled) Prepare(target, keepOpen: true);
+            }
+        }
+    }
 
     internal void RegisterSizeAdjustment(Window window, Func<FloatingWindowSize> read,
         Action<FloatingWindowSize, Rect> preview, Action<FloatingWindowSize> commit)
@@ -278,9 +296,10 @@ internal sealed class FloatingLyricsPanelController : IDisposable
         if (locked && (!target.Window.IsVisible || !target.ContentVisible() || bounds.IsEmpty || bounds.Width <= 0 || bounds.Height <= 0)) return;
         if (_active == target) Close(immediate: true);
         target.Locked = locked;
+        target.LyricsBounds = Rect.Empty;
         if (locked)
         {
-            Release(target);
+            if (!ShowBackground) Release(target);
             target.UnlockWindow = new FloatingCoverUnlockWindow(target.Window, () => SetLocked(target, false), hovered =>
             {
                 if (!target.Locked || target.CoverHovered == hovered) return;
@@ -296,6 +315,7 @@ internal sealed class FloatingLyricsPanelController : IDisposable
             target.UnlockWindow = null;
         }
         ApplyInputPolicy(target);
+        if (_enabled && ShowBackground) Prepare(target);
         target.CoverHovered = ShowPlaybackControls && locked && target.UnlockWindow?.IsMouseOver == true;
         target.LockChanged?.Invoke(locked, target.CoverHovered);
         // Resume the usual hover delay after unlocking, including when the cursor stays on the cover.
@@ -336,17 +356,18 @@ internal sealed class FloatingLyricsPanelController : IDisposable
         var workArea = new Rect(work.Left, work.Top, work.Right - work.Left, work.Bottom - work.Top);
         try
         {
-            if (target.Material is not null && target.Panel is { IsClosed: false } && target.LyricsBounds == bounds &&
+            if (target.Material is not null && target.LyricsBounds == bounds &&
                 target.Scale == scale && target.WorkArea == workArea && target.HighContrast == SystemParameters.HighContrast)
             {
                 if (target.Topmost != target.Window.Topmost)
                 {
-                    target.Panel.Topmost = target.Window.Topmost;
-                    target.Material.Position(target.CardBounds, scale, new WindowInteropHelper(target.Window).Handle);
+                    if (target.Panel is { IsClosed: false }) target.Panel.Topmost = target.Window.Topmost;
+                    target.MaterialBounds = Rect.Empty;
+                    UpdateMaterial(target);
                     target.ResizeGrip?.Position(target.CardBounds, scale, _active == target, _light);
                     target.Topmost = target.Window.Topmost;
                 }
-                return EnsureWindowOrder(target);
+                return EnsureWindowOrder(target) && target.CanExpand;
             }
             var remainVisible = _active == target && (keepOpen || _dragging == target);
             if (_active == target && !remainVisible) Close(immediate: true);
@@ -355,15 +376,24 @@ internal sealed class FloatingLyricsPanelController : IDisposable
                 ? FloatingLyricsPanelPlacement.Follow(bounds, target.Above, scale, ShowPlaybackControls)
                 : FloatingLyricsPanelPlacement.Place(bounds, workArea, scale, ShowPlaybackControls);
             var requiredHeight = FloatingLyricsPanelPlacement.GetHeight(bounds.Width / scale, ShowPlaybackControls) * scale;
-            if (placement.Bounds.Height < requiredHeight) { Release(target); return false; }
+            target.CanExpand = !target.Locked && placement.Bounds.Height >= requiredHeight;
+            if (!target.CanExpand && remainVisible)
+            {
+                Close(immediate: true);
+                remainVisible = false;
+            }
+            if (!target.CanExpand && !ShowBackground) { Release(target); return false; }
             target.Material ??= CreateMaterial();
-            if (target.Panel is null || target.Panel.IsClosed)
+            if (target.CanExpand && (target.Panel is null || target.Panel.IsClosed))
             {
                 target.Panel = _create();
                 target.Panel.DragRequested += PanelDragRequested;
             }
-            target.Panel.Prepare(target.Window, placement, scale, ShowPlaybackControls);
-            target.Panel.SetPanelVisible(remainVisible, immediate: true);
+            if (target.CanExpand)
+            {
+                target.Panel!.Prepare(target.Window, placement, scale, ShowPlaybackControls);
+                target.Panel.SetPanelVisible(remainVisible, immediate: true);
+            }
             target.LyricsBounds = bounds;
             target.CardBounds = Rect.Union(bounds, placement.Bounds);
             target.WorkArea = workArea;
@@ -373,10 +403,10 @@ internal sealed class FloatingLyricsPanelController : IDisposable
             target.HighContrast = SystemParameters.HighContrast;
             target.Topmost = target.Window.Topmost;
             target.Material.Configure(_light, _brightness, _tintOpacity, _blurAmount);
-            target.Material.Position(target.CardBounds, scale, new WindowInteropHelper(target.Window).Handle);
+            target.MaterialBounds = Rect.Empty;
+            UpdateMaterial(target);
             if (!target.Material.EnsureBelow(new WindowInteropHelper(target.Window).Handle))
             { Release(target); return false; }
-            target.Material.SetVisible(remainVisible, immediate: true);
             if (target.ReadSize is not null && target.ResizeGrip is null)
             {
                 target.ResizeGrip = new FloatingResizeGripWindow(target.Window);
@@ -387,7 +417,7 @@ internal sealed class FloatingLyricsPanelController : IDisposable
             target.ResizeGrip?.Position(target.CardBounds, scale, remainVisible, _light);
             if (!EnsureWindowOrder(target)) { Release(target); return false; }
             if (remainVisible && directionChanged) target.Surface(true, target.Above);
-            return true;
+            return target.CanExpand;
         }
         catch (Exception ex) when (ex is COMException or InvalidOperationException or NotSupportedException)
         {
@@ -397,11 +427,29 @@ internal sealed class FloatingLyricsPanelController : IDisposable
             return false;
         }
     }
+
+    private void UpdateMaterial(Target target, bool immediate = true)
+    {
+        if (target.Material is not { } material) return;
+        var expanded = _active == target && !target.Locked;
+        var visible = _enabled && target.Window.IsVisible && target.ContentVisible() && (expanded || ShowBackground);
+        if (visible)
+        {
+            var bounds = expanded ? target.CardBounds : target.LyricsBounds;
+            if (bounds.IsEmpty) return;
+            if (target.MaterialBounds != bounds)
+            {
+                material.Position(bounds, target.Scale, new WindowInteropHelper(target.Window).Handle);
+                target.MaterialBounds = bounds;
+            }
+        }
+        material.SetVisible(visible, immediate);
+    }
+
     private void Tick(object? sender, EventArgs e)
     {
         if (_dragging is not null) return;
-        if (_readPointer() is not { } pointer) return;
-        var (point, hoveredRoot) = pointer;
+        var pointer = _readPointer();
         Target? hovered = null;
         foreach (var target in _targets)
         {
@@ -420,16 +468,20 @@ internal sealed class FloatingLyricsPanelController : IDisposable
                         FloatingPanelWindowOrder.EnsureAbove(new WindowInteropHelper(unlock).Handle,
                             new WindowInteropHelper(target.Window).Handle);
                     }
+                    if (ShowBackground) Prepare(target);
                     continue;
                 }
             }
             if (!Prepare(target)) continue;
+            if (pointer is not { } currentPointer) continue;
+            var (point, hoveredRoot) = currentPointer;
             var hoverBounds = _active == target ? target.CardBounds : target.LyricsBounds;
             if (hoverBounds.Contains(point) && (hoveredRoot == target.Material!.Handle ||
                 hoveredRoot == new WindowInteropHelper(target.Window).Handle || hoveredRoot == new WindowInteropHelper(target.Panel!).Handle ||
                 target.ResizeGrip is { } grip && hoveredRoot == new WindowInteropHelper(grip).Handle))
                 hovered = target;
         }
+        if (pointer is null) return;
         if (_active is not null && (hovered == _active || _active.Panel is { IsActive: true, KeepOpenForKeyboard: true }))
         { _leftAt = 0; return; }
         if (_active is not null && (GetAsyncKeyState(1) & 0x8000) != 0) return;
@@ -472,7 +524,7 @@ internal sealed class FloatingLyricsPanelController : IDisposable
         Close();
         _active = target;
         _suppressed = false;
-        target.Material!.SetVisible(true);
+        UpdateMaterial(target);
         target.Panel!.SetPanelVisible(true);
         target.ResizeGrip?.Position(target.CardBounds, target.Scale, true, _light);
         target.Surface(true, target.Above);
@@ -505,8 +557,8 @@ internal sealed class FloatingLyricsPanelController : IDisposable
         _resizing?.ResizeGrip?.CancelAdjustment();
         var target = _active;
         _active = null;
-        target?.Material?.SetVisible(false, immediate);
-        target?.Panel?.SetPanelVisible(false, immediate);
+        if (target is not null) UpdateMaterial(target, immediate);
+        target?.Panel?.SetPanelVisible(false, immediate || ShowBackground);
         target?.ResizeGrip?.Hide();
         target?.Surface(false, false);
         _leftAt = 0;
@@ -523,7 +575,8 @@ internal sealed class FloatingLyricsPanelController : IDisposable
         if (target.Panel is not null) target.Panel.DragRequested -= PanelDragRequested;
         target.Panel?.Close(); target.Panel = null;
         target.ResizeGrip?.Close(); target.ResizeGrip = null;
-        target.LyricsBounds = Rect.Empty; target.CardBounds = Rect.Empty;
+        target.LyricsBounds = Rect.Empty; target.CardBounds = Rect.Empty; target.MaterialBounds = Rect.Empty;
+        target.CanExpand = false;
     }
     internal static Rect GetBounds(Window window)
     {

@@ -1265,6 +1265,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             ControlPanelTriggerCover = _settings.ControlPanelTriggerCover,
             ControlPanelTriggerLyrics = _settings.ControlPanelTriggerLyrics,
             EnableFloatingControlPanel = _settings.EnableFloatingControlPanel,
+            ShowFloatingBackground = _settings.ShowFloatingBackground,
             FloatingLyricsLayoutScalePercent = _settings.FloatingLyricsLayoutScalePercent,
             EmbeddedPanelBrightness = _settings.EmbeddedPanelBrightness,
             EmbeddedPanelTintOpacity = _settings.EmbeddedPanelTintOpacity,
@@ -1487,7 +1488,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             "horizontalAnchor" or "xOffset" or "yOffset" or "showBackground" or "backgroundOpacity" or
             "showBorder" or "enableControlPanel" or "controlPanelTriggerMethod" or "controlPanelTriggerCover" or "controlPanelTriggerLyrics" or
             "embeddedPanelBrightness" or "embeddedPanelTintOpacity" or "embeddedPanelBlurAmount") return;
-        if (!_settings.UseFloatingWindow && key is "forceAlwaysOnTop" or "floatingWindowLayer" or "enableFloatingControlPanel" or
+        if (!_settings.UseFloatingWindow && key is "forceAlwaysOnTop" or "floatingWindowLayer" or "enableFloatingControlPanel" or "showFloatingBackground" or
             "floatingPanelBrightness" or "floatingPanelTintOpacity" or "floatingPanelBlurAmount") return;
 
         switch (key)
@@ -1614,6 +1615,9 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 break;
             case "enableFloatingControlPanel":
                 _settings.EnableFloatingControlPanel = ReadBool(element, _settings.EnableFloatingControlPanel);
+                break;
+            case "showFloatingBackground":
+                _settings.ShowFloatingBackground = ReadBool(element, _settings.ShowFloatingBackground);
                 break;
             case "floatingPanelBrightness":
                 _settings.FloatingPanelBrightness = ReadDouble(element, _settings.FloatingPanelBrightness);
@@ -2178,6 +2182,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         target.ControlPanelTriggerCover = source.ControlPanelTriggerCover;
         target.ControlPanelTriggerLyrics = source.ControlPanelTriggerLyrics;
         target.EnableFloatingControlPanel = source.EnableFloatingControlPanel;
+        target.ShowFloatingBackground = source.ShowFloatingBackground;
         target.FloatingLyricsLayoutScalePercent = source.FloatingLyricsLayoutScalePercent;
         target.EmbeddedPanelBrightness = source.EmbeddedPanelBrightness;
         target.EmbeddedPanelTintOpacity = source.EmbeddedPanelTintOpacity;
@@ -2331,6 +2336,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         public bool ControlPanelTriggerCover { get; set; }
         public bool ControlPanelTriggerLyrics { get; set; }
         public bool EnableFloatingControlPanel { get; set; }
+        public bool ShowFloatingBackground { get; set; }
         public double FloatingLyricsLayoutScalePercent { get; set; }
         public double EmbeddedPanelBrightness { get; set; }
         public double EmbeddedPanelTintOpacity { get; set; }

@@ -45,6 +45,9 @@ public sealed class ControlPanelTriggerWebSettingsTests
                     Update("embeddedPanelTintOpacity", 0.3);
                     Update("embeddedPanelBlurAmount", 48);
                     Update("floatingPanelBrightness", 0.2);
+                    Update("showFloatingBackground", true);
+                    Update("showFloatingBackground", "invalid");
+                    Assert.Equal(floating, settings.ShowFloatingBackground);
                     Update("floatingWindowLayer", "Desktop");
                     Assert.Equal(floating ? FloatingWindowLayer.Desktop : FloatingWindowLayer.Fullscreen, settings.FloatingWindowLayer);
                     Update("floatingWindowLayer", "Unknown");
@@ -67,6 +70,7 @@ public sealed class ControlPanelTriggerWebSettingsTests
                     var dto = typeof(SettingsWindow).GetMethod("CreateSettingsPayload", flags)!.Invoke(window, null)!;
                     var payload = JsonSerializer.SerializeToElement(dto, SettingsWebJson.Options);
                     Assert.Equal(floating ? "Desktop" : "Fullscreen", payload.GetProperty("floatingWindowLayer").GetString());
+                    Assert.Equal(floating, payload.GetProperty("showFloatingBackground").GetBoolean());
                     Assert.Equal(settings.EmbeddedPanelBrightness, payload.GetProperty("embeddedPanelBrightness").GetDouble());
                     Assert.Equal(settings.EmbeddedPanelTintOpacity, payload.GetProperty("embeddedPanelTintOpacity").GetDouble());
                     Assert.Equal(settings.EmbeddedPanelBlurAmount, payload.GetProperty("embeddedPanelBlurAmount").GetDouble());

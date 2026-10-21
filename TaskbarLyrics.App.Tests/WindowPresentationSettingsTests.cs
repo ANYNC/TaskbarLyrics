@@ -51,6 +51,7 @@ public sealed class WindowPresentationSettingsTests
             FloatingLyricsLayoutScalePercent = 160,
             EnableControlPanel = false,
             EnableFloatingControlPanel = false,
+            ShowFloatingBackground = true,
             ForceAlwaysOnTop = false,
             HorizontalAnchor = LyricsHorizontalAnchor.Right,
             XOffset = -42,
@@ -76,7 +77,7 @@ public sealed class WindowPresentationSettingsTests
         var before = JsonSerializer.SerializeToElement(settings);
         var defaults = JsonSerializer.SerializeToElement(new AppSettings());
         string[] resetKeys = floating
-            ? ["FloatingWindowWidth", "FloatingLyricsLayoutScalePercent", "EnableFloatingControlPanel", "ForceAlwaysOnTop", "FloatingWindowLayer",
+            ? ["FloatingWindowWidth", "FloatingLyricsLayoutScalePercent", "EnableFloatingControlPanel", "ShowFloatingBackground", "ForceAlwaysOnTop", "FloatingWindowLayer",
                 "FloatingPanelBlurAmount", "FloatingPanelBrightness", "FloatingPanelTintOpacity"]
             : ["WindowWidth", "LyricsLayoutScalePercent", "EnableControlPanel", "HorizontalAnchor", "XOffset", "YOffset",
                 "ShowBackground", "BackgroundOpacity", "ShowBorder", "EmbeddedPanelBlurAmount", "EmbeddedPanelBrightness", "EmbeddedPanelTintOpacity"];

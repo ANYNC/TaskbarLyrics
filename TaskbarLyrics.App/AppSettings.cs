@@ -203,6 +203,8 @@ public sealed class AppSettings
 
     public bool EnableFloatingControlPanel { get; set; } = true;
 
+    public bool ShowFloatingBackground { get; set; }
+
     public bool GetEnableControlPanel() => UseFloatingWindow ? EnableFloatingControlPanel : EnableControlPanel;
 
     public const double DefaultEmbeddedPanelBrightness = 0.20;
@@ -482,6 +484,7 @@ public sealed class AppSettings
             FloatingWindowWidth = defaults.FloatingWindowWidth;
             FloatingLyricsLayoutScalePercent = defaults.FloatingLyricsLayoutScalePercent;
             EnableFloatingControlPanel = defaults.EnableFloatingControlPanel;
+            ShowFloatingBackground = defaults.ShowFloatingBackground;
             ForceAlwaysOnTop = defaults.ForceAlwaysOnTop;
             FloatingWindowLayer = defaults.FloatingWindowLayer;
             FloatingPanelBlurAmount = defaults.FloatingPanelBlurAmount;
