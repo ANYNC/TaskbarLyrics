@@ -163,6 +163,11 @@ internal sealed class AppCompositionRoot : IAppCompositionRoot
         if (settings.EnableNetease) sources.Add("Netease");
         if (settings.EnableKugou) sources.Add("Kugou");
         if (settings.EnableSpotify) sources.Add("Spotify");
+        var overridden = settings.CustomPlayerSources.Select(source => PlayerSourceIdentity.NormalizeAdditional(source.SourceAppUserModelId))
+            .OfType<string>().ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (settings.EnableAppleMusic && !overridden.Contains("AppleMusic")) sources.Add("AppleMusic");
+        if (settings.EnableSodaMusic && !overridden.Contains("SodaMusic")) sources.Add("SodaMusic");
+        if (settings.EnableFoobar2000 && !overridden.Contains("Foobar2000")) sources.Add("Foobar2000");
         if (settings.EnableBrowser) sources.Add("Browser");
         sources.AddRange(settings.CustomPlayerSources.Where(source => source.Enabled)
             .Select(source => source.SourceAppUserModelId));

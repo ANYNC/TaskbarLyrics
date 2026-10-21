@@ -18,7 +18,6 @@ namespace TaskbarLyrics.App;
 
 public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
 {
-    private static readonly string[] BuiltInPlayerSources = ["QQMusic", "Netease", "Kugou", "Spotify", "Browser"];
     private readonly AppSettings _settings;
     private readonly TrackLyricOffsetStore _trackLyricOffsetStore;
     private readonly Func<Task<CurrentTrackLyricsContext?>> _getCurrentTrackLyricsContext;
@@ -1211,6 +1210,9 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             EnableQQMusic = _settings.EnableQQMusic,
             EnableKugou = _settings.EnableKugou,
             EnableSpotify = _settings.EnableSpotify,
+            EnableAppleMusic = _settings.EnableAppleMusic,
+            EnableSodaMusic = _settings.EnableSodaMusic,
+            EnableFoobar2000 = _settings.EnableFoobar2000,
             EnableBrowser = _settings.EnableBrowser,
             PlayerLyricOffsets = _settings.PlayerSources.ToDictionary(
                 pair => pair.Key,
@@ -1416,29 +1418,8 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
 
     private List<string> NormalizeSourceOrder(IEnumerable<string>? order)
     {
-        var known = BuiltInPlayerSources
-            .Concat(_settings.CustomPlayerSources.Select(source => source.SourceAppUserModelId))
-            .ToArray();
-        var result = new List<string>();
-
-        foreach (var source in order ?? Enumerable.Empty<string>())
-        {
-            var match = known.FirstOrDefault(item => string.Equals(item, source, StringComparison.OrdinalIgnoreCase));
-            if (match is not null && !result.Contains(match, StringComparer.OrdinalIgnoreCase))
-            {
-                result.Add(match);
-            }
-        }
-
-        foreach (var source in known)
-        {
-            if (!result.Contains(source, StringComparer.OrdinalIgnoreCase))
-            {
-                result.Add(source);
-            }
-        }
-
-        return result;
+        return PlayerSourceIdentity.NormalizeOrder(order,
+            _settings.CustomPlayerSources.Select(source => source.SourceAppUserModelId));
     }
 
     private static string NormalizeFontWeight(string? value)
@@ -1525,6 +1506,15 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 break;
             case "enableBrowser":
                 _settings.EnableBrowser = ReadBool(element, _settings.EnableBrowser);
+                break;
+            case "enableAppleMusic":
+                _settings.EnableAppleMusic = ReadBool(element, _settings.EnableAppleMusic);
+                break;
+            case "enableSodaMusic":
+                _settings.EnableSodaMusic = ReadBool(element, _settings.EnableSodaMusic);
+                break;
+            case "enableFoobar2000":
+                _settings.EnableFoobar2000 = ReadBool(element, _settings.EnableFoobar2000);
                 break;
             case "enableLocalLyrics":
                 _settings.EnableLocalLyrics = ReadBool(element, _settings.EnableLocalLyrics);
@@ -2155,6 +2145,9 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         target.EnableQQMusic = source.EnableQQMusic;
         target.EnableKugou = source.EnableKugou;
         target.EnableSpotify = source.EnableSpotify;
+        target.EnableAppleMusic = source.EnableAppleMusic;
+        target.EnableSodaMusic = source.EnableSodaMusic;
+        target.EnableFoobar2000 = source.EnableFoobar2000;
         target.EnableBrowser = source.EnableBrowser;
         source.NormalizePlayerSources();
         target.PlayerSources = source.PlayerSources.ToDictionary(
@@ -2301,6 +2294,9 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         public bool EnableQQMusic { get; set; }
         public bool EnableKugou { get; set; }
         public bool EnableSpotify { get; set; }
+        public bool EnableAppleMusic { get; set; }
+        public bool EnableSodaMusic { get; set; }
+        public bool EnableFoobar2000 { get; set; }
         public bool EnableBrowser { get; set; }
         public Dictionary<string, int> PlayerLyricOffsets { get; set; } = new(StringComparer.OrdinalIgnoreCase);
         public Dictionary<string, List<LyricProviderPreference>> PlayerLyricProviders { get; set; } = new(StringComparer.OrdinalIgnoreCase);

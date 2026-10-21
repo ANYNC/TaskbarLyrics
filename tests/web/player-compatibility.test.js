@@ -12,6 +12,22 @@ async function createCompatibility() {
 }
 
 describe("shared player compatibility", () => {
+  it("renders onboarding titles and keeps shared drawer metrics when changing presentation", async () => {
+    const { dom, container, render } = await createCompatibility();
+    render(container, "netease", undefined, true);
+    expect(container.querySelector("h2").textContent).toBe("网易云音乐");
+    expect(container.querySelector("img").getAttribute("src")).toBe("../../Assets/PlayerIcons/网易云音乐.png");
+    expect(container.querySelector("[data-compatibility-link]")).toBeNull();
+    const metrics = container.querySelector("dl").outerHTML;
+    const instructions = container.querySelector("ol").outerHTML;
+    render(container, "netease");
+    expect(container.querySelector("h2, img")).toBeNull();
+    expect(container.querySelector("[data-compatibility-link]")).not.toBeNull();
+    expect(container.querySelector("dl").outerHTML).toBe(metrics);
+    expect(container.querySelector("ol").outerHTML).toBe(instructions);
+    dom.window.close();
+  });
+
   it.each([
     ["qqmusic", "supported", ["支持", "支持", "无需配置"]],
     ["spotify", "supported", ["支持", "支持", "无需配置"]],

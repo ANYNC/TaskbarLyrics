@@ -45,7 +45,7 @@ internal static class PlayerMediaSessionDiscovery
             }
 
             var normalized = SmtcMusicSessionProvider.NormalizeSource(id);
-            var isBuiltIn = normalized is "QQMusic" or "Netease" or "Kugou" or "Spotify";
+            var isBuiltIn = normalized != "Browser" && PlayerSourceIdentity.BuiltInOrder.Contains(normalized, StringComparer.OrdinalIgnoreCase);
             var name = id.Contains('!') ? id[(id.LastIndexOf('!') + 1)..] : id;
             if (name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
             {

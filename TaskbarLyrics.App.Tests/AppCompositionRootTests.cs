@@ -25,7 +25,10 @@ public sealed class AppCompositionRootTests
             EnableQQMusic = false,
             EnableNetease = true,
             EnableKugou = false,
-            EnableSpotify = true
+            EnableSpotify = true,
+            EnableAppleMusic = false,
+            EnableSodaMusic = false,
+            EnableFoobar2000 = false
         };
         Assert.True(settings.AddCustomPlayerSource("Example.Player!Music", "示例播放器"));
         Assert.True(settings.AddCustomPlayerSource("Other.Player!Music", "另一播放器"));
@@ -37,6 +40,22 @@ public sealed class AppCompositionRootTests
         Assert.Equal(["Netease", "Spotify", "Example.Player!Music"], sources);
         settings.EnableBrowser = true;
         Assert.Equal(["Netease", "Spotify", "Browser", "Example.Player!Music"], root.GetEnabledPlayerSources(settings));
+    }
+
+    [Fact]
+    public void NewBuiltInPlayersRespectDisabledCustomOverridesWithoutDuplicatingSources()
+    {
+        using var root = CreateRoot();
+        var settings = new AppSettings();
+        Assert.Equal(["QQMusic", "Netease", "Kugou", "Spotify", "AppleMusic", "SodaMusic", "Foobar2000"], root.GetEnabledPlayerSources(settings));
+        Assert.True(settings.AddCustomPlayerSource("AppleInc.AppleMusicWin_nzyj5cx40ttqa!App", "旧 Apple", enabled: false));
+        Assert.True(settings.AddCustomPlayerSource("foobar2000", "旧 foobar", enabled: false));
+        var enabled = root.GetEnabledPlayerSources(settings);
+        Assert.DoesNotContain("AppleMusic", enabled);
+        Assert.DoesNotContain("Foobar2000", enabled);
+        Assert.Contains("SodaMusic", enabled);
+        Assert.True(settings.SetCustomPlayerSourceEnabled("foobar2000", true));
+        Assert.Single(root.GetEnabledPlayerSources(settings), source => source.Equals("foobar2000", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]

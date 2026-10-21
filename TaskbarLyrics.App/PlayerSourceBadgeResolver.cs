@@ -15,6 +15,9 @@ internal static class PlayerSourceBadgeResolver
             ["Netease"] = ("网易云音乐", "网易云音乐.png"),
             ["Kugou"] = ("酷狗音乐", "酷狗音乐.png"),
             ["Spotify"] = ("Spotify", "spotify.png"),
+            ["AppleMusic"] = ("Apple Music", "Apple Music.png.png"),
+            ["SodaMusic"] = ("汽水音乐", "Soda Music.png"),
+            ["Foobar2000"] = ("foobar2000", "Foobar2000.png"),
             ["Browser"] = ("浏览器", "Browser.png")
         };
 
@@ -30,13 +33,13 @@ internal static class PlayerSourceBadgeResolver
             return default;
         }
 
-        if (BuiltInSources.TryGetValue(source, out var builtIn))
+        var custom = settings.CustomPlayerSources.FirstOrDefault(item =>
+            string.Equals(item.SourceAppUserModelId, source, StringComparison.OrdinalIgnoreCase));
+        if (custom is null && BuiltInSources.TryGetValue(source, out var builtIn))
         {
             return new PlayerSourceBadge(builtIn.Name, LoadAsset(builtIn.FileName), false);
         }
 
-        var custom = settings.CustomPlayerSources.FirstOrDefault(item =>
-            string.Equals(item.SourceAppUserModelId, source, StringComparison.OrdinalIgnoreCase));
         if (custom is null)
         {
             return new PlayerSourceBadge(source, LoadAsset("Presets/music-player.svg"), true);

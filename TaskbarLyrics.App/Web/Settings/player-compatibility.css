@@ -18,3 +18,19 @@
 .compatibility-link:hover { color: var(--primary); }
 .compatibility-link:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: var(--radius-sm); }
 .player-compatibility-section { padding: 12px 14px; }
+.is-onboarding .compatibility-heading { margin-bottom: 12px; }
+.compatibility-player { min-width: 0; display: flex; align-items: center; gap: 12px; }
+.compatibility-player img { width: 44px; height: 44px; flex: none; object-fit: contain; }
+.compatibility-player h2 { margin: 0; font-size: 23px; font-weight: 600; line-height: 1.3; }
+.is-onboarding .compatibility-summary { font-size: 13px; }
+.is-onboarding .compatibility-metrics { gap: 0; margin: 24px 0; padding: 16px 0; border-block: 1px solid var(--border); }
+.is-onboarding .compatibility-metrics > div { padding: 0 16px; border: 0; border-radius: 0; }
+.is-onboarding .compatibility-metrics > div:first-child { padding-left: 0; }
+.is-onboarding .compatibility-metrics > div + div { border-left: 1px solid var(--border); }
+.is-onboarding .compatibility-metrics dd { font-size: 13px; }
+.is-onboarding .compatibility-details { margin-top: 0; }
+.is-onboarding .compatibility-details-title { font-size: 13px; }
+.is-onboarding .compatibility-details ol { display: grid; gap: 16px; margin: 16px 0; padding: 0; list-style: none; counter-reset: preparation; }
+.is-onboarding .compatibility-details li { display: grid; grid-template-columns: 24px minmax(0, 1fr); align-items: start; gap: 10px; margin: 0; counter-increment: preparation; }
+.is-onboarding .compatibility-details li::before { content: counter(preparation); display: grid; place-items: center; width: 22px; height: 22px; border: 1px solid var(--input); border-radius: 50%; color: var(--foreground); font-size: 11px; line-height: 1; }
+.is-onboarding[data-support-level="setup"] .compatibility-level { font-weight: 600; }

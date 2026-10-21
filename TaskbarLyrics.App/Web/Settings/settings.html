@@ -57,26 +57,28 @@
       </header>
 
       <div class="page-stack">
-        <section class="page" data-page="gettingStarted" aria-labelledby="gettingStartedHeading">
+        <section class="page getting-started-page" data-page="gettingStarted" aria-labelledby="gettingStartedHeading">
           <div class="page-inner">
             <section class="panel getting-started-panel">
-              <div class="panel-head"><div><h2 id="gettingStartedHeading" tabindex="-1">选择播放器，开始显示歌词</h2><p>查看兼容性和必要配置。</p></div></div>
-              <div class="panel-body getting-started-body">
+              <aside class="getting-started-selector">
+                <div class="getting-started-list-heading"><h2 id="gettingStartedHeading" tabindex="-1">选择播放器</h2><span id="gettingStartedCount" aria-label="播放器数量"></span></div>
+                <label class="getting-started-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg><input id="gettingStartedSearch" type="search" placeholder="搜索播放器…" aria-label="搜索播放器" aria-controls="gettingStartedPlayerList" autocomplete="off" spellcheck="false"></label>
                 <fieldset class="getting-started-players">
-                  <legend>你主要使用哪个播放器？</legend>
-                  <label><input type="radio" name="gettingStartedPlayer" value="netease"><span>网易云音乐</span></label>
-                  <label><input type="radio" name="gettingStartedPlayer" value="qqmusic"><span>QQ 音乐</span></label>
-                  <label><input type="radio" name="gettingStartedPlayer" value="kugou"><span>酷狗音乐</span></label>
-                  <label><input type="radio" name="gettingStartedPlayer" value="spotify"><span>Spotify</span></label>
-                  <label><input type="radio" name="gettingStartedPlayer" value="applemusic"><span>Apple Music</span></label>
-                  <label><input type="radio" name="gettingStartedPlayer" value="sodamusic"><span>汽水音乐</span></label>
-                  <label><input type="radio" name="gettingStartedPlayer" value="foobar2000"><span>foobar2000</span></label>
-                  <label><input type="radio" name="gettingStartedPlayer" value="browser"><span>浏览器</span></label>
-                  <label><input type="radio" name="gettingStartedPlayer" value="other"><span>其他播放器</span></label>
+                  <legend class="getting-started-sr-only">你主要使用哪个播放器？</legend>
+                  <div id="gettingStartedPlayerList" class="getting-started-player-list"></div>
+                  <p id="gettingStartedNoResults" class="getting-started-note" hidden>未找到匹配项，可选择下方的其他播放器。</p>
+                  <div id="gettingStartedOther" class="getting-started-other"></div>
                 </fieldset>
-                <section id="gettingStartedGuidance" aria-live="polite" hidden></section>
-                <p class="getting-started-note">未列出的播放器需先在“播放源”中添加。选择仅用于查看说明，不改变设置；指标非实时检测。</p>
-                <div class="getting-started-actions"><button class="btn" type="button" data-getting-started-done>开始使用</button><button class="btn ghost" type="button" data-getting-started-later>稍后配置</button></div>
+                <span id="gettingStartedSearchStatus" class="getting-started-sr-only" role="status"></span>
+              </aside>
+              <div class="getting-started-content">
+                <section id="gettingStartedGuidance" class="getting-started-guidance" aria-live="polite" hidden></section>
+                <div class="getting-started-footer">
+                  <p id="gettingStartedAddNote" class="getting-started-note" hidden>播放歌曲后，在媒体会话中选择并添加此播放器。</p>
+                  <div class="getting-started-actions"><button class="btn" type="button" data-getting-started-done>查看安装说明</button><button class="btn ghost" type="button" data-getting-started-later>跳过引导</button></div>
+                  <button class="getting-started-ready compatibility-link" type="button" data-getting-started-ready hidden>已配置，显示歌词</button>
+                  <p class="getting-started-note">选择仅用于查看说明，不改变播放源设置。兼容性为参考，非实时检测结果。</p>
+                </div>
               </div>
             </section>
           </div>

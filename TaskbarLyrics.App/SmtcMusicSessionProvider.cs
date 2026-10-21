@@ -203,8 +203,8 @@ internal sealed class ProcessFallbackDetectionCache
 
 public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlaybackController, IPlayerRecognitionController, IDisposable
 {
-    private static readonly string[] DefaultEnabledSources = { "QQMusic", "Netease", "Kugou", "Spotify" };
-    private static readonly string[] DefaultRecognitionOrder = { "QQMusic", "Netease", "Kugou", "Spotify", "Browser" };
+    private static readonly string[] DefaultEnabledSources = PlayerSourceIdentity.BuiltInOrder.Where(source => source != "Browser").ToArray();
+    private static readonly string[] DefaultRecognitionOrder = PlayerSourceIdentity.BuiltInOrder.ToArray();
     private static readonly Regex TitleArtistRegex = new(
         @"^(?<title>.+?)\s*[-|—]\s*(?<artist>.+)$",
         RegexOptions.Compiled);
@@ -911,6 +911,7 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
     internal static string NormalizeSource(string? sourceAppUserModelId)
     {
         if (string.IsNullOrWhiteSpace(sourceAppUserModelId)) return string.Empty;
+        if (PlayerSourceIdentity.NormalizeAdditional(sourceAppUserModelId) is { } additional) return additional;
         if (sourceAppUserModelId.Contains("spotify", StringComparison.OrdinalIgnoreCase))
         {
             return "Spotify";
@@ -979,10 +980,10 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
     {
         if (string.IsNullOrWhiteSpace(sourceAppUserModelId)) return false;
         if (IsBlockedSystemSource(sourceAppUserModelId)) return false;
+        if (_configuredCustomSources.Contains(sourceAppUserModelId)) return _enabledSources.Contains(sourceAppUserModelId);
+        if (PlayerSourceIdentity.NormalizeAdditional(sourceAppUserModelId) is { } additional) return _enabledSources.Contains(additional);
         if (!IsBrowserSource(sourceAppUserModelId)) return true;
-        return _configuredCustomSources.Contains(sourceAppUserModelId)
-            ? _enabledSources.Contains(sourceAppUserModelId)
-            : _enabledSources.Contains("Browser");
+        return _enabledSources.Contains("Browser");
     }
 
     private static bool IsAnyProcessRunning(params string[] names)
@@ -1148,7 +1149,9 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
         {
             if (enabledSources.Contains(source) && seen.Add(source))
             {
-                result.Add(source);
+                var browser = result.IndexOf("Browser");
+                if (browser >= 0 && source != "Browser") result.Insert(browser, source);
+                else result.Add(source);
             }
         }
 

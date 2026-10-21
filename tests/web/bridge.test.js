@@ -74,7 +74,8 @@ describe("settings WebView bridge", () => {
     dom.window.settingsApp.receive({ version: 1, type: "navigate", payload: { page: "gettingStarted" } });
     const initialCount = sent.length;
     const guidance = document.querySelector("#gettingStartedGuidance");
-    expect(guidance.hidden).toBe(true);
+    expect(guidance.hidden).toBe(false);
+    expect(document.querySelector('input[name="gettingStartedPlayer"]:checked').value).toBe("netease");
     for (const [player, content] of [["netease", "inflink-rs"], ["kugou", "不支持"], ["qqmusic", "完美支持，直接播放即可"], ["spotify", "完美支持，直接播放即可"], ["applemusic", "时间轴信息不精准"], ["sodamusic", "完美支持，直接播放即可"], ["foobar2000", "foo_mediacontrol"], ["browser", "视网站而定"], ["other", "待确认"]]) {
       const radio = document.querySelector(`input[name="gettingStartedPlayer"][value="${player}"]`);
       radio.click();
@@ -84,12 +85,134 @@ describe("settings WebView bridge", () => {
     }
     expect(sent).toHaveLength(initialCount);
     document.querySelector('input[name="gettingStartedPlayer"][value="netease"]').click();
-    guidance.querySelector("[data-compatibility-link]").click();
+    document.querySelector("[data-getting-started-done]").click();
     expect(sent.at(-1)).toEqual({ version: 1, type: "openExternalLink", payload: "https://github.com/apoint123/inflink-rs" });
     document.querySelector('input[name="gettingStartedPlayer"][value="kugou"]').click();
     guidance.querySelector("[data-compatibility-link]").click();
     expect(sent.at(-1)).toEqual({ version: 1, type: "openExternalLink", payload: "https://github.com/MoeKoeMusic/MoeKoeMusic" });
     expect(document.querySelector('[data-player-card="netease"] .source-info small').textContent).toContain("已停用");
+    dom.window.close();
+  });
+
+  it("uses bundled player icons and a persistent other-player entry", async () => {
+    const { dom, script } = await createSettingsDom();
+    dom.window.eval(script);
+    const document = dom.window.document;
+    const options = [...document.querySelectorAll(".getting-started-option")];
+    expect(options).toHaveLength(9);
+    expect(document.querySelector("#gettingStartedCount").textContent).toBe("9");
+    for (const option of options) {
+      const icon = option.querySelector("img");
+      expect(icon.alt).toBe("");
+      expect(icon.getAttribute("src")).toMatch(/^\.\.\/\.\.\/Assets\/PlayerIcons\//);
+      const iconPath = new URL(icon.getAttribute("src"), new URL("TaskbarLyrics.App/Web/Settings/settings.html", root));
+      expect((await readFile(iconPath)).length).toBeGreaterThan(0);
+    }
+    expect(document.querySelector('#gettingStartedOther input').value).toBe("other");
+    expect(document.querySelector("#gettingStartedGuidance h2").textContent).toBe("网易云音乐");
+    expect(document.querySelector("#gettingStartedGuidance .compatibility-level").textContent).toContain("需配置插件");
+    expect(document.querySelector("#gettingStartedGuidance [data-compatibility-link]")).toBeNull();
+    dom.window.close();
+  });
+
+  it("filters player aliases without clearing the selection or changing settings and supports keyboard selection", async () => {
+    const { dom, sent, script } = await createSettingsDom();
+    dom.window.eval(script);
+    const document = dom.window.document;
+    dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings: {} } });
+    const search = document.querySelector("#gettingStartedSearch");
+    dom.window.settingsApp.receive({ version: 1, type: "navigate", payload: { page: "gettingStarted" } });
+    const initialCount = sent.length;
+    const filter = query => {
+      search.value = query;
+      search.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+    };
+    filter("  APPLE MUSIC ");
+    expect([...document.querySelectorAll('#gettingStartedPlayerList label:not([hidden]) input')].map(item => item.value)).toEqual(["applemusic"]);
+    expect(document.querySelector('input[name="gettingStartedPlayer"]:checked').value).toBe("netease");
+    expect(document.querySelector('#gettingStartedGuidance h2').textContent).toBe("网易云音乐");
+    const apple = document.querySelector('input[name="gettingStartedPlayer"][value="applemusic"]');
+    expect(apple.tabIndex).toBe(0);
+    apple.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "End", bubbles: true }));
+    expect(document.querySelector('input[name="gettingStartedPlayer"]:checked').value).toBe("other");
+    expect(document.activeElement.value).toBe("other");
+    filter("没有这个播放器");
+    expect(document.querySelector("#gettingStartedNoResults").hidden).toBe(false);
+    expect(document.querySelector('#gettingStartedOther input').tabIndex).toBe(0);
+    expect(document.querySelector("#gettingStartedSearchStatus").textContent).toContain("找到 0 个播放器");
+    search.focus();
+    search.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(search.value).toBe("");
+    expect(document.querySelector("#gettingStartedNoResults").hidden).toBe(true);
+    expect(document.querySelectorAll('#gettingStartedPlayerList label:not([hidden])')).toHaveLength(8);
+    expect(document.activeElement).toBe(search);
+    expect(sent).toHaveLength(initialCount);
+    dom.window.close();
+  });
+
+  it.each([
+    ["netease", "https://github.com/apoint123/inflink-rs"],
+    ["foobar2000", "https://github.com/ungive/foo_mediacontrol"]
+  ])("opens %s setup documentation without changing settings or starting playback", async (player, url) => {
+    const { dom, sent, script } = await createSettingsDom();
+    dom.window.eval(script);
+    const document = dom.window.document;
+    dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings: {} } });
+    document.querySelector(`input[name="gettingStartedPlayer"][value="${player}"]`).click();
+    dom.window.settingsApp.receive({ version: 1, type: "navigate", payload: { page: "gettingStarted" } });
+    const initialCount = sent.length;
+    const button = document.querySelector("[data-getting-started-done]");
+    expect(button.textContent).toBe("查看安装说明");
+    button.click();
+    expect(sent.slice(initialCount)).toEqual([{ version: 1, type: "openExternalLink", payload: url }]);
+    expect(document.querySelector("[data-getting-started-ready]").hidden).toBe(false);
+    dom.window.close();
+  });
+
+  it("routes other players to media-session discovery only after the user requests it", async () => {
+    const player = "other";
+    const { dom, sent, script } = await createSettingsDom();
+    enableDialogDomSupport(dom);
+    dom.window.eval(script);
+    const document = dom.window.document;
+    dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings: {} } });
+    document.querySelector(`input[name="gettingStartedPlayer"][value="${player}"]`).click();
+    expect(document.querySelector("#gettingStartedAddNote").hidden).toBe(false);
+    dom.window.settingsApp.receive({ version: 1, type: "navigate", payload: { page: "gettingStarted" } });
+    const initialCount = sent.length;
+    document.querySelector("[data-getting-started-done]").click();
+    expect(document.querySelector('[data-page="sources"]').classList.contains("active")).toBe(true);
+    expect(document.querySelector("#playerSettingsDialog").open).toBe(true);
+    expect(sent.slice(initialCount)).toEqual([
+      { version: 1, type: "settingsPageChanged", payload: "sources" },
+      { version: 1, type: "discoverPlayerSessions", payload: {} }
+    ]);
+    dom.window.close();
+  });
+
+  it("offers playback instead of duplicate registration for an already-added custom player and retains focus on refresh", async () => {
+    const { dom, sent, script } = await createSettingsDom();
+    dom.window.eval(script);
+    const document = dom.window.document;
+    const settings = { customPlayerSources: [{ sourceAppUserModelId: "AppleInc.AppleMusicWin_nzyj5cx40ttqa!App", displayName: "我的播放器", enabled: true }] };
+    dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings } });
+    const radio = document.querySelector('input[name="gettingStartedPlayer"][value="applemusic"]');
+    radio.click();
+    radio.focus();
+    const guidance = document.querySelector("#gettingStartedGuidance").firstElementChild;
+    dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings } });
+    expect(document.activeElement).toBe(radio);
+    expect(document.querySelector("#gettingStartedGuidance").firstElementChild).toBe(guidance);
+    expect(document.querySelector("#gettingStartedAddNote").hidden).toBe(true);
+    dom.window.settingsApp.receive({ version: 1, type: "navigate", payload: { page: "gettingStarted" } });
+    const button = document.querySelector("[data-getting-started-done]");
+    expect(button.textContent).toBe("显示歌词");
+    const initialCount = sent.length;
+    button.click();
+    expect(sent.slice(initialCount)).toEqual([
+      { version: 1, type: "showLyricsWindow", payload: {} },
+      { version: 1, type: "settingsPageChanged", payload: "sources" }
+    ]);
     dom.window.close();
   });
 
@@ -105,6 +228,7 @@ describe("settings WebView bridge", () => {
     expect(sent.slice(initialCount)).toEqual([{ version: 1, type: "settingsPageChanged", payload: "sources" }]);
     document.querySelector('[data-nav="gettingStarted"]').click();
     expect(document.querySelector('[data-page="gettingStarted"]').classList.contains("active")).toBe(true);
+    document.querySelector('input[name="gettingStartedPlayer"][value="qqmusic"]').click();
     document.querySelector("[data-getting-started-done]").click();
     expect(sent.slice(-2)).toEqual([
       { version: 1, type: "showLyricsWindow", payload: {} },
@@ -128,6 +252,65 @@ describe("settings WebView bridge", () => {
     }
     expect(document.querySelector("#playerGuidanceDialog")).toBeNull();
     expect(sent).toHaveLength(initialCount);
+    dom.window.close();
+  });
+
+  it.each([
+    ["applemusic", "AppleMusic", "enableAppleMusic", "Apple Music.png.png"],
+    ["sodamusic", "SodaMusic", "enableSodaMusic", "Soda Music.png"],
+    ["foobar2000", "Foobar2000", "enableFoobar2000", "Foobar2000.png"]
+  ])("exposes %s as a built-in source with recognition and playback preferences", async (player, adapter, key, fileName) => {
+    const { dom, sent, script } = await createSettingsDom();
+    enableDialogDomSupport(dom);
+    dom.window.eval(script);
+    const document = dom.window.document;
+    dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings: {
+      [key]: true,
+      sourceRecognitionOrder: ["QQMusic", "Netease", "Kugou", "Spotify", "Browser"],
+      playerLyricOffsets: { [adapter]: 123 }
+    } } });
+    const cards = [...document.querySelectorAll("[data-player-card]")];
+    expect(cards.map(card => card.dataset.playerCard)).toEqual(["qqmusic", "netease", "kugou", "spotify", "applemusic", "sodamusic", "foobar2000", "browser"]);
+    const card = document.querySelector(`[data-player-card="${player}"]`);
+    expect(card.classList.contains("enabled")).toBe(true);
+    expect(card.querySelector("img").getAttribute("src")).toBe(`../../Assets/PlayerIcons/${fileName}`);
+    document.querySelector(`[data-player-settings="${player}"]`).click();
+    expect(document.querySelector("#playerOffsetInput").value).toBe("123");
+    expect(document.querySelector("#playerCardInfoSection").hidden).toBe(true);
+    expect(document.querySelector("#removePlayerSourceButton").hidden).toBe(true);
+    const toggle = document.querySelector("#playerRecognitionToggle");
+    expect(toggle.checked).toBe(true);
+    toggle.checked = false;
+    toggle.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+    expect(sent.at(-1)).toEqual({ version: 1, type: "update", payload: { key, value: false } });
+    document.querySelector("#playerSettingsDialog").close();
+    document.querySelector(`input[name="gettingStartedPlayer"][value="${player}"]`).click();
+    expect(document.querySelector("#gettingStartedAddNote").hidden).toBe(true);
+    expect(document.querySelector(player === "foobar2000" ? "[data-getting-started-ready]" : "[data-getting-started-done]").textContent).toContain("显示歌词");
+    dom.window.close();
+  });
+
+  it("keeps legacy custom player cards and their settings instead of duplicating built-in cards", async () => {
+    const { dom, sent, script } = await createSettingsDom();
+    enableDialogDomSupport(dom);
+    dom.window.eval(script);
+    const document = dom.window.document;
+    dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings: {
+      customPlayerSources: [{ sourceAppUserModelId: "foobar2000", displayName: "我的 foobar", enabled: false }],
+      playerLyricOffsets: { foobar2000: 456 },
+      enableFoobar2000: true
+    } } });
+    expect(document.querySelector('[data-player-card="foobar2000"]')).toBeNull();
+    const card = document.querySelector('[data-player-card="custom-foobar2000"]');
+    expect(card.textContent).toContain("我的 foobar");
+    expect(card.classList.contains("enabled")).toBe(false);
+    document.querySelector('[data-player-settings="custom-foobar2000"]').click();
+    expect(document.querySelector("#playerOffsetInput").value).toBe("456");
+    expect(document.querySelector("#playerCompatibilitySection").textContent).toContain("foo_mediacontrol");
+    const toggle = document.querySelector("#playerRecognitionToggle");
+    toggle.checked = true;
+    toggle.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+    expect(sent.at(-1).payload).toEqual({ key: "customPlayerEnabled:foobar2000", value: true });
     dom.window.close();
   });
 
@@ -155,7 +338,9 @@ describe("settings WebView bridge", () => {
       const sourceId = customIds[player] ? `custom-${encodeURIComponent(customIds[player])}` : player;
       document.querySelector(`[data-player-settings="${sourceId}"]`).click();
       expect(section.hidden).toBe(false);
-      expect(section.querySelector(".player-compatibility").outerHTML).toBe(guide.querySelector(".player-compatibility").outerHTML);
+      expect(section.querySelector("dl").innerHTML).toBe(guide.querySelector("dl").innerHTML);
+      expect(section.querySelector(".compatibility-summary").textContent).toBe(guide.querySelector(".compatibility-summary").textContent);
+      expect([...section.querySelectorAll("li")].map(item => item.textContent)).toEqual([...guide.querySelectorAll("li")].map(item => item.textContent));
       expect(section.querySelectorAll("dl > div")).toHaveLength(3);
       dialog.close();
     }
@@ -455,7 +640,7 @@ describe("settings WebView bridge", () => {
     expect(document.querySelector("#priorityList")).toBeNull();
     expect(document.querySelector('[data-page="sources"]').textContent).not.toContain("识别优先级");
     expect([...document.querySelectorAll("[data-player-settings]")].map(item => item.dataset.playerSettings))
-      .toEqual(["spotify", "qqmusic", "netease", "kugou", "browser"]);
+      .toEqual(["spotify", "qqmusic", "netease", "kugou", "applemusic", "sodamusic", "foobar2000", "browser"]);
 
     document.querySelector('[data-player-settings="browser"]').click();
     const drawerBody = document.querySelector("#playerDrawerBody");
@@ -508,26 +693,26 @@ describe("settings WebView bridge", () => {
     const initialMessages = sent.length;
     drag(document.querySelector('[data-player-drag-id="qqmusic"]'), "dragstart");
     drag(document.querySelector('[data-player-card="netease"]'), "dragover");
-    expect(order()).toEqual(["netease", "qqmusic", "kugou", "spotify", "browser"]);
+    expect(order()).toEqual(["netease", "qqmusic", "kugou", "spotify", "applemusic", "sodamusic", "foobar2000", "browser"]);
     expect(sent).toHaveLength(initialMessages);
     drag(grid, "drop");
     expect(sent.at(-1).type).toBe("reorderSources");
-    expect(sent.at(-1).payload).toEqual(["Netease", "QQMusic", "Kugou", "Spotify", "Browser"]);
+    expect(sent.at(-1).payload).toEqual(["Netease", "QQMusic", "Kugou", "Spotify", "AppleMusic", "SodaMusic", "Foobar2000", "Browser"]);
     expect(document.querySelector("#sourceOrderAnnouncement").textContent).toContain("第 2 位");
 
     const committedMessages = sent.length;
     const spotifyHandle = document.querySelector('[data-player-drag-id="spotify"]');
     drag(spotifyHandle, "dragstart");
     drag(document.querySelector('[data-player-card="netease"]'), "dragover");
-    expect(order()).toEqual(["spotify", "netease", "qqmusic", "kugou", "browser"]);
+    expect(order()).toEqual(["spotify", "netease", "qqmusic", "kugou", "applemusic", "sodamusic", "foobar2000", "browser"]);
     drag(spotifyHandle, "dragend");
-    expect(order()).toEqual(["netease", "qqmusic", "kugou", "spotify", "browser"]);
+    expect(order()).toEqual(["netease", "qqmusic", "kugou", "spotify", "applemusic", "sodamusic", "foobar2000", "browser"]);
     expect(sent).toHaveLength(committedMessages);
 
     document.querySelector('[data-player-drag-id="qqmusic"]')
       .dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "ArrowUp", altKey: true, bubbles: true }));
-    expect(order()).toEqual(["qqmusic", "netease", "kugou", "spotify", "browser"]);
-    expect(sent.at(-1).payload).toEqual(["QQMusic", "Netease", "Kugou", "Spotify", "Browser"]);
+    expect(order()).toEqual(["qqmusic", "netease", "kugou", "spotify", "applemusic", "sodamusic", "foobar2000", "browser"]);
+    expect(sent.at(-1).payload).toEqual(["QQMusic", "Netease", "Kugou", "Spotify", "AppleMusic", "SodaMusic", "Foobar2000", "Browser"]);
     expect(document.activeElement.dataset.playerDragId).toBe("qqmusic");
   });
 

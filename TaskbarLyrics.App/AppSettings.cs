@@ -69,7 +69,7 @@ public enum FloatingWindowLayer
 
 public sealed class AppSettings
 {
-    private static readonly string[] BuiltInPlayerSources = ["QQMusic", "Netease", "Kugou", "Spotify", "Browser"];
+    private static readonly string[] ReservedLegacyPlayerSources = ["QQMusic", "Netease", "Kugou", "Spotify", "Browser"];
 
     public const int MinimumPlayerLyricOffsetMilliseconds = -5000;
     public const int MaximumPlayerLyricOffsetMilliseconds = 5000;
@@ -110,14 +110,7 @@ public sealed class AppSettings
 
     public const string LightForegroundColor = "#FFFFFFFF";
 
-    public List<string> SourceRecognitionOrder { get; set; } = new()
-    {
-        "QQMusic",
-        "Netease",
-        "Kugou",
-        "Spotify",
-        "Browser"
-    };
+    public List<string> SourceRecognitionOrder { get; set; } = PlayerSourceIdentity.BuiltInOrder.ToList();
 
     public bool EnableNetease { get; set; } = true;
 
@@ -126,6 +119,9 @@ public sealed class AppSettings
     public bool EnableKugou { get; set; } = true;
 
     public bool EnableSpotify { get; set; } = true;
+    public bool EnableAppleMusic { get; set; } = true;
+    public bool EnableSodaMusic { get; set; } = true;
+    public bool EnableFoobar2000 { get; set; } = true;
     public bool EnableBrowser { get; set; }
 
     public Dictionary<string, PlayerSourceSettings> PlayerSources { get; set; } = CreateDefaultPlayerSources();
@@ -375,6 +371,10 @@ public sealed class AppSettings
             .ToList();
         var current = PlayerSources ?? new Dictionary<string, PlayerSourceSettings>();
         var normalized = CreateDefaultPlayerSources();
+        foreach (var overridden in CustomPlayerSources.Select(source => PlayerSourceIdentity.NormalizeAdditional(source.SourceAppUserModelId)).OfType<string>())
+        {
+            normalized.Remove(overridden);
+        }
         foreach (var custom in CustomPlayerSources)
         {
             normalized[custom.SourceAppUserModelId] = new PlayerSourceSettings();
@@ -463,7 +463,8 @@ public sealed class AppSettings
 
     private static bool IsValidCustomSourceId(string? sourceId) =>
         !string.IsNullOrWhiteSpace(sourceId) && sourceId.Length <= 256 &&
-        !sourceId.Any(char.IsControl) && NormalizePlayerSourceName(sourceId.Trim()) is null;
+        !sourceId.Any(char.IsControl) && !ReservedLegacyPlayerSources.Contains(sourceId.Trim(), StringComparer.OrdinalIgnoreCase) &&
+        !string.Equals(sourceId.Trim(), "neteasemusic", StringComparison.OrdinalIgnoreCase);
 
     private static string NormalizeCustomDisplayName(string? name, string sourceId)
     {
@@ -653,7 +654,7 @@ public sealed class AppSettings
 
     private static Dictionary<string, PlayerSourceSettings> CreateDefaultPlayerSources()
     {
-        return BuiltInPlayerSources.ToDictionary(
+        return PlayerSourceIdentity.BuiltInOrder.ToDictionary(
             source => source,
             source => new PlayerSourceSettings
             {
@@ -672,13 +673,13 @@ public sealed class AppSettings
             "kugou" => "Kugou",
             "spotify" => "Spotify",
             "browser" => "Browser",
-            _ => null
+            _ => PlayerSourceIdentity.NormalizeAdditional(sourceApp)
         };
     }
 
     private string? ResolvePlayerSourceName(string? sourceApp) =>
-        NormalizePlayerSourceName(sourceApp) ??
-        CustomPlayerSources.FirstOrDefault(source => string.Equals(source.SourceAppUserModelId, sourceApp, StringComparison.OrdinalIgnoreCase))?.SourceAppUserModelId;
+        CustomPlayerSources.FirstOrDefault(source => string.Equals(source.SourceAppUserModelId, sourceApp, StringComparison.OrdinalIgnoreCase))?.SourceAppUserModelId ??
+        NormalizePlayerSourceName(sourceApp);
 
     public static double ClampFontSize(double value)
     {

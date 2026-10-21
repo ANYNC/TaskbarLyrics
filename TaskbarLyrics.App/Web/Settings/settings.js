@@ -3,6 +3,9 @@
       { id: "netease", name: "网易云音乐", adapter: "Netease", settingKey: "enableNetease", icon: "../../Assets/PlayerIcons/网易云音乐.png" },
       { id: "kugou", name: "酷狗音乐", adapter: "Kugou", settingKey: "enableKugou", icon: "../../Assets/PlayerIcons/酷狗音乐.png" },
       { id: "spotify", name: "Spotify", adapter: "Spotify", settingKey: "enableSpotify", icon: "../../Assets/PlayerIcons/spotify.png" },
+      { id: "applemusic", name: "Apple Music", adapter: "AppleMusic", settingKey: "enableAppleMusic", icon: "../../Assets/PlayerIcons/Apple Music.png.png" },
+      { id: "sodamusic", name: "汽水音乐", adapter: "SodaMusic", settingKey: "enableSodaMusic", icon: "../../Assets/PlayerIcons/Soda Music.png" },
+      { id: "foobar2000", name: "foobar2000", adapter: "Foobar2000", settingKey: "enableFoobar2000", icon: "../../Assets/PlayerIcons/Foobar2000.png" },
       { id: "browser", name: "浏览器", adapter: "Browser", settingKey: "enableBrowser", icon: "../../Assets/PlayerIcons/Browser.png" }
     ];
     const lyricProviderDefaults = [
@@ -11,6 +14,8 @@
       { providerId: "Netease", name: "网易云音乐" },
       { providerId: "LRCLIB", name: "LRCLIB" }
     ];
+    const gettingStartedPlayers = window.taskbarLyricsPlayerCompatibility.getPlayers();
+    let gettingStartedPlayer = gettingStartedPlayers[0].id;
 
     const selectOptions = {
       spectrumDisplayMode: [{ value: "Disabled", label: "关闭" }, { value: "PureMusicOnly", label: "仅纯音乐时" }, { value: "PureMusicOrNoLyrics", label: "纯音乐或无歌词时" }, { value: "Always", label: "始终显示" }],
@@ -179,9 +184,81 @@
       };
     }
 
-    function renderPlayerCompatibility(container, playerId) {
+    function renderPlayerCompatibility(container, playerId, onboarding = false) {
       window.taskbarLyricsPlayerCompatibility.render(container, playerId,
-        url => bridge.post({ type: "openExternalLink", value: url }));
+        url => bridge.post({ type: "openExternalLink", value: url }), onboarding);
+    }
+
+    function gettingStartedNeedsPlayer() {
+      const profile = window.taskbarLyricsPlayerCompatibility.getProfile(gettingStartedPlayer);
+      return profile.requiresAdding && (gettingStartedPlayer === "other" || !sourceCatalog.some(source =>
+        source.custom && window.taskbarLyricsPlayerCompatibility.resolveSourceProfile(source.adapter) === gettingStartedPlayer));
+    }
+
+    function renderGettingStarted() {
+      const profile = window.taskbarLyricsPlayerCompatibility.getProfile(gettingStartedPlayer);
+      const needsPlayer = gettingStartedNeedsPlayer();
+      renderPlayerCompatibility($("#gettingStartedGuidance"), gettingStartedPlayer, true);
+      $("[data-getting-started-done]").textContent = profile.level === "setup" ? "查看安装说明" : needsPlayer ? "添加播放器" : "显示歌词";
+      $("[data-getting-started-ready]").hidden = profile.level !== "setup";
+      $("[data-getting-started-ready]").textContent = needsPlayer ? "已配置，添加播放器" : "已配置，显示歌词";
+      $("#gettingStartedAddNote").hidden = !needsPlayer;
+    }
+
+    function syncGettingStartedTabStops() {
+      const radios = $$('.getting-started-option:not([hidden]) input');
+      const tabbable = radios.find(radio => radio.checked) ?? radios[0];
+      $$('input[name="gettingStartedPlayer"]').forEach(radio => { radio.tabIndex = radio === tabbable ? 0 : -1; });
+    }
+
+    function filterGettingStartedPlayers() {
+      const query = $("#gettingStartedSearch").value.trim().toLowerCase().replace(/\s+/g, "");
+      let count = 0;
+      $$("#gettingStartedPlayerList .getting-started-option").forEach(option => {
+        option.hidden = !option.dataset.search.toLowerCase().replace(/\s+/g, "").includes(query);
+        if (!option.hidden) count++;
+      });
+      $("#gettingStartedNoResults").hidden = count !== 0;
+      $("#gettingStartedSearchStatus").textContent = query ? `找到 ${count} 个播放器，其他播放器入口始终可用。` : "";
+      syncGettingStartedTabStops();
+    }
+
+    function initializeGettingStarted() {
+      const option = player => `<label class="getting-started-option" data-search="${escapeHtml(`${player.name} ${player.search ?? ""}`)}"><input type="radio" name="gettingStartedPlayer" value="${player.id}"${player.id === gettingStartedPlayer ? " checked" : ""}><img class="${player.id === "other" ? "default-player-icon" : ""}" src="../../Assets/PlayerIcons/${escapeHtml(player.icon)}" alt="" draggable="false"><span>${escapeHtml(player.name)}</span><svg class="getting-started-check" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg></label>`;
+      $("#gettingStartedPlayerList").innerHTML = gettingStartedPlayers.filter(player => player.id !== "other").map(option).join("");
+      $("#gettingStartedOther").innerHTML = gettingStartedPlayers.filter(player => player.id === "other").map(option).join("");
+      $("#gettingStartedCount").textContent = gettingStartedPlayers.length;
+      $("#gettingStartedSearch").addEventListener("input", filterGettingStartedPlayers);
+      $("#gettingStartedSearch").addEventListener("keydown", event => {
+        if (event.key !== "Escape") return;
+        event.preventDefault();
+        $("#gettingStartedSearch").value = "";
+        filterGettingStartedPlayers();
+      });
+      $(".getting-started-players").addEventListener("keydown", event => {
+        if (!event.target.matches('input[name="gettingStartedPlayer"]') ||
+          !["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+        event.preventDefault();
+        const radios = $$('.getting-started-option:not([hidden]) input');
+        const current = radios.indexOf(event.target);
+        const next = event.key === "Home" ? 0 : event.key === "End" ? radios.length - 1
+          : (current + (["ArrowDown", "ArrowRight"].includes(event.key) ? 1 : -1) + radios.length) % radios.length;
+        radios[next].click();
+        radios[next].focus({ preventScroll: true });
+        radios[next].closest("label").scrollIntoView?.({ block: "nearest" });
+      });
+      syncGettingStartedTabStops();
+      renderGettingStarted();
+    }
+
+    function startGettingStartedPlayback() {
+      if (gettingStartedNeedsPlayer()) {
+        navigateToPage("sources");
+        openAddPlayerDrawer();
+      } else {
+        bridge.post({ type: "showLyricsWindow" });
+        navigateToPage("sources");
+      }
     }
 
     function renderSources() {
@@ -1288,7 +1365,9 @@
         return Number.isFinite(value) ? Math.max(-5000, Math.min(5000, Math.round(value))) : 0;
       };
       const customSources = Array.isArray(nextState.customPlayerSources) ? nextState.customPlayerSources : [];
-      const allSources = sourceCatalogDefaults.concat(customSources.map(source => ({
+      const customProfiles = new Set(customSources.map(source => window.taskbarLyricsPlayerCompatibility.resolveSourceProfile(source.sourceAppUserModelId)));
+      const defaults = sourceCatalogDefaults.filter(source => !["applemusic", "sodamusic", "foobar2000"].includes(source.id) || !customProfiles.has(source.id));
+      const allSources = defaults.concat(customSources.map(source => ({
         id: `custom-${encodeURIComponent(source.sourceAppUserModelId)}`,
         adapter: source.sourceAppUserModelId,
         name: source.displayName,
@@ -1314,7 +1393,15 @@
         defaultOffset: defaultOffsetFor(source),
         enabled: source.custom ? source.enabled : Boolean(nextState[source.settingKey])
       }));
-      const order = Array.isArray(nextState.sourceRecognitionOrder) ? nextState.sourceRecognitionOrder : [];
+      const order = (Array.isArray(nextState.sourceRecognitionOrder) ? nextState.sourceRecognitionOrder : [])
+        .map(adapter => typeof adapter === "string" ? allSources.find(source => source.adapter.toLowerCase() === adapter.toLowerCase())?.adapter : undefined)
+        .filter(Boolean);
+      for (const source of allSources) {
+        if (order.includes(source.adapter)) continue;
+        const browser = order.indexOf("Browser");
+        if (!source.custom && source.id !== "browser" && browser >= 0) order.splice(browser, 0, source.adapter);
+        else order.push(source.adapter);
+      }
       sourceCatalog.sort((a, b) => {
         const aIndex = order.indexOf(a.adapter);
         const bIndex = order.indexOf(b.adapter);
@@ -1776,6 +1863,7 @@
 
     function refresh() {
       renderSources();
+      renderGettingStarted();
       renderTrackOffsets();
       if ($("#playerSettingsDialog").open) renderPlayerSettings();
       syncLayoutBounds();
@@ -1798,8 +1886,14 @@
 
     document.addEventListener("click", event => {
       if (event.target.closest("[data-getting-started-done]")) {
-        bridge.post({ type: "showLyricsWindow" });
-        navigateToPage("sources");
+        if (!state) return;
+        const profile = window.taskbarLyricsPlayerCompatibility.getProfile(gettingStartedPlayer);
+        if (profile.level === "setup") bridge.post({ type: "openExternalLink", value: profile.link });
+        else startGettingStartedPlayback();
+        return;
+      }
+      if (event.target.closest("[data-getting-started-ready]")) {
+        if (state) startGettingStartedPlayback();
         return;
       }
       if (event.target.closest("[data-getting-started-later]")) {
@@ -2176,7 +2270,9 @@
 
     document.addEventListener("change", event => {
       if (event.target.matches('input[name="gettingStartedPlayer"]')) {
-        renderPlayerCompatibility($("#gettingStartedGuidance"), event.target.value);
+        gettingStartedPlayer = event.target.value;
+        syncGettingStartedTabStops();
+        renderGettingStarted();
         return;
       }
       const lyricToggle = event.target.closest("[data-lyric-provider-toggle]");
@@ -2534,6 +2630,7 @@
       }
     }
 
+    initializeGettingStarted();
     window.settingsApp = { receive };
     setPageInteractionState($$("[data-page]"), document.querySelector("[data-page].active"));
     bridge.post({ type: "ready" });
