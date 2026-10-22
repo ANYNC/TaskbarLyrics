@@ -133,7 +133,10 @@ public sealed class QqMusicLyricSource : ILyricSource, IDisposable
         return new RawLyricPayload(
             payload.ProviderId, payload.CandidateId, payload.Format,
             decoded.OriginalLyrics, decoded.TranslationLyrics, false,
-            payload.IsPureMusic, payload.Diagnostics, payload.HasStableIdentity);
+            payload.IsPureMusic, new Dictionary<string, string>(payload.Diagnostics, StringComparer.Ordinal)
+            {
+                [QqMusicContentRevision.DiagnosticKey] = QqMusicContentRevision.Current
+            }, payload.HasStableIdentity);
     }
 
     private async Task<QqMusicSearchSong?> TryGetSongAsync(string id, CancellationToken cancellationToken)
@@ -266,13 +269,13 @@ internal static partial class QqMusicResponseMapper
             throw new QqMusicApiException(code);
         }
 
-        var content = ExtractCData(response, "content");
+        var content = ExtractDownloadContent(response, "content");
         if (string.IsNullOrWhiteSpace(content))
         {
             return null;
         }
 
-        var translation = ExtractCData(response, "contentts");
+        var translation = ExtractDownloadContent(response, "contentts");
         var encrypted = IsHexPayload(content);
         return new RawLyricPayload(
             KnownLyricProviders.QQMusic,
@@ -336,17 +339,7 @@ internal static partial class QqMusicResponseMapper
 
         try
         {
-            // XML 会把属性内的字面换行归一为空格，先转成字符实体以保留 QRC 的行边界。
-            var xml = LyricContentAttributeRegex().Replace(decoded, match =>
-                match.Groups["prefix"].Value + match.Groups["quote"].Value +
-                match.Groups["value"].Value.Replace("\r", "&#13;", StringComparison.Ordinal)
-                    .Replace("\n", "&#10;", StringComparison.Ordinal)
-                    .Replace("\t", "&#9;", StringComparison.Ordinal) +
-                match.Groups["quote"].Value);
-            using var reader = XmlReader.Create(new StringReader(xml),
-                new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null });
-            var document = new XmlDocument { XmlResolver = null };
-            document.Load(reader);
+            var document = ReadCompatibleXml(decoded);
             var node = document.SelectSingleNode("//Lyric_1[@LyricContent]") ??
                        document.SelectSingleNode("//*[@LyricContent]");
             return node?.Attributes?["LyricContent"]?.Value ??
@@ -356,6 +349,30 @@ internal static partial class QqMusicResponseMapper
         {
             throw new FormatException("QQ QRC XML is invalid.", exception);
         }
+    }
+
+    private static XmlDocument ReadCompatibleXml(string xml)
+    {
+        // Keep the existing DTD prohibition before invoking the upstream compatibility reader.
+        if (xml.Contains("<!DOCTYPE", StringComparison.OrdinalIgnoreCase))
+            throw new FormatException("QQ lyric XML must not contain a DTD.");
+        // Lyricify preserves attribute newlines and repairs bare &, quotes, and malformed empty tags.
+        return Lyricify.Lyrics.Decrypter.Qrc.XmlUtils.Create(xml);
+    }
+
+    private static string? ExtractDownloadContent(string? response, string tag)
+    {
+        var cdata = ExtractCData(response, tag);
+        if (cdata is not null) return cdata;
+        foreach (Match match in DownloadContentRegex().Matches(response ?? string.Empty))
+        {
+            if (match.Groups["tag"].Value == tag)
+            {
+                try { return ReadCompatibleXml(match.Value).DocumentElement?.InnerText.Trim(); }
+                catch (XmlException exception) { throw new FormatException("QQ lyric content XML is invalid.", exception); }
+            }
+        }
+        return null;
     }
 
     public static void ValidateSearchResponse(string? json)
@@ -520,9 +537,11 @@ internal static partial class QqMusicResponseMapper
         }
 
         var text = response.Trim();
+        if (text.StartsWith('{') || text.StartsWith('[')) return text;
         var start = text.IndexOf('(');
         var end = text.LastIndexOf(')');
-        return start >= 0 && end > start ? text[(start + 1)..end] : text;
+        return start > 0 && end > start && JsonpCallbackRegex().IsMatch(text[..start].Trim()) &&
+            text[(end + 1)..].Trim() is "" or ";" ? text[(start + 1)..end] : text;
     }
 
     private static string? DecodeBase64(JsonElement element, string property)
@@ -594,8 +613,11 @@ internal static partial class QqMusicResponseMapper
     [GeneratedRegex(@"<(?<tag>[A-Za-z_][\w\-]*)(?:\s[^>]*)?>\s*<!\[CDATA\[(?<value>.*?)\]\]>", RegexOptions.Singleline)]
     private static partial Regex CDataRegex();
 
-    [GeneratedRegex(@"(?<prefix>\bLyricContent\s*=\s*)(?<quote>[""'])(?<value>.*?)\k<quote>", RegexOptions.Singleline)]
-    private static partial Regex LyricContentAttributeRegex();
+    [GeneratedRegex(@"<(?<tag>content(?:ts|roma)?)(?:\s[^>]*)?>(?<value>.*?)</\k<tag>\s*>", RegexOptions.Singleline)]
+    private static partial Regex DownloadContentRegex();
+
+    [GeneratedRegex(@"^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$")]
+    private static partial Regex JsonpCallbackRegex();
 
     [GeneratedRegex(@"<result>\s*(?<code>-?\d+)\s*</result>")]
     private static partial Regex DownloadResultRegex();

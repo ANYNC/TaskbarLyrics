@@ -49,6 +49,12 @@ public sealed class LyricifyPayloadParserTests
             segment =>
             {
                 Assert.Equal(TimeSpan.FromMilliseconds(1300), segment.StartTime);
+                Assert.Equal(TimeSpan.FromMilliseconds(1300).Add(TimeSpan.FromTicks(1)), segment.EndTime);
+                Assert.Equal("zero", segment.Text);
+            },
+            segment =>
+            {
+                Assert.Equal(TimeSpan.FromMilliseconds(1300), segment.StartTime);
                 Assert.Equal(TimeSpan.FromMilliseconds(2800), segment.EndTime);
             });
     }

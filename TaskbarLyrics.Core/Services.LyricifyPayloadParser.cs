@@ -50,7 +50,8 @@ public sealed partial class LyricifyPayloadParser : ILyricPayloadParser
 
         var lines = payload.Format == LyricPayloadFormat.Lrc
             ? ParseLrcLines(payload.OriginalLyrics)
-            : ConvertLines(ParseExplicit(payload.Format, payload.OriginalLyrics).Lines);
+            : ConvertLines(ParseExplicit(payload.Format, payload.OriginalLyrics).Lines,
+                preserveInstantSegments: payload.ProviderId == KnownLyricProviders.QQMusic && payload.Format == LyricPayloadFormat.Qrc);
         if (!string.IsNullOrWhiteSpace(payload.TranslationLyrics))
         {
             try
@@ -112,7 +113,7 @@ public sealed partial class LyricifyPayloadParser : ILyricPayloadParser
             payload.IsPureMusic);
     }
 
-    private static List<ParsedLyricLine> ConvertLines(IEnumerable<ILineInfo>? sourceLines)
+    private static List<ParsedLyricLine> ConvertLines(IEnumerable<ILineInfo>? sourceLines, bool preserveInstantSegments = false)
     {
         var lines = new List<ParsedLyricLine>();
         foreach (var sourceLine in sourceLines ?? [])
@@ -124,19 +125,22 @@ public sealed partial class LyricifyPayloadParser : ILyricPayloadParser
 
             var startMs = Math.Max(0, sourceLine.StartTime ?? 0);
             var sourceEndMs = sourceLine.EndTime;
-            var segments = ConvertSegments(sourceLine, startMs, sourceEndMs);
+            var segments = ConvertSegments(sourceLine, startMs, sourceEndMs, preserveInstantSegments);
             var endMs = sourceEndMs is > 0
                 ? Math.Max(startMs, sourceEndMs.Value)
                 : segments.Length == 0
                     ? (int?)null
                     : segments.Max(segment => (int)segment.EndTime.TotalMilliseconds);
+            TimeSpan? endTime = endMs is null ? null : TimeSpan.FromMilliseconds(endMs.Value);
+            if (segments.Length > 0 && endTime is not null)
+                endTime = Max(endTime.Value, segments.Max(segment => segment.EndTime));
             var translation = sourceLine is IFullLineInfo fullLine
                 ? ResolveChineseTranslation(fullLine)
                 : null;
 
             lines.Add(new ParsedLyricLine(
                 TimeSpan.FromMilliseconds(startMs),
-                endMs is null ? null : TimeSpan.FromMilliseconds(endMs.Value),
+                endTime,
                 NormalizeLineText(sourceLine.Text),
                 translation,
                 segments));
@@ -150,7 +154,8 @@ public sealed partial class LyricifyPayloadParser : ILyricPayloadParser
     private static ParsedLyricSegment[] ConvertSegments(
         ILineInfo sourceLine,
         int lineStartMs,
-        int? lineEndMs)
+        int? lineEndMs,
+        bool preserveInstantSegments)
     {
         if (sourceLine is not SyllableLineInfo { Syllables.Count: > 0 } syllableLine)
         {
@@ -161,11 +166,14 @@ public sealed partial class LyricifyPayloadParser : ILyricPayloadParser
             .Where(syllable =>
                 !string.IsNullOrEmpty(syllable.Text) &&
                 syllable.StartTime >= lineStartMs &&
-                syllable.EndTime > syllable.StartTime &&
+                (syllable.EndTime > syllable.StartTime || (preserveInstantSegments && syllable.EndTime == syllable.StartTime)) &&
                 (lineEndMs is null || syllable.EndTime <= lineEndMs.Value))
             .Select(syllable => new ParsedLyricSegment(
                 TimeSpan.FromMilliseconds(syllable.StartTime),
-                TimeSpan.FromMilliseconds(syllable.EndTime),
+                // A single tick retains QQ's instantaneous marker within our positive-duration model.
+                syllable.EndTime == syllable.StartTime
+                    ? TimeSpan.FromMilliseconds(syllable.EndTime).Add(TimeSpan.FromTicks(1))
+                    : TimeSpan.FromMilliseconds(syllable.EndTime),
                 syllable.Text))
             .OrderBy(segment => segment.StartTime)
             .ToArray();

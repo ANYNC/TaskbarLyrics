@@ -2,6 +2,10 @@
 
 本文保留 PR #61 首版的接口对比和当时的网络实测记录。合并后的链路修补以 `docs/工程变更记录.md` 中「QQ 音乐歌词链路容错与精确身份补齐」为准：songmid 优先精确转换，原文与译文分别解密，坏 QRC 回退同歌曲 LRC，解析成功后才写入新缓存。下文的「新实现」特指 PR 首版。
 
+2026-10-22 业务对照补充：保持自持请求层，后续 XML 提取复用当前 NuGet 0.2.0 对应提交 `a139e385b032b9abfca4c060627776cf9c3147ad` 的公开 `XmlUtils`；不修改第三方包。原先严格 XML 读取漏掉其裸 `&`、双引号及异常标签容错，已补齐；DTD 继续禁止。QQ 零时长片段转换为一 tick 的瞬时片段，保留原文和起点；旧 QQ 缓存按同一候选刷新，保留手动选择并允许失败时继续显示旧歌词。
+
+同响应回放的三首 QQ 候选 `232271227`、`295618479`、`307181501`，解包原文与翻译均与 Lyricify 原生 API 输出一致；内部歌词分别为 59／46／79 行，437／459／702 个片段，常规片段文本和起止时间逐项一致，零时长片段按上述内部约束归一，翻译分别对齐 55／43／64 行。三个样本的下载参数 `miniversion=82/100` 返回原文与译文均相同，不把版本参数认定为此次故障原因。该对照证明这些响应及已覆盖边界的效果，不代表所有网络条件或未来服务端格式均已验证。证据位于忽略目录 `tmp/qq-native-chain-audit/`，永久合成回归为 `QqMusicContentParityTests` 与相关恢复测试。
+
 - 对比对象：TaskbarLyrics `main`（改动前，基于 Lyricify 0.2.0 封装） vs 本次改动（Core 内自持传输层）
 - 测试时间：2026-10-10，同一台机器、同一出口 IP、同一时段
 - 相关改动：`TaskbarLyrics.Core/Services.QqMusicLyrics.cs`、`TaskbarLyrics.Core/Services.QqMusicApiClient.cs`（新增），`Services.LyricifySources.cs`（移除旧 QQ 实现），`Services.LyricifyPayloadDecoder.cs`（新增 QRC 解包）

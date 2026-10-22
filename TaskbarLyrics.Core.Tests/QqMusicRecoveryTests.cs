@@ -12,6 +12,33 @@ public sealed class QqMusicRecoveryTests
     private const string Mid = "003WkhSf2FOUwq";
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void SongDetailDoesNotMistakeParenthesesInsideJsonForAWrapper(bool wrapped)
+    {
+        const string json = """{"code":0,"data":[{"id":"1","mid":"mid","songname":"Title (Live)"}]}""";
+        var response = wrapped ? "getOneSongInfoCallback(" + json + ");" : json;
+        Assert.Equal("Title (Live)", QqMusicResponseMapper.MapSongDetail(response, "mid")!.Title);
+    }
+
+    [Fact]
+    public async Task DownloadAcceptsXmlTextNodesWithoutDiscardingOriginalOrTranslation()
+    {
+        var calls = 0;
+        using var source = Source(_ =>
+        {
+            calls++;
+            return "<root><result>0</result><content>[00:01.00]A &amp; B</content><contentts>[00:01.00]译文</contentts></root>";
+        });
+        var raw = Assert.IsType<RawLyricPayload>(await source.FetchAsync(Candidate()));
+        var parsed = await new LyricifyPayloadParser().ParseAsync(Decoded(raw));
+        Assert.Equal("A & B", Assert.Single(parsed.Lines).Text);
+        Assert.Equal("译文", parsed.Lines[0].Translation);
+        Assert.Equal(QqMusicContentRevision.Current, raw.Diagnostics[QqMusicContentRevision.DiagnosticKey]);
+        Assert.Equal(1, calls);
+    }
+
+    [Theory]
     [InlineData("[]")]
     [InlineData("null")]
     [InlineData("{\"data\":null}")]
