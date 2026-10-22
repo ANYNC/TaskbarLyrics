@@ -370,14 +370,16 @@ public partial class App : System.Windows.Application, IDisposable
             var constraints = GetTaskbarScaleConstraints(Settings);
             var scale = TaskbarEmbeddingLayoutPolicy.ScaleForTaskbarHeightChange(Settings, _taskbarScaleConstraints, constraints);
             _taskbarScaleConstraints = constraints;
-            if (Math.Abs(scale - Settings.LyricsLayoutScalePercent) > 0.001)
+            var scaleChanged = Math.Abs(scale - Settings.LyricsLayoutScalePercent) > 0.001;
+            if (scaleChanged)
             {
                 // Merge only the embedded scale on the settings owner's dispatcher.
                 var adjusted = Settings.Clone();
                 adjusted.LyricsLayoutScalePercent = scale;
                 if (!SaveSettings(adjusted)) Log.Warn("Taskbar layout scale could not be saved.");
             }
-            else if (_settingsWindow is not null)
+            // Saving an inactive embedded scale does not apply the floating window or refresh settings.
+            if (_settingsWindow is not null && (!scaleChanged || Settings.UseFloatingWindow))
             {
                 TaskObserver.Observe(_settingsWindow.ApplyExternalSettingsAsync(Settings.Clone()), "taskbar layout bounds update");
             }

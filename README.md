@@ -19,6 +19,9 @@
 <p align="center">
   <img src="docs/images/preview/demo.gif" alt="TaskbarLyrics 任务栏歌词、翻译与频谱动态效果" height="400">
 </p>
+<p align="center">
+  <img src="docs/images/preview/floating-window.gif" alt="TaskbarLyrics 悬浮窗口歌词效果" height="400">
+</p>
 
 <p align="center">
   演示使用内置的 Source Han Sans SC 字体，无需单独安装。

@@ -24,10 +24,12 @@ public sealed class TaskbarScaleTransitionTests
         Assert.Equal(100, settings.FloatingLyricsLayoutScalePercent);
     }
 
-    [Fact]
-    public void GrowthRespectsNewTaskbarLimitWithoutChangingTheOriginalSettings()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void GrowthRespectsNewTaskbarLimitWithoutChangingTheOriginalSettings(bool floating)
     {
-        var settings = new AppSettings { SingleLineLyrics = true, LyricsLayoutScalePercent = 100 };
+        var settings = new AppSettings { UseFloatingWindow = floating, SingleLineLyrics = true, LyricsLayoutScalePercent = 100 };
         var normal = Constraints(48);
         var scale = TaskbarEmbeddingLayoutPolicy.ScaleForTaskbarHeightChange(settings, Constraints(32), normal);
         Assert.InRange(scale, 100, 149);
@@ -39,19 +41,23 @@ public sealed class TaskbarScaleTransitionTests
         Assert.Equal(100, settings.LyricsLayoutScalePercent);
     }
 
-    [Fact]
-    public void MixedDisplaysUseTheSmallestHorizontalTaskbarAndIgnoreSidebarHeight()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void MixedDisplaysUseTheSmallestHorizontalTaskbarAndIgnoreSidebarHeight(bool floating)
     {
-        var settings = new AppSettings { SingleLineLyrics = true, LyricsLayoutScalePercent = 70 };
+        var settings = new AppSettings { UseFloatingWindow = floating, SingleLineLyrics = true, LyricsLayoutScalePercent = 70 };
         var compact = Constraints(32) with { Displays = [new(1920, 32, 1), new(2560, 48, 1.5), new(48, 1080, 1) { IsVertical = true }] };
         var normal = compact with { Displays = [new(1920, 48, 1), new(2560, 48, 1.5), new(48, 1080, 1) { IsVertical = true }] };
         Assert.Equal(105, TaskbarEmbeddingLayoutPolicy.ScaleForTaskbarHeightChange(settings, compact, normal), 6);
     }
 
-    [Fact]
-    public void MissingGeometryFloatingAndOrientationChangesKeepExistingScale()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void MissingGeometryAndOrientationChangesKeepExistingScale(bool floating)
     {
-        var settings = new AppSettings { SingleLineLyrics = true, LyricsLayoutScalePercent = 70 };
+        var settings = new AppSettings { UseFloatingWindow = floating, SingleLineLyrics = true, LyricsLayoutScalePercent = 70 };
         var compact = Constraints(32);
         var normal = Constraints(48);
         var sidebar = new TaskbarEmbeddingConstraints(48, 1080) { Displays = [new(48, 1080, 1) { IsVertical = true }] };
@@ -60,8 +66,61 @@ public sealed class TaskbarScaleTransitionTests
         Assert.Equal(70, TaskbarEmbeddingLayoutPolicy.ScaleForTaskbarHeightChange(settings, compact, default));
         Assert.Equal(70, TaskbarEmbeddingLayoutPolicy.ScaleForTaskbarHeightChange(settings, sidebar, normal));
         Assert.Equal(70, TaskbarEmbeddingLayoutPolicy.ScaleForTaskbarHeightChange(settings, compact, sidebar));
-        settings.UseFloatingWindow = true;
-        Assert.Equal(70, TaskbarEmbeddingLayoutPolicy.ScaleForTaskbarHeightChange(settings, compact, normal));
+    }
+
+    [Theory]
+    [InlineData(false, 1)]
+    [InlineData(false, 1.25)]
+    [InlineData(false, 1.5)]
+    [InlineData(false, 2)]
+    [InlineData(true, 1)]
+    [InlineData(true, 1.25)]
+    [InlineData(true, 1.5)]
+    [InlineData(true, 2)]
+    public void EmbeddedScaleRecoversWhenTaskbarReturnsToNormalWhileFloating(bool singleLine, double dpi)
+    {
+        var normal = Constraints(48, dpi);
+        var compact = Constraints(32, dpi);
+        var settings = new AppSettings
+        {
+            SingleLineLyrics = singleLine,
+            LyricsLayoutScalePercent = 105,
+            FloatingLyricsLayoutScalePercent = 145
+        };
+        settings.LyricsLayoutScalePercent = TaskbarEmbeddingLayoutPolicy.ScaleForTaskbarHeightChange(settings, normal, compact);
+        Assert.Equal(70, settings.LyricsLayoutScalePercent, 6);
+        var floating = App.CreateDisplayModeSettings(settings, true, compact, out _);
+        var adjusted = floating.Clone();
+        adjusted.LyricsLayoutScalePercent = TaskbarEmbeddingLayoutPolicy.ScaleForTaskbarHeightChange(floating, compact, normal);
+
+        Assert.Equal(105, adjusted.LyricsLayoutScalePercent, 6);
+        Assert.Equal(70, floating.LyricsLayoutScalePercent, 6);
+        Assert.Equal(145, adjusted.GetLyricsLayoutScalePercent());
+        Assert.Equal(105, TaskbarEmbeddingLayoutPolicy.ScaleForTaskbarHeightChange(adjusted, normal, normal), 6);
+        Assert.False(AppSettingsChangeSet.Create(floating, adjusted).RequiresLyricsWindowApply);
+
+        var embedded = App.CreateDisplayModeSettings(adjusted, false, normal, out var message);
+        Assert.False(embedded.UseFloatingWindow);
+        Assert.Equal(105, embedded.GetLyricsLayoutScalePercent(), 6);
+        Assert.Equal(145, embedded.FloatingLyricsLayoutScalePercent);
+        Assert.Equal(string.Empty, message);
+    }
+
+    [Fact]
+    public void TaskbarShrinkingWhileFloatingAlsoAdaptsOnlyTheEmbeddedScale()
+    {
+        var normal = Constraints(48);
+        var compact = Constraints(32);
+        var settings = new AppSettings { UseFloatingWindow = true, LyricsLayoutScalePercent = 105,
+            FloatingLyricsLayoutScalePercent = 145 };
+
+        settings.LyricsLayoutScalePercent = TaskbarEmbeddingLayoutPolicy.ScaleForTaskbarHeightChange(settings, normal, compact);
+        Assert.Equal(70, settings.LyricsLayoutScalePercent, 6);
+        Assert.Equal(145, settings.GetLyricsLayoutScalePercent());
+        var embedded = App.CreateDisplayModeSettings(settings, false, compact, out _);
+        Assert.False(embedded.UseFloatingWindow);
+        Assert.Equal(70, embedded.GetLyricsLayoutScalePercent(), 6);
+        Assert.True(TaskbarEmbeddingLayoutPolicy.CanFit(embedded, compact));
     }
 
     [Fact]

@@ -114,7 +114,8 @@ internal static class TaskbarEmbeddingLayoutPolicy
     {
         ArgumentNullException.ThrowIfNull(settings);
         var scale = settings.LyricsLayoutScalePercent;
-        if (settings.UseFloatingWindow || previous is not { IsSupported: true } old || !current.IsSupported ||
+        // The stored embedded scale follows the taskbar even while the floating layout is active.
+        if (previous is not { IsSupported: true } old || !current.IsSupported ||
             HasOnlySidebars(old) || HasOnlySidebars(current))
             return scale;
 
