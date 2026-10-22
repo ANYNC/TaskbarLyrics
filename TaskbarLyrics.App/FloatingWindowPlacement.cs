@@ -43,7 +43,7 @@ internal sealed class FloatingWindowPlacement(Window window, FloatingWindowPosit
         var position = store.Get(_home.Id);
         if (position is null) return false;
         var scale = _display.PixelsPerDip;
-        var bounds = RestoreBounds(position, _display.WorkArea, new Size(window.Width * scale, window.Height * scale));
+        var bounds = RestoreBounds(position, _display, new Size(window.Width * scale, window.Height * scale));
         Move(bounds, scale);
         return true;
     }
@@ -54,7 +54,7 @@ internal sealed class FloatingWindowPlacement(Window window, FloatingWindowPosit
         _displays = DisplayMonitorService.GetDisplays();
         var bounds = FloatingLyricsPanelController.GetBounds(window);
         _display = Nearest(bounds, _displays) ?? _home;
-        var clamped = Clamp(bounds, _display.WorkArea);
+        var clamped = Clamp(bounds, _display.Bounds);
         Move(clamped, _display.PixelsPerDip);
         store.Remember(_home.Id, Capture(clamped, _display));
     }
@@ -71,7 +71,7 @@ internal sealed class FloatingWindowPlacement(Window window, FloatingWindowPosit
         var bounds = FloatingLyricsPanelController.GetBounds(window);
         if (!_enabled || _home.Id != home.Id || bounds.IsEmpty || bounds.TopLeft == original.TopLeft || !window.IsVisible) return;
         _display = Nearest(bounds, _displays) ?? home;
-        var clamped = Clamp(bounds, _display.WorkArea);
+        var clamped = Clamp(bounds, _display.Bounds);
         Move(clamped, _display.PixelsPerDip);
         store.Remember(home.Id, Capture(clamped, _display));
     }
@@ -91,24 +91,27 @@ internal sealed class FloatingWindowPlacement(Window window, FloatingWindowPosit
         var scale = TaskbarNativeMethods.GetDpiForWindow(handle) / 96.0;
         var physicalWidth = Math.Round(width * scale);
         var physicalHeight = Math.Round(height * scale);
-        var bounds = Clamp(new Rect(anchor.Left, anchor.Bottom - physicalHeight, physicalWidth, physicalHeight), display.WorkArea);
+        var bounds = Clamp(new Rect(anchor.Left, anchor.Bottom - physicalHeight, physicalWidth, physicalHeight), display.Bounds);
         // Apply the size and bottom anchoring before WPF can expose an intermediate HWND.
         TaskbarNativeMethods.SetWindowPos(handle, IntPtr.Zero,
             (int)Math.Round(bounds.Left), (int)Math.Round(bounds.Top), (int)physicalWidth, (int)physicalHeight,
             TaskbarNativeMethods.SWP_NOZORDER | TaskbarNativeMethods.SWP_NOACTIVATE);
     }
 
-    internal static Rect Clamp(Rect bounds, NativeRect work) => new(
-        Math.Clamp(bounds.Left, work.Left, Math.Max(work.Left, work.Right - bounds.Width)),
-        Math.Clamp(bounds.Top, work.Top, Math.Max(work.Top, work.Bottom - bounds.Height)), bounds.Width, bounds.Height);
+    internal static Rect Clamp(Rect bounds, NativeRect area) => new(
+        Math.Clamp(bounds.Left, area.Left, Math.Max(area.Left, area.Right - bounds.Width)),
+        Math.Clamp(bounds.Top, area.Top, Math.Max(area.Top, area.Bottom - bounds.Height)), bounds.Width, bounds.Height);
 
-    internal static Rect RestoreBounds(FloatingWindowPosition position, NativeRect work, Size size) => new(
-        work.Left + Math.Max(0, work.Width - size.Width) * position.X,
-        work.Top + Math.Max(0, work.Height - size.Height) * position.Y, size.Width, size.Height);
+    internal static Rect RestoreBounds(FloatingWindowPosition position, DisplayMonitor display, Size size)
+    {
+        var area = position.UseScreenBounds ? display.Bounds : display.WorkArea;
+        return new Rect(area.Left + Math.Max(0, area.Width - size.Width) * position.X,
+            area.Top + Math.Max(0, area.Height - size.Height) * position.Y, size.Width, size.Height);
+    }
 
     internal static FloatingWindowPosition Capture(Rect bounds, DisplayMonitor display) => new(display.Id,
-        Math.Clamp((bounds.Left - display.WorkArea.Left) / Math.Max(1, display.WorkAreaWidth - bounds.Width), 0, 1),
-        Math.Clamp((bounds.Top - display.WorkArea.Top) / Math.Max(1, display.WorkAreaHeight - bounds.Height), 0, 1));
+        Math.Clamp((bounds.Left - display.Bounds.Left) / Math.Max(1, display.Width - bounds.Width), 0, 1),
+        Math.Clamp((bounds.Top - display.Bounds.Top) / Math.Max(1, display.Height - bounds.Height), 0, 1), UseScreenBounds: true);
 
     internal static DisplayMonitor? Nearest(Rect bounds, IReadOnlyList<DisplayMonitor> displays) => displays
         .OrderByDescending(item => Overlap(bounds, item.Bounds)).ThenBy(item => Distance(bounds, item.Bounds)).FirstOrDefault();

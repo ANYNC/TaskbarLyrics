@@ -320,11 +320,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 }
                 break;
             case "resetDefaults":
-                var defaultSettings = new AppSettings();
-                App.ApplyStartupForegroundColor(defaultSettings);
-                CopySettings(defaultSettings, _settings);
-                await SaveSettingsAndNotifyWebAsync();
-                await PushSettingsToWebAsync();
+                await ResetDefaultsAsync();
                 break;
             case "resetWindowPresentation":
                 if (!SettingsWebMessageRouter.TryParseWindowPresentation(message.Value, out var resetFloating)) break;
@@ -1115,6 +1111,20 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
 
         _settings.SpectrumAudioAccessGranted = true;
         _settings.SpectrumDisplayMode = mode;
+        await SaveSettingsAndNotifyWebAsync();
+        await PushSettingsToWebAsync();
+        await PushSpectrumCaptureStateAsync(force: true);
+    }
+
+    private async Task ResetDefaultsAsync()
+    {
+        var defaultSettings = new AppSettings
+        {
+            // Reset preferences without revoking the user's explicit audio-capture consent.
+            SpectrumAudioAccessGranted = _settings.SpectrumAudioAccessGranted
+        };
+        App.ApplyStartupForegroundColor(defaultSettings);
+        CopySettings(defaultSettings, _settings);
         await SaveSettingsAndNotifyWebAsync();
         await PushSettingsToWebAsync();
         await PushSpectrumCaptureStateAsync(force: true);

@@ -86,7 +86,7 @@ internal static class MediaHotkeyCatalog
             MediaHotkeyAction.ToggleWordScanning,
             "hotkeyToggleWordScanning",
             "toggleWordScanning",
-            "开启/关闭逐词扫描",
+            "开启/关闭逐字扫描",
             "Alt+Shift+S",
             RegistrationIdBase + (int)MediaHotkeyAction.ToggleWordScanning,
             settings => settings.ToggleWordScanning,

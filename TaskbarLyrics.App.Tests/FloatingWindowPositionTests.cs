@@ -1,4 +1,5 @@
 using System.IO;
+using System.Text.Json;
 using System.Windows;
 using Xunit;
 
@@ -29,6 +30,73 @@ public sealed class FloatingWindowPositionTests
     }
 
     [Fact]
+    public void LegacyPositionsKeepTheirWorkAreaMeaningWhenAnotherWindowIsSaved()
+    {
+        using var files = new PositionFiles();
+        const string legacyJson = "{\"Version\":1,\"Positions\":{\"primary\":{\"DisplayId\":\"monitor\",\"X\":0.25,\"Y\":1}}}";
+        File.WriteAllText(files.Path, legacyJson);
+        var store = new FloatingWindowPositionStore(files.Path);
+        var legacy = Assert.IsType<FloatingWindowPosition>(store.Get("primary"));
+        var display = new DisplayMonitor("monitor", "monitor", true,
+            new NativeRect(0, 0, 1920, 1080), new NativeRect(0, 0, 1920, 1032), 1);
+        var size = new Size(420, 44);
+        var original = FloatingWindowPlacement.RestoreBounds(legacy, display, size);
+        Assert.False(legacy.UseScreenBounds);
+        Assert.Equal(1032, original.Bottom);
+        Assert.Equal(legacyJson, File.ReadAllText(files.Path)); // Reading does not migrate or rewrite user data.
+
+        var moved = FloatingWindowPlacement.Capture(new Rect(100, 1036, size.Width, size.Height), display);
+        store.Remember("mirror", moved);
+        using var document = JsonDocument.Parse(File.ReadAllText(files.Path));
+        Assert.Equal(2, document.RootElement.GetProperty("Version").GetInt32());
+        var loaded = new FloatingWindowPositionStore(files.Path);
+        Assert.Equal(legacy, loaded.Get("primary"));
+        Assert.Equal(original, FloatingWindowPlacement.RestoreBounds(loaded.Get("primary")!, display, size));
+        Assert.Equal(moved, loaded.Get("mirror"));
+        Assert.Equal(1080, FloatingWindowPlacement.RestoreBounds(loaded.Get("mirror")!, display, size).Bottom);
+        store.Remember("primary", FloatingWindowPlacement.Capture(original, display));
+        var migrated = new FloatingWindowPositionStore(files.Path).Get("primary")!;
+        Assert.True(migrated.UseScreenBounds);
+        Assert.Equal(original, FloatingWindowPlacement.RestoreBounds(migrated, display, size));
+    }
+
+    [Theory]
+    [InlineData("bottom", 1)]
+    [InlineData("bottom", 1.5)]
+    [InlineData("top", 1.25)]
+    [InlineData("top", 2)]
+    [InlineData("left", 1)]
+    [InlineData("left", 2)]
+    [InlineData("right", 1.25)]
+    [InlineData("right", 1.5)]
+    public void TaskbarOverlapsRoundTripWithinTheScreenAtEveryEdge(string edge, double scale)
+    {
+        using var files = new PositionFiles();
+        var screen = new NativeRect(-1920, -120, 0, 960);
+        var work = edge switch
+        {
+            "left" => screen with { Left = screen.Left + 64 },
+            "right" => screen with { Right = screen.Right - 64 },
+            "top" => screen with { Top = screen.Top + 64 },
+            _ => screen with { Bottom = screen.Bottom - 64 }
+        };
+        var display = new DisplayMonitor("negative", "negative", false, screen, work, scale);
+        var bounds = new Rect(edge == "right" ? screen.Right - 420 * scale : screen.Left,
+            edge == "bottom" ? screen.Bottom - 44 * scale : screen.Top, 420 * scale, 44 * scale);
+        Assert.Equal(bounds, FloatingWindowPlacement.Clamp(bounds, display.Bounds));
+        Assert.NotEqual(bounds, FloatingWindowPlacement.Clamp(bounds, display.WorkArea));
+        var position = FloatingWindowPlacement.Capture(bounds, display);
+        Assert.True(position.UseScreenBounds);
+        var store = new FloatingWindowPositionStore(files.Path);
+        store.Remember("primary", position);
+        var loaded = new FloatingWindowPositionStore(files.Path).Get("primary")!;
+        Assert.Equal(position, loaded);
+        Assert.Equal(bounds, FloatingWindowPlacement.RestoreBounds(loaded, display, bounds.Size));
+        Assert.Equal(bounds, FloatingWindowPlacement.RestoreBounds(loaded,
+            display with { WorkArea = screen }, bounds.Size)); // Taskbar auto-hide does not shift saved windows.
+    }
+
+    [Fact]
     public void PositionsRoundTripIndependentlyByWindowAndLeaveNoTemporaryFiles()
     {
         using var files = new PositionFiles();
@@ -49,7 +117,7 @@ public sealed class FloatingWindowPositionTests
 
     [Theory]
     [InlineData("{broken")]
-    [InlineData("{\"Version\":2,\"Positions\":{}}")]
+    [InlineData("{\"Version\":3,\"Positions\":{}}")]
     [InlineData("{\"Version\":1,\"Positions\":null}")]
     [InlineData("{\"Version\":1,\"Positions\":{\"a\":{\"DisplayId\":\"m\",\"X\":2,\"Y\":0}}}")]
     [InlineData("{\"Version\":1,\"Positions\":{\"a\":null}}")]
@@ -84,16 +152,16 @@ public sealed class FloatingWindowPositionTests
     [InlineData(1.25)]
     [InlineData(1.5)]
     [InlineData(2)]
-    public void NormalizedPositionsRoundTripOnNegativeCoordinateDisplaysAndScaleWithWorkArea(double scale)
+    public void NormalizedPositionsRoundTripOnNegativeCoordinateDisplaysAndScaleWithScreen(double scale)
     {
         var display = Monitor("negative", new NativeRect(-1920, -120, 0, 960), scale);
         var bounds = new Rect(-1800, 420, 420 * scale, 44 * scale);
         var position = FloatingWindowPlacement.Capture(bounds, display);
-        var restored = FloatingWindowPlacement.RestoreBounds(position, display.WorkArea, bounds.Size);
+        var restored = FloatingWindowPlacement.RestoreBounds(position, display, bounds.Size);
         Assert.Equal(bounds.Left, restored.Left, 6);
         Assert.Equal(bounds.Top, restored.Top, 6);
         var bottomRight = FloatingWindowPlacement.RestoreBounds(new FloatingWindowPosition("negative", 1, 1),
-            new NativeRect(-2560, -200, 0, 1200), new Size(420 * scale, 44 * scale));
+            Monitor("negative", new NativeRect(-2560, -200, 0, 1200), scale), new Size(420 * scale, 44 * scale));
         Assert.Equal(0, bottomRight.Right);
         Assert.Equal(1200, bottomRight.Bottom);
     }

@@ -224,7 +224,7 @@
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-                            <TextBlock Text="开启/关闭逐词扫描"
+                            <TextBlock Text="开启/关闭逐字扫描"
                                        VerticalAlignment="Center"
                                        Foreground="{DynamicResource TrayMenuTextBrush}"
                                        FontFamily="Microsoft YaHei UI"

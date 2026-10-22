@@ -50,6 +50,9 @@
       const after = groups.map(group => group.getBoundingClientRect());
       const duration = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--duration-slow')) || 220;
       groups.forEach((group, index) => {
+        // Hidden groups have no layout box and cannot provide a meaningful animation endpoint.
+        if (before[index].width <= 0 || before[index].height <= 0 ||
+            after[index].width <= 0 || after[index].height <= 0) return;
         const distance = before[index].top - after[index].top;
         if (Math.abs(distance) < 0.5 || typeof group.animate !== 'function') return;
         animations.push(group.animate(

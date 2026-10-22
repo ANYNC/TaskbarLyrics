@@ -3,7 +3,7 @@
     netease: {
       name: "网易云音乐", icon: "网易云音乐.png", search: "netease cloudmusic wangyiyun",
       level: "setup", label: "需配置", information: "支持", progress: "支持", preparation: "inflink-rs",
-      summary: "请先配置 inflink-rs，再开始同步歌词。",
+      summary: "安装 inflink-rs 后，即可同步歌词。",
       detailsLabel: "配置步骤",
       steps: ["按 BetterNCM 官方说明确认版本兼容并安装。", "在插件商店安装 inflink-rs，重启网易云音乐。"],
       link: "https://github.com/apoint123/inflink-rs", linkLabel: "官方安装说明",
@@ -96,16 +96,20 @@
     rendered.set(container, current);
     const mark = profile.level === "supported" ? "✓" : profile.level === "unknown" ? "?" : "!";
     const summary = `<p class="compatibility-summary">${profile.summary}</p>`;
+    const explainSetup = onboarding && profile.level === "setup";
     container.innerHTML = `<div class="player-compatibility${onboarding ? " is-onboarding" : ""}" data-support-level="${profile.level}">
       <div class="compatibility-heading">${onboarding
         ? `<div class="compatibility-player"><img class="${playerId === "other" ? "default-player-icon" : ""}" src="../../Assets/PlayerIcons/${profile.icon}" alt="" draggable="false"><h2>${profile.name}</h2></div>`
         : "<strong>兼容性参考</strong>"}<span class="compatibility-level"><span aria-hidden="true">${mark}</span> ${onboarding && profile.level === "setup" ? "需配置插件" : profile.label}</span></div>
       ${onboarding ? summary : ""}
-      <dl class="compatibility-metrics">
-        <div><dt>歌曲信息</dt><dd>${profile.information}</dd></div>
-        <div><dt>时间轴信息</dt><dd>${profile.progress}</dd></div>
-        <div><dt>使用准备</dt><dd>${profile.preparation}</dd></div>
-      </dl>
+      <div class="compatibility-overview">
+        <dl class="compatibility-metrics">
+          <div><dt>${onboarding ? "歌曲识别" : "歌曲信息"}</dt><dd>${profile.information}</dd></div>
+          <div><dt>${onboarding ? "歌词同步" : "时间轴信息"}</dt><dd>${profile.progress}${explainSetup ? "，需配置插件" : ""}</dd></div>
+          <div><dt>使用准备</dt><dd>${explainSetup ? "安装 " : ""}${profile.preparation}</dd></div>
+        </dl>
+        ${onboarding ? '<p class="compatibility-reference-note">兼容性参考，非实时检测结果。</p>' : ""}
+      </div>
       ${onboarding ? "" : summary}
       ${profile.detailsLabel ? `<div class="compatibility-details"><h3 class="compatibility-details-title">${profile.detailsLabel}</h3>
         ${profile.steps ? `<ol>${profile.steps.map(step => `<li>${step}</li>`).join("")}</ol>` : ""}

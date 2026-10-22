@@ -4,7 +4,7 @@ using TaskbarLyrics.Core.Utilities;
 
 namespace TaskbarLyrics.App;
 
-internal sealed record FloatingWindowPosition(string DisplayId, double X, double Y)
+internal sealed record FloatingWindowPosition(string DisplayId, double X, double Y, bool UseScreenBounds = false)
 {
     internal bool IsValid => !string.IsNullOrWhiteSpace(DisplayId) && double.IsFinite(X) && double.IsFinite(Y)
         && X is >= 0 and <= 1 && Y is >= 0 and <= 1;
@@ -24,13 +24,14 @@ internal sealed class FloatingWindowPositionStore
         {
             if (!File.Exists(path)) return;
             var document = JsonSerializer.Deserialize<Document>(File.ReadAllText(path));
-            if (document is not { Version: 1, Positions: not null })
+            if (document is not { Version: 1 or 2, Positions: not null })
                 throw new JsonException("Unsupported floating window position document.");
             foreach (var (key, position) in document.Positions)
             {
                 if (string.IsNullOrWhiteSpace(key) || position is null || !position.IsValid)
                     throw new JsonException("Invalid floating window position.");
-                _positions.Add(key, position);
+                // V1 coordinates were relative to the work area; retain that meaning until moved.
+                _positions.Add(key, document.Version == 1 ? position with { UseScreenBounds = false } : position);
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or ArgumentException)
@@ -74,7 +75,7 @@ internal sealed class FloatingWindowPositionStore
             using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None,
                        4096, FileOptions.WriteThrough))
             {
-                JsonSerializer.Serialize(stream, new Document(1, _positions));
+                JsonSerializer.Serialize(stream, new Document(2, _positions));
                 stream.Flush(flushToDisk: true);
             }
             File.Move(temporary, path, overwrite: true);

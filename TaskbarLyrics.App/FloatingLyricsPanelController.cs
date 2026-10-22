@@ -157,7 +157,7 @@ internal sealed class FloatingLyricsPanelController : IDisposable
             target.Window.UpdateLayout();
             var bounds = GetBounds(target.Window);
             var desired = restore ? _sizeOriginalBounds : FloatingWindowPlacement.Clamp(
-                new Rect(_sizeOriginalBounds.Left, _sizeOriginalBounds.Bottom - bounds.Height, bounds.Width, bounds.Height), display.WorkArea);
+                new Rect(_sizeOriginalBounds.Left, _sizeOriginalBounds.Bottom - bounds.Height, bounds.Width, bounds.Height), display.Bounds);
             TaskbarNativeMethods.SetWindowPos(new WindowInteropHelper(target.Window).Handle, IntPtr.Zero,
                 (int)Math.Round(desired.Left), (int)Math.Round(desired.Top),
                 (int)Math.Round(desired.Width), (int)Math.Round(desired.Height),

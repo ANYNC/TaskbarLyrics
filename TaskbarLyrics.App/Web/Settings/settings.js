@@ -86,6 +86,10 @@
     let rangePreviewFrame = 0;
     let announceNextLayoutPreview = false;
     let lyricDiagnosticsState = { status: "idle", track: null, report: null, message: "", apply: null };
+    let diagnosticApplyFocus = null;
+    document.addEventListener("focusin", event => {
+      if (diagnosticApplyFocus && event.target !== diagnosticApplyFocus) diagnosticApplyFocus = null;
+    });
     let pendingSpectrumDisplayMode = null;
     let spectrumCaptureState = { state: "disabled", message: "" };
 
@@ -199,9 +203,8 @@
       const profile = window.taskbarLyricsPlayerCompatibility.getProfile(gettingStartedPlayer);
       const needsPlayer = gettingStartedNeedsPlayer();
       renderPlayerCompatibility($("#gettingStartedGuidance"), gettingStartedPlayer, true);
-      $("[data-getting-started-done]").textContent = profile.level === "setup" ? "查看安装说明" : needsPlayer ? "添加播放器" : "显示歌词";
-      $("[data-getting-started-ready]").hidden = profile.level !== "setup";
-      $("[data-getting-started-ready]").textContent = needsPlayer ? "已配置，添加播放器" : "已配置，显示歌词";
+      $("[data-getting-started-action-label]").textContent = profile.level === "setup" ? "查看安装说明" : needsPlayer ? "添加播放器" : "显示歌词";
+      $("[data-getting-started-external]").hidden = profile.level !== "setup";
       $("#gettingStartedAddNote").hidden = !needsPlayer;
     }
 
@@ -555,7 +558,42 @@
     }
 
     function diagnosticCandidateKey(providerId, candidateId, mode = "current") {
-      return `${providerId}\u0000${candidateId}\u0000${mode}`;
+      return `${providerId.toLowerCase()}\u0000${candidateId}\u0000${mode}`;
+    }
+
+    function diagnosticApplyButtonState(providerId, candidateId, mode) {
+      const apply = lyricDiagnosticsState.apply;
+      const matches = apply?.key === diagnosticCandidateKey(providerId, candidateId, mode);
+      const running = matches && apply.status === "running";
+      const busy = apply?.status === "running" &&
+        ["current", "remember"].some(value => apply.key === diagnosticCandidateKey(providerId, candidateId, value));
+      const label = mode === "remember"
+        ? running ? "正在记住…" : matches && apply.status === "success" ? "已应用并记住" : "使用并记住"
+        : running ? "正在应用…" : matches && apply.status === "success" ? "已应用" : "本次使用";
+      return { running, busy, label };
+    }
+
+    function updateLyricDiagnosticsApplyState() {
+      const page = $('[data-page="lyricDiagnostics"]');
+      const scrollTop = page.scrollTop;
+      const apply = lyricDiagnosticsState.apply;
+      $$("[data-lyric-diagnostics-apply]").forEach(button => {
+        const { running, busy, label } = diagnosticApplyButtonState(button.dataset.providerId, button.dataset.candidateId, button.dataset.applyMode);
+        button.disabled = busy;
+        button.toggleAttribute("aria-busy", running);
+        if (running) button.setAttribute("aria-busy", "true");
+        const signature = `${running}:${label}`;
+        if (button.dataset.applyState !== signature) {
+          button.dataset.applyState = signature;
+          button.innerHTML = `${running ? '<span class="spinner" aria-hidden="true"></span>' : ""}${label}`;
+        }
+      });
+      if (apply?.status !== "running" && diagnosticApplyFocus) {
+        if (diagnosticApplyFocus.isConnected && !diagnosticApplyFocus.disabled && document.activeElement === document.body)
+          diagnosticApplyFocus.focus({ preventScroll: true });
+        diagnosticApplyFocus = null;
+      }
+      page.scrollTop = scrollTop;
     }
 
     function renderLyricDiagnosticsTrack(track) {
@@ -611,14 +649,10 @@
             const candidateIdentifier = diagnosticRawIdentifier(candidate?.candidateId);
             const candidateId = diagnosticString(candidateIdentifier);
             const candidateIsSelected = diagnosticCandidateMatchesSelection(report?.selection, providerIdentifier, candidateIdentifier);
-            const apply = lyricDiagnosticsState.apply;
-            const currentApplyState = apply && apply.key === diagnosticCandidateKey(providerIdentifier, candidateIdentifier, "current") ? apply.status : "idle";
-            const rememberApplyState = apply && apply.key === diagnosticCandidateKey(providerIdentifier, candidateIdentifier, "remember") ? apply.status : "idle";
-            const candidateApplyRunning = currentApplyState === "running" || rememberApplyState === "running";
-            const currentApplyLabel = currentApplyState === "running" ? "正在应用…" : currentApplyState === "success" ? "已应用" : "本次使用";
-            const rememberApplyLabel = rememberApplyState === "running" ? "正在记住…" : rememberApplyState === "success" ? "已应用并记住" : "使用并记住";
+            const current = diagnosticApplyButtonState(providerIdentifier, candidateIdentifier, "current");
+            const remember = diagnosticApplyButtonState(providerIdentifier, candidateIdentifier, "remember");
             const applyActions = providerIdentifier && candidateIdentifier
-              ? `<div class="diagnostics-candidate-actions"><button class="btn secondary small diagnostics-apply-button" type="button" data-lyric-diagnostics-apply data-apply-mode="current" data-provider-id="${escapeHtml(providerIdentifier)}" data-candidate-id="${escapeHtml(candidateIdentifier)}"${candidateApplyRunning ? " disabled" : ""}${currentApplyState === "running" ? " aria-busy=\"true\"" : ""}>${currentApplyState === "running" ? '<span class="spinner" aria-hidden="true"></span>' : ""}${currentApplyLabel}</button><button class="btn ghost small diagnostics-apply-button" type="button" data-lyric-diagnostics-apply data-apply-mode="remember" data-provider-id="${escapeHtml(providerIdentifier)}" data-candidate-id="${escapeHtml(candidateIdentifier)}"${candidateApplyRunning ? " disabled" : ""}${rememberApplyState === "running" ? " aria-busy=\"true\"" : ""}>${rememberApplyState === "running" ? '<span class="spinner" aria-hidden="true"></span>' : ""}${rememberApplyLabel}</button></div>`
+              ? `<div class="diagnostics-candidate-actions"><button class="btn secondary small diagnostics-apply-button" type="button" data-lyric-diagnostics-apply data-apply-mode="current" data-provider-id="${escapeHtml(providerIdentifier)}" data-candidate-id="${escapeHtml(candidateIdentifier)}"${current.busy ? " disabled" : ""}${current.running ? " aria-busy=\"true\"" : ""}>${current.running ? '<span class="spinner" aria-hidden="true"></span>' : ""}${current.label}</button><button class="btn ghost small diagnostics-apply-button" type="button" data-lyric-diagnostics-apply data-apply-mode="remember" data-provider-id="${escapeHtml(providerIdentifier)}" data-candidate-id="${escapeHtml(candidateIdentifier)}"${remember.busy ? " disabled" : ""}${remember.running ? " aria-busy=\"true\"" : ""}>${remember.running ? '<span class="spinner" aria-hidden="true"></span>' : ""}${remember.label}</button></div>`
               : "";
             const candidateState = candidateIsSelected ? "selected" : admitted ? "accepted" : "rejected";
             const candidateStateLabel = candidateIsSelected ? "当前采用" : admitted ? "已接纳" : "已拒绝";
@@ -675,7 +709,7 @@
       container.innerHTML = `<div class="diagnostics-selection-card is-selected"><div class="diagnostics-selection-title"><strong>${escapeHtml(diagnosticString(selection.providerId, "未知来源"))}</strong><span class="diagnostics-badge" data-state="selected">已采用</span></div><div class="diagnostics-selection-meta"><span>候选 ID：<code>${escapeHtml(diagnosticString(selection.candidateId))}</code></span><span>获取方式：${escapeHtml(diagnosticString(selection.acquisition))}</span><span>格式：${escapeHtml(diagnosticString(selection.format))}</span><span>时序：${escapeHtml(diagnosticString(selection.timingKind))} / ${escapeHtml(diagnosticString(selection.timingProvenance))}</span><span>歌词行数：${escapeHtml(diagnosticString(selection.lineCount, "0"))}</span></div>${diagnosticsMarkup}</div>`;
     }
 
-    function renderLyricDiagnosticsState() {
+    function renderLyricDiagnosticsState(applyOnly = false) {
       const current = lyricDiagnosticsState;
       const status = $("#lyricDiagnosticsStatus");
       const button = $("#runLyricDiagnosticsButton");
@@ -700,6 +734,9 @@
       button.setAttribute("aria-busy", String(current.status === "running" || applyBusy));
       button.innerHTML = current.status === "running" ? '<span class="spinner" aria-hidden="true"></span>查找中…' : current.status === "idle" ? "查找歌词" : "重新查找";
 
+      if (applyOnly) { updateLyricDiagnosticsApplyState(); return; }
+      diagnosticApplyFocus = null;
+
       renderLyricDiagnosticsTrack(track);
       reportPanel.hidden = !report || current.status !== "success";
       selectionPanel.hidden = !report || current.status !== "success";
@@ -721,6 +758,7 @@
     }
 
     function setLyricDiagnosticsState(payload = {}) {
+      const previousReport = lyricDiagnosticsState.report;
       const status = ["running", "success", "empty", "error"].includes(payload?.status) ? payload.status : "error";
       const hasApply = payload.apply && typeof payload.apply === "object";
       const report = status === "success" && payload.report && typeof payload.report === "object"
@@ -750,7 +788,7 @@
         message: diagnosticString(payload.message, status === "success" && !report ? "匹配结果无效。" : ""),
         apply
       };
-      renderLyricDiagnosticsState();
+      renderLyricDiagnosticsState(hasApply && report === previousReport && lyricDiagnosticsState.status === "success");
     }
 
     function changeTrackOffsetPage(delta) {
@@ -1909,10 +1947,6 @@
         else startGettingStartedPlayback();
         return;
       }
-      if (event.target.closest("[data-getting-started-ready]")) {
-        if (state) startGettingStartedPlayback();
-        return;
-      }
       if (event.target.closest("[data-getting-started-later]")) {
         navigateToPage("sources");
         return;
@@ -2506,12 +2540,13 @@
       const mode = button.dataset.applyMode === "remember" ? "remember" : "current";
       if (!providerId || !candidateId) return;
       const key = diagnosticCandidateKey(providerId, candidateId, mode);
+      diagnosticApplyFocus = document.activeElement === button ? button : null;
       lyricDiagnosticsState.apply = {
         status: "running",
         key,
         message: mode === "remember" ? "正在获取、应用并写入歌词缓存…" : "正在获取并应用歌词…"
       };
-      renderLyricDiagnosticsState();
+      renderLyricDiagnosticsState(true);
       bridge.post({
         type: "applyLyricDiagnosticCandidate",
         value: { providerId, candidateId, mode }

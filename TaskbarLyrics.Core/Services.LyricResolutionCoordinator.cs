@@ -121,8 +121,9 @@ public sealed class LyricResolutionCoordinator : ILyricResolutionCoordinator
                 return LyricResolutionResult.FromLyrics(null);
             }
 
-            if (TryGetCachedLyrics(track, selection, out var cachedLyrics))
+            if (TryGetCachedLyrics(track, selection, out var cachedLyrics, out var cacheContext))
             {
+                cachedLyrics = await RefreshCachedQqLyricsAsync(track, cachedLyrics!, cacheContext, token);
                 LogSelection(requestId, cachedLyrics);
                 return LyricResolutionResult.FromLyrics(cachedLyrics);
             }
@@ -194,9 +195,11 @@ public sealed class LyricResolutionCoordinator : ILyricResolutionCoordinator
     private bool TryGetCachedLyrics(
         TrackInfo track,
         LyricSourceSelection selection,
-        out ResolvedLyrics? resolvedLyrics)
+        out ResolvedLyrics? resolvedLyrics,
+        out string? cacheContext)
     {
         resolvedLyrics = null;
+        cacheContext = selection.CacheContext;
         if (_resolvedLyricCache is null)
         {
             return false;
@@ -208,6 +211,7 @@ public sealed class LyricResolutionCoordinator : ILyricResolutionCoordinator
                 manualCache.TryGet(track, LyricSourceSelection.ManualCacheContext, out resolvedLyrics) &&
                 resolvedLyrics is not null)
             {
+                cacheContext = LyricSourceSelection.ManualCacheContext;
                 return true;
             }
 
@@ -226,6 +230,40 @@ public sealed class LyricResolutionCoordinator : ILyricResolutionCoordinator
         {
             Log.Warn($"Resolved lyric cache lookup failed: {exception.Message}");
             return false;
+        }
+    }
+
+    private async Task<ResolvedLyrics> RefreshCachedQqLyricsAsync(
+        TrackInfo track, ResolvedLyrics cached, string? cacheContext, CancellationToken cancellationToken)
+    {
+        if (!QqMusicContentRevision.NeedsRefresh(cached.ProviderId, cached.Content.Format, cached.Diagnostics))
+            return cached;
+        var identity = TrackIdentity.FromTrackInfo(track);
+        var candidate = new SourceTrackCandidate(cached.ProviderId, cached.CandidateId, identity.Title,
+            identity.Artists, identity.Album, identity.Duration, "cached-candidate", new Dictionary<string, string>());
+        try
+        {
+            var refreshed = await ResolveCandidateAsync(track, candidate, cancellationToken);
+            if (refreshed is null || QqMusicContentRevision.NeedsRefresh(refreshed.ProviderId, refreshed.Content.Format, refreshed.Diagnostics))
+                return cached;
+            // Preserve the manually chosen candidate and its context even when automatic sources are disabled.
+            try
+            {
+                var stored = cacheContext is not null && _resolvedLyricCache is IContextualResolvedLyricCache contextual
+                    ? contextual.Store(track, refreshed, cacheContext)
+                    : _resolvedLyricCache?.Store(track, refreshed) == true;
+                if (!stored) Log.Warn("Refreshed QQ lyrics could not be saved; using the refreshed content for this session.");
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                Log.Warn($"Refreshed QQ lyric cache write failed: {exception.Message}");
+            }
+            return refreshed;
+        }
+        catch (Exception exception) when (exception is HttpRequestException or QqMusicApiException or FormatException or ArgumentException)
+        {
+            Log.Warn($"QQ cached lyric refresh failed. Candidate='{cached.CandidateId}' Error='{exception.Message}'");
+            return cached;
         }
     }
 
@@ -611,9 +649,9 @@ public sealed class LyricResolutionCoordinator : ILyricResolutionCoordinator
     {
         var candidate = admission.Candidate;
         var stopwatch = Stopwatch.StartNew();
-        // QQ 解码行为改变时只失效它的解析结果，已有原始载荷和其他源仍可复用。
+        // Reparse QQ data after adapting upstream XML and instantaneous timing behavior.
         var normalizationVersion = source.ProviderId == KnownLyricProviders.QQMusic
-            ? NormalizationVersion + "-qq-2"
+            ? NormalizationVersion + "-qq-" + QqMusicContentRevision.Current
             : NormalizationVersion;
         for (var attempt = 0; attempt < 2; attempt++)
         {
@@ -625,7 +663,24 @@ public sealed class LyricResolutionCoordinator : ILyricResolutionCoordinator
                 rawPayload = await source.FetchAsync(candidate, cancellationToken).ConfigureAwait(false);
                 acquisition = LyricAcquisitionKind.Remote;
             }
-
+            if (fromCache && rawPayload is { Format: LyricPayloadFormat.Lrc } stale &&
+                QqMusicContentRevision.NeedsRefresh(stale.ProviderId, stale.Format, stale.Diagnostics))
+            {
+                try
+                {
+                    var refreshed = await source.FetchAsync(candidate, cancellationToken).ConfigureAwait(false);
+                    if (refreshed is not null)
+                    {
+                        rawPayload = refreshed;
+                        fromCache = false;
+                        acquisition = LyricAcquisitionKind.Remote;
+                    }
+                }
+                catch (Exception exception) when (exception is HttpRequestException or QqMusicApiException or FormatException)
+                {
+                    Log.Warn($"QQ raw lyric refresh failed; retaining cached lyrics. Candidate='{candidate.CandidateId}' Error='{exception.Message}'");
+                }
+            }
             if (rawPayload is null)
             {
                 return CandidateResolution.NoLyrics;
@@ -696,6 +751,8 @@ public sealed class LyricResolutionCoordinator : ILyricResolutionCoordinator
                 ["format"] = rawPayload.Format.ToString(),
                 ["elapsedMs"] = stopwatch.ElapsedMilliseconds.ToString(System.Globalization.CultureInfo.InvariantCulture)
             };
+            if (source.ProviderId == KnownLyricProviders.QQMusic && rawPayload.Format == LyricPayloadFormat.Qrc)
+                diagnostics[QqMusicContentRevision.DiagnosticKey] = QqMusicContentRevision.Current;
             return new CandidateResolution(
                 new ResolvedLyrics(parsed!, source.ProviderId, candidate.CandidateId, acquisition, diagnostics), false);
         }

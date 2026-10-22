@@ -7,6 +7,91 @@ namespace TaskbarLyrics.Core.Tests;
 
 public sealed class ResolvedLyricCacheCoordinatorTests
 {
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task OldQqFallbackRefreshPreservesTheCandidateContextAndUsableContent(bool manual, bool succeeds)
+    {
+        using var fixture = CacheFile.Create();
+        var track = CreateTrack();
+        using var cache = new JsonResolvedLyricCache(fixture.Path);
+        var context = manual ? LyricSourceSelection.ManualCacheContext : "configured";
+        var old = new ResolvedLyrics(new ParsedLyrics([new ParsedLyricLine(TimeSpan.FromSeconds(1), null, "old fallback")],
+            LyricTimingKind.LineTimed, LyricTimingProvenance.ProviderSupplied, LyricPayloadFormat.Lrc),
+            KnownLyricProviders.QQMusic, "232271227", LyricAcquisitionKind.Remote, new Dictionary<string, string>());
+        Assert.True(cache.Store(track, old, context));
+        var pipeline = new RecordingLyricPipelineCache();
+        pipeline.StoreRaw(new RawLyricPayload(old.ProviderId, old.CandidateId, LyricPayloadFormat.Lrc,
+            "[00:01.00]old fallback", null, false, false, new Dictionary<string, string>()), DateTimeOffset.UtcNow);
+        var source = new RecordingSource(old.ProviderId);
+        source.FetchHandler = (candidate, _) =>
+        {
+            Assert.Equal(old.CandidateId, candidate.CandidateId);
+            if (!succeeds) throw new System.Net.Http.HttpRequestException("offline");
+            return Task.FromResult<RawLyricPayload?>(new RawLyricPayload(old.ProviderId, old.CandidateId, LyricPayloadFormat.Qrc,
+                "[1000,1000]A(1000,500)B(1500,500)", "[00:01.00]译文", false, false,
+                new Dictionary<string, string> { [QqMusicContentRevision.DiagnosticKey] = QqMusicContentRevision.Current }));
+        };
+        using var coordinator = new LyricResolutionCoordinator([source], [], [new LyricifyPayloadParser()], pipeline,
+            new RecordingMappingResolver(), trustPolicy: new LyricProviderTrustPolicy([source.ProviderId], [source.ProviderId]),
+            resolvedLyricCache: cache, sourceSelectionResolver: _ =>
+                new LyricSourceSelection(manual ? [] : [source.ProviderId], "configured"));
+        var result = Assert.IsType<ResolvedLyrics>(await coordinator.ResolveAsync(track));
+        Assert.Equal(old.CandidateId, result.CandidateId);
+        Assert.Equal(0, source.SearchCalls);
+        Assert.Equal(1, source.FetchCalls);
+        Assert.True(cache.TryGet(track, context, out var saved));
+        if (succeeds)
+        {
+            Assert.Equal(LyricPayloadFormat.Qrc, result.Content.Format);
+            Assert.Equal(2, Assert.Single(result.Content.Lines).Segments.Count);
+            Assert.Equal("译文", result.Content.Lines[0].Translation);
+            Assert.Equal(LyricPayloadFormat.Qrc, saved!.Content.Format);
+            Assert.NotNull(await coordinator.ResolveAsync(track));
+            Assert.Equal(1, source.FetchCalls); // Current content does not refetch on every cache hit.
+        }
+        else
+        {
+            Assert.Equal("old fallback", Assert.Single(result.Content.Lines).Text);
+            Assert.Equal(LyricPayloadFormat.Lrc, saved!.Content.Format);
+            Assert.True(pipeline.TryGetRaw(old.ProviderId, old.CandidateId, out var raw, out _));
+            Assert.Equal(LyricPayloadFormat.Lrc, raw!.Format);
+        }
+        if (manual) Assert.False(cache.TryGet(track, "configured", out _));
+    }
+
+    [Fact]
+    public async Task CancelingOldQqRefreshLeavesTheRememberedSelectionUntouched()
+    {
+        using var fixture = CacheFile.Create();
+        using var cache = new JsonResolvedLyricCache(fixture.Path);
+        var track = CreateTrack();
+        var old = new ResolvedLyrics(new ParsedLyrics([new ParsedLyricLine(TimeSpan.Zero, null, "remembered")],
+            LyricTimingKind.LineTimed, LyricTimingProvenance.ProviderSupplied, LyricPayloadFormat.Lrc),
+            KnownLyricProviders.QQMusic, "remembered-id", LyricAcquisitionKind.UserBinding, new Dictionary<string, string>());
+        Assert.True(cache.Store(track, old, LyricSourceSelection.ManualCacheContext));
+        var source = new RecordingSource(old.ProviderId);
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        source.FetchHandler = async (_, token) =>
+        {
+            started.SetResult();
+            await Task.Delay(Timeout.InfiniteTimeSpan, token);
+            return null;
+        };
+        using var coordinator = CreateCoordinator(source, new RecordingMappingResolver(), cache);
+        using var cancellation = new CancellationTokenSource();
+        var pending = coordinator.ResolveAsync(track, cancellation.Token);
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        cancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending);
+        Assert.True(cache.TryGet(track, LyricSourceSelection.ManualCacheContext, out var retained));
+        Assert.Equal(old.CandidateId, retained!.CandidateId);
+        Assert.Equal("remembered", Assert.Single(retained.Content.Lines).Text);
+        Assert.Equal(0, source.SearchCalls);
+    }
+
     [Fact]
     public async Task ManualSelectionSurvivesDisabledAutomaticProviders()
     {

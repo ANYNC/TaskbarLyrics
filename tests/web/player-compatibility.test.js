@@ -12,18 +12,22 @@ async function createCompatibility() {
 }
 
 describe("shared player compatibility", () => {
-  it("renders onboarding titles and keeps shared drawer metrics when changing presentation", async () => {
+  it("explains onboarding setup requirements while preserving compact drawer metrics", async () => {
     const { dom, container, render } = await createCompatibility();
     render(container, "netease", undefined, true);
     expect(container.querySelector("h2").textContent).toBe("网易云音乐");
     expect(container.querySelector("img").getAttribute("src")).toBe("../../Assets/PlayerIcons/网易云音乐.png");
     expect(container.querySelector("[data-compatibility-link]")).toBeNull();
-    const metrics = container.querySelector("dl").outerHTML;
+    expect([...container.querySelectorAll("dt")].map(item => item.textContent)).toEqual(["歌曲识别", "歌词同步", "使用准备"]);
+    expect([...container.querySelectorAll("dd")].map(item => item.textContent)).toEqual(["支持", "支持，需配置插件", "安装 inflink-rs"]);
+    expect(container.querySelector(".compatibility-reference-note").textContent).toBe("兼容性参考，非实时检测结果。");
     const instructions = container.querySelector("ol").outerHTML;
     render(container, "netease");
     expect(container.querySelector("h2, img")).toBeNull();
     expect(container.querySelector("[data-compatibility-link]")).not.toBeNull();
-    expect(container.querySelector("dl").outerHTML).toBe(metrics);
+    expect([...container.querySelectorAll("dt")].map(item => item.textContent)).toEqual(["歌曲信息", "时间轴信息", "使用准备"]);
+    expect([...container.querySelectorAll("dd")].map(item => item.textContent)).toEqual(["支持", "支持", "inflink-rs"]);
+    expect(container.querySelector(".compatibility-reference-note")).toBeNull();
     expect(container.querySelector("ol").outerHTML).toBe(instructions);
     dom.window.close();
   });
