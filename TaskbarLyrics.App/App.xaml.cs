@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
 using System.Text.Json;
@@ -26,6 +27,7 @@ public partial class App : System.Windows.Application, IDisposable
     private CancellationTokenSource? _activationServerCancellation;
     private SpectrumTuningSettings _spectrumTuningSettings = SpectrumTuningSettings.CreateDefault();
     private int _isDisposed;
+    private Stopwatch? _shutdownStopwatch;
 
     public AppSettings Settings { get; private set; } = new();
 
@@ -130,8 +132,11 @@ public partial class App : System.Windows.Application, IDisposable
 
     protected override void OnExit(ExitEventArgs e)
     {
+        LogShutdownStage("OnExit.Begin");
         Dispose();
         base.OnExit(e);
+        LogShutdownStage("OnExit.End");
+        Log.Diagnostic("SHUTDOWN", $"Stage='Completed' ElapsedMs={_shutdownStopwatch!.ElapsedMilliseconds}");
     }
 
     public void Dispose()
@@ -141,19 +146,29 @@ public partial class App : System.Windows.Application, IDisposable
             return;
         }
 
+        LogShutdownStage("Dispose.Begin");
         _activationServerCancellation?.Cancel();
         _activationServerCancellation?.Dispose();
         SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
         SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
+        LogShutdownStage("Dispose.ActivationAndEvents.End");
         _settingsStore?.Save(Settings);
+        LogShutdownStage("Dispose.SaveSettings.End");
         _spectrumTuningWindow?.Close();
+        LogShutdownStage("Dispose.SpectrumWindow.End");
         _mediaHotkeyService?.Dispose();
+        LogShutdownStage("Dispose.Hotkeys.End");
         _lyricsWindowHost?.Dispose();
+        LogShutdownStage("Dispose.LyricsHost.End");
         _compositionRoot?.Dispose();
+        LogShutdownStage("Dispose.CompositionRoot.End");
         _trayService?.Dispose();
+        LogShutdownStage("Dispose.Tray.End");
         _trackLyricOffsetStore?.Dispose();
+        LogShutdownStage("Dispose.TrackOffsets.End");
         SingleInstanceService.Release();
         GC.SuppressFinalize(this);
+        LogShutdownStage("Dispose.End");
     }
 
     internal void ResetFloatingPositions() => _lyricsWindowHost?.ResetFloatingPositions();
@@ -684,12 +699,26 @@ public partial class App : System.Windows.Application, IDisposable
         }
 
         IsExiting = true;
+        LogShutdownStage("ExitRequested");
+        Log.Debug($"[SHUTDOWN] Floating={Settings.UseFloatingWindow} SettingsVisible={_settingsWindow?.IsVisible == true}");
         if (_mediaHotkeyService is not null)
         {
+            LogShutdownStage("Hotkeys.Stop.Begin");
             await _mediaHotkeyService.StopAsync(TimeSpan.FromSeconds(1));
+            LogShutdownStage("Hotkeys.Stop.End");
         }
 
-        _lyricsWindowHost?.Close();
+        LogShutdownStage("LyricsHost.Close.Begin");
+        if (_lyricsWindowHost is not null) await _lyricsWindowHost.CloseAsync();
+        LogShutdownStage("LyricsHost.Close.End");
+        LogShutdownStage("Shutdown.Request");
         Shutdown();
+        LogShutdownStage("Shutdown.Return");
+    }
+
+    private void LogShutdownStage(string stage)
+    {
+        _shutdownStopwatch ??= Stopwatch.StartNew();
+        Log.Debug($"[SHUTDOWN] Scope='App' Stage='{stage}' ElapsedMs={_shutdownStopwatch.ElapsedMilliseconds} ThreadId={Environment.CurrentManagedThreadId}");
     }
 }

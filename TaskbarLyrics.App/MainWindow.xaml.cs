@@ -100,7 +100,7 @@ public partial class MainWindow : Window, IDisposable
     private bool _hasReportedWebViewControllerMonitoringFailure;
     private int _displayLayoutRefreshPending;
     private int _isDisposed;
-    private bool _isClosingForRecreation;
+    private bool _isClosingFromHost;
     private DisplayMonitor? _displayMonitor;
 
     internal event Action<LyricsPresentationCommand>? PresentationCommandCreated;
@@ -600,15 +600,15 @@ public partial class MainWindow : Window, IDisposable
         UpdateSpectrumCaptureState();
     }
 
-    internal void CloseForRecreation()
+    internal void CloseFromHost()
     {
-        _isClosingForRecreation = true;
+        _isClosingFromHost = true;
         Close();
     }
 
     private void OnClosing(object? sender, CancelEventArgs e)
     {
-        if (!_isClosingForRecreation &&
+        if (!_isClosingFromHost &&
             System.Windows.Application.Current is App app &&
             !app.IsExiting)
         {

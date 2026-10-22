@@ -12,6 +12,7 @@ internal sealed class LyricsWindowHost : IDisposable
 {
     private static readonly TimeSpan StartupTimeout = TimeSpan.FromSeconds(10);
     private readonly TaskCompletionSource _ready = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource _stopped = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly Thread _thread;
     private readonly Action _openSettings;
     private readonly Action _toggleTranslation;
@@ -30,6 +31,7 @@ internal sealed class LyricsWindowHost : IDisposable
     private volatile bool _isVisible;
     private bool _isLyricsContentVisible = true;
     private int _startupAbandoned;
+    private Task? _dispatcherShutdown;
 
     public LyricsWindowHost(
         AppSettings initialSettings,
@@ -206,30 +208,49 @@ internal sealed class LyricsWindowHost : IDisposable
             cancellationToken);
     }
 
-    public void Close()
-    {
-        if (_disposed)
-        {
-            return;
-        }
+    public void Close() => TaskObserver.Observe(CloseAsync(), "lyrics window host shutdown");
 
-        InvokeAsync(() =>
-        {
-            SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
-            SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
-            CloseMirrorWindows();
-            _window?.Close();
-            Dispatcher.CurrentDispatcher.BeginInvokeShutdown(DispatcherPriority.Normal);
-        });
+    public Task CloseAsync()
+    {
         lock (_previewGate)
         {
+            if (_disposed) return _stopped.Task;
             _disposed = true;
             _pendingPreviewSettings = null;
         }
 
-        if (!_thread.Join(TimeSpan.FromMilliseconds(200)))
+        if (_dispatcher is { HasShutdownStarted: false, HasShutdownFinished: false } dispatcher)
+            TaskObserver.Observe(dispatcher.InvokeAsync(CloseOnWindowThreadAsync).Task.Unwrap(), "lyrics window close");
+        return _stopped.Task;
+    }
+
+    private async Task CloseOnWindowThreadAsync()
+    {
+        try
         {
-            _dispatcher?.BeginInvokeShutdown(DispatcherPriority.Normal);
+            SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
+            SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
+            CloseMirrorWindows();
+            _window?.CloseFromHost();
+        }
+        finally
+        {
+            await ShutdownDispatcherAsync();
+        }
+    }
+
+    private Task ShutdownDispatcherAsync() => _dispatcherShutdown ??= ShutdownDispatcherCoreAsync();
+
+    private async Task ShutdownDispatcherCoreAsync()
+    {
+        try
+        {
+            // The native queue needs this STA's message pump until its completion callback returns.
+            await FloatingMaterialCompositor.WaitForPendingShutdownAsync();
+        }
+        finally
+        {
+            _dispatcher!.BeginInvokeShutdown(DispatcherPriority.Normal);
         }
     }
 
@@ -246,6 +267,7 @@ internal sealed class LyricsWindowHost : IDisposable
         try
         {
             _dispatcher = Dispatcher.CurrentDispatcher;
+            SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(_dispatcher));
             _trackLyricOffsetStore = trackLyricOffsetStore;
             _compositionRoot = compositionRoot;
             _window = CreateAndWireLyricsWindow();
@@ -255,17 +277,24 @@ internal sealed class LyricsWindowHost : IDisposable
 
             if (Volatile.Read(ref _startupAbandoned) != 0)
             {
-                _window.Close();
-                return;
+                _window.CloseFromHost();
             }
-
-            _ready.TrySetResult();
+            else _ready.TrySetResult();
             Dispatcher.Run();
         }
         catch (Exception exception)
         {
             Log.Error($"Lyrics window initialization failed: {exception}");
             _ready.TrySetException(exception);
+            if (_dispatcher is { HasShutdownStarted: false, HasShutdownFinished: false })
+            {
+                TaskObserver.Observe(CloseOnWindowThreadAsync(), "lyrics initialization cleanup");
+                Dispatcher.Run();
+            }
+        }
+        finally
+        {
+            _stopped.TrySetResult();
         }
     }
 
@@ -304,20 +333,27 @@ internal sealed class LyricsWindowHost : IDisposable
 
     private void OnLyricsWindowClosed(object? sender, EventArgs e)
     {
+        lock (_previewGate)
+        {
+            _disposed = true;
+            _pendingPreviewSettings = null;
+        }
         SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
         SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
         CloseMirrorWindows();
         _isVisible = false;
-        Dispatcher.CurrentDispatcher.BeginInvokeShutdown(DispatcherPriority.Normal);
+        TaskObserver.Observe(ShutdownDispatcherAsync(), "lyrics dispatcher shutdown");
     }
 
     private void OnLyricsWindowRecreateRequested(object? sender, EventArgs e)
     {
         // Defer until the current anchor/settings call stack completes on the old window.
-        _dispatcher?.BeginInvoke(RecreateLyricsWindow, DispatcherPriority.Normal);
+        if (_dispatcher is not null)
+            TaskObserver.Observe(_dispatcher.InvokeAsync(RecreateLyricsWindowAsync, DispatcherPriority.Normal).Task.Unwrap(),
+                "lyrics window recreation");
     }
 
-    private void RecreateLyricsWindow()
+    private async Task RecreateLyricsWindowAsync()
     {
         if (_disposed || _window is null)
         {
@@ -327,7 +363,9 @@ internal sealed class LyricsWindowHost : IDisposable
         var oldWindow = _window;
         _window = null;
         UnwireLyricsWindow(oldWindow);
-        oldWindow.CloseForRecreation();
+        oldWindow.CloseFromHost();
+        await FloatingMaterialCompositor.WaitForPendingShutdownAsync();
+        if (_disposed) return;
         _window = CreateAndWireLyricsWindow();
         ApplySettingsOnWindowThread(_currentSettings);
         if (_isVisible)
@@ -356,6 +394,9 @@ internal sealed class LyricsWindowHost : IDisposable
 
     private void ApplySettingsOnWindowThread(AppSettings settings, bool keepControlPanelOpen = false)
     {
+        if (_disposed) return;
+        _currentSettings = settings.Clone();
+        _currentSettings.NormalizeDisplaySelection();
         if (_window is null)
         {
             return;
@@ -368,8 +409,6 @@ internal sealed class LyricsWindowHost : IDisposable
                 _pendingSizeCommit == FloatingWindowSize.FromSettings(settings);
             _pendingSizeCommit = null;
         }
-        _currentSettings = settings.Clone();
-        _currentSettings.NormalizeDisplaySelection();
         var targets = LyricsDisplayTargetSelector.Select(
             DisplayMonitorService.GetDisplays(),
             _currentSettings.LyricsDisplayMode,

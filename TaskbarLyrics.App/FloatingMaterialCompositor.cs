@@ -8,6 +8,10 @@ namespace TaskbarLyrics.App;
 
 internal sealed class FloatingMaterialCompositor : IDisposable
 {
+    // Panel compositors share one native queue on their STA. Its owner can be
+    // disposed during window recreation; keep shutdown awaitable by that thread's host.
+    [ThreadStatic]
+    private static Task? _pendingQueueShutdown;
     private readonly DispatcherQueueController? _queue;
     private bool _disposed;
     internal Compositor Compositor { get; }
@@ -24,7 +28,7 @@ internal sealed class FloatingMaterialCompositor : IDisposable
         try { Compositor = new Compositor(); }
         catch
         {
-            if (_queue is not null) TaskObserver.Observe(_queue.ShutdownQueueAsync().AsTask(), "floating material failed initialization cleanup");
+            BeginQueueShutdown();
             throw;
         }
     }
@@ -34,7 +38,26 @@ internal sealed class FloatingMaterialCompositor : IDisposable
         if (_disposed) return;
         _disposed = true;
         Compositor.Dispose();
-        if (_queue is not null) TaskObserver.Observe(_queue.ShutdownQueueAsync().AsTask(), "floating material dispatcher shutdown");
+        BeginQueueShutdown();
+    }
+
+    internal static Task WaitForPendingShutdownAsync() => _pendingQueueShutdown ?? Task.CompletedTask;
+
+    private void BeginQueueShutdown()
+    {
+        if (_queue is null) return;
+        var shutdown = ShutdownQueueAsync();
+        _pendingQueueShutdown = _pendingQueueShutdown is { IsCompleted: false } pending
+            ? Task.WhenAll(pending, shutdown)
+            : shutdown;
+        TaskObserver.Observe(shutdown, "floating material dispatcher shutdown");
+    }
+
+    private async Task ShutdownQueueAsync()
+    {
+        Log.Debug($"[SHUTDOWN] Scope='CompositionQueue' Stage='Shutdown.Begin' ThreadId={Environment.CurrentManagedThreadId}");
+        await _queue!.ShutdownQueueAsync();
+        Log.Debug($"[SHUTDOWN] Scope='CompositionQueue' Stage='Shutdown.End' ThreadId={Environment.CurrentManagedThreadId}");
     }
 
     [StructLayout(LayoutKind.Sequential)]

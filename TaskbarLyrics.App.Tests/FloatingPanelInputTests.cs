@@ -1051,7 +1051,12 @@ public sealed partial class FloatingPanelInputTests
         {
             try { check(); }
             catch (Exception ex) { failure = ex; }
-            finally { Dispatcher.CurrentDispatcher.InvokeShutdown(); }
+            finally
+            {
+                try { CompleteStartupPanel(FloatingMaterialCompositor.WaitForPendingShutdownAsync()); }
+                catch (Exception ex) { failure ??= ex; }
+                Dispatcher.CurrentDispatcher.InvokeShutdown();
+            }
         })
         { IsBackground = true };
         thread.SetApartmentState(ApartmentState.STA);

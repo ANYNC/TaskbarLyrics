@@ -1,3 +1,5 @@
+using System.ComponentModel;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Net.Http;
@@ -29,6 +31,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
     private bool _isWebReady;
     private bool _isNavigationReady;
     private bool _isClosed;
+    private Stopwatch? _closeStopwatch;
     private bool _isTrackOffsetRefreshRunning;
     private bool _isRuntimeStateRefreshRunning;
     private bool _isTrackOffsetsPageActive;
@@ -76,6 +79,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         Loaded += SettingsWindow_Loaded;
         Activated += SettingsWindow_Activated;
         StateChanged += SettingsWindow_StateChanged;
+        Closing += SettingsWindow_Closing;
         Closed += SettingsWindow_Closed;
         NativeWindowTheme.ThemeChanged += OnWindowThemeChanged;
         SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
@@ -120,19 +124,31 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         TaskObserver.Observe(PushWindowStateToWebAsync(), "settings window state update");
     }
 
+    private void SettingsWindow_Closing(object? sender, CancelEventArgs e)
+    {
+        _closeStopwatch = Stopwatch.StartNew();
+        LogCloseStage("Closing");
+        Log.Debug($"[SHUTDOWN] Scope='SettingsWindow' AppExiting={(System.Windows.Application.Current as App)?.IsExiting == true} WebReady={_isWebReady} PendingPreviewChanges={_hasPendingPreviewChanges}");
+    }
+
     private void SettingsWindow_Closed(object? sender, EventArgs e)
     {
         _isClosed = true;
         _isWebReady = false;
+        LogCloseStage("Closed.Begin");
         var playerDiscoveryCancellation = Interlocked.Exchange(ref _playerSessionDiscoveryCancellation, null);
         playerDiscoveryCancellation?.Cancel();
         playerDiscoveryCancellation?.Dispose();
+        LogCloseStage("PlayerDiscovery.Cancel.End");
         if (_hasPendingPreviewChanges)
         {
+            LogCloseStage("SavePreview.Begin");
             SaveSettings();
             _hasPendingPreviewChanges = false;
+            LogCloseStage("SavePreview.End");
         }
 
+        LogCloseStage("Diagnostics.Dispose.Begin");
         NativeWindowTheme.ThemeChanged -= OnWindowThemeChanged;
         SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
         var diagnosticsCancellation = Interlocked.Exchange(ref _lyricDiagnosticsCancellation, null);
@@ -145,14 +161,26 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         diagnosticRunner?.Dispose();
         _trackOffsetRefreshTimer.Stop();
         _trackOffsetRefreshTimer.Tick -= TrackOffsetRefreshTimer_Tick;
+        LogCloseStage("Diagnostics.Dispose.End");
 
+        LogCloseStage("WebView.NavigateBlank.Begin");
         if (SettingsWebView.CoreWebView2 is not null)
         {
             SettingsWebView.CoreWebView2.WebMessageReceived -= SettingsWebView_WebMessageReceived;
             SettingsWebView.CoreWebView2.Navigate("about:blank");
         }
+        LogCloseStage("WebView.NavigateBlank.End");
 
+        LogCloseStage("WebView.Dispose.Begin");
         SettingsWebView.Dispose();
+        LogCloseStage("WebView.Dispose.End");
+        LogCloseStage("Closed.End");
+    }
+
+    private void LogCloseStage(string stage)
+    {
+        _closeStopwatch ??= Stopwatch.StartNew();
+        Log.Debug($"[SHUTDOWN] Scope='SettingsWindow' Stage='{stage}' ElapsedMs={_closeStopwatch.ElapsedMilliseconds} ThreadId={Environment.CurrentManagedThreadId}");
     }
 
     private void OnDisplaySettingsChanged(object? sender, EventArgs e)

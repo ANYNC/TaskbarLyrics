@@ -72,6 +72,7 @@ public sealed class CompositionGaussianBlurEffectTests
                             Assert.Equal(amount, actual);
                         }
                     }
+                    await FloatingMaterialCompositor.WaitForPendingShutdownAsync();
                     completed.SetResult();
                 }
                 catch (Exception ex) { completed.SetException(ex); }
