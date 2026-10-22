@@ -49,7 +49,7 @@ internal sealed class TaskbarPlacementService
         window.Left = Math.Clamp(requestedLeft, display.Left, maximumLeft);
 
         window.Top = display.Top + CalculateVerticalPosition(
-            taskbar.CenterY - display.Top,
+            settings.UseFloatingWindow ? display.Height / 2.0 : taskbar.CenterY - display.Top,
             window.Height,
             display.Height,
             settings.UseFloatingWindow ? 0 : settings.YOffset);
