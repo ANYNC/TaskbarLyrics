@@ -82,6 +82,7 @@ describe("settings WebView bridge", () => {
       expect(guidance.hidden).toBe(false);
       expect(guidance.textContent).toContain(content);
       expect(guidance.textContent).not.toContain("未安装插件");
+      expect(document.querySelector("[data-getting-started-external]").hidden).toBe(!["netease", "foobar2000"].includes(player));
     }
     expect(sent).toHaveLength(initialCount);
     document.querySelector('input[name="gettingStartedPlayer"][value="netease"]').click();
@@ -163,9 +164,11 @@ describe("settings WebView bridge", () => {
     const initialCount = sent.length;
     const button = document.querySelector("[data-getting-started-done]");
     expect(button.textContent).toBe("查看安装说明");
+    expect(button.querySelector("[data-getting-started-external]").hidden).toBe(false);
+    expect(document.querySelector("[data-getting-started-ready]")).toBeNull();
     button.click();
     expect(sent.slice(initialCount)).toEqual([{ version: 1, type: "openExternalLink", payload: url }]);
-    expect(document.querySelector("[data-getting-started-ready]").hidden).toBe(false);
+    expect(document.querySelector('[data-page="gettingStarted"]').classList.contains("active")).toBe(true);
     dom.window.close();
   });
 
@@ -286,7 +289,7 @@ describe("settings WebView bridge", () => {
     document.querySelector("#playerSettingsDialog").close();
     document.querySelector(`input[name="gettingStartedPlayer"][value="${player}"]`).click();
     expect(document.querySelector("#gettingStartedAddNote").hidden).toBe(true);
-    expect(document.querySelector(player === "foobar2000" ? "[data-getting-started-ready]" : "[data-getting-started-done]").textContent).toContain("显示歌词");
+    expect(document.querySelector("[data-getting-started-done]").textContent).toBe(player === "foobar2000" ? "查看安装说明" : "显示歌词");
     dom.window.close();
   });
 
@@ -338,7 +341,11 @@ describe("settings WebView bridge", () => {
       const sourceId = customIds[player] ? `custom-${encodeURIComponent(customIds[player])}` : player;
       document.querySelector(`[data-player-settings="${sourceId}"]`).click();
       expect(section.hidden).toBe(false);
-      expect(section.querySelector("dl").innerHTML).toBe(guide.querySelector("dl").innerHTML);
+      const drawerValues = [...section.querySelectorAll("dd")].map(item => item.textContent);
+      const guidanceValues = [...guide.querySelectorAll("dd")].map(item => item.textContent);
+      expect(guidanceValues).toEqual(["netease", "foobar2000"].includes(player)
+        ? [drawerValues[0], `${drawerValues[1]}，需配置插件`, `安装 ${drawerValues[2]}`]
+        : drawerValues);
       expect(section.querySelector(".compatibility-summary").textContent).toBe(guide.querySelector(".compatibility-summary").textContent);
       expect([...section.querySelectorAll("li")].map(item => item.textContent)).toEqual([...guide.querySelectorAll("li")].map(item => item.textContent));
       expect(section.querySelectorAll("dl > div")).toHaveLength(3);
@@ -1377,6 +1384,35 @@ describe("settings WebView bridge", () => {
     expect(document.querySelector("#spectrumTuningDescription").textContent).toContain("实时调节频谱参数");
   });
 
+  it.each([
+    [true, "PureMusicOnly"], [true, "PureMusicOrNoLyrics"], [true, "Always"],
+    [false, "PureMusicOnly"], [false, "PureMusicOrNoLyrics"], [false, "Always"]
+  ])("uses retained consent %s after restoring defaults before enabling %s", async (granted, mode) => {
+    const { dom, sent, script } = await createSettingsDom({ reducedMotion: true });
+    enableDialogDomSupport(dom);
+    dom.window.eval(script);
+    const document = dom.window.document;
+    dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings: {
+      spectrumDisplayMode: granted ? "Always" : "Disabled", spectrumAudioAccessGranted: granted
+    } } });
+    document.querySelector("#restoreButton").click();
+    expect(document.querySelector("#restoreDialogDescription").textContent).toContain("授权会保留，频谱将关闭");
+    document.querySelector("#confirmRestore").click();
+    expect(sent.at(-1)).toEqual({ version: 1, type: "resetDefaults", payload: {} });
+    dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings: {
+      spectrumDisplayMode: "Disabled", spectrumAudioAccessGranted: granted
+    } } });
+    expect(document.querySelector('[data-setting="spectrumDisplayMode"] .select-trigger-value').textContent).toContain("关闭");
+    expect(document.querySelector("#spectrumTuningButton").disabled).toBe(true);
+    const initialCount = sent.length;
+    dom.window.settingsApp.receive({ version: 1, type: "requestSpectrumDisplayMode", payload: { mode } });
+    expect(document.querySelector("#spectrumAudioConsentDialog").open).toBe(!granted);
+    expect(sent.slice(initialCount)).toEqual(granted
+      ? [{ version: 1, type: "update", payload: { key: "spectrumDisplayMode", value: mode } }]
+      : []);
+    dom.window.close();
+  });
+
   it("renders spectrum capture states and posts recovery commands", async () => {
     const { dom, sent, script } = await createSettingsDom();
     enableDialogDomSupport(dom);
@@ -1453,6 +1489,58 @@ describe("settings WebView bridge", () => {
 
     document.querySelector("#revokeSpectrumAudioAccessButton").click();
     expect(sent.at(-1)).toEqual({ version: 1, type: "revokeSpectrumAudioAccess", payload: {} });
+  });
+
+  it("patches diagnostic apply states without rebuilding results or losing browsing context", async () => {
+    const { dom, script } = await createSettingsDom();
+    dom.window.eval(script);
+    const document = dom.window.document;
+    const receive = payload => dom.window.settingsApp.receive({ version: 1, type: "lyricDiagnosticsState", payload });
+    dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings: {} } });
+    dom.window.settingsApp.receive({ version: 1, type: "navigate", payload: { page: "lyricDiagnostics" } });
+    const report = { providers: [
+      { providerId: "QQMusic", candidates: [{ candidateId: "qq", title: "歌曲" }] },
+      { providerId: "Netease", candidates: [{ candidateId: "netease", title: "歌曲" }] }
+    ] };
+    receive({ status: "success", report });
+    const page = document.querySelector('[data-page="lyricDiagnostics"]');
+    const firstProvider = document.querySelector(".diagnostics-provider");
+    const button = document.querySelector('[data-candidate-id="netease"][data-apply-mode="current"]');
+    const row = button.closest(".diagnostics-candidate");
+    firstProvider.open = false;
+    page.scrollTop = 480;
+    button.focus();
+    button.click();
+    expect(firstProvider.isConnected).toBe(true);
+    expect(firstProvider.open).toBe(false);
+    expect(button.isConnected).toBe(true);
+    expect(button.disabled).toBe(true);
+    expect(page.scrollTop).toBe(480);
+    const apply = status => receive({ status: "success", apply: {
+      status, providerId: "netease", candidateId: "netease", mode: "current", message: status
+    } });
+    apply("running");
+    // Model native focus loss when a loading button is disabled.
+    button.blur();
+    apply("success");
+    expect(document.activeElement).toBe(button);
+    expect(button.textContent).toBe("已应用");
+    expect(page.scrollTop).toBe(480);
+    expect(firstProvider.open).toBe(false);
+    expect(row.isConnected).toBe(true);
+    button.click();
+    const nav = document.querySelector('[data-nav="sources"]');
+    nav.focus();
+    apply("error");
+    expect(document.activeElement).toBe(nav);
+    expect(firstProvider.isConnected).toBe(true);
+    expect(firstProvider.open).toBe(false);
+    // A genuinely new lookup may replace results and reset their initial expansion.
+    receive({ status: "running" });
+    receive({ status: "success", report });
+    expect(firstProvider.isConnected).toBe(false);
+    expect(document.querySelector(".diagnostics-provider").open).toBe(true);
+    dom.window.close();
   });
 
   it("runs one lyric diagnostics request and exposes the running track", async () => {

@@ -31,6 +31,37 @@ async function createPresentation({ reducedMotion = false } = {}) {
 }
 
 describe("display presentation", () => {
+  it.each([false, true])("only moves groups visible in both modes when switching from floating=%s", async floating => {
+    const { dom, sync } = await createPresentation();
+    const document = dom.window.document;
+    const groups = [...document.querySelectorAll(".display-setting-group")];
+    const background = document.querySelector('[data-display-group="floating-background"]');
+    const appearance = document.querySelector('[data-display-group="appearance"]');
+    const controls = document.querySelector('[data-display-group="controls"]');
+    const size = document.querySelector('[data-display-group="size"]');
+    for (const [index, group] of groups.entries()) {
+      group.getBoundingClientRect = () => {
+        if (group.closest("[hidden]")) return { top: 0, width: 0, height: 0 };
+        const offset = group === controls && !background.hidden ? 60 : 0;
+        return { top: 200 + index * 150 + offset, width: 380, height: 140 };
+      };
+      group.animate = vi.fn(() => ({ cancel: vi.fn() }));
+    }
+    sync({ page: "displayArea", useFloatingWindow: floating });
+    sync({ page: "displayArea", useFloatingWindow: !floating });
+
+    expect(background.hidden).toBe(floating);
+    expect(appearance.hidden).toBe(!floating);
+    expect(background.animate).not.toHaveBeenCalled();
+    expect(appearance.animate).not.toHaveBeenCalled();
+    expect(size.animate).not.toHaveBeenCalled();
+    expect(controls.animate).toHaveBeenCalledExactlyOnceWith(
+      [{ transform: `translateY(${floating ? 60 : -60}px)` }, { transform: "translateY(0)" }],
+      { duration: 220, easing: "cubic-bezier(.2,.75,.25,1)" }
+    );
+    dom.window.close();
+  });
+
   it("plays on the first display-page visit and mode changes, without replaying for setting edits or page revisits", async () => {
     const { dom, video, sync } = await createPresentation();
     const state = { page: "sources", useFloatingWindow: false, enableControlPanel: true, showCover: true };

@@ -75,9 +75,8 @@
                 <section id="gettingStartedGuidance" class="getting-started-guidance" aria-live="polite" hidden></section>
                 <div class="getting-started-footer">
                   <p id="gettingStartedAddNote" class="getting-started-note" hidden>播放歌曲后，在媒体会话中选择并添加此播放器。</p>
-                  <div class="getting-started-actions"><button class="btn" type="button" data-getting-started-done>查看安装说明</button><button class="btn ghost" type="button" data-getting-started-later>跳过引导</button></div>
-                  <button class="getting-started-ready compatibility-link" type="button" data-getting-started-ready hidden>已配置，显示歌词</button>
-                  <p class="getting-started-note">选择仅用于查看说明，不改变播放源设置。兼容性为参考，非实时检测结果。</p>
+                  <div class="getting-started-actions"><button class="btn" type="button" data-getting-started-done><span data-getting-started-action-label>查看安装说明</span><svg viewBox="0 0 24 24" aria-hidden="true" data-getting-started-external><path d="M14 3h7v7M21 3l-10 10M10 3H4a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1v-6"/></svg></button><button class="btn ghost" type="button" data-getting-started-later>跳过引导</button></div>
+                  <p class="getting-started-note">选择仅用于查看说明，不改变播放源设置。</p>
                 </div>
               </div>
             </section>
@@ -114,12 +113,12 @@
         <section class="page" data-page="lyrics" aria-labelledby="lyricsHeading">
           <div class="page-inner">
             <section class="panel">
-              <div class="panel-head"><div><h2 id="lyricsHeading" tabindex="-1">显示行为</h2><p>控制歌词何时出现，以及翻译和逐词扫描的显示方式。</p></div></div>
+              <div class="panel-head"><div><h2 id="lyricsHeading" tabindex="-1">显示行为</h2><p>控制歌词何时出现，以及翻译和逐字扫描的显示方式。</p></div></div>
               <div class="settings">
                 <div class="setting-row compact"><div class="setting-label"><strong>启动时显示歌词</strong></div><label class="switch"><input type="checkbox" data-setting="showLyricsOnStartup" aria-label="启动时显示歌词"><span class="switch-track"></span></label></div>
                 <div class="setting-row compact"><div class="setting-label"><strong>无播放时自动隐藏</strong><small>未检测到播放媒体时隐藏歌词区域；暂停播放不会隐藏。</small></div><label class="switch"><input type="checkbox" data-setting="autoHideWhenNoPlayback" aria-label="无播放时自动隐藏"><span class="switch-track"></span></label></div>
                 <div class="setting-row compact"><div class="setting-label"><strong>显示歌词翻译</strong></div><label class="switch"><input type="checkbox" data-setting="showLyricTranslation" aria-label="显示歌词翻译"><span class="switch-track"></span></label></div>
-                <div class="setting-row compact"><div class="setting-label"><strong>逐词扫描</strong></div><label class="switch"><input type="checkbox" data-setting="enableWordScanning" aria-label="逐词扫描"><span class="switch-track"></span></label></div>
+                <div class="setting-row compact"><div class="setting-label"><strong>逐字扫描</strong></div><label class="switch"><input type="checkbox" data-setting="enableWordScanning" aria-label="逐字扫描"><span class="switch-track"></span></label></div>
               </div>
             </section>
             <section class="panel">
@@ -384,7 +383,7 @@
     </main>
   </div>
 
-  <dialog id="restoreDialog" aria-labelledby="restoreDialogTitle" aria-describedby="restoreDialogDescription"><div class="dialog-body"><h2 id="restoreDialogTitle">恢复默认设置？</h2><p id="restoreDialogDescription">所有设置都会恢复为默认值，并立即应用到歌词窗口。</p></div><div class="dialog-actions"><button class="btn ghost" type="button" data-dialog-cancel="restoreDialog">取消</button><button id="confirmRestore" class="btn" type="button">恢复默认</button></div></dialog>
+  <dialog id="restoreDialog" aria-labelledby="restoreDialogTitle" aria-describedby="restoreDialogDescription"><div class="dialog-body"><h2 id="restoreDialogTitle">恢复默认设置？</h2><p id="restoreDialogDescription">设置将恢复为默认值，并立即应用到歌词窗口。已确认的系统音频采集授权会保留，频谱将关闭。</p></div><div class="dialog-actions"><button class="btn ghost" type="button" data-dialog-cancel="restoreDialog">取消</button><button id="confirmRestore" class="btn" type="button">恢复默认</button></div></dialog>
   <dialog id="clearDialog" aria-labelledby="clearDialogTitle" aria-describedby="clearDialogDescription"><div class="dialog-body"><h2 id="clearDialogTitle">清除歌词与封面缓存？</h2><p id="clearDialogDescription">将删除歌词、封面缓存，以及歌词匹配中“使用并记住”的指定记录；应用设置不会受到影响。</p></div><div class="dialog-actions"><button class="btn ghost" type="button" data-dialog-cancel="clearDialog">取消</button><button id="confirmClear" class="btn destructive" type="button">清除缓存</button></div></dialog>
   <dialog id="deleteTrackOffsetDialog" aria-labelledby="deleteTrackOffsetDialogTitle" aria-describedby="deleteTrackOffsetDialogDescription"><div class="dialog-body"><h2 id="deleteTrackOffsetDialogTitle">删除这条单曲偏移？</h2><p id="deleteTrackOffsetDialogDescription">删除后，这首歌曲在对应歌词源下将恢复为仅使用播放器偏移。</p></div><div class="dialog-actions"><button class="btn ghost" type="button" data-dialog-cancel="deleteTrackOffsetDialog">取消</button><button id="confirmDeleteTrackOffset" class="btn destructive" type="button">删除偏移</button></div></dialog>
   <dialog id="clearTrackOffsetsDialog" aria-labelledby="clearTrackOffsetsDialogTitle" aria-describedby="clearTrackOffsetsDialogDescription"><div class="dialog-body"><h2 id="clearTrackOffsetsDialogTitle">清除全部单曲偏移？</h2><p id="clearTrackOffsetsDialogDescription">所有歌曲和歌词源的单独修正都会被删除，此操作不会影响播放器偏移。</p></div><div class="dialog-actions"><button class="btn ghost" type="button" data-dialog-cancel="clearTrackOffsetsDialog">取消</button><button id="confirmClearTrackOffsets" class="btn destructive" type="button">全部清除</button></div></dialog>

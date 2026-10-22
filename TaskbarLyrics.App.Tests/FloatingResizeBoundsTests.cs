@@ -114,9 +114,11 @@ public sealed partial class FloatingPanelInputTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void FloatingLyricsResizeAppliesTheBottomAnchorBeforeChangingNativeSize(bool mirrorHost)
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public void FloatingLyricsResizeAppliesTheBottomAnchorBeforeChangingNativeSize(bool mirrorHost, bool onScreenBottom)
     {
         RunSta(() =>
         {
@@ -141,7 +143,8 @@ public sealed partial class FloatingPanelInputTests
                 var handle = new WindowInteropHelper(host).EnsureHandle();
                 var scale = TaskbarNativeMethods.GetDpiForWindow(handle) / 96.0;
                 var original = ReadResizeBounds(handle);
-                var anchor = new Rect(display.WorkArea.Left + 100, display.WorkArea.Top + 400, original.Width, original.Height);
+                var anchor = new Rect(display.WorkArea.Left + 100,
+                    onScreenBottom ? display.Bounds.Bottom - original.Height : display.WorkArea.Top + 400, original.Width, original.Height);
                 Assert.True(TaskbarNativeMethods.SetWindowPos(handle, IntPtr.Zero, (int)anchor.Left, (int)anchor.Top,
                     (int)anchor.Width, (int)anchor.Height, TaskbarNativeMethods.SWP_NOZORDER | TaskbarNativeMethods.SWP_NOACTIVATE));
                 using var trace = new ResizeBoundsTrace(handle);
@@ -156,7 +159,7 @@ public sealed partial class FloatingPanelInputTests
                     var metrics = LyricsLayoutMetrics.Create(settings, scale);
                     var expected = FloatingWindowPlacement.Clamp(new Rect(anchor.Left,
                         anchor.Bottom - Math.Round(metrics.DesiredWindowHeight * scale), Math.Round(width * scale),
-                        Math.Round(metrics.DesiredWindowHeight * scale)), display.WorkArea);
+                        Math.Round(metrics.DesiredWindowHeight * scale)), display.Bounds);
                     Assert.NotEmpty(trace.Bounds);
                     Assert.All(trace.Bounds, observed => Assert.Equal(expected, observed));
                     Assert.Equal(expected, actual);
