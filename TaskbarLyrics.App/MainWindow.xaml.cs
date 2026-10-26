@@ -79,6 +79,7 @@ public partial class MainWindow : Window, IDisposable
     private object? _lyricsWebViewControl;
     private CoreWebView2? _lyricsCoreWebView2;
     private CoreWebView2Controller? _lyricsWebViewController;
+    private LyricsLayoutDiagnostics? _layoutDiagnostics;
     private EventInfo? _lyricsNavigationCompletedEvent;
     private Delegate? _lyricsNavigationCompletedHandler;
     private string _lastCoverVisualDiagnosticsKey = string.Empty;
@@ -442,19 +443,34 @@ public partial class MainWindow : Window, IDisposable
     internal void ToggleControlPanelNear(Rect triggerBoundsPx, DisplayMonitor targetDisplay, Action<bool> setExpanded, Window? source = null,
         ControlPanelTriggerArea area = ControlPanelTriggerArea.Cover, ControlPanelActivation activation = ControlPanelActivation.Click)
     {
-        if (!_regionVisibility.IsInteractive || !_currentSettings.CanTriggerControlPanel(area, activation)) return;
-        if (source is LyricsMirrorWindow mirror ? mirror.IsEmbeddedSurfaceHidden : _embeddedTaskbarAnchor.IsSurfaceHidden) return;
+        _layoutDiagnostics?.RecordPanelDecision("RequestReceived", source ?? this);
+        if (!_regionVisibility.IsInteractive || !_currentSettings.CanTriggerControlPanel(area, activation))
+        {
+            _layoutDiagnostics?.RecordPanelDecision("NotInteractiveOrTriggerDisabled", source ?? this);
+            return;
+        }
+        if (source is LyricsMirrorWindow mirror ? mirror.IsEmbeddedSurfaceHidden : _embeddedTaskbarAnchor.IsSurfaceHidden)
+        {
+            _layoutDiagnostics?.RecordPanelDecision("EmbeddedSurfaceHidden", source ?? this);
+            return;
+        }
         if (_currentSettings.UseFloatingWindow)
         {
             _floatingControls?.ToggleLock(source ?? this);
+            _layoutDiagnostics?.RecordPanelDecision("FloatingLockToggled", source ?? this);
             return;
         }
         var hover = activation == ControlPanelActivation.Hover;
         // A source click can deactivate the panel before its WebView message arrives.
         // Consume that click while the exit animation is already in progress.
-        if (!hover && _controlPanelWindow is { IsClosing: true }) return;
+        if (!hover && _controlPanelWindow is { IsClosing: true })
+        {
+            _layoutDiagnostics?.RecordPanelDecision("PanelClosing", source ?? this);
+            return;
+        }
         if (_controlPanelWindow is { IsClosing: false } currentPanel && (currentPanel.IsVisible || currentPanel.IsOpening))
         {
+            _layoutDiagnostics?.RecordPanelDecision(hover ? "PanelAlreadyOpen" : "PanelToggleClose", source ?? this);
             if (hover)
             {
                 if (_setControlPanelOpen != setExpanded) _setControlPanelOpen?.Invoke(false);
@@ -469,6 +485,7 @@ public partial class MainWindow : Window, IDisposable
         if (!IsVisible || !_isLyricsContentVisible ||
             DateTimeOffset.UtcNow - _lastControlPanelClosedUtc < TimeSpan.FromMilliseconds(200))
         {
+            _layoutDiagnostics?.RecordPanelDecision("SourceUnavailableOrCloseDebounce", source ?? this);
             return;
         }
 
@@ -483,6 +500,7 @@ public partial class MainWindow : Window, IDisposable
         panel.UpdateTimeline(_currentPlaybackPosition, _currentTrack?.Duration ?? TimeSpan.Zero, _isCurrentPlaybackPlaying, _canSeek);
         var anchorBoundsPx = GetControlPanelAnchor(source ?? this, triggerBoundsPx);
         TaskObserver.Observe(panel.ShowNearAsync(anchorBoundsPx, targetDisplay, _currentSettings.CoverPosition, activate: !hover), "lyrics control panel show");
+        _layoutDiagnostics?.RecordPanelDecision("PanelShowRequested", source ?? this);
         setExpanded(true);
     }
 
@@ -630,6 +648,7 @@ public partial class MainWindow : Window, IDisposable
             return;
         }
 
+        _layoutDiagnostics?.Dispose();
         _floatingControls?.Dispose();
         _regionVisibility.Dispose();
 
@@ -1297,6 +1316,11 @@ public partial class MainWindow : Window, IDisposable
                 coreWebView2.Settings.IsBuiltInErrorPageEnabled = false;
                 AttachWebViewMessageHandler(coreWebView2);
                 AttachLyricsWebViewController(webViewControl);
+                _layoutDiagnostics ??= LyricsLayoutDiagnostics.Start(this, () =>
+                    _isWebDocumentReady && !_isShowingWebErrorPage && _lyricsWebViewElement is { } host && _lyricsCoreWebView2 is { } core
+                        ? new(host, core, _currentSettings, PlacementDisplay, _embeddedTaskbarAnchor.IsAttached,
+                            _embeddedTaskbarAnchor.IsSurfaceHidden, _regionVisibility.IsInteractive, _controlPanelWindow?.IsVisible == true)
+                        : null);
             }
 
             AttachWebViewNavigationHandler(webViewControl);
@@ -1559,7 +1583,7 @@ public partial class MainWindow : Window, IDisposable
         }
     }
 
-    private static bool TryGetLyricsWebViewController(
+    internal static bool TryGetLyricsWebViewController(
         object webViewControl,
         out CoreWebView2Controller controller,
         out string failureReason)
@@ -1627,6 +1651,7 @@ public partial class MainWindow : Window, IDisposable
         try
         {
             var message = LyricsWebMessageRouter.Parse(e.TryGetWebMessageAsString());
+            _layoutDiagnostics?.RecordTrigger(message);
             if (LyricsWebMessageRouter.TryGetRegionVisibilityCompleted(message, out var regionGeneration, out var regionVisible))
             {
                 _regionVisibility.Complete(regionGeneration, regionVisible);

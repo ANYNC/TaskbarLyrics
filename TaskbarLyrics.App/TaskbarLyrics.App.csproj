@@ -22,6 +22,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="Diagnostics\lyrics-layout-snapshot.js" />
+    <None Update="Diagnostics\layout-diagnostics.enabled" Condition="'$(LayoutDiagnostics)' == 'true'">
+      <Link>layout-diagnostics.enabled</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
     <None Update="Web\**\*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

@@ -6,6 +6,30 @@ namespace TaskbarLyrics.App.Tests;
 public sealed class LyricsWebMessageRouterTests
 {
     [Theory]
+    [InlineData(-1, 0, 34, 34, 500, 50, "NegativePosition")]
+    [InlineData(0, -1, 34, 34, 500, 50, "NegativePosition")]
+    [InlineData(0, 0, 0, 34, 500, 50, "NonPositiveSize")]
+    [InlineData(0, 0, 34, 34, 500, 0, "InvalidViewport")]
+    [InlineData(0, 0, 34, 34, 500, 12, "OutsideViewport")]
+    [InlineData(0, 0, 10, 10, 500, 12, "None")]
+    [InlineData(0, 0, 34, 34, 500, 33, "None")]
+    public void BoundsDiagnosticsExplainRejectionWithoutRelaxingValidation(
+        double x, double y, double width, double height, double viewportWidth, double viewportHeight, string expected)
+    {
+        var json = FormattableString.Invariant($"{{\"version\":1,\"type\":\"coverClick\",\"payload\":{{\"x\":{x},\"y\":{y},\"width\":{width},\"height\":{height},\"viewportWidth\":{viewportWidth},\"viewportHeight\":{viewportHeight}}}}}");
+        var message = LyricsWebMessageRouter.Parse(json)!;
+        Assert.Equal(expected, LyricsWebMessageRouter.ReadBounds(message.Payload!.Value, out _));
+        Assert.Equal(expected == "None", LyricsWebMessageRouter.TryGetCoverClick(message, out _));
+    }
+
+    [Fact]
+    public void BoundsDiagnosticsRejectMissingOrNonNumericFields()
+    {
+        using var payload = System.Text.Json.JsonDocument.Parse("{\"x\":\"34\"}");
+        Assert.Equal("InvalidNumber", LyricsWebMessageRouter.ReadBounds(payload.RootElement, out _));
+    }
+
+    [Theory]
     [InlineData("Cover", "Hover", true)]
     [InlineData("Lyrics", "Click", true)]
     [InlineData("Lyrics", "Keyboard", true)]

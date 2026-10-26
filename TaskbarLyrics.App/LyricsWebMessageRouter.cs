@@ -62,6 +62,9 @@ internal static class LyricsWebMessageRouter
     }
 
     private static bool TryReadBounds(JsonElement payload, out LyricsCoverClickBounds bounds)
+        => ReadBounds(payload, out bounds) == "None";
+
+    internal static string ReadBounds(JsonElement payload, out LyricsCoverClickBounds bounds)
     {
         bounds = default;
         if (!TryReadNumber(payload, "x", out var x) ||
@@ -69,16 +72,18 @@ internal static class LyricsWebMessageRouter
             !TryReadNumber(payload, "width", out var width) ||
             !TryReadNumber(payload, "height", out var height) ||
             !TryReadNumber(payload, "viewportWidth", out var viewportWidth) ||
-            !TryReadNumber(payload, "viewportHeight", out var viewportHeight) ||
-            x < 0 || y < 0 || width <= 0 || height <= 0 ||
-            viewportWidth <= 0 || viewportHeight <= 0 ||
-            x + width > viewportWidth + 1 || y + height > viewportHeight + 1)
+            !TryReadNumber(payload, "viewportHeight", out var viewportHeight))
         {
-            return false;
+            return "InvalidNumber";
         }
 
+        if (x < 0 || y < 0) return "NegativePosition";
+        if (width <= 0 || height <= 0) return "NonPositiveSize";
+        if (viewportWidth <= 0 || viewportHeight <= 0) return "InvalidViewport";
+        if (x + width > viewportWidth + 1 || y + height > viewportHeight + 1) return "OutsideViewport";
+
         bounds = new LyricsCoverClickBounds(x, y, width, height, viewportWidth, viewportHeight);
-        return true;
+        return "None";
     }
 
     private static bool TryReadNumber(JsonElement payload, string name, out double value)

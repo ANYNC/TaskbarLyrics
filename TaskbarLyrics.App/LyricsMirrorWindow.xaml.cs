@@ -26,6 +26,7 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
     private bool _isSpectrumScriptPending;
     private bool _isDisposed;
     private bool _isContentVisible = true;
+    private LyricsLayoutDiagnostics? _layoutDiagnostics;
 
     public LyricsMirrorWindow(DisplayMonitor displayMonitor, Action<Window, Rect, DisplayMonitor, Action<bool>, ControlPanelTriggerArea, ControlPanelActivation> onCoverClicked,
         IAppCompositionRoot compositionRoot, Action? onSurfaceHidden = null)
@@ -202,6 +203,7 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
         }
 
         _isDisposed = true;
+        _layoutDiagnostics?.Dispose();
         _regionVisibility.Dispose();
         Loaded -= OnLoaded;
         SourceInitialized -= OnSourceInitialized;
@@ -259,16 +261,24 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
         try
         {
             var message = LyricsWebMessageRouter.Parse(e.TryGetWebMessageAsString());
+            _layoutDiagnostics?.RecordTrigger(message);
             if (LyricsWebMessageRouter.TryGetRegionVisibilityCompleted(message, out var generation, out var visible))
             {
                 _regionVisibility.Complete(generation, visible);
                 return;
             }
-            if (!_isContentVisible || IsEmbeddedSurfaceHidden || !_regionVisibility.IsInteractive || !(_settings.UseFloatingWindow || _settings.GetEnableControlPanel())) return;
+            if (!_isContentVisible || IsEmbeddedSurfaceHidden || !_regionVisibility.IsInteractive || !(_settings.UseFloatingWindow || _settings.GetEnableControlPanel()))
+            {
+                if (message?.Type is "coverClick" or "controlPanelTrigger")
+                    _layoutDiagnostics?.RecordPanelDecision("MirrorNotInteractiveOrTriggerDisabled", this);
+                return;
+            }
             if (!LyricsWebMessageRouter.TryGetControlPanelTrigger(
                     message, out var click, out var area, out var activation) ||
                 !_settings.CanTriggerControlPanel(area, activation))
             {
+                if (message?.Type is "coverClick" or "controlPanelTrigger")
+                    _layoutDiagnostics?.RecordPanelDecision("MirrorRejectedOrTriggerDisabled", this);
                 return;
             }
 
@@ -309,6 +319,11 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
             core.Settings.IsZoomControlEnabled = false;
             core.Settings.IsBuiltInErrorPageEnabled = false;
             core.WebMessageReceived += OnWebMessageReceived;
+            _layoutDiagnostics ??= LyricsLayoutDiagnostics.Start(this, () =>
+                _isWebReady && LyricsWebView.CoreWebView2 is { } currentCore
+                    ? new(LyricsWebView, currentCore, _settings, DisplayMonitor, IsEmbeddedInTaskbar,
+                        IsEmbeddedSurfaceHidden, _regionVisibility.IsInteractive, null)
+                    : null);
             LyricsWebView.NavigationCompleted += OnNavigationCompleted;
             LyricsWebView.NavigateToString(MainWindow.GetLyricsWebUiHtml());
         }
