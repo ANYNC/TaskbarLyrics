@@ -18,6 +18,7 @@ internal static class LyricsStyleScriptFactory
         var metrics = LyricsLayoutMetrics.Create(settings, pixelsPerDip, taskbar);
         var stylePayload = new
         {
+            hostPixelsPerDip = double.IsFinite(pixelsPerDip) && pixelsPerDip > 0 ? pixelsPerDip : 1,
             fontFamily = AppSettings.NormalizeFontFamily(settings.FontFamily),
             layoutScalePercent = metrics.ScalePercent,
             fontSize = metrics.FontSize,

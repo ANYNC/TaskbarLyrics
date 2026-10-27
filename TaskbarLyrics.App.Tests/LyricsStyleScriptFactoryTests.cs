@@ -5,6 +5,22 @@ namespace TaskbarLyrics.App.Tests;
 public sealed class LyricsStyleScriptFactoryTests
 {
     [Theory]
+    [InlineData(1, "1")]
+    [InlineData(1.5, "1.5")]
+    [InlineData(2, "2")]
+    [InlineData(0, "1")]
+    [InlineData(double.NaN, "1")]
+    public void CreateIncludesHostDpiWithoutApplyingTextScaleToStoredSizes(double dpi, string expected)
+    {
+        var settings = new AppSettings { FontSize = 14, CoverSize = 34 };
+        var script = LyricsStyleScriptFactory.Create(settings, dpi);
+        Assert.Contains($"\"hostPixelsPerDip\":{expected}", script);
+        Assert.Contains("\"fontSize\":14", script);
+        Assert.Equal(14, settings.FontSize);
+        Assert.Equal(34, settings.CoverSize);
+    }
+
+    [Theory]
     [InlineData(false, false)]
     [InlineData(false, true)]
     [InlineData(true, false)]

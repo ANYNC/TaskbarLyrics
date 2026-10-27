@@ -2458,6 +2458,23 @@
       if (valid) commitSetting("foregroundColor", input.value.toUpperCase());
     }));
 
+    function updateNavigationTooltip(button) {
+      if (!button) return;
+      const rect = button.getBoundingClientRect();
+      const nav = $(".nav").getBoundingClientRect();
+      button.style.setProperty("--nav-tooltip-left", `${rect.right + 12}px`);
+      button.style.setProperty("--nav-tooltip-top", `${Math.max(18, Math.min(window.innerHeight - 18, rect.top + rect.height / 2))}px`);
+      button.style.setProperty("--nav-tooltip-visibility", rect.bottom > nav.top && rect.top < nav.bottom ? "visible" : "hidden");
+    }
+
+    for (const eventName of ["pointerover", "focusin"]) {
+      $(".nav").addEventListener(eventName, event => updateNavigationTooltip(event.target.closest?.("[data-nav]")));
+    }
+    const refreshNavigationTooltip = () => updateNavigationTooltip(
+      $(".nav-item:hover") || document.activeElement?.closest?.("[data-nav]"));
+    $(".nav").addEventListener("scroll", refreshNavigationTooltip, { passive: true });
+    window.addEventListener("resize", refreshNavigationTooltip);
+
     $("#sidebarToggle").addEventListener("click", () => {
       const collapsed = $("#appShell").classList.toggle("sidebar-collapsed");
       $("#sidebarToggle").setAttribute("aria-label", collapsed ? "展开侧栏" : "折叠侧栏");

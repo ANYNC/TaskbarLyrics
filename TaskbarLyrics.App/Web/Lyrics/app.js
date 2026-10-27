@@ -38,6 +38,9 @@ let requestedFontSize = 13;
 let currentSize = 13;
 let viewportDescenderBufferPx = 2;
 let layoutScaleFactor = 1;
+let hostPixelsPerDip = 0;
+let layoutMetricScale = 1;
+const hostPixelMetrics = new Map();
 let requestedSpectrumBarWidthPx = 3;
 let requestedSpectrumGapPx = 3;
 let requestedSpectrumBarCount = spectrumBarEls.length;
@@ -99,11 +102,15 @@ coverEl?.addEventListener("mousedown", event => {
 function postPanelTrigger(element, area, activation) {
   if (regionPhase !== "visible") return;
   const bounds = element.getBoundingClientRect();
+  // Only the visible intersection is an actionable trigger. Keep the V1 host's
+  // strict viewport validation, including when fractional CSS pixels cross an edge.
+  const x = Math.max(0, bounds.x);
+  const y = Math.max(0, bounds.y);
+  const width = Math.min(window.innerWidth, bounds.x + bounds.width) - x;
+  const height = Math.min(window.innerHeight, bounds.y + bounds.height) - y;
+  if (![x, y, width, height].every(Number.isFinite) || width <= 0 || height <= 0) return;
   const payload = {
-    x: bounds.x,
-    y: bounds.y,
-    width: bounds.width,
-    height: bounds.height,
+    x, y, width, height,
     viewportWidth: window.innerWidth,
     viewportHeight: window.innerHeight
   };
@@ -1163,10 +1170,11 @@ function updateSpectrumGeometry() {
     return;
   }
 
+  const barWidth = requestedSpectrumBarWidthPx * layoutMetricScale;
+  const gap = requestedSpectrumGapPx * layoutMetricScale;
   const availableWidth = spectrumEl.clientWidth;
   const maxVisibleBars = Number.isFinite(availableWidth) && availableWidth > 0
-    ? Math.max(1, Math.floor((availableWidth + requestedSpectrumGapPx)
-      / (requestedSpectrumBarWidthPx + requestedSpectrumGapPx)))
+    ? Math.max(1, Math.floor((availableWidth + gap) / (barWidth + gap)))
     : requestedSpectrumBarCount;
   ensureSpectrumBarCount(Math.min(requestedSpectrumBarCount, maxVisibleBars));
   if (!Number.isFinite(availableWidth) || availableWidth <= 0) {
@@ -1175,19 +1183,19 @@ function updateSpectrumGeometry() {
 
   const barCount = spectrumBarEls.length;
   const gapCount = Math.max(0, barCount - 1);
-  const desiredWidth = (requestedSpectrumBarWidthPx * barCount) + (requestedSpectrumGapPx * gapCount);
-  let fittedBarWidth = requestedSpectrumBarWidthPx;
-  let fittedGap = requestedSpectrumGapPx;
+  const desiredWidth = (barWidth * barCount) + (gap * gapCount);
+  let fittedBarWidth = barWidth;
+  let fittedGap = gap;
 
   if (desiredWidth > availableWidth) {
     const fitRatio = availableWidth / desiredWidth;
     const minimumBarWidth = 1 / (Number(window.devicePixelRatio) || 1);
     fittedBarWidth = Math.max(
       minimumBarWidth,
-      alignDownToPhysicalPixel(requestedSpectrumBarWidthPx * fitRatio));
+      alignDownToPhysicalPixel(barWidth * fitRatio));
     const remainingWidth = Math.max(0, availableWidth - (fittedBarWidth * barCount));
     fittedGap = gapCount > 0
-      ? alignDownToPhysicalPixel(Math.min(requestedSpectrumGapPx, remainingWidth / gapCount))
+      ? alignDownToPhysicalPixel(Math.min(gap, remainingWidth / gapCount))
       : 0;
   }
 
@@ -1255,7 +1263,9 @@ function renderSpectrumFrame(now) {
     }
 
     const level = spectrumVisuals[i];
-    const height = Math.max(1, Math.round((spectrumTuning.minHeight + (level * spectrumTuning.heightRange)) * layoutScaleFactor));
+    const requestedHeight = (spectrumTuning.minHeight + (level * spectrumTuning.heightRange)) * layoutScaleFactor;
+    const height = layoutMetricScale === 1 ? Math.max(1, Math.round(requestedHeight)) :
+      Math.max(1 / (Number(window.devicePixelRatio) || 1), snapToPhysicalPixel(requestedHeight * layoutMetricScale));
     const bar = spectrumBarEls[i];
     bar.style.height = `${height}px`;
     bar.style.transform = "scaleY(1)";
@@ -1877,15 +1887,27 @@ function updateMetrics() {
   metricsUpdatePending = false;
   // Exclude the host-provided descender buffer from row metrics.
   const vertical = root.classList.contains("vertical-taskbar");
-  const measuredViewportHeight = (vertical ? viewportEl.clientWidth : viewportEl.clientHeight) || 30;
+  const textScaled = layoutMetricScale < 1 - 0.0001;
+  const viewportBounds = textScaled ? viewportEl.getBoundingClientRect() : null;
+  const measuredViewportHeight = (vertical ? viewportBounds?.width : viewportBounds?.height) ||
+    (vertical ? viewportEl.clientWidth : viewportEl.clientHeight) || 30;
   const rows = root.classList.contains("single-line") ? 1 : 2;
   const minimumHostHeight = rows;
-  const hostHeight = Math.max(minimumHostHeight, measuredViewportHeight - (vertical ? 0 : viewportDescenderBufferPx));
-  rowHeightPx = Math.max(1, Math.floor(hostHeight / rows));
+  const descenderBuffer = viewportDescenderBufferPx * layoutMetricScale;
+  const hostHeight = Math.max(minimumHostHeight, measuredViewportHeight - (vertical ? 0 : descenderBuffer));
+  rowHeightPx = textScaled ? alignDownToPhysicalPixel(hostHeight / rows) : Math.max(1, Math.floor(hostHeight / rows));
   rowGapPx = rows === 1 ? 0 : Math.max(0, hostHeight - (rowHeightPx * 2));
   linePitchPx = rowHeightPx + rowGapPx;
   const currentSizeMax = Math.max(11.2 * layoutScaleFactor, rowHeightPx * 0.92);
   currentSize = Math.min(requestedFontSize, currentSizeMax);
+  if (textScaled) {
+    const metric = name => Number.parseFloat(root.style.getPropertyValue(name)) || 0;
+    const offset = vertical ? 0 : Math.max(metric("--primary-offset-y"), rows === 2 ? metric("--secondary-offset-y") : 0);
+    // Fit the last row's centered line box, downward offset and descender buffer.
+    const rowBudget = rowHeightPx + (vertical ? 0 : 2 * (descenderBuffer - offset)) - metric("--line-text-padding-bottom");
+    const fittedSize = Math.floor(Math.max(0, rowBudget / 1.12) * 100) / 100;
+    currentSize = Math.min(currentSize, fittedSize);
+  }
   const nextSize = Math.min(currentSize, Math.max(9 * layoutScaleFactor, currentSize * 0.92));
   root.style.setProperty("--row-height", `${rowHeightPx}px`);
   root.style.setProperty("--row-gap", `${rowGapPx}px`);
@@ -2279,7 +2301,27 @@ function presentSpectrumFrame(targetFrame, isPlaying, animateTransition) {
   });
 }
 
+function updateLayoutPixelMetrics() {
+  const rasterScale = Number(window.devicePixelRatio) || 1;
+  // WPF geometry is in DIP, while CSS pixels also include Windows text scaling.
+  // Convert geometry once; requestedFontSize stays in CSS so text can grow.
+  layoutMetricScale = hostPixelsPerDip > 0 ? hostPixelsPerDip / rasterScale : 1;
+  for (const [name, value] of hostPixelMetrics) {
+    root.style.setProperty(name, `${value * layoutMetricScale}px`);
+  }
+  const coverSize = hostPixelMetrics.get("--cover-size");
+  const vertical = root.classList.contains("vertical-taskbar");
+  const bounds = layoutEl.getBoundingClientRect();
+  const crossAxis = vertical ? bounds.width || layoutEl.clientWidth : bounds.height || layoutEl.clientHeight;
+  if (coverSize > 0 && crossAxis > 0) {
+    const padding = vertical ? 2 * (hostPixelMetrics.get("--layout-padding-inline") || 0) : viewportDescenderBufferPx;
+    const fittedCover = Math.max(0, Math.min(coverSize * layoutMetricScale, crossAxis - padding * layoutMetricScale));
+    root.style.setProperty("--cover-size", `${fittedCover}px`);
+  }
+}
+
 function updateResponsiveLayout() {
+  updateLayoutPixelMetrics();
   updateMetrics();
   updateSpectrumGeometry();
 }
@@ -2303,7 +2345,9 @@ presentationCoordinator.setCurrentFrame(createPresentationFrame({
 }));
 
 if (typeof ResizeObserver !== "undefined") {
-  new ResizeObserver(updateResponsiveLayout).observe(layoutEl);
+  const layoutObserver = new ResizeObserver(updateResponsiveLayout);
+  layoutObserver.observe(layoutEl);
+  layoutObserver.observe(viewportEl);
 } else {
   window.addEventListener("resize", updateResponsiveLayout);
 }
@@ -2569,6 +2613,8 @@ const lyricsApi = {
       layoutScaleFactor = layoutScalePercent / 100;
     }
     requestedFontSize = Number(payload.fontSize) || 13;
+    const hostScale = Number(payload.hostPixelsPerDip);
+    if (Number.isFinite(hostScale) && hostScale > 0) hostPixelsPerDip = hostScale;
     root.style.setProperty("--font-size", `${requestedFontSize}px`);
     root.style.setProperty("--font-weight", window.taskbarLyricsState.normalizeWeight(payload.fontWeight));
     root.classList.toggle("cover-hidden", payload.showCover === false);
@@ -2593,27 +2639,28 @@ const lyricsApi = {
 
     const coverSize = Number(payload.coverSize);
     if (Number.isFinite(coverSize) && coverSize > 0) {
-      root.style.setProperty("--cover-size", `${coverSize}px`);
+      hostPixelMetrics.set("--cover-size", coverSize);
     }
     const coverGap = Number(payload.coverGap);
     if (Number.isFinite(coverGap) && coverGap >= 0) {
-      root.style.setProperty("--cover-gap", `${coverGap}px`);
+      hostPixelMetrics.set("--cover-gap", coverGap);
     }
     const coverCornerRadius = Number(payload.coverCornerRadius);
     if (Number.isFinite(coverCornerRadius) && coverCornerRadius >= 0) {
-      root.style.setProperty("--cover-radius", `${coverCornerRadius}px`);
+      hostPixelMetrics.set("--cover-radius", coverCornerRadius);
     }
 
     const descenderBuffer = Number(payload.viewportDescenderBuffer);
     if (Number.isFinite(descenderBuffer) && descenderBuffer >= 0) {
       viewportDescenderBufferPx = descenderBuffer;
     }
-    root.style.setProperty("--viewport-descender-buffer", `${viewportDescenderBufferPx}px`);
+    hostPixelMetrics.set("--viewport-descender-buffer", viewportDescenderBufferPx);
 
     const lyricsPaneHeight = Number(payload.lyricsPaneHeight);
     if (Number.isFinite(lyricsPaneHeight) && lyricsPaneHeight > 0) {
-      root.style.setProperty("--lyrics-pane-height", `${lyricsPaneHeight}px`);
+      hostPixelMetrics.set("--lyrics-pane-height", lyricsPaneHeight);
     } else {
+      hostPixelMetrics.delete("--lyrics-pane-height");
       root.style.removeProperty("--lyrics-pane-height");
     }
 
@@ -2640,7 +2687,7 @@ const lyricsApi = {
     Object.entries(pixelMetrics).forEach(([payloadKey, cssVariable]) => {
       const value = Number(payload[payloadKey]);
       if (Number.isFinite(value) && value >= 0) {
-        root.style.setProperty(cssVariable, `${value}px`);
+        hostPixelMetrics.set(cssVariable, value);
       }
     });
     const spectrumBarWidth = Number(payload.spectrumBarWidth);

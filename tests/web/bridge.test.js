@@ -66,6 +66,49 @@ function enableDialogDomSupport(dom) {
 }
 
 describe("settings WebView bridge", () => {
+  it("keeps collapsed navigation tooltips in viewport coordinates while the navigation scrolls", async () => {
+    const { dom, script } = await createSettingsDom();
+    try {
+      dom.window.eval(script);
+      const document = dom.window.document;
+      const nav = document.querySelector(".nav");
+      const about = document.querySelector('[data-nav="about"]');
+      let top = 80;
+      nav.getBoundingClientRect = () => ({ top: 70, bottom: 170, height: 100 });
+      about.getBoundingClientRect = () => ({ top, bottom: top + 40, height: 40, right: 56 });
+      document.querySelector("#sidebarToggle").click();
+      about.focus();
+      expect(about.style.getPropertyValue("--nav-tooltip-left")).toBe("68px");
+      expect(about.style.getPropertyValue("--nav-tooltip-top")).toBe("100px");
+      expect(about.style.getPropertyValue("--nav-tooltip-visibility")).toBe("visible");
+      top = 190;
+      nav.dispatchEvent(new dom.window.Event("scroll"));
+      expect(about.style.getPropertyValue("--nav-tooltip-visibility")).toBe("hidden");
+      top = 90;
+      nav.dispatchEvent(new dom.window.Event("scroll"));
+      expect(about.style.getPropertyValue("--nav-tooltip-top")).toBe("110px");
+      expect(about.style.getPropertyValue("--nav-tooltip-visibility")).toBe("visible");
+    } finally { dom.window.close(); }
+  });
+
+  it("retains navigation and footer confirmation actions after scrolling without changing settings", async () => {
+    const { dom, sent, script } = await createSettingsDom();
+    try {
+      enableDialogDomSupport(dom);
+      dom.window.eval(script);
+      const document = dom.window.document;
+      const initialUpdates = sent.filter(message => message.type === "update").length;
+      const nav = document.querySelector(".nav");
+      nav.scrollTop = 200;
+      nav.dispatchEvent(new dom.window.Event("scroll"));
+      document.querySelector('[data-nav="about"]').click();
+      expect(document.querySelector('.page.active').dataset.page).toBe("about");
+      document.querySelector("#restoreButton").click();
+      expect(document.querySelector("#restoreDialog").open).toBe(true);
+      expect(sent.filter(message => message.type === "update")).toHaveLength(initialUpdates);
+    } finally { dom.window.close(); }
+  });
+
   it("keeps the advanced search-status switch on for old settings and posts persisted V1 updates", async () => {
     const { dom, sent, script } = await createSettingsDom();
     dom.window.eval(script);

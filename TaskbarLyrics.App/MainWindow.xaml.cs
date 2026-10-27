@@ -1968,7 +1968,7 @@ public partial class MainWindow : Window, IDisposable
         QueueDisplayLayoutRefresh();
     }
 
-    private void QueueDisplayLayoutRefresh()
+    internal void QueueDisplayLayoutRefresh()
     {
         if (Volatile.Read(ref _isDisposed) != 0 || Dispatcher.HasShutdownStarted || Dispatcher.HasShutdownFinished)
         {

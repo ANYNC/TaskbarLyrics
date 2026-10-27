@@ -135,6 +135,7 @@ html, body {
   height: 100%;
   display: grid;
   grid-template-columns: var(--cover-size) var(--cover-gap) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   grid-template-areas: "cover gap lyrics";
   align-items: center;
 }
@@ -350,6 +351,7 @@ html, body {
 
 .lyrics-pane {
   min-width: 0;
+  min-height: 0;
   height: 100%;
   overflow: hidden;
   position: relative;

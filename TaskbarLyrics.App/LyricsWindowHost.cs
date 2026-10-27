@@ -5,6 +5,7 @@ using Microsoft.Win32;
 using TaskbarLyrics.Core.Models;
 using TaskbarLyrics.Core.Services;
 using TaskbarLyrics.Core.Utilities;
+using Windows.UI.ViewManagement;
 
 namespace TaskbarLyrics.App;
 
@@ -32,6 +33,7 @@ internal sealed class LyricsWindowHost : IDisposable
     private bool _isLyricsContentVisible = true;
     private int _startupAbandoned;
     private Task? _dispatcherShutdown;
+    private UISettings? _uiSettings;
 
     public LyricsWindowHost(
         AppSettings initialSettings,
@@ -268,6 +270,8 @@ internal sealed class LyricsWindowHost : IDisposable
         {
             _dispatcher = Dispatcher.CurrentDispatcher;
             SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(_dispatcher));
+            _uiSettings = new UISettings();
+            _uiSettings.TextScaleFactorChanged += OnTextScaleFactorChanged;
             _trackLyricOffsetStore = trackLyricOffsetStore;
             _compositionRoot = compositionRoot;
             _window = CreateAndWireLyricsWindow();
@@ -294,6 +298,8 @@ internal sealed class LyricsWindowHost : IDisposable
         }
         finally
         {
+            if (_uiSettings is not null) _uiSettings.TextScaleFactorChanged -= OnTextScaleFactorChanged;
+            _uiSettings = null;
             _stopped.TrySetResult();
         }
     }
@@ -503,6 +509,13 @@ internal sealed class LyricsWindowHost : IDisposable
     {
         InvokeAsync(() => ApplySettingsOnWindowThread(_currentSettings));
     }
+
+    private void OnTextScaleFactorChanged(UISettings sender, object args) => InvokeAsync(() =>
+    {
+        _window?.QueueDisplayLayoutRefresh();
+        foreach (var mirror in _mirrorWindows.Values)
+            mirror.ApplySettings(_currentSettings, keepControlPanelOpen: true, preserveFloatingPosition: true);
+    });
 
     private void OnUserPreferenceChanged(object sender, UserPreferenceChangedEventArgs e)
     {

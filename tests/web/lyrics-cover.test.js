@@ -482,6 +482,7 @@ describe("lyrics cover fallback", () => {
     dom.window.chrome = { webview: { postMessage: message => sent.push(JSON.parse(message)) } };
     const document = dom.window.document;
     const cover = document.querySelector("#cover");
+    cover.getBoundingClientRect = () => ({ x: 0, y: 0, width: 34, height: 34 });
     const interaction = cover.querySelector(".cover-interaction");
     const css = document.createElement("style");
     css.textContent = style;
