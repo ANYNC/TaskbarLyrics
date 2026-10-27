@@ -145,7 +145,11 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
     private bool _disposed;
     private string? _lastAttachDiagnostic;
     private readonly TaskbarOccupiedSpaceProvider _occupiedSpace;
+    private readonly TaskbarChangeObserver _changeObserver;
+    private int _spaceRefreshQueued;
+    private double _positionPixelsPerDip;
     private DispatcherTimer? _spaceRefreshTimer;
+    private DispatcherTimer? _eventRefreshTimer;
     private Window? _positionWindow;
     private AppSettings? _positionSettings;
     private DisplayMonitor? _positionDisplay;
@@ -156,6 +160,7 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
     internal EmbeddedTaskbarAnchor(TaskbarOccupiedSpaceProvider occupiedSpace)
     {
         _occupiedSpace = occupiedSpace;
+        _changeObserver = new TaskbarChangeObserver(OnTaskbarChanged, _occupiedSpace.Invalidate);
         _occupiedSpace.SnapshotAvailable += OnSnapshotAvailable;
     }
 
@@ -253,10 +258,14 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
     {
         IsSurfaceHidden = false;
         _spaceRefreshTimer?.Stop();
+        _eventRefreshTimer?.Stop();
+        _changeObserver.Detach();
+        _occupiedSpace.SetEventMonitoring(false);
         _occupiedSpace.Invalidate();
         _positionWindow = null;
         _positionSettings = null;
         _positionDisplay = null;
+        _positionPixelsPerDip = 0;
         RestoreTaskList();
 
         if (_windowHandle != IntPtr.Zero && IsWindow(_windowHandle))
@@ -286,15 +295,30 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
         _occupiedSpace.SnapshotAvailable -= OnSnapshotAvailable;
         Detach();
         if (_spaceRefreshTimer is not null) _spaceRefreshTimer.Tick -= OnSpaceRefreshTick;
+        if (_eventRefreshTimer is not null) _eventRefreshTimer.Tick -= OnEventRefreshTick;
         _occupiedSpace.Dispose();
+        _changeObserver.Dispose();
         _disposed = true;
     }
 
     private void MonitorAvailableSpace(Window window, AppSettings settings, DisplayMonitor? display)
     {
+        var pixelsPerDip = display?.PixelsPerDip ?? TaskbarPlacementService.GetPixelsPerDip(window);
+        if (_positionDisplay?.Id != display?.Id || _positionPixelsPerDip != pixelsPerDip)
+            _occupiedSpace.Invalidate();
+        _positionPixelsPerDip = pixelsPerDip;
         _positionWindow = window;
         _positionSettings = settings;
         _positionDisplay = display;
+        _occupiedSpace.SetEventMonitoring(_changeObserver.UpdateTarget(_taskbarHandle));
+        if (_eventRefreshTimer is null)
+        {
+            _eventRefreshTimer = new DispatcherTimer(DispatcherPriority.Normal, window.Dispatcher)
+            {
+                Interval = TimeSpan.FromMilliseconds(100)
+            };
+            _eventRefreshTimer.Tick += OnEventRefreshTick;
+        }
         if (_spaceRefreshTimer is null)
         {
             _spaceRefreshTimer = new DispatcherTimer(DispatcherPriority.Background, window.Dispatcher)
@@ -314,11 +338,42 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
     {
         var dispatcher = Volatile.Read(ref _positionWindow)?.Dispatcher;
         if (dispatcher is null || dispatcher.HasShutdownStarted || dispatcher.HasShutdownFinished) return;
-        dispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(RefreshAvailableSpace));
+        if (Interlocked.Exchange(ref _spaceRefreshQueued, 1) != 0) return;
+        dispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(() =>
+        {
+            Interlocked.Exchange(ref _spaceRefreshQueued, 0);
+            RefreshAvailableSpace();
+        }));
+    }
+
+    private void OnTaskbarChanged()
+    {
+        _occupiedSpace.NotifyChanged();
+        if (_eventRefreshTimer is { IsEnabled: false }) _eventRefreshTimer.Start();
+    }
+
+    private void OnEventRefreshTick(object? sender, EventArgs e)
+    {
+        _eventRefreshTimer?.Stop();
+        RefreshAvailableSpace();
+    }
+
+    internal void InvalidateTaskbarTarget()
+    {
+        _changeObserver.Detach();
+        _occupiedSpace.SetEventMonitoring(false);
+        _occupiedSpace.Invalidate();
     }
 
     private void RefreshAvailableSpace()
     {
+        if (!_disposed && _parentHandle != IntPtr.Zero && !IsWindow(_parentHandle))
+        {
+            _changeObserver.Detach();
+            _occupiedSpace.SetEventMonitoring(false);
+            _occupiedSpace.Invalidate();
+            return;
+        }
         if (!_disposed && _positionWindow is { IsVisible: true } window && _positionSettings is { } settings &&
             _windowHandle != IntPtr.Zero && _parentHandle != IntPtr.Zero && IsWindow(_parentHandle))
             Position(_windowHandle, _parentHandle, window, settings, _positionDisplay);

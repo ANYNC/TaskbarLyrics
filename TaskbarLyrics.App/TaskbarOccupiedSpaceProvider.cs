@@ -11,6 +11,9 @@ internal sealed class TaskbarOccupiedSpaceProvider : IDisposable
 {
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromMilliseconds(500);
     private static readonly TimeSpan SnapshotLifetime = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan IdleRefreshInterval = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan IdleSnapshotLifetime = IdleRefreshInterval + SnapshotLifetime;
+    private static readonly TimeSpan EventCoalesceInterval = TimeSpan.FromMilliseconds(100);
     private readonly object _gate = new();
     private readonly Func<IntPtr, Rect, CancellationToken, TaskbarInterval[]?> _read;
     private readonly TimeProvider _clock;
@@ -23,6 +26,12 @@ internal sealed class TaskbarOccupiedSpaceProvider : IDisposable
     private bool _hasRequested;
     private bool _queryRunning;
     private bool _disposed;
+    private bool _eventMonitoring;
+    private bool _readFailed;
+    private long? _changedAt;
+    private long? _uncertainSince;
+    private long _changeVersion;
+    private TaskbarInterval[]? _lastObserved;
 
     public TaskbarOccupiedSpaceProvider() : this(ReadOccupiedBounds, TimeProvider.System) { }
 
@@ -42,6 +51,30 @@ internal sealed class TaskbarOccupiedSpaceProvider : IDisposable
 
     public event EventHandler? SnapshotAvailable;
 
+    // Only a live event subscription permits the slower idle cadence. Hook
+    // failures automatically retain the original polling/expiry contract.
+    internal void SetEventMonitoring(bool available)
+    {
+        lock (_gate)
+        {
+            if (_disposed || _eventMonitoring == available) return;
+            _eventMonitoring = available;
+            InvalidateCache();
+        }
+    }
+
+    internal void NotifyChanged()
+    {
+        lock (_gate)
+        {
+            if (_disposed) return;
+            _changeVersion++;
+            _lastObserved = null;
+            _changedAt = _clock.GetTimestamp();
+            _uncertainSince ??= _changedAt;
+        }
+    }
+
     public IReadOnlyList<TaskbarInterval>? GetOccupiedBounds(IntPtr taskbar, Rect bounds)
     {
         lock (_gate)
@@ -59,13 +92,17 @@ internal sealed class TaskbarOccupiedSpaceProvider : IDisposable
             var request = new Request(taskbar, bounds);
             if (_request != request)
             {
+                InvalidateCache();
                 _request = request;
-                _generation++;
-                _snapshot = null;
-                _hasRequested = false;
+                _changedAt = _clock.GetTimestamp();
             }
 
-            if (!_queryRunning && (!_hasRequested || _clock.GetElapsedTime(_lastRequest) >= RefreshInterval))
+            var fastRefresh = !_eventMonitoring || _readFailed || _uncertainSince is not null ||
+                              _snapshot is null || IsSettling();
+            var interval = fastRefresh ? RefreshInterval : IdleRefreshInterval;
+            var coalescing = _eventMonitoring && _uncertainSince is { } changed &&
+                             _clock.GetElapsedTime(changed) < EventCoalesceInterval;
+            if (!_queryRunning && !coalescing && (!_hasRequested || _clock.GetElapsedTime(_lastRequest) >= interval))
             {
                 _lastRequest = _clock.GetTimestamp();
                 _hasRequested = true;
@@ -73,16 +110,20 @@ internal sealed class TaskbarOccupiedSpaceProvider : IDisposable
                 var started = _lastRequest;
                 var token = _stop.Token;
                 var generation = _generation;
-                _pendingRead = Task.Run(() => Refresh(request, started, generation, token), CancellationToken.None);
+                var changeVersion = _changeVersion;
+                _pendingRead = Task.Run(() => Refresh(request, started, generation, changeVersion, token), CancellationToken.None);
                 TaskObserver.Observe(_pendingRead, "taskbar occupied-space query");
             }
 
             return _snapshot is { } snapshot &&
-                   _clock.GetElapsedTime(snapshot.Timestamp) <= SnapshotLifetime
+                   _clock.GetElapsedTime(snapshot.Timestamp) <= (_eventMonitoring ? IdleSnapshotLifetime : SnapshotLifetime) &&
+                   (_uncertainSince is not { } uncertain || _clock.GetElapsedTime(uncertain) <= SnapshotLifetime)
                 ? snapshot.Occupied
                 : null;
         }
     }
+
+    private bool IsSettling() => _changedAt is { } changed && _clock.GetElapsedTime(changed) < SnapshotLifetime;
 
     public void Invalidate()
     {
@@ -100,6 +141,11 @@ internal sealed class TaskbarOccupiedSpaceProvider : IDisposable
         _request = null;
         _snapshot = null;
         _hasRequested = false;
+        _lastObserved = null;
+        _changedAt = null;
+        _uncertainSince = null;
+        _readFailed = false;
+        _changeVersion++;
         _generation++;
     }
 
@@ -124,7 +170,7 @@ internal sealed class TaskbarOccupiedSpaceProvider : IDisposable
             (interval.End - taskbarOrigin) / pixelsPerDip)).ToArray();
     }
 
-    private void Refresh(Request request, long started, long generation, CancellationToken token)
+    private void Refresh(Request request, long started, long generation, long changeVersion, CancellationToken token)
     {
         try
         {
@@ -133,12 +179,40 @@ internal sealed class TaskbarOccupiedSpaceProvider : IDisposable
             var accepted = false;
             lock (_gate)
             {
-                if (!_disposed && _generation == generation && _request == request && occupied is not null)
+                if (!_disposed && _eventMonitoring && _generation == generation && _request == request &&
+                    _changeVersion != changeVersion && occupied is not null &&
+                    _clock.GetElapsedTime(started) <= SnapshotLifetime && _snapshot is { } prior &&
+                    _clock.GetElapsedTime(prior.Timestamp) <= IdleSnapshotLifetime &&
+                    (_uncertainSince is not { } uncertain || _clock.GetElapsedTime(uncertain) <= SnapshotLifetime))
                 {
-                    // Age from query start: a delayed Explorer response must not
-                    // make geometry captured several seconds ago appear fresh.
-                    _snapshot = new Snapshot(occupied, started);
+                    // A later event cannot make positive occupancy unsafe to add.
+                    // Use it only to shrink, never to expand or renew freshness;
+                    // confirmation still requires a read from the latest version.
+                    _snapshot = new Snapshot(MergeOccupancy(prior.Occupied, occupied), prior.Timestamp);
                     accepted = true;
+                }
+                if (!_disposed && _generation == generation && _request == request && _changeVersion == changeVersion)
+                {
+                    if (occupied is null || _clock.GetElapsedTime(started) > SnapshotLifetime)
+                    {
+                        MarkReadFailure(started);
+                    }
+                    else
+                    {
+                        occupied = occupied.OrderBy(item => item.Start).ThenBy(item => item.End).Distinct().ToArray();
+                        var confirmed = !_eventMonitoring || _lastObserved is not null && _lastObserved.SequenceEqual(occupied);
+                        if (_eventMonitoring && (_lastObserved is null || !_lastObserved.SequenceEqual(occupied)))
+                            _changedAt = _clock.GetTimestamp(); // even a missed event enters short polling
+                        var safeBounds = confirmed || _snapshot is null ? occupied
+                            : MergeOccupancy(_snapshot.Occupied, occupied);
+                        // New occupancy shrinks free space immediately. Removed
+                        // occupancy is released only after a matching second read.
+                        _snapshot = new Snapshot(safeBounds, started);
+                        _lastObserved = occupied;
+                        _readFailed = false;
+                        _uncertainSince = null;
+                        accepted = true;
+                    }
                 }
             }
             if (accepted) SnapshotAvailable?.Invoke(this, EventArgs.Empty);
@@ -147,7 +221,11 @@ internal sealed class TaskbarOccupiedSpaceProvider : IDisposable
         catch (Exception exception) when (exception is ElementNotAvailableException or COMException or
                                           InvalidOperationException or ArgumentException)
         {
-            // Keep a matching last-known snapshot only until SnapshotLifetime.
+            lock (_gate)
+            {
+                if (!_disposed && _generation == generation && _request == request && _changeVersion == changeVersion)
+                    MarkReadFailure(started);
+            }
         }
         finally
         {
@@ -155,56 +233,30 @@ internal sealed class TaskbarOccupiedSpaceProvider : IDisposable
         }
     }
 
-    internal static TaskbarInterval[]? ReadOccupiedBounds(
-        IntPtr taskbar, Rect taskbarBounds, CancellationToken token)
+    private void MarkReadFailure(long started)
     {
-        token.ThrowIfCancellationRequested();
-        var root = AutomationElement.FromHandle(taskbar);
-        var owner = root.Current.ProcessId;
-        var explorerOnly = new PropertyCondition(AutomationElement.ProcessIdProperty, owner);
-        ControlType[] interactiveTypes =
-            [ControlType.Button, ControlType.CheckBox, ControlType.RadioButton, ControlType.Edit, ControlType.ListItem];
-        var controlsCondition = new AndCondition(explorerOnly,
-            new PropertyCondition(AutomationElement.IsOffscreenProperty, false),
-            new OrCondition(interactiveTypes.Select(type =>
-                (System.Windows.Automation.Condition)new PropertyCondition(AutomationElement.ControlTypeProperty, type)).ToArray()));
-
-        // Inspect Explorer-owned immediate children first. Searching the entire
-        // taskbar subtree also walks embedded third-party/WebView windows.
-        var hosts = root.FindAll(TreeScope.Children, explorerOnly);
-        var occupied = new HashSet<TaskbarInterval>();
-        var cache = new CacheRequest
-        {
-            AutomationElementMode = AutomationElementMode.None,
-            TreeScope = TreeScope.Element
-        };
-        cache.Add(AutomationElement.BoundingRectangleProperty);
-        for (var hostIndex = 0; hostIndex < hosts.Count; hostIndex++)
-        {
-            token.ThrowIfCancellationRequested();
-            var host = hosts[hostIndex];
-            var info = host.Current;
-            if (interactiveTypes.Contains(info.ControlType) && !info.IsOffscreen) Add(info.BoundingRectangle);
-            using var activation = cache.Activate();
-            var controls = host.FindAll(TreeScope.Descendants, controlsCondition);
-            for (var index = 0; index < controls.Count; index++)
-            {
-                token.ThrowIfCancellationRequested();
-                Add(controls[index].Cached.BoundingRectangle);
-            }
-        }
-
-        // A completely missing taskbar tree is unknown, not an empty free bar.
-        return occupied.Count > 0 ? occupied.ToArray() : null;
-
-        void Add(Rect rect)
-        {
-            if (!rect.IsEmpty && rect.Width > 0 && rect.Height > 0 && rect.IntersectsWith(taskbarBounds))
-                occupied.Add(taskbarBounds.Height > taskbarBounds.Width
-                    ? new TaskbarInterval(rect.Top, rect.Bottom)
-                    : new TaskbarInterval(rect.Left, rect.Right));
-        }
+        _readFailed = true;
+        _uncertainSince ??= started;
+        _lastObserved = null;
     }
+
+    private static TaskbarInterval[] MergeOccupancy(TaskbarInterval[] previous, TaskbarInterval[] current)
+    {
+        // A moving button can produce many distinct intermediate rectangles.
+        // Merge overlaps instead of retaining every historical rectangle.
+        var merged = new List<TaskbarInterval>();
+        foreach (var interval in previous.Concat(current).OrderBy(item => item.Start).ThenBy(item => item.End))
+        {
+            if (merged.Count > 0 && interval.Start <= merged[^1].End)
+                merged[^1] = new TaskbarInterval(merged[^1].Start, Math.Max(merged[^1].End, interval.End));
+            else merged.Add(interval);
+        }
+        return merged.ToArray();
+    }
+
+    internal static TaskbarInterval[]? ReadOccupiedBounds(
+        IntPtr taskbar, Rect taskbarBounds, CancellationToken token) =>
+        NativeTaskbarAutomation.ReadOccupiedBounds(taskbar, taskbarBounds, token);
 
     // Orientation is derived from Bounds, just as in LyricsLayoutMetrics. A turn
     // between horizontal and vertical necessarily changes this request identity.

@@ -556,9 +556,11 @@ public partial class MainWindow : Window, IDisposable
 
     private async Task InitializeLyricsWindowAsync()
     {
+        if (Volatile.Read(ref _isDisposed) != 0) return;
         AnchorToTaskbar();
         AttachToTaskbarHost();
         await EnsureLyricsWebViewReadyAsync();
+        if (Volatile.Read(ref _isDisposed) != 0) return;
         ApplySpectrumTuning(_spectrumTuningSettings);
         PushCurrentLyricsToWebView();
         _timer.Start();
@@ -660,6 +662,14 @@ public partial class MainWindow : Window, IDisposable
         DetachWebViewMessageHandler();
         DetachLyricsWebViewController();
         DetachWebViewNavigationHandler();
+        _isWebViewReady = false;
+        _isWebDocumentReady = false;
+        _pendingSpectrumValuesJson = null;
+        var webViewControl = _lyricsWebViewControl;
+        _lyricsWebViewControl = null;
+        _lyricsWebViewElement = null;
+        LyricsWebHost.Children.Clear();
+        (webViewControl as IDisposable)?.Dispose();
 
         _lyricSyncService.Dispose();
         _localMediaCoverProvider?.Dispose();
@@ -747,6 +757,7 @@ public partial class MainWindow : Window, IDisposable
             EnsureVisibleIfExpected();
 
             var snapshot = await _musicSessionProvider.GetCurrentAsync();
+            if (Volatile.Read(ref _isDisposed) != 0) return;
             var inputKind = PlaybackInputPolicy.Classify(snapshot);
             var previousStabilityState = _playbackSnapshotStabilityGate.State;
             var gateDecision = _playbackSnapshotStabilityGate.Observe(
@@ -1267,7 +1278,7 @@ public partial class MainWindow : Window, IDisposable
 
     private async Task EnsureLyricsWebViewReadyAsync()
     {
-        if (_isWebViewReady || _isWebViewInitializing)
+        if (Volatile.Read(ref _isDisposed) != 0 || _isWebViewReady || _isWebViewInitializing)
         {
             return;
         }
@@ -1285,8 +1296,13 @@ public partial class MainWindow : Window, IDisposable
                 browserExecutableFolder: null,
                 userDataFolder: webViewUserDataFolder);
 
+            // Both awaits can finish after Close/Dispose on this dispatcher.
+            // Never initialize a disposed control or reattach its callbacks.
+            if (Volatile.Read(ref _isDisposed) != 0) return;
+
             TrySetDefaultBackgroundColor(webViewControl, System.Drawing.Color.Transparent);
             await EnsureCoreWebView2Async(webViewControl, webViewEnvironment);
+            if (Volatile.Read(ref _isDisposed) != 0) return;
             var coreWebView2 = TryGetCoreWebView2(webViewControl);
             if (coreWebView2 is not null)
             {
@@ -1483,6 +1499,7 @@ public partial class MainWindow : Window, IDisposable
 
     private void OnLyricsWebViewNavigationCompleted(object? sender, CoreWebView2NavigationCompletedEventArgs e)
     {
+        if (Volatile.Read(ref _isDisposed) != 0) return;
         if (!e.IsSuccess)
         {
             _isWebDocumentReady = false;
@@ -1688,6 +1705,7 @@ public partial class MainWindow : Window, IDisposable
 
     private object EnsureWebViewControlCreated()
     {
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _isDisposed) != 0, this);
         if (_lyricsWebViewControl is not null && _lyricsWebViewElement is not null)
         {
             return _lyricsWebViewControl;
@@ -2029,6 +2047,10 @@ public partial class MainWindow : Window, IDisposable
                 if (TaskbarPlacementService.IsShowWindowMessage(msg))
                 {
                     EnsureVisibleIfExpected();
+                }
+                else
+                {
+                    _embeddedTaskbarAnchor.InvalidateTaskbarTarget();
                 }
 
                 AnchorToTaskbar();

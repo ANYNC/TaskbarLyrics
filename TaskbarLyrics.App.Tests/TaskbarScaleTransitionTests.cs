@@ -111,8 +111,12 @@ public sealed class TaskbarScaleTransitionTests
     {
         var normal = Constraints(48);
         var compact = Constraints(32);
-        var settings = new AppSettings { UseFloatingWindow = true, LyricsLayoutScalePercent = 105,
-            FloatingLyricsLayoutScalePercent = 145 };
+        var settings = new AppSettings
+        {
+            UseFloatingWindow = true,
+            LyricsLayoutScalePercent = 105,
+            FloatingLyricsLayoutScalePercent = 145
+        };
 
         settings.LyricsLayoutScalePercent = TaskbarEmbeddingLayoutPolicy.ScaleForTaskbarHeightChange(settings, normal, compact);
         Assert.Equal(70, settings.LyricsLayoutScalePercent, 6);

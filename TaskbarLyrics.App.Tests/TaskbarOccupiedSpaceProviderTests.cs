@@ -11,7 +11,7 @@ public sealed class TaskbarOccupiedSpaceProviderTestGroup;
 // These tests deliberately block worker reads to model an unresponsive native
 // provider; isolate them from other collections' short async deadlines.
 [Collection("TaskbarOccupiedSpaceProvider")]
-public sealed class TaskbarOccupiedSpaceProviderTests
+public sealed partial class TaskbarOccupiedSpaceProviderTests
 {
     private static readonly TimeSpan WaitTimeout = TimeSpan.FromSeconds(5);
     private static readonly IntPtr TaskbarHandle = new(42);
