@@ -153,6 +153,9 @@ public sealed class AppSettings
 
     public ToolWindowTheme ToolWindowTheme { get; set; } = ToolWindowTheme.System;
 
+    /// <summary>Interface-language catalog id, or empty to follow the system language at startup.</summary>
+    public string UiLanguage { get; set; } = "";
+
     public SpectrumDisplayMode SpectrumDisplayMode { get; set; } = SpectrumDisplayMode.Disabled;
 
     public bool SpectrumAudioAccessGranted { get; set; }

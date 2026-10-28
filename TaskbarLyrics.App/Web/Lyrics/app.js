@@ -73,10 +73,10 @@ const leavingLineOpacity = 0.16;
 const coverSwapDelayMs = 180;
 const coverSwitchMinVisibleMs = 420;
 const horizontalScrollAnchorRatio = 0.65;
-const SEARCHING_TEXT = "\u6b63\u5728\u68c0\u7d22\u6b4c\u8bcd...";
+const SEARCHING_TEXT = window.taskbarLyricsI18n.t("UI_SearchingForLyrics");
 // A regular space is trimmed into the fallback prompt by toDisplayLine.
 const BLANK_SEARCH_TEXT = "\u200b";
-const LEGACY_SEARCHING_TEXT = "\u6b63\u5728\u5339\u914d\u6b4c\u8bcd...";
+const LEGACY_SEARCHING_TEXT = window.taskbarLyricsI18n.t("UI_MatchingLyrics");
 let trackSwitchSearchTransitionActive = false;
 let spectrumExitState = null;
 let coverUpdateTimer = 0;
@@ -174,7 +174,7 @@ function setFloatingLockState(locked, hovered = false) {
   root.classList.toggle("floating-locked", active);
   root.classList.toggle("floating-lock-hovered", active && hovered === true);
   if (!coverEl) return;
-  coverEl.setAttribute("aria-label", floating ? (active ? "解锁浮窗" : "锁定浮窗") : "展开播放控制");
+  coverEl.setAttribute("aria-label", floating ? (active ? window.taskbarLyricsI18n.t("UI_UnlockFloatingWindow") : window.taskbarLyricsI18n.t("UI_LockFloatingWindow")) : window.taskbarLyricsI18n.t("UI_ExpandPlaybackControls"));
   coverEl.removeAttribute("title");
   if (floating) coverEl.setAttribute("aria-pressed", String(active));
   else coverEl.removeAttribute("aria-pressed");
@@ -2626,7 +2626,7 @@ const lyricsApi = {
     if (panelLyricsEl) {
       const enabled = panelAreaEnabled("Lyrics");
       panelLyricsEl.classList.toggle("panel-trigger", enabled);
-      for (const [name, value] of [["role", "button"], ["tabindex", "0"], ["aria-label", "展开播放控制"], ["aria-expanded", coverEl?.getAttribute("aria-expanded") || "false"]]) {
+      for (const [name, value] of [["role", "button"], ["tabindex", "0"], ["aria-label", window.taskbarLyricsI18n.t("UI_ExpandPlaybackControls")], ["aria-expanded", coverEl?.getAttribute("aria-expanded") || "false"]]) {
         if (enabled) panelLyricsEl.setAttribute(name, value);
         else panelLyricsEl.removeAttribute(name);
       }

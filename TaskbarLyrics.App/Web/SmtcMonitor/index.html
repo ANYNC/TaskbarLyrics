@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>SMTC 时间轴监视器</title>
+  <title>{{UI_SMTCTimelineMonitor}}</title>
   <style>
     :root {
       color-scheme: dark;
@@ -135,44 +135,44 @@
   </div>
   <div class="window">
     <header class="titlebar" data-caption-drag>
-      <h1>SMTC 时间轴监视器</h1>
-      <span class="live" id="live">实时 · 80ms</span>
+      <h1>{{UI_SMTCTimelineMonitor}}</h1>
+      <span class="live" id="live">{{UI_Live80ms}}</span>
       <div class="caption-controls">
-        <button class="caption-button pin" type="button" data-window-action="pin" aria-label="置顶窗口" aria-pressed="false" title="置顶"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 17v5M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg></button>
-        <button class="caption-button" type="button" data-window-action="minimize" aria-label="最小化"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6h8"/></svg></button>
-        <button class="caption-button close" type="button" data-window-action="close" aria-label="关闭"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 3l6 6M9 3l-6 6"/></svg></button>
+        <button class="caption-button pin" type="button" data-window-action="pin" aria-label="{{UI_KeepWindowOnTop}}" aria-pressed="false" title="{{UI_OnTop}}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 17v5M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg></button>
+        <button class="caption-button" type="button" data-window-action="minimize" aria-label="{{UI_Minimize}}"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6h8"/></svg></button>
+        <button class="caption-button close" type="button" data-window-action="close" aria-label="{{UI_Close}}"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 3l6 6M9 3l-6 6"/></svg></button>
       </div>
     </header>
 
     <section class="status">
       <div class="stat">
-        <div class="k">播放状态</div>
-        <div class="v" id="playStat"><span class="badge muted">等待</span></div>
-        <div class="sub" id="playSub">策略：—</div>
+        <div class="k">{{UI_PlaybackStatus}}</div>
+        <div class="v" id="playStat"><span class="badge muted">{{UI_Waiting}}</span></div>
+        <div class="sub" id="playSub">{{UI_Strategy}}</div>
       </div>
       <div class="stat">
-        <div class="k">当前播放源</div>
+        <div class="k">{{UI_CurrentPlaybackSource}}</div>
         <div class="v"><span id="sourceName">—</span></div>
-        <div class="sub source-detail"><span id="sourceSub">歌词源：—</span><span class="badge compact muted" id="cacheBadge">等待</span></div>
+        <div class="sub source-detail"><span id="sourceSub">{{UI_LyricSource_17}}</span><span class="badge compact muted" id="cacheBadge">{{UI_Waiting}}</span></div>
       </div>
       <div class="stat">
-        <div class="k">外推漂移<span class="info-tip" data-tip="结合外推漂移与上报间隔，可用于定位歌词不同步。&#10;外推漂移 = 外推位置 − 原始位置&#10;绿色 &lt; 0.2s：正常&#10;琥珀 0.2–0.5s：注意&#10;红色 &gt; 0.5s：歌词可能不同步" tabindex="0" aria-label="外推漂移状态说明"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.5"/><path d="M8 7.5v3"/><circle cx="8" cy="5.4" r=".7" fill="currentColor" stroke="none"/></svg></span></div>
+        <div class="k">{{UI_ExtrapolationDrift}}<span class="info-tip" data-tip="结合外推漂移与上报间隔，可用于定位歌词不同步。&#10;外推漂移 = 外推位置 − 原始位置&#10;绿色 &lt; 0.2s：正常&#10;琥珀 0.2–0.5s：注意&#10;红色 &gt; 0.5s：歌词可能不同步" tabindex="0" aria-label="{{UI_ExtrapolationDriftStatusGuide}}"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.5"/><path d="M8 7.5v3"/><circle cx="8" cy="5.4" r=".7" fill="currentColor" stroke="none"/></svg></span></div>
         <div class="v big" id="driftVal">—</div>
-        <div class="sub" id="driftSub">距上次上报 —</div>
+        <div class="sub" id="driftSub">{{UI_LastReport}}</div>
       </div>
     </section>
 
     <main class="details">
       <section class="panel">
-        <pre class="mono" id="log">等待 SMTC 诊断数据…</pre>
+        <pre class="mono" id="log">{{UI_WaitingForSMTCDiagnostics}}</pre>
       </section>
     </main>
 
     <footer class="footer">
       <div class="actions">
-        <button class="btn secondary" type="button" id="pauseBtn"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3v10M11 3v10"/></svg><span id="pauseLabel">暂停</span></button>
-        <button class="btn secondary" type="button" id="copyBtn">复制</button>
-        <button class="btn" type="button" data-window-action="close">关闭</button>
+        <button class="btn secondary" type="button" id="pauseBtn"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3v10M11 3v10"/></svg><span id="pauseLabel">{{UI_Pause}}</span></button>
+        <button class="btn secondary" type="button" id="copyBtn">{{UI_Copy}}</button>
+        <button class="btn" type="button" data-window-action="close">{{UI_Close}}</button>
       </div>
     </footer>
   </div>
@@ -180,7 +180,8 @@
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <div class="hover-tooltip" id="hoverTooltip" role="tooltip"></div>
 
-  <script>
+  <script>window.taskbarLyricsI18n.translateDocument();
+
     const $ = s => document.querySelector(s);
     const bridge = {
       post(type, payload = {}) {
@@ -196,40 +197,40 @@
     function driftColor(ms) { if (ms > TH_BAD) return "red"; if (ms > TH_WARN) return "amber"; return "green"; }
     function acquisitionMeta(kind) {
       switch (kind) {
-        case "MemoryCache": return { label: "内存命中", cls: "ok" };
-        case "DiskCache": return { label: "磁盘命中", cls: "ok" };
-        case "Remote": return { label: "在线获取", cls: "muted" };
-        case "LocalFile": return { label: "本地文件", cls: "ok" };
-        case "SongMapping": return { label: "规则映射", cls: "muted" };
-        case "UserBinding": return { label: "指定记录", cls: "ok" };
-        case "Searching": return { label: "检索中", cls: "warn" };
-        case "NotFound": return { label: "未找到", cls: "bad" };
-        default: return { label: "等待", cls: "muted" };
+        case "MemoryCache": return { label: window.taskbarLyricsI18n.t("UI_MemoryCacheHit"), cls: "ok" };
+        case "DiskCache": return { label: window.taskbarLyricsI18n.t("UI_DiskCacheHit"), cls: "ok" };
+        case "Remote": return { label: window.taskbarLyricsI18n.t("UI_OnlineFetch"), cls: "muted" };
+        case "LocalFile": return { label: window.taskbarLyricsI18n.t("UI_LocalFile"), cls: "ok" };
+        case "SongMapping": return { label: window.taskbarLyricsI18n.t("UI_RuleMapping"), cls: "muted" };
+        case "UserBinding": return { label: window.taskbarLyricsI18n.t("UI_SavedSelection"), cls: "ok" };
+        case "Searching": return { label: window.taskbarLyricsI18n.t("UI_Searching_18"), cls: "warn" };
+        case "NotFound": return { label: window.taskbarLyricsI18n.t("UI_NotFound"), cls: "bad" };
+        default: return { label: window.taskbarLyricsI18n.t("UI_Waiting"), cls: "muted" };
       }
     }
 
     function setData(p) {
-      if (!p) { $("#log").textContent = "等待 SMTC 诊断数据…"; return; }
+      if (!p) { $("#log").textContent = window.taskbarLyricsI18n.t("UI_WaitingForSMTCDiagnostics"); return; }
       const drift = p.driftMs ?? 0;
       const age = p.lastUpdateAgeMs ?? 0;
       const dCol = p.isPlaying ? driftColor(drift) : "green";
 
-      $("#playStat").innerHTML = `<span class="badge ${p.isPlaying ? 'ok' : 'warn'}">${p.isPlaying ? '播放中' : '暂停'}</span>`;
-      $("#playSub").textContent = `策略：${p.strategy || '—'}${p.isFallback ? ' · 回退快照' : ''}`;
+      $("#playStat").innerHTML = `<span class="badge ${p.isPlaying ? 'ok' : 'warn'}">${p.isPlaying ? window.taskbarLyricsI18n.t("UI_Playing_19") : window.taskbarLyricsI18n.t("UI_Pause")}</span>`;
+      $("#playSub").textContent = window.taskbarLyricsI18n.format("UI_Strategy_20", p.strategy || '—', p.isFallback ? window.taskbarLyricsI18n.t("UI_FallbackSnapshot") : '');
 
       const src = p.resolvedSource || p.normalizedSource || p.sourceAppUserModelId || '—';
       const sourceName = $("#sourceName");
       sourceName.textContent = src;
       sourceName.dataset.fullValue = src;
       sourceName.classList.add("truncated-value");
-      $("#sourceSub").textContent = `歌词源：${p.lyricSource || '—'}`;
+      $("#sourceSub").textContent = window.taskbarLyricsI18n.format("UI_LyricSource_21", p.lyricSource || '—');
       const acquisition = acquisitionMeta(p.lyricAcquisition);
       const cacheBadge = $("#cacheBadge");
       cacheBadge.textContent = acquisition.label;
       cacheBadge.className = `badge compact ${acquisition.cls}`;
 
       const dv = $("#driftVal"); dv.textContent = (drift / 1000).toFixed(3); dv.className = `v big ${dCol}`;
-      $("#driftSub").textContent = `距上次上报 ${(age / 1000).toFixed(2)}s`;
+      $("#driftSub").textContent = window.taskbarLyricsI18n.format("UI_LastReportSAgo", (age / 1000).toFixed(2));
 
       const driftClass = dCol === "red" ? "bad" : dCol === "amber" ? "warn" : "ok";
       const ageClass = p.isPlaying && age > STALE_MS ? "bad" : "v";
@@ -309,16 +310,16 @@
 
     function setPaused(v) {
       paused = v;
-      $("#pauseLabel").textContent = v ? "继续" : "暂停";
+      $("#pauseLabel").textContent = v ? window.taskbarLyricsI18n.t("UI_Resume") : window.taskbarLyricsI18n.t("UI_Pause");
       $("#pauseBtn").querySelector("svg").innerHTML = v ? '<path d="M4 3l9 5-9 5z"/>' : '<path d="M5 3v10M11 3v10"/>';
-      const live = $("#live"); live.textContent = v ? "已暂停" : "实时 · 80ms"; live.classList.toggle("paused", v);
+      const live = $("#live"); live.textContent = v ? window.taskbarLyricsI18n.t("UI_Paused") : window.taskbarLyricsI18n.t("UI_Live80ms"); live.classList.toggle("paused", v);
     }
 
     function setTopmost(v) {
       const btn = document.querySelector('.caption-button.pin');
       btn.classList.toggle("active", v);
       btn.setAttribute("aria-pressed", v ? "true" : "false");
-      btn.title = v ? "取消置顶" : "置顶窗口";
+      btn.title = v ? window.taskbarLyricsI18n.t("UI_StopKeepingOnTop") : window.taskbarLyricsI18n.t("UI_KeepWindowOnTop");
     }
 
     let toastTimer;
@@ -363,8 +364,8 @@
           if (message.payload && typeof message.payload === "object" && typeof message.payload.success === "boolean") {
             const failureMessage = typeof message.payload.message === "string" && message.payload.message
               ? message.payload.message
-              : "复制失败，请重试。";
-            showToast(message.payload.success ? "已复制到剪贴板" : failureMessage);
+              : window.taskbarLyricsI18n.t("UI_CopyFailedPleaseRetry");
+            showToast(message.payload.success ? window.taskbarLyricsI18n.t("UI_CopiedToClipboard") : failureMessage);
           }
           break;
       }

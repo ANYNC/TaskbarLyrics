@@ -31,7 +31,7 @@ internal static class FontCatalogService
             fonts.Insert(0, new FontCatalogOption
             {
                 Value = AppSettings.BundledFontFamily,
-                Label = $"{AppSettings.BundledFontFamily} (内置)"
+                Label = Text.Format("Font_Bundled", AppSettings.BundledFontFamily)
             });
         }
 

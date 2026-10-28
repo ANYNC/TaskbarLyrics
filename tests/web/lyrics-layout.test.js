@@ -1,5 +1,5 @@
 import { loadLyricsAssets, createLyricsDom, runLyricsScripts } from "./helpers/lyrics-dom.js";
-import { JSDOM } from "jsdom";
+import { JSDOM } from "./helpers/localized-dom.js";
 import { describe, expect, it } from "vitest";
 
 describe("lyrics responsive layout", () => {

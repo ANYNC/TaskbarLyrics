@@ -35,7 +35,7 @@ internal static class DisplayMonitorService
         }
         var pixelsPerDip = GetPixelsPerDip(monitor);
         var device = GetDisplayDevice(screen.DeviceName);
-        var displayName = $"显示器 {GetWindowsDisplayNumber(screen.DeviceName, displayNumber)}";
+        var displayName = Text.Format("Display_Name", GetWindowsDisplayNumber(screen.DeviceName, displayNumber));
         if (!string.IsNullOrWhiteSpace(device.FriendlyName))
         {
             displayName += $" · {device.FriendlyName}";

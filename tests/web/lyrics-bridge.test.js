@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { JSDOM } from "jsdom";
+import { JSDOM } from "./helpers/localized-dom.js";
 import { describe, expect, it } from "vitest";
 
 const root = new URL("../..", import.meta.url);

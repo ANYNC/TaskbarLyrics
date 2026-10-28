@@ -7,7 +7,8 @@
     const rect = element.getBoundingClientRect();
     const clip = container?.getBoundingClientRect() || { left: 0, top: 0, right: innerWidth, bottom: innerHeight };
     if (rect.width <= 0 || rect.height <= 0 || rect.left < clip.left - 1 || rect.top < clip.top - 1 ||
-        rect.right > clip.right + 1 || rect.bottom > clip.bottom + 1) failures.push(label);
+        rect.right > clip.right + 1 || rect.bottom > clip.bottom + 1)
+      failures.push(`${label}: bounds=${JSON.stringify(rect.toJSON())}, clip=${JSON.stringify(clip)}`);
     return rect;
   };
   try {

@@ -111,9 +111,32 @@ public partial class SpectrumTuningWindow : Wpf.Ui.Controls.FluentWindow
         core.Settings.IsBuiltInErrorPageEnabled = false;
         core.WebMessageReceived += WebMessageReceived;
 
+        await core.AddScriptToExecuteOnDocumentCreatedAsync(Text.CreateWebBootstrap());
+        if (_isClosed) return;
+
         var htmlPath = Path.Combine(AppContext.BaseDirectory, "Web", "SpectrumTuning", "index.html");
         TuningWebView.Source = new Uri(htmlPath);
         _isWebReady = true;
+    }
+
+    internal void ReloadForUiLanguage()
+    {
+        TaskObserver.Observe(ReloadForUiLanguageAsync(), "spectrum tuning language reload");
+    }
+
+    private async Task ReloadForUiLanguageAsync()
+    {
+        if (_isClosed || TuningWebView.CoreWebView2 is null)
+        {
+            return;
+        }
+
+        Title = Text.T("UI_SpectrumTuning");
+        await TuningWebView.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(Text.CreateWebBootstrap());
+        if (!_isClosed)
+        {
+            TuningWebView.CoreWebView2.Reload();
+        }
     }
 
     private void WebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)

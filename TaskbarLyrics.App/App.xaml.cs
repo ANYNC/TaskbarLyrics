@@ -58,6 +58,7 @@ public partial class App : System.Windows.Application, IDisposable
 
         _settingsStore = new SettingsStore(settingsPath);
         Settings = _settingsStore.Load();
+        Text.ApplyPreference(Settings.UiLanguage);
         Settings.FontFamily = AppSettings.NormalizeFontFamily(Settings.FontFamily);
         Settings.SpectrumTuning ??= SpectrumTuningSettings.CreateDefault();
         Settings.GlobalMediaHotkeys ??= new GlobalMediaHotkeySettings();
@@ -184,11 +185,18 @@ public partial class App : System.Windows.Application, IDisposable
 
         nextSettings.SpectrumTuning = Settings.SpectrumTuning.Clone();
         nextSettings.GlobalMediaHotkeys ??= new GlobalMediaHotkeySettings();
+        var uiLanguageChanged = !string.Equals(
+            currentSettings.UiLanguage, nextSettings.UiLanguage, StringComparison.Ordinal);
         var changes = AppSettingsChangeSet.Create(currentSettings, nextSettings);
         NativeWindowTheme.SetMode(nextSettings.ToolWindowTheme);
         Settings = nextSettings;
         _taskbarScaleConstraints = GetTaskbarScaleConstraints(nextSettings);
         var saved = _settingsStore?.Save(Settings) ?? false;
+        if (uiLanguageChanged)
+        {
+            ApplyUiLanguageChange();
+        }
+
         if (changes.RequiresLyricsWindowApply)
         {
             _lyricsWindowHost?.ApplySettings(Settings);
@@ -206,6 +214,18 @@ public partial class App : System.Windows.Application, IDisposable
         }
 
         return saved;
+    }
+
+    private void ApplyUiLanguageChange()
+    {
+        Text.ApplyPreference(Settings.UiLanguage);
+        // Let the settings message handler finish before reloading its WebView and the other surfaces.
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            _settingsWindow?.ReloadForUiLanguage();
+            _lyricsWindowHost?.ApplyUiLanguage();
+            _spectrumTuningWindow?.ReloadForUiLanguage();
+        }), DispatcherPriority.Background);
     }
 
     private void SaveFloatingSize(FloatingWindowSize size)
@@ -229,14 +249,14 @@ public partial class App : System.Windows.Application, IDisposable
         return _mediaHotkeyService?.GetStatusSnapshot()
             ?? new Dictionary<string, string>(StringComparer.Ordinal)
             {
-                ["toggleLyricsVisibility"] = "未注册",
-                ["togglePlayPause"] = "未注册",
-                ["previousTrack"] = "未注册",
-                ["nextTrack"] = "未注册",
-                ["seekBackward"] = "未注册",
-                ["seekForward"] = "未注册",
-                ["toggleTranslation"] = "未注册",
-                ["toggleWordScanning"] = "未注册"
+                ["toggleLyricsVisibility"] = Text.T("UI_NotRegistered"),
+                ["togglePlayPause"] = Text.T("UI_NotRegistered"),
+                ["previousTrack"] = Text.T("UI_NotRegistered"),
+                ["nextTrack"] = Text.T("UI_NotRegistered"),
+                ["seekBackward"] = Text.T("UI_NotRegistered"),
+                ["seekForward"] = Text.T("UI_NotRegistered"),
+                ["toggleTranslation"] = Text.T("UI_NotRegistered"),
+                ["toggleWordScanning"] = Text.T("UI_NotRegistered")
             };
     }
 
@@ -270,8 +290,8 @@ public partial class App : System.Windows.Application, IDisposable
             {
                 Settings.LastNotifiedUpdateVersion = result.Version;
                 _trayService?.ShowNotification(
-                    "TaskbarLyrics 有新版本",
-                    $"发现 {result.Version}，当前版本 {result.CurrentVersion}。可在设置页的关于中打开发布页。");
+                    Text.T("UI_TaskbarLyricsUpdateAvailable"),
+                    Text.Format("Update_AvailableNotification", result.Version, result.CurrentVersion));
             }
 
             _settingsStore?.Save(Settings);
@@ -426,7 +446,7 @@ public partial class App : System.Windows.Application, IDisposable
         if (next.UseFloatingWindow != Settings.UseFloatingWindow && !SaveSettings(next))
             Log.Warn("Display mode could not be saved.");
         if (!string.IsNullOrEmpty(message))
-            _trayService?.ShowNotification("显示模式", message, System.Windows.Forms.ToolTipIcon.Info);
+            _trayService?.ShowNotification(Text.T("UI_DisplayMode_23"), message, System.Windows.Forms.ToolTipIcon.Info);
     }
 
     private void SetSpectrumDisplayMode(SpectrumDisplayMode mode)
@@ -603,13 +623,13 @@ public partial class App : System.Windows.Application, IDisposable
             string.IsNullOrWhiteSpace(context.Track.Title) ||
             string.Equals(context.Track.Title, "Unknown Title", StringComparison.OrdinalIgnoreCase))
         {
-            _trayService?.ShowNotification("无法调整单曲偏移", "当前没有可调整的歌曲。");
+            _trayService?.ShowNotification(Text.T("UI_CannotAdjustTrackOffset"), Text.T("UI_NoTrackAvailableToAdjust_24"));
             return;
         }
 
         if (string.IsNullOrWhiteSpace(context.LyricSource))
         {
-            _trayService?.ShowNotification("歌词仍在检索", "歌词源确定后再调整单曲偏移。");
+            _trayService?.ShowNotification(Text.T("UI_LyricsAreStillBeingSearched"), Text.T("UI_WaitUntilALyricSourceIsSelectedBeforeAdjusting"));
             return;
         }
 
