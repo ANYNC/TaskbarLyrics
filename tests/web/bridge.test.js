@@ -91,6 +91,32 @@ describe("settings WebView bridge", () => {
     } finally { dom.window.close(); }
   });
 
+  it("refreshes both hovered and focused navigation tooltips on scroll and resize", async () => {
+    const { dom, script } = await createSettingsDom();
+    try {
+      dom.window.eval(script);
+      const document = dom.window.document;
+      const nav = document.querySelector(".nav");
+      const hovered = document.querySelector('[data-nav="sources"]');
+      const focused = document.querySelector('[data-nav="about"]');
+      let top = 120;
+      nav.getBoundingClientRect = () => ({ top: 70, bottom: 170 });
+      hovered.getBoundingClientRect = () => ({ top: 80, bottom: 120, height: 40, right: 56 });
+      focused.getBoundingClientRect = () => ({ top, bottom: top + 40, height: 40, right: 56 });
+      focused.focus();
+      const query = document.querySelector.bind(document);
+      document.querySelector = selector => selector === ".nav-item:hover" ? hovered : query(selector);
+      top = 190;
+      nav.dispatchEvent(new dom.window.Event("scroll"));
+      expect(hovered.style.getPropertyValue("--nav-tooltip-visibility")).toBe("visible");
+      expect(focused.style.getPropertyValue("--nav-tooltip-visibility")).toBe("hidden");
+      top = 90;
+      dom.window.dispatchEvent(new dom.window.Event("resize"));
+      expect(focused.style.getPropertyValue("--nav-tooltip-top")).toBe("110px");
+      expect(focused.style.getPropertyValue("--nav-tooltip-visibility")).toBe("visible");
+    } finally { dom.window.close(); }
+  });
+
   it("retains navigation and footer confirmation actions after scrolling without changing settings", async () => {
     const { dom, sent, script } = await createSettingsDom();
     try {

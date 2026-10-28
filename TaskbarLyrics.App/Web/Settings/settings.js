@@ -2470,8 +2470,12 @@
     for (const eventName of ["pointerover", "focusin"]) {
       $(".nav").addEventListener(eventName, event => updateNavigationTooltip(event.target.closest?.("[data-nav]")));
     }
-    const refreshNavigationTooltip = () => updateNavigationTooltip(
-      $(".nav-item:hover") || document.activeElement?.closest?.("[data-nav]"));
+    const refreshNavigationTooltip = () => {
+      const buttons = new Set([
+        $(".nav-item:hover"), document.activeElement?.closest?.("[data-nav]")
+      ]);
+      buttons.forEach(updateNavigationTooltip);
+    };
     $(".nav").addEventListener("scroll", refreshNavigationTooltip, { passive: true });
     window.addEventListener("resize", refreshNavigationTooltip);
 

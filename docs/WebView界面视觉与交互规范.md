@@ -456,6 +456,7 @@
 ### 验证
 
 - [ ] 相关 Vitest/jsdom、App 测试和仓库验证按影响范围通过。
+- [ ] 设置页缩放、滚动与弹窗几何变化时，在 Windows 桌面运行 `pwsh -NoProfile -File scripts/verify-settings-layout.ps1`。该独立 WebView2 检查加载生产 HTML/CSS/JS，覆盖默认／最小窗口、100%／140%／225% 文字缩放及比例往返，验证导航、页末与弹窗操作可达，并用撤回滚动约束的负向对照确认检查有效；结果保存于 `tmp/settings-layout-probe/`。此检查不由 jsdom 替代，也不替代真实系统文字大小通知、混合 DPI 多屏和人工视觉验收。
 - [ ] `git diff --check` 通过。
 - [ ] 需要人工确认的 WebView2、焦点、DPI、高对比度和动画结果已记录。
 
