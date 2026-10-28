@@ -6,6 +6,7 @@ Read this file before changing the repository. Keep user-visible behavior and st
 
 - Use the relevant sections of `.agents/skills/taskbarlyrics-clean-code-guardian/references/repository-contracts.md` when a change touches a compatibility or platform boundary. The Clean Code skill and rubric are optional review aids for complex changes, not prerequisites for routine work.
 - For WebView interface work, consult the relevant sections of `docs/WebView界面视觉与交互规范.md`. Treat current tokens and components as the starting point; a justified improvement may update the standard.
+- For interface text, language files, or language detection changes, follow `docs/界面本地化与语言设置.md` and keep every language section in `TaskbarLyrics.App/text.yaml` in sync.
 
 ## Build and verification
 

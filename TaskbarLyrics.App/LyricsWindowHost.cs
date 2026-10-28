@@ -173,6 +173,15 @@ internal sealed class LyricsWindowHost : IDisposable
         InvokeAsync(() => _window?.OpenSmtcTimelineMonitorWindow());
     }
 
+    public void ApplyUiLanguage() => InvokeAsync(() =>
+    {
+        _window?.ReloadForUiLanguage();
+        foreach (var mirror in _mirrorWindows.Values)
+        {
+            mirror.ReloadForUiLanguage();
+        }
+    });
+
     public Task<CurrentTrackLyricsContext?> GetCurrentTrackLyricsContextAsync()
     {
         if (_disposed || _dispatcher is null)

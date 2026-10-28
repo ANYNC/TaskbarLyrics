@@ -7,7 +7,7 @@
     },
     formatDuration(seconds) {
       const value = Math.max(0, Number(seconds) || 0);
-      if (!value) return "时长未知";
+      if (!value) return window.taskbarLyricsI18n.t("UI_UnknownDuration");
       const minutes = Math.floor(value / 60);
       return `${String(minutes).padStart(2, "0")}:${String(Math.round(value % 60)).padStart(2, "0")}`;
     }

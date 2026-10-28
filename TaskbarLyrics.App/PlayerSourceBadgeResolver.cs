@@ -11,14 +11,14 @@ internal static class PlayerSourceBadgeResolver
     private static readonly Dictionary<string, (string Name, string FileName)> BuiltInSources =
         new(StringComparer.OrdinalIgnoreCase)
         {
-            ["QQMusic"] = ("QQ 音乐", "QQ音乐.png"),
-            ["Netease"] = ("网易云音乐", "网易云音乐.png"),
-            ["Kugou"] = ("酷狗音乐", "酷狗音乐.png"),
+            ["QQMusic"] = (Text.T("UI_QQMusic"), "QQ音乐.png"),
+            ["Netease"] = (Text.T("UI_NetEaseCloudMusic"), "网易云音乐.png"),
+            ["Kugou"] = (Text.T("UI_KugouMusic"), "酷狗音乐.png"),
             ["Spotify"] = ("Spotify", "spotify.png"),
             ["AppleMusic"] = ("Apple Music", "Apple Music.png.png"),
-            ["SodaMusic"] = ("汽水音乐", "Soda Music.png"),
+            ["SodaMusic"] = (Text.T("UI_SodaMusic"), "Soda Music.png"),
             ["Foobar2000"] = ("foobar2000", "Foobar2000.png"),
-            ["Browser"] = ("浏览器", "Browser.png")
+            ["Browser"] = (Text.T("UI_Browser"), "Browser.png")
         };
 
     // 与设置页播放器卡片的两个预设路径保持一致。

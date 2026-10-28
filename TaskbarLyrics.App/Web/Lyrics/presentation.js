@@ -113,8 +113,8 @@
     }
 
     if (frame?.isSearching === true ||
-        frame?.current === "\u6b63\u5728\u68c0\u7d22\u6b4c\u8bcd..." ||
-        frame?.current === "\u6b63\u5728\u5339\u914d\u6b4c\u8bcd...") {
+        frame?.current === window.taskbarLyricsI18n.t("UI_SearchingForLyrics") ||
+        frame?.current === window.taskbarLyricsI18n.t("UI_MatchingLyrics")) {
       return SCENES.SEARCHING;
     }
 

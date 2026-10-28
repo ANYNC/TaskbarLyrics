@@ -17,7 +17,7 @@
     const playing = !video.paused;
     ++revision;
     video.pause();
-    if (playing) status.textContent = '演示已暂停 · 可重播';
+    if (playing) status.textContent = window.taskbarLyricsI18n.t("UI_DemoPausedReplayAvailable");
   }
 
   function play() {
@@ -26,9 +26,9 @@
     video.pause();
     video.currentTime = 0;
     video.muted = true;
-    status.textContent = `正在演示 · ${durations[videoMode]} 秒`;
+    status.textContent = window.taskbarLyricsI18n.format("UI_PlayingDemoS", durations[videoMode]);
     video.play().catch(() => {
-      if (current === revision && active) status.textContent = '点击重播演示';
+      if (current === revision && active) status.textContent = window.taskbarLyricsI18n.t("UI_ClickToReplayTheDemo");
     });
   }
 
@@ -68,24 +68,24 @@
     video.pause();
     videoMode = nextMode;
     const floating = nextMode === 'floating';
-    page.querySelector('[data-presentation-name]').textContent = floating ? '悬浮窗口' : '任务栏嵌入';
+    page.querySelector('[data-presentation-name]').textContent = floating ? window.taskbarLyricsI18n.t("UI_FloatingWindow") : window.taskbarLyricsI18n.t("UI_TaskbarEmbedded");
     page.querySelector('[data-presentation-description]').textContent = floating
-      ? '展开播放控制面板，并演示移动位置与调整大小。'
-      : '歌词保留在任务栏，播放面板在附近独立出现。';
-    video.setAttribute('aria-label', `${floating ? '悬浮窗口' : '任务栏嵌入'}模式演示`);
+      ? window.taskbarLyricsI18n.t("UI_ExpandPlaybackControlsAndDemonstrateMovingAndResizing")
+      : window.taskbarLyricsI18n.t("UI_LyricsStayInTheTaskbarWithPlaybackControlsNearby");
+    video.setAttribute('aria-label', window.taskbarLyricsI18n.format("UI_Demo", floating ? window.taskbarLyricsI18n.t("UI_FloatingWindow") : window.taskbarLyricsI18n.t("UI_TaskbarEmbedded")));
     video.poster = `media/${nextMode}-poster.png?v=${mediaVersion}`;
     video.src = `media/${nextMode}.mp4?v=${mediaVersion}`;
     video.load();
-    status.textContent = motion.matches ? '已减少动态效果 · 可手动重播' : '固定示例';
+    status.textContent = motion.matches ? window.taskbarLyricsI18n.t("UI_ReducedMotionReplayManually") : window.taskbarLyricsI18n.t("UI_FixedExample");
     if (!motion.matches && !document.hidden) play();
   }
 
   page.querySelector('[data-replay-presentation]').addEventListener('click', play);
   video.addEventListener('ended', () => {
-    if (active && video.ended && video.currentSrc === video.src) status.textContent = '演示结束';
+    if (active && video.ended && video.currentSrc === video.src) status.textContent = window.taskbarLyricsI18n.t("UI_DemoFinished");
   });
   video.addEventListener('error', () => {
-    if (active && videoMode && video.currentSrc === video.src) status.textContent = '演示暂不可用，请重试';
+    if (active && videoMode && video.currentSrc === video.src) status.textContent = window.taskbarLyricsI18n.t("UI_DemoUnavailablePleaseRetry");
   });
   document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
   motion.addEventListener('change', () => {

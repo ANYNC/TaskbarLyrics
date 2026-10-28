@@ -40,8 +40,8 @@ public partial class MainWindow : Window, IDisposable
     private Media.Color _secondaryTextColor = ForegroundColorPolicy.CreateSecondaryColor(Media.Colors.White);
     private Media.Color _translationTextColor = ForegroundColorPolicy.CreateTranslationColor(Media.Colors.White);
     private LyricSyncService _lyricSyncService;
-    private string _currentLine = "TaskbarLyrics 已启动";
-    private string _nextLine = "等待歌词...";
+    private string _currentLine = Text.T("UI_TaskbarLyricsStarted");
+    private string _nextLine = Text.T("UI_WaitingForLyrics");
     private string _currentTranslation = string.Empty;
     private string _nextTranslation = string.Empty;
     private bool _hasTrackTranslation;
@@ -839,9 +839,10 @@ public partial class MainWindow : Window, IDisposable
             }
 
             var current = string.IsNullOrWhiteSpace(frame.CurrentLine)
-                ? "等待播放..."
+                ? Text.T("UI_WaitingForPlayback_25")
                 : frame.CurrentLine;
 
+            if (IsLyricsNotFoundFrame(frame)) current = Text.T("Lyrics_NotFound");
             var next = frame.NextLine;
             _lastWebCurrentLineIndex = frame.CurrentLineIndex;
             _lastWebTrackId = snapshot.Track is null
@@ -876,7 +877,7 @@ public partial class MainWindow : Window, IDisposable
         catch (Exception ex)
         {
             Log.Error($"Lyrics timer tick failed: {ex}");
-            _currentLine = $"歌词服务异常: {ex.Message}";
+            _currentLine = Text.Format("Lyrics_ServiceError", ex.Message);
             _nextLine = string.Empty;
             _currentTranslation = string.Empty;
             _nextTranslation = string.Empty;
@@ -1818,6 +1819,23 @@ public partial class MainWindow : Window, IDisposable
         _lyricsNavigationCompletedHandler = null;
     }
 
+    internal void ReloadForUiLanguage()
+    {
+        if (Volatile.Read(ref _isDisposed) != 0)
+        {
+            return;
+        }
+
+        CloseControlPanel(animate: false);
+        _smtcTimelineMonitorWindow?.ReloadForUiLanguage();
+        _isWebDocumentReady = false;
+        _isShowingWebErrorPage = false;
+        if (_isWebViewReady)
+        {
+            NavigateWebViewToString(GetLyricsWebUiHtml());
+        }
+    }
+
     private void NavigateWebViewToString(string html)
     {
         if (_lyricsWebViewControl is null)
@@ -1855,7 +1873,7 @@ public partial class MainWindow : Window, IDisposable
             var lyricsWebDir = Path.Combine(AppContext.BaseDirectory, "Web", "Lyrics");
             var template = File.ReadAllText(Path.Combine(lyricsWebDir, "index.html"));
             var style = File.ReadAllText(Path.Combine(lyricsWebDir, "style.css"));
-            var script = string.Join(Environment.NewLine, [
+            var script = Text.CreateWebBootstrap() + "\nwindow.taskbarLyricsI18n.translateDocument();\n" + string.Join(Environment.NewLine, [
                 File.ReadAllText(Path.Combine(lyricsWebDir, "bridge.js")),
                 File.ReadAllText(Path.Combine(lyricsWebDir, "state.js")),
                 File.ReadAllText(Path.Combine(lyricsWebDir, "presentation.js")),
@@ -2100,8 +2118,8 @@ public partial class MainWindow : Window, IDisposable
     private void ApplyNoPlaybackPresentation(LyricsContentVisibilityTransition transition)
     {
         _currentLine = transition.CountdownSecondsRemaining is int seconds
-            ? $"暂无播放内容，{seconds} 秒后自动隐藏"
-            : "等待播放...";
+            ? Text.Format("Lyrics_HideCountdown", seconds)
+            : Text.T("UI_WaitingForPlayback_25");
         _nextLine = string.Empty;
         _currentTranslation = string.Empty;
         _nextTranslation = string.Empty;

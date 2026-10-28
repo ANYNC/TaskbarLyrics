@@ -106,8 +106,8 @@ internal partial class FloatingLyricsControlWindow : Window
             _pendingSeek = null;
         }
         _duration = track?.Duration ?? TimeSpan.Zero;
-        TitleText.Text = track?.Title ?? "暂无播放";
-        ArtistText.Text = track is null ? "当前没有播放内容" : $"{track.Artist} · {source.DisplayName}";
+        TitleText.Text = track?.Title ?? Text.T("UI_NothingPlaying");
+        ArtistText.Text = track is null ? Text.T("UI_NoMediaIsCurrentlyPlaying") : $"{track.Artist} · {source.DisplayName}";
         PreviousButton.IsEnabled = PlayButton.IsEnabled = NextButton.IsEnabled = track is not null;
         SeekSlider.IsEnabled = track is not null && canSeek && _duration > TimeSpan.Zero;
         if (!SeekSlider.IsEnabled)
@@ -120,7 +120,7 @@ internal partial class FloatingLyricsControlWindow : Window
             _playing = playing;
             PlayGlyph.Visibility = playing ? Visibility.Collapsed : Visibility.Visible;
             PauseGlyph.Visibility = playing ? Visibility.Visible : Visibility.Collapsed;
-            AutomationProperties.SetName(PlayButton, playing ? "暂停" : "播放");
+            AutomationProperties.SetName(PlayButton, playing ? Text.T("UI_Pause") : Text.T("UI_Play"));
         }
         SetPalette(light);
         if (!_seeking && CanApplyTimeline(position)) SeekSlider.Value = _duration > TimeSpan.Zero

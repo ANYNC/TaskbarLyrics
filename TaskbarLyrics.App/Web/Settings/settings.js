@@ -1,46 +1,48 @@
     const sourceCatalogDefaults = [
-      { id: "qqmusic", name: "QQ 音乐", adapter: "QQMusic", settingKey: "enableQQMusic", icon: "../../Assets/PlayerIcons/QQ音乐.png" },
-      { id: "netease", name: "网易云音乐", adapter: "Netease", settingKey: "enableNetease", icon: "../../Assets/PlayerIcons/网易云音乐.png" },
-      { id: "kugou", name: "酷狗音乐", adapter: "Kugou", settingKey: "enableKugou", icon: "../../Assets/PlayerIcons/酷狗音乐.png" },
+      { id: "qqmusic", name: window.taskbarLyricsI18n.t("UI_QQMusic"), adapter: "QQMusic", settingKey: "enableQQMusic", icon: "../../Assets/PlayerIcons/QQ音乐.png" },
+      { id: "netease", name: window.taskbarLyricsI18n.t("UI_NetEaseCloudMusic"), adapter: "Netease", settingKey: "enableNetease", icon: "../../Assets/PlayerIcons/网易云音乐.png" },
+      { id: "kugou", name: window.taskbarLyricsI18n.t("UI_KugouMusic"), adapter: "Kugou", settingKey: "enableKugou", icon: "../../Assets/PlayerIcons/酷狗音乐.png" },
       { id: "spotify", name: "Spotify", adapter: "Spotify", settingKey: "enableSpotify", icon: "../../Assets/PlayerIcons/spotify.png" },
       { id: "applemusic", name: "Apple Music", adapter: "AppleMusic", settingKey: "enableAppleMusic", icon: "../../Assets/PlayerIcons/Apple Music.png.png" },
-      { id: "sodamusic", name: "汽水音乐", adapter: "SodaMusic", settingKey: "enableSodaMusic", icon: "../../Assets/PlayerIcons/Soda Music.png" },
+      { id: "sodamusic", name: window.taskbarLyricsI18n.t("UI_SodaMusic"), adapter: "SodaMusic", settingKey: "enableSodaMusic", icon: "../../Assets/PlayerIcons/Soda Music.png" },
       { id: "foobar2000", name: "foobar2000", adapter: "Foobar2000", settingKey: "enableFoobar2000", icon: "../../Assets/PlayerIcons/Foobar2000.png" },
-      { id: "browser", name: "浏览器", adapter: "Browser", settingKey: "enableBrowser", icon: "../../Assets/PlayerIcons/Browser.png" }
+      { id: "browser", name: window.taskbarLyricsI18n.t("UI_Browser"), adapter: "Browser", settingKey: "enableBrowser", icon: "../../Assets/PlayerIcons/Browser.png" }
     ];
     const lyricProviderDefaults = [
-      { providerId: "QQMusic", name: "QQ 音乐" },
-      { providerId: "Kugou", name: "酷狗音乐" },
-      { providerId: "Netease", name: "网易云音乐" },
+      { providerId: "QQMusic", name: window.taskbarLyricsI18n.t("UI_QQMusic") },
+      { providerId: "Kugou", name: window.taskbarLyricsI18n.t("UI_KugouMusic") },
+      { providerId: "Netease", name: window.taskbarLyricsI18n.t("UI_NetEaseCloudMusic") },
       { providerId: "LRCLIB", name: "LRCLIB" }
     ];
     const gettingStartedPlayers = window.taskbarLyricsPlayerCompatibility.getPlayers();
     let gettingStartedPlayer = gettingStartedPlayers[0].id;
 
     const selectOptions = {
-      spectrumDisplayMode: [{ value: "Disabled", label: "关闭" }, { value: "PureMusicOnly", label: "仅纯音乐时" }, { value: "PureMusicOrNoLyrics", label: "纯音乐或无歌词时" }, { value: "Always", label: "始终显示" }],
+      spectrumDisplayMode: [{ value: "Disabled", label: window.taskbarLyricsI18n.t("UI_Close") }, { value: "PureMusicOnly", label: window.taskbarLyricsI18n.t("UI_InstrumentalOnly") }, { value: "PureMusicOrNoLyrics", label: window.taskbarLyricsI18n.t("UI_InstrumentalOrNoLyrics") }, { value: "Always", label: window.taskbarLyricsI18n.t("UI_Always") }],
       fontFamily: [],
-      fontWeight: [{ value: "Light", label: "细体" }, { value: "Normal", label: "常规" }, { value: "Medium", label: "中等" }, { value: "SemiBold", label: "半粗体" }, { value: "Bold", label: "粗体" }],
-      foregroundColorMode: [{ value: "System", label: "跟随系统" }, { value: "Dark", label: "深色" }, { value: "Light", label: "浅色" }, { value: "Custom", label: "自定义" }],
-      trackOffsetSourceFilter: [{ value: "All", label: "全部歌词源" }],
-      trackOffsetSort: [{ value: "updated", label: "最近修改" }, { value: "title", label: "歌曲名称" }, { value: "offset", label: "偏移量" }]
+      fontWeight: [{ value: "Light", label: window.taskbarLyricsI18n.t("UI_Light_5") }, { value: "Normal", label: window.taskbarLyricsI18n.t("UI_General") }, { value: "Medium", label: window.taskbarLyricsI18n.t("UI_Medium") }, { value: "SemiBold", label: window.taskbarLyricsI18n.t("UI_Semibold") }, { value: "Bold", label: window.taskbarLyricsI18n.t("UI_Bold") }],
+      foregroundColorMode: [{ value: "System", label: window.taskbarLyricsI18n.t("UI_FollowSystem") }, { value: "Dark", label: window.taskbarLyricsI18n.t("UI_Dark") }, { value: "Light", label: window.taskbarLyricsI18n.t("UI_Light") }, { value: "Custom", label: window.taskbarLyricsI18n.t("UI_Custom") }],
+      trackOffsetSourceFilter: [{ value: "All", label: window.taskbarLyricsI18n.t("UI_AllLyricSources") }],
+      trackOffsetSort: [{ value: "updated", label: window.taskbarLyricsI18n.t("UI_RecentlyModified") }, { value: "title", label: window.taskbarLyricsI18n.t("UI_TrackTitle") }, { value: "offset", label: window.taskbarLyricsI18n.t("UI_Offset") }],
+      uiLanguage: []
     };
     const presetColors = ["#FFFFFF", "#A1A1AA", "#18181B", "#EF4444", "#F97316", "#EAB308", "#22C55E", "#06B6D4", "#3B82F6", "#A855F7"];
 
     const pageMeta = {
-      gettingStarted: ["开始使用", "先了解播放器的准备事项，再开始显示歌词。"],
-      sources: ["播放源", "选择需要监听的音乐软件，并配置各播放器的歌词设置。"],
-      shortcuts: ["快捷键", "设置播放器控制和歌词显示的全局组合键。"],
-      lyrics: ["歌词", "控制歌词显示、翻译和频谱策略。"],
-      trackOffsets: ["单曲偏移", "调整当前歌曲同步，并管理按歌词源保存的偏移。"],
-      displayArea: ["显示与外观", "调整歌词显示的尺寸、文字、窗口外观与位置，并在歌词窗口中即时检查效果。"],
-      general: ["常规", "管理启动行为与界面主题。"],
-      advanced: ["高级", "管理歌词提示、诊断工具和缓存数据。"],
-      lyricDiagnostics: ["歌词匹配", "查找当前 SMTC 歌曲的歌词候选，比较匹配分并选择结果。"],
-      about: ["关于", "查看版本、许可证与项目技术信息。"]
+      gettingStarted: [window.taskbarLyricsI18n.t("UI_GetStarted"), window.taskbarLyricsI18n.t("UI_CheckPlayerRequirementsBeforeDisplayingLyrics")],
+      sources: [window.taskbarLyricsI18n.t("UI_Sources"), window.taskbarLyricsI18n.t("UI_ChooseMusicPlayersToMonitorAndConfigureTheirLyric")],
+      shortcuts: [window.taskbarLyricsI18n.t("UI_Shortcuts"), window.taskbarLyricsI18n.t("UI_SetGlobalShortcutsForPlaybackControlsAndLyricDisplay")],
+      lyrics: [window.taskbarLyricsI18n.t("UI_Lyrics"), window.taskbarLyricsI18n.t("UI_ManageLyricDisplayTranslationAndSpectrumBehavior")],
+      trackOffsets: [window.taskbarLyricsI18n.t("UI_TrackOffsets"), window.taskbarLyricsI18n.t("UI_AdjustCurrentTrackSynchronizationAndManageOffsetsSavedPer")],
+      displayArea: [window.taskbarLyricsI18n.t("UI_DisplayAppearance"), window.taskbarLyricsI18n.t("UI_AdjustLyricSizeTextAppearanceAndPositionWithLive")],
+      general: [window.taskbarLyricsI18n.t("UI_General"), window.taskbarLyricsI18n.t("UI_ManageStartupBehaviorAndInterfaceTheme")],
+      advanced: [window.taskbarLyricsI18n.t("UI_Advanced"), window.taskbarLyricsI18n.t("UI_ManageLyricHintsDiagnosticToolsAndCachedData")],
+      lyricDiagnostics: [window.taskbarLyricsI18n.t("UI_LyricMatching"), window.taskbarLyricsI18n.t("UI_FindLyricCandidatesForTheCurrentSMTCTrackCompare")],
+      about: [window.taskbarLyricsI18n.t("UI_About"), window.taskbarLyricsI18n.t("UI_ViewVersionLicenseAndProjectTechnologyInformation")]
     };
 
     let state = null;
+    let initialPageId = "";
     let sourceCatalog = sourceCatalogDefaults.map(item => ({ ...item, enabled: false }));
     let toastTimer;
     let draggedPlayerSourceId = null;
@@ -137,7 +139,7 @@
       const awaitingSession = playerDrawerMode === "add" && !selectedPlayerSessionId;
       $("#chooseCustomPlayerIconButton").disabled = awaitingSession;
       $("#customPlayerName").disabled = awaitingSession;
-      $("#customPlayerName").placeholder = awaitingSession ? "先选择媒体会话" : "输入显示名称";
+      $("#customPlayerName").placeholder = awaitingSession ? window.taskbarLyricsI18n.t("UI_SelectAMediaSessionFirst") : window.taskbarLyricsI18n.t("UI_EnterADisplayName");
       updateAddPlayerButton();
     }
 
@@ -150,8 +152,8 @@
       selectedPlayerPresetColor = "";
       $("#customPlayerIcon").value = "";
       $("#customPlayerIconStatus").textContent = selectedPlayerIconDataUrl
-        ? "已使用系统检测到的图标。点击可上传其他图片。"
-        : "点击图标上传 PNG、JPEG 或 WebP 图片，最大 128 KB。";
+        ? window.taskbarLyricsI18n.t("UI_UsingTheSystemDetectedIconClickToUploadAnother")
+        : window.taskbarLyricsI18n.t("UI_ClickToUploadAPNGJPEGOrWebPImage");
       renderSelectedPlayerIcon();
     }
 
@@ -166,7 +168,7 @@
       if (source.icon) {
         selectedPlayerIconMode = "custom";
         selectedPlayerIconDataUrl = source.icon;
-        $("#customPlayerIconStatus").textContent = "当前自定义图片";
+        $("#customPlayerIconStatus").textContent = window.taskbarLyricsI18n.t("UI_CurrentCustomImage");
       } else if (presetPlayerIconIds.includes(source.presetIconId) && validPresetPlayerColor(source.presetIconColor)) {
         selectedPlayerPresetIconId = source.presetIconId;
         selectedPlayerPresetColor = source.presetIconColor.toUpperCase();
@@ -203,7 +205,7 @@
       const profile = window.taskbarLyricsPlayerCompatibility.getProfile(gettingStartedPlayer);
       const needsPlayer = gettingStartedNeedsPlayer();
       renderPlayerCompatibility($("#gettingStartedGuidance"), gettingStartedPlayer, true);
-      $("[data-getting-started-action-label]").textContent = profile.level === "setup" ? "查看安装说明" : needsPlayer ? "添加播放器" : "显示歌词";
+      $("[data-getting-started-action-label]").textContent = profile.level === "setup" ? window.taskbarLyricsI18n.t("UI_ViewSetupGuide") : needsPlayer ? window.taskbarLyricsI18n.t("UI_AddPlayer") : window.taskbarLyricsI18n.t("UI_ShowLyrics");
       $("[data-getting-started-external]").hidden = profile.level !== "setup";
       $("#gettingStartedAddNote").hidden = !needsPlayer;
     }
@@ -222,7 +224,7 @@
         if (!option.hidden) count++;
       });
       $("#gettingStartedNoResults").hidden = count !== 0;
-      $("#gettingStartedSearchStatus").textContent = query ? `找到 ${count} 个播放器，其他播放器入口始终可用。` : "";
+      $("#gettingStartedSearchStatus").textContent = query ? window.taskbarLyricsI18n.format("UI_FoundPlayersOtherPlayerRemainsAvailable", count) : "";
       syncGettingStartedTabStops();
     }
 
@@ -268,14 +270,14 @@
       const grid = $("#sourceGrid");
       grid.innerHTML = sourceCatalog.map(source => `
         <article class="source-card ${source.enabled ? "enabled" : ""}" data-player-card="${escapeHtml(source.id)}">
-          <button class="source-drag-handle" type="button" draggable="true" data-player-drag-id="${escapeHtml(source.id)}" aria-label="拖动 ${escapeHtml(source.name)} 调整同时播放时的选择顺序" aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown Alt+ArrowLeft Alt+ArrowRight" title="拖动调整播放器选择顺序；也可按 Alt + 方向键">
+          <button class="source-drag-handle" type="button" draggable="true" data-player-drag-id="${escapeHtml(source.id)}" aria-label="${window.taskbarLyricsI18n.t("UI_Drag")} ${escapeHtml(source.name)} ${window.taskbarLyricsI18n.t("UI_ToChangePriorityDuringSimultaneousPlayback")}" aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown Alt+ArrowLeft Alt+ArrowRight" title="${window.taskbarLyricsI18n.t("UI_DragToChangePlayerPriorityOrPressAltArrow")}">
             <span class="source-logo ${source.custom ? "custom-player-icon" : ""}" aria-hidden="true">${playerIcon(source)}</span>
-            <span class="source-info"><strong>${escapeHtml(source.name)}</strong><small>${source.enabled ? "已启用" : "已停用"} · ${formatPlayerOffset(getPlayerOffset(source))}</small></span>
+            <span class="source-info"><strong>${escapeHtml(source.name)}</strong><small>${source.enabled ? window.taskbarLyricsI18n.t("UI_Enabled") : window.taskbarLyricsI18n.t("UI_Disabled")} · ${formatPlayerOffset(getPlayerOffset(source))}</small></span>
           </button>
-          <button class="source-settings-button" type="button" data-player-settings="${escapeHtml(source.id)}" aria-label="打开 ${escapeHtml(source.name)} 设置"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.25A3.25 3.25 0 1 0 12 8.75a3.25 3.25 0 0 0 0 6.5Z" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M19.1 13.3a7.5 7.5 0 0 0 0-2.6l2-1.55-2-3.46-2.5 1a7.6 7.6 0 0 0-2.25-1.3L14 2.75h-4l-.35 2.64A7.6 7.6 0 0 0 7.4 6.7l-2.5-1-2 3.46 2 1.55a7.5 7.5 0 0 0 0 2.6l-2 1.55 2 3.46 2.5-1a7.6 7.6 0 0 0 2.25 1.3l.35 2.64h4l.35-2.64a7.6 7.6 0 0 0 2.25-1.3l2.5 1 2-3.46-2-1.55Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></button>
+          <button class="source-settings-button" type="button" data-player-settings="${escapeHtml(source.id)}" aria-label="${window.taskbarLyricsI18n.t("UI_Open")} ${escapeHtml(source.name)} ${window.taskbarLyricsI18n.t("UI_Settings")}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.25A3.25 3.25 0 1 0 12 8.75a3.25 3.25 0 0 0 0 6.5Z" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M19.1 13.3a7.5 7.5 0 0 0 0-2.6l2-1.55-2-3.46-2.5 1a7.6 7.6 0 0 0-2.25-1.3L14 2.75h-4l-.35 2.64A7.6 7.6 0 0 0 7.4 6.7l-2.5-1-2 3.46 2 1.55a7.5 7.5 0 0 0 0 2.6l-2 1.55 2 3.46 2.5-1a7.6 7.6 0 0 0 2.25 1.3l.35 2.64h4l.35-2.64a7.6 7.6 0 0 0 2.25-1.3l2.5 1 2-3.46-2-1.55Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></button>
         </article>`).join("");
       const enabled = sourceCatalog.filter(source => source.enabled).length;
-      $("#sourceCount").textContent = `${enabled} / ${sourceCatalog.length} 个已启用`;
+      $("#sourceCount").textContent = window.taskbarLyricsI18n.format("UI_Enabled_6", enabled, sourceCatalog.length);
     }
 
     function commitPlayerSourceOrder(order) {
@@ -289,7 +291,7 @@
     function announcePlayerSourcePosition(sourceId) {
       const index = sourceCatalog.findIndex(source => source.id === sourceId);
       if (index < 0) return;
-      $("#sourceOrderAnnouncement").textContent = `${sourceCatalog[index].name} 已移至第 ${index + 1} 位，共 ${sourceCatalog.length} 位`;
+      $("#sourceOrderAnnouncement").textContent = window.taskbarLyricsI18n.format("UI_MovedToPositionOf", sourceCatalog[index].name, index + 1, sourceCatalog.length);
     }
 
     function renderAvailablePlayerSessions(payload) {
@@ -299,7 +301,7 @@
       list.removeAttribute("aria-busy");
       if (payload?.status === "error") {
         status.className = "player-discovery-status error";
-        status.textContent = "无法读取媒体会话，请稍后重试。";
+        status.textContent = window.taskbarLyricsI18n.t("UI_CannotReadMediaSessionsPleaseRetryLater");
         return;
       } else {
         availablePlayerSessions = (Array.isArray(payload?.sessions) ? payload.sessions : [])
@@ -307,7 +309,7 @@
             !sourceCatalog.some(source => source.adapter.toLowerCase() === String(session.sourceAppUserModelId).toLowerCase()));
         status.className = availablePlayerSessions.length ? "player-discovery-status" : "player-discovery-status empty";
         status.innerHTML = availablePlayerSessions.length ? "" :
-          `<span class="player-discovery-empty-icon" aria-hidden="true">${defaultPlayerIcon()}</span><strong>暂未检测到可添加的播放器</strong><small>打开播放器并播放一首歌，然后点击刷新。</small>`;
+          `<span class="player-discovery-empty-icon" aria-hidden="true">${defaultPlayerIcon()}</span><strong>${window.taskbarLyricsI18n.t("UI_NoPlayersAvailableToAdd")}</strong><small>${window.taskbarLyricsI18n.t("UI_OpenAPlayerAndPlayASongThenRefresh")}</small>`;
       }
       if (playerDrawerMode === "add" && !availablePlayerSessions.some(session => session.sourceAppUserModelId === selectedPlayerSessionId)) {
         selectedPlayerSessionId = null;
@@ -319,7 +321,7 @@
         <button class="available-player-session" type="button" data-player-session-index="${index}" aria-pressed="${session.sourceAppUserModelId === selectedPlayerSessionId}">
           <span class="available-player-session-icon" aria-hidden="true">${safeSessionIcon(session.iconDataUrl) ? `<img src="${escapeHtml(session.iconDataUrl)}" alt="">` : defaultPlayerIcon()}</span>
           <span class="available-player-session-info"><strong>${escapeHtml(session.displayName)}</strong>
-            <small>${session.isPlaying ? "正在播放" : "已暂停"}${session.trackTitle ? ` · ${escapeHtml(session.trackTitle)}` : ""}</small>
+            <small>${session.isPlaying ? window.taskbarLyricsI18n.t("UI_Playing") : window.taskbarLyricsI18n.t("UI_Paused")}${session.trackTitle ? ` · ${escapeHtml(session.trackTitle)}` : ""}</small>
             ${session.displayName === session.sourceAppUserModelId ? "" : `<small>${escapeHtml(session.sourceAppUserModelId)}</small>`}
           </span>
         </button>`).join("");
@@ -335,7 +337,7 @@
       }
       if (!list.childElementCount && !status.textContent.trim()) {
         status.className = "player-discovery-status loading";
-        status.textContent = "正在检测媒体会话…";
+        status.textContent = window.taskbarLyricsI18n.t("UI_DetectingMediaSessions");
       }
       list.setAttribute("aria-busy", "true");
       $("#refreshPlayerSessionsButton").disabled = true;
@@ -348,9 +350,9 @@
     }
 
     function formatPlayerOffset(value) {
-      if (value > 0) return `提前 ${value} ms`;
-      if (value < 0) return `延后 ${Math.abs(value)} ms`;
-      return "同步";
+      if (value > 0) return window.taskbarLyricsI18n.format("UI_AdvanceMs", value);
+      if (value < 0) return window.taskbarLyricsI18n.format("UI_DelayMs", Math.abs(value));
+      return window.taskbarLyricsI18n.t("UI_InSync");
     }
 
     const normalizeTrackOffset = (value, fallback = 0) => window.taskbarLyricsTrackOffsets.normalize(value, fallback);
@@ -358,8 +360,8 @@
     function sourceDisplayName(source) {
       const known = sourceCatalogDefaults.find(item => item.adapter.toLowerCase() === String(source ?? "").toLowerCase());
       if (known) return known.name;
-      if (String(source).toLowerCase() === "local") return "本地歌词";
-      return source || "未知来源";
+      if (String(source).toLowerCase() === "local") return window.taskbarLyricsI18n.t("UI_LocalLyrics");
+      return source || window.taskbarLyricsI18n.t("UI_UnknownSource");
     }
 
     const formatTrackDuration = seconds => window.taskbarLyricsTrackOffsets.formatDuration(seconds);
@@ -367,7 +369,7 @@
     function formatTrackOffsetDate(value) {
       const date = new Date(value);
       if (Number.isNaN(date.getTime())) return "--";
-      return new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(date);
+      return new Intl.DateTimeFormat(window.taskbarLyricsI18n.locale, { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(date);
     }
 
     function trackOffsetKeyId(key) {
@@ -384,15 +386,15 @@
       const badge = $("#currentTrackOffsetBadge");
       const current = trackOffsetData.currentTrack;
       if (!current) {
-        badge.textContent = "等待播放";
-        container.innerHTML = `<div class="track-offset-empty"><div><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5l10-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="16" cy="16" r="3"/></svg><strong>当前没有可调整的歌曲</strong><small>开始播放并成功获取歌词后，可以在这里调整对应歌词源的同步偏移。</small></div></div>`;
+        badge.textContent = window.taskbarLyricsI18n.t("UI_WaitingForPlayback");
+        container.innerHTML = `<div class="track-offset-empty"><div><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5l10-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="16" cy="16" r="3"/></svg><strong>${window.taskbarLyricsI18n.t("UI_NoTrackAvailableToAdjust")}</strong><small>${window.taskbarLyricsI18n.t("UI_PlayATrackAndLoadLyricsToAdjustIts")}</small></div></div>`;
         return;
       }
 
       const ready = Boolean(current.lyricSourceReady);
-      badge.textContent = ready ? sourceDisplayName(current.lyricSource) : "正在检索歌词";
+      badge.textContent = ready ? sourceDisplayName(current.lyricSource) : window.taskbarLyricsI18n.t("UI_SearchingForLyrics_7");
       if (!ready) {
-        container.innerHTML = `<div class="track-offset-empty"><div><span class="spinner" aria-hidden="true"></span><strong>${escapeHtml(current.title || "当前歌曲")}</strong><small>歌词源确定后即可调整单曲偏移。</small></div></div>`;
+        container.innerHTML = `<div class="track-offset-empty"><div><span class="spinner" aria-hidden="true"></span><strong>${escapeHtml(current.title || window.taskbarLyricsI18n.t("UI_CurrentTrack"))}</strong><small>${window.taskbarLyricsI18n.t("UI_TrackOffsetsBecomeAvailableOnceALyricSourceIs")}</small></div></div>`;
         return;
       }
 
@@ -402,23 +404,23 @@
       container.innerHTML = `
         <div class="current-track-layout">
           <div class="current-track-identity">
-            <strong title="${escapeHtml(current.title)}">${escapeHtml(current.title || "未知歌曲")}</strong>
-            <small title="${escapeHtml(current.artist)}">${escapeHtml(current.artist || "未知歌手")} · ${formatTrackDuration(current.durationSeconds)}</small>
-            <div class="current-track-source"><span class="track-offset-badge">${escapeHtml(sourceDisplayName(current.sourceApp))}</span><span class="track-offset-badge">歌词源 · ${escapeHtml(sourceDisplayName(current.lyricSource))}</span></div>
+            <strong title="${escapeHtml(current.title)}">${escapeHtml(current.title || window.taskbarLyricsI18n.t("UI_UnknownSong"))}</strong>
+            <small title="${escapeHtml(current.artist)}">${escapeHtml(current.artist || window.taskbarLyricsI18n.t("UI_UnknownArtist"))} · ${formatTrackDuration(current.durationSeconds)}</small>
+            <div class="current-track-source"><span class="track-offset-badge">${escapeHtml(sourceDisplayName(current.sourceApp))}</span><span class="track-offset-badge">${window.taskbarLyricsI18n.t("UI_LyricSource")} ${escapeHtml(sourceDisplayName(current.lyricSource))}</span></div>
           </div>
           <div class="current-track-controls">
             <div class="offset-summary">
-              <div class="offset-summary-item"><span>播放器偏移</span><strong>${formatPlayerOffset(playerOffset)}</strong></div>
-              <div class="offset-summary-item"><span>单曲偏移</span><strong>${formatPlayerOffset(trackOffset)}</strong></div>
-              <div class="offset-summary-item"><span>最终效果</span><strong>${formatPlayerOffset(effectiveOffset)}</strong></div>
+              <div class="offset-summary-item"><span>${window.taskbarLyricsI18n.t("UI_PlayerOffset")}</span><strong>${formatPlayerOffset(playerOffset)}</strong></div>
+              <div class="offset-summary-item"><span>${window.taskbarLyricsI18n.t("UI_TrackOffsets")}</span><strong>${formatPlayerOffset(trackOffset)}</strong></div>
+              <div class="offset-summary-item"><span>${window.taskbarLyricsI18n.t("UI_EffectiveOffset")}</span><strong>${formatPlayerOffset(effectiveOffset)}</strong></div>
             </div>
             <div class="current-track-editor">
               <div class="stepper track-offset-stepper">
-                <button type="button" data-current-track-offset-delta="-100" aria-label="当前歌曲歌词延后 100 毫秒">−</button>
-                <input id="currentTrackOffsetInput" class="control" type="number" min="-5000" max="5000" step="10" inputmode="numeric" value="${trackOffset}" aria-label="当前歌曲单曲偏移毫秒">
-                <button type="button" data-current-track-offset-delta="100" aria-label="当前歌曲歌词提前 100 毫秒">+</button>
+                <button type="button" data-current-track-offset-delta="-100" aria-label="${window.taskbarLyricsI18n.t("UI_DelayCurrentTrackLyricsBy100Milliseconds")}">−</button>
+                <input id="currentTrackOffsetInput" class="control" type="number" min="-5000" max="5000" step="10" inputmode="numeric" value="${trackOffset}" aria-label="${window.taskbarLyricsI18n.t("UI_CurrentTrackOffsetInMilliseconds")}">
+                <button type="button" data-current-track-offset-delta="100" aria-label="${window.taskbarLyricsI18n.t("UI_AdvanceCurrentTrackLyricsBy100Milliseconds")}">+</button>
               </div>
-              <button class="btn ghost small" type="button" data-reset-current-track-offset ${trackOffset === 0 ? "disabled" : ""}>恢复为 0</button>
+              <button class="btn ghost small" type="button" data-reset-current-track-offset ${trackOffset === 0 ? "disabled" : ""}>${window.taskbarLyricsI18n.t("UI_ResetTo0")}</button>
             </div>
           </div>
         </div>`;
@@ -437,8 +439,8 @@
       const pageCount = Math.max(1, Number(trackOffsetData.pageCount) || 1);
       trackOffsetPage = Math.min(pageCount, Math.max(1, Number(trackOffsetData.page) || 1));
       $("#trackOffsetCount").textContent = totalCount === unfilteredCount
-        ? `${unfilteredCount} 首`
-        : `${totalCount} / ${unfilteredCount} 首`;
+        ? window.taskbarLyricsI18n.format("UI_Tracks", unfilteredCount)
+        : window.taskbarLyricsI18n.format("UI_Tracks_8", totalCount, unfilteredCount);
       $("#clearTrackOffsetsButton").disabled = unfilteredCount === 0;
       const pagination = $("#trackOffsetPagination");
       pagination.hidden = false;
@@ -449,27 +451,27 @@
 
       if (!visibleTrackOffsetEntries.length) {
         const hasRecords = unfilteredCount > 0;
-        container.innerHTML = `<div class="track-offset-empty"><div><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/></svg><strong>${hasRecords ? "没有找到匹配的歌曲" : "还没有配置过单曲偏移"}</strong><small>${hasRecords ? "请调整搜索内容或歌词源筛选条件。" : "通过上方当前歌曲区域或托盘入口完成第一次调整。"}</small></div></div>`;
+        container.innerHTML = `<div class="track-offset-empty"><div><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/></svg><strong>${hasRecords ? window.taskbarLyricsI18n.t("UI_NoMatchingTracks") : window.taskbarLyricsI18n.t("UI_NoTrackOffsetsConfiguredYet")}</strong><small>${hasRecords ? window.taskbarLyricsI18n.t("UI_TryAnotherSearchOrLyricSourceFilter") : window.taskbarLyricsI18n.t("UI_MakeYourFirstAdjustmentAboveOrFromTheTray")}</small></div></div>`;
         return;
       }
 
       container.innerHTML = `
-        <div class="track-offset-table-head"><span>歌曲</span><span>歌词源</span><span>单曲偏移</span><span>最近修改</span><span></span></div>
+        <div class="track-offset-table-head"><span>${window.taskbarLyricsI18n.t("UI_Track")}</span><span>${window.taskbarLyricsI18n.t("UI_LyricSource_9")}</span><span>${window.taskbarLyricsI18n.t("UI_TrackOffsets")}</span><span>${window.taskbarLyricsI18n.t("UI_RecentlyModified")}</span><span></span></div>
         ${visibleTrackOffsetEntries.map((entry, index) => {
           const isExpanded = expandedTrackOffsetKey === trackOffsetKeyId(entry.key);
           const offset = Number(entry.offsetMilliseconds) || 0;
           return `<div class="track-offset-item">
             <div class="track-offset-row">
-              <div class="track-offset-song"><strong title="${escapeHtml(entry.title)}">${escapeHtml(entry.title || "未知歌曲")}</strong><small title="${escapeHtml(entry.artist)}">${escapeHtml(entry.artist || "未知歌手")} · ${escapeHtml(sourceDisplayName(entry.sourceApp))} · ${formatTrackDuration(entry.durationSeconds)}</small></div>
+              <div class="track-offset-song"><strong title="${escapeHtml(entry.title)}">${escapeHtml(entry.title || window.taskbarLyricsI18n.t("UI_UnknownSong"))}</strong><small title="${escapeHtml(entry.artist)}">${escapeHtml(entry.artist || window.taskbarLyricsI18n.t("UI_UnknownArtist"))} · ${escapeHtml(sourceDisplayName(entry.sourceApp))} · ${formatTrackDuration(entry.durationSeconds)}</small></div>
               <span class="track-offset-meta">${escapeHtml(sourceDisplayName(entry.lyricSource))}</span>
               <span class="track-offset-value">${formatPlayerOffset(offset)}</span>
               <span class="track-offset-meta">${formatTrackOffsetDate(entry.updatedAtUtc)}</span>
               <div class="track-offset-actions">
-                <button class="track-offset-action" type="button" data-edit-track-offset="${index}" aria-label="调整 ${escapeHtml(entry.title)} 的偏移" aria-expanded="${isExpanded}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M4 17h16M18 4v6M14 14v6"/><circle cx="18" cy="13" r="0"/><path d="M18 4v6M15 7h6M14 14v6M11 17h6"/></svg></button>
-                <button class="track-offset-action destructive" type="button" data-delete-track-offset="${index}" aria-label="删除 ${escapeHtml(entry.title)} 的偏移"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg></button>
+                <button class="track-offset-action" type="button" data-edit-track-offset="${index}" aria-label="${window.taskbarLyricsI18n.t("UI_Adjust")} ${escapeHtml(entry.title)} ${window.taskbarLyricsI18n.t("UI_Offset_10")}" aria-expanded="${isExpanded}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M4 17h16M18 4v6M14 14v6"/><circle cx="18" cy="13" r="0"/><path d="M18 4v6M15 7h6M14 14v6M11 17h6"/></svg></button>
+                <button class="track-offset-action destructive" type="button" data-delete-track-offset="${index}" aria-label="${window.taskbarLyricsI18n.t("UI_Delete")} ${escapeHtml(entry.title)} ${window.taskbarLyricsI18n.t("UI_Offset_10")}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg></button>
               </div>
             </div>
-            ${isExpanded ? `<div class="track-offset-inline-editor"><span>正值让歌词提前，负值让歌词延后。</span><div class="stepper track-offset-stepper"><button type="button" data-stored-track-offset-delta="-100" data-track-offset-index="${index}" aria-label="歌词延后 100 毫秒">−</button><input class="control" type="number" min="-5000" max="5000" step="10" inputmode="numeric" value="${offset}" data-stored-track-offset-input="${index}" aria-label="${escapeHtml(entry.title)} 单曲偏移毫秒"><button type="button" data-stored-track-offset-delta="100" data-track-offset-index="${index}" aria-label="歌词提前 100 毫秒">+</button></div><span class="track-offset-editor-unit">ms</span></div>` : ""}
+            ${isExpanded ? `<div class="track-offset-inline-editor"><span>${window.taskbarLyricsI18n.t("UI_PositiveValuesAdvanceLyricsNegativeValuesDelayThem")}</span><div class="stepper track-offset-stepper"><button type="button" data-stored-track-offset-delta="-100" data-track-offset-index="${index}" aria-label="${window.taskbarLyricsI18n.t("UI_DelayLyricsBy100Milliseconds")}">−</button><input class="control" type="number" min="-5000" max="5000" step="10" inputmode="numeric" value="${offset}" data-stored-track-offset-input="${index}" aria-label="${escapeHtml(entry.title)} ${window.taskbarLyricsI18n.t("UI_TrackOffsetInMilliseconds")}"><button type="button" data-stored-track-offset-delta="100" data-track-offset-index="${index}" aria-label="${window.taskbarLyricsI18n.t("UI_AdvanceLyricsBy100Milliseconds")}">+</button></div><span class="track-offset-editor-unit">ms</span></div>` : ""}
           </div>`;
         }).join("")}`;
     }
@@ -521,15 +523,15 @@
 
     function diagnosticProviderStateLabel(value) {
       return ({
-        Succeeded: "成功",
-        IdentityRejected: "身份拒绝",
-        NoLyrics: "无歌词",
-        InvalidContent: "内容无效",
-        Failed: "失败",
-        TimedOut: "超时",
-        Disabled: "未启用",
-        Canceled: "已取消"
-      })[value] ?? (value ? String(value) : "未完成");
+        Succeeded: window.taskbarLyricsI18n.t("UI_Success"),
+        IdentityRejected: window.taskbarLyricsI18n.t("UI_IdentityRejected"),
+        NoLyrics: window.taskbarLyricsI18n.t("UI_NoLyrics"),
+        InvalidContent: window.taskbarLyricsI18n.t("UI_InvalidContent"),
+        Failed: window.taskbarLyricsI18n.t("UI_Failed"),
+        TimedOut: window.taskbarLyricsI18n.t("UI_TimedOut"),
+        Disabled: window.taskbarLyricsI18n.t("UI_Disabled_11"),
+        Canceled: window.taskbarLyricsI18n.t("UI_Canceled")
+      })[value] ?? (value ? String(value) : window.taskbarLyricsI18n.t("UI_Incomplete"));
     }
 
     function diagnosticProviderStateClass(value) {
@@ -554,7 +556,7 @@
     function formatDiagnosticTimestamp(value) {
       const date = new Date(value);
       if (Number.isNaN(date.getTime())) return "";
-      return new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(date);
+      return new Intl.DateTimeFormat(window.taskbarLyricsI18n.locale, { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(date);
     }
 
     function diagnosticCandidateKey(providerId, candidateId, mode = "current") {
@@ -568,8 +570,8 @@
       const busy = apply?.status === "running" &&
         ["current", "remember"].some(value => apply.key === diagnosticCandidateKey(providerId, candidateId, value));
       const label = mode === "remember"
-        ? running ? "正在记住…" : matches && apply.status === "success" ? "已应用并记住" : "使用并记住"
-        : running ? "正在应用…" : matches && apply.status === "success" ? "已应用" : "本次使用";
+        ? running ? window.taskbarLyricsI18n.t("UI_Remembering") : matches && apply.status === "success" ? window.taskbarLyricsI18n.t("UI_AppliedAndRemembered") : window.taskbarLyricsI18n.t("UI_UseAndRemember")
+        : running ? window.taskbarLyricsI18n.t("UI_Applying") : matches && apply.status === "success" ? window.taskbarLyricsI18n.t("UI_Applied") : window.taskbarLyricsI18n.t("UI_UseThisTime");
       return { running, busy, label };
     }
 
@@ -606,46 +608,46 @@
       }
 
       panel.hidden = false;
-      const title = diagnosticString(track.title, "未知歌曲");
+      const title = diagnosticString(track.title, window.taskbarLyricsI18n.t("UI_UnknownSong"));
       const sourceApp = diagnosticString(track.sourceApp);
       const songId = diagnosticString(track.songId);
       container.innerHTML = `
-        <div class="diagnostics-track-item"><span>歌曲</span><strong title="${escapeHtml(title)}">${escapeHtml(title)}</strong></div>
-        <div class="diagnostics-track-item"><span>歌手</span><strong title="${escapeHtml(diagnosticTrackArtist(track))}">${escapeHtml(diagnosticTrackArtist(track))}</strong></div>
-        <div class="diagnostics-track-item"><span>专辑</span><strong title="${escapeHtml(diagnosticString(track.album))}">${escapeHtml(diagnosticString(track.album))}</strong></div>
-        <div class="diagnostics-track-item"><span>播放器</span><strong title="${escapeHtml(sourceApp)}">${escapeHtml(sourceApp)}</strong></div>
-        <div class="diagnostics-track-item"><span>时长 / 歌曲 ID</span><strong title="${escapeHtml(`${formatDiagnosticDuration(track.durationSeconds ?? track.duration)} · ${songId}`)}">${escapeHtml(formatDiagnosticDuration(track.durationSeconds ?? track.duration))} · ${escapeHtml(songId)}</strong></div>`;
+        <div class="diagnostics-track-item"><span>${window.taskbarLyricsI18n.t("UI_Track")}</span><strong title="${escapeHtml(title)}">${escapeHtml(title)}</strong></div>
+        <div class="diagnostics-track-item"><span>${window.taskbarLyricsI18n.t("UI_Artist")}</span><strong title="${escapeHtml(diagnosticTrackArtist(track))}">${escapeHtml(diagnosticTrackArtist(track))}</strong></div>
+        <div class="diagnostics-track-item"><span>${window.taskbarLyricsI18n.t("UI_Album")}</span><strong title="${escapeHtml(diagnosticString(track.album))}">${escapeHtml(diagnosticString(track.album))}</strong></div>
+        <div class="diagnostics-track-item"><span>${window.taskbarLyricsI18n.t("UI_Players")}</span><strong title="${escapeHtml(sourceApp)}">${escapeHtml(sourceApp)}</strong></div>
+        <div class="diagnostics-track-item"><span>${window.taskbarLyricsI18n.t("UI_DurationTrackID")}</span><strong title="${escapeHtml(`${formatDiagnosticDuration(track.durationSeconds ?? track.duration)} · ${songId}`)}">${escapeHtml(formatDiagnosticDuration(track.durationSeconds ?? track.duration))} · ${escapeHtml(songId)}</strong></div>`;
     }
 
     function renderLyricDiagnosticsProviders(report) {
       const providers = Array.isArray(report?.providers) ? report.providers : [];
       const container = $("#lyricDiagnosticsProviders");
-      $("#lyricDiagnosticsProviderCount").textContent = `${providers.length} 个歌词源`;
+      $("#lyricDiagnosticsProviderCount").textContent = window.taskbarLyricsI18n.format("UI_LyricSources", providers.length);
       const summary = $("#lyricDiagnosticsReportSummary");
       const preferredProvider = diagnosticString(report?.preferredProvider, "");
-      const musicKind = report?.isPureMusic === true ? "纯音乐" : report?.isPureMusic === false ? "常规歌曲" : "歌曲类型：未知";
-      summary.innerHTML = `<span>${musicKind}</span><span>首选来源：${escapeHtml(preferredProvider || "未指定")}</span>`;
+      const musicKind = report?.isPureMusic === true ? window.taskbarLyricsI18n.t("UI_Instrumental") : report?.isPureMusic === false ? window.taskbarLyricsI18n.t("UI_RegularTrack") : window.taskbarLyricsI18n.t("UI_TrackTypeUnknown");
+      summary.innerHTML = `<span>${musicKind}</span><span>${window.taskbarLyricsI18n.t("UI_PreferredSource")}${escapeHtml(preferredProvider || window.taskbarLyricsI18n.t("UI_NotSpecified"))}</span>`;
       if (!providers.length) {
-        container.innerHTML = `<div class="diagnostics-selection-empty"><strong>没有收到歌词源结果</strong><small>本次运行没有可展示的来源终态。</small></div>`;
+        container.innerHTML = `<div class="diagnostics-selection-empty"><strong>${window.taskbarLyricsI18n.t("UI_NoLyricSourceResultsReceived")}</strong><small>${window.taskbarLyricsI18n.t("UI_NoTerminalSourceStatusIsAvailableForThisRun")}</small></div>`;
         return;
       }
 
       container.innerHTML = providers.map(provider => {
         const providerIdentifier = diagnosticRawIdentifier(provider?.providerId);
-        const providerId = diagnosticString(providerIdentifier, "未知来源");
+        const providerId = diagnosticString(providerIdentifier, window.taskbarLyricsI18n.t("UI_UnknownSource"));
         const providerState = provider?.state ?? null;
         const providerStateClass = diagnosticProviderStateClass(providerState);
         const candidates = Array.isArray(provider?.candidates) ? provider.candidates : [];
         const detail = diagnosticString(provider?.detail, "");
-        const selectedBadge = provider?.selected ? `<span class="diagnostics-badge" data-state="selected">最终采用</span>` : "";
+        const selectedBadge = provider?.selected ? `<span class="diagnostics-badge" data-state="selected">${window.taskbarLyricsI18n.t("UI_FinalSelection")}</span>` : "";
         const candidateMarkup = candidates.length
           ? candidates.map(candidate => {
             const admitted = candidate?.isAdmitted === true;
             const score = Number.isFinite(Number(candidate?.score)) ? Number(candidate.score) : null;
             const reasons = Array.isArray(candidate?.rejectionReasons) ? candidate.rejectionReasons.filter(Boolean) : [];
             const metadataKeys = Array.isArray(candidate?.fetchMetadataKeys) ? candidate.fetchMetadataKeys.filter(Boolean) : [];
-            const title = diagnosticString(candidate?.title, "未知候选");
-            const artist = diagnosticArtists(candidate?.artists, "未知歌手");
+            const title = diagnosticString(candidate?.title, window.taskbarLyricsI18n.t("UI_UnknownCandidate"));
+            const artist = diagnosticArtists(candidate?.artists, window.taskbarLyricsI18n.t("UI_UnknownArtist"));
             const candidateIdentifier = diagnosticRawIdentifier(candidate?.candidateId);
             const candidateId = diagnosticString(candidateIdentifier);
             const candidateIsSelected = diagnosticCandidateMatchesSelection(report?.selection, providerIdentifier, candidateIdentifier);
@@ -655,19 +657,19 @@
               ? `<div class="diagnostics-candidate-actions"><button class="btn secondary small diagnostics-apply-button" type="button" data-lyric-diagnostics-apply data-apply-mode="current" data-provider-id="${escapeHtml(providerIdentifier)}" data-candidate-id="${escapeHtml(candidateIdentifier)}"${current.busy ? " disabled" : ""}${current.running ? " aria-busy=\"true\"" : ""}>${current.running ? '<span class="spinner" aria-hidden="true"></span>' : ""}${current.label}</button><button class="btn ghost small diagnostics-apply-button" type="button" data-lyric-diagnostics-apply data-apply-mode="remember" data-provider-id="${escapeHtml(providerIdentifier)}" data-candidate-id="${escapeHtml(candidateIdentifier)}"${remember.busy ? " disabled" : ""}${remember.running ? " aria-busy=\"true\"" : ""}>${remember.running ? '<span class="spinner" aria-hidden="true"></span>' : ""}${remember.label}</button></div>`
               : "";
             const candidateState = candidateIsSelected ? "selected" : admitted ? "accepted" : "rejected";
-            const candidateStateLabel = candidateIsSelected ? "当前采用" : admitted ? "已接纳" : "已拒绝";
+            const candidateStateLabel = candidateIsSelected ? window.taskbarLyricsI18n.t("UI_CurrentSelection") : admitted ? window.taskbarLyricsI18n.t("UI_Accepted") : window.taskbarLyricsI18n.t("UI_Rejected");
             return `<article class="diagnostics-candidate${candidateIsSelected ? " is-selected" : ""}">
               <div class="diagnostics-candidate-main">
                 <div class="diagnostics-candidate-title"><strong title="${escapeHtml(title)}">${escapeHtml(title)}</strong><small title="${escapeHtml(artist)}">${escapeHtml(artist)}</small></div>
-                <div class="diagnostics-candidate-meta"><span>专辑：${escapeHtml(diagnosticString(candidate?.album))}</span><span>时长：${escapeHtml(formatDiagnosticDuration(candidate?.durationSeconds ?? candidate?.duration))}</span><span>查询变体：${escapeHtml(diagnosticString(candidate?.queryVariantId))}</span><span>候选 ID：<code title="${escapeHtml(candidateId)}">${escapeHtml(candidateId)}</code></span>${metadataKeys.length ? `<span>元数据：${escapeHtml(metadataKeys.join("、"))}</span>` : ""}</div>
-                ${reasons.length ? `<ul class="diagnostics-reasons" aria-label="拒绝原因">${reasons.map(reason => `<li>${escapeHtml(reason)}</li>`).join("")}</ul>` : ""}
+                <div class="diagnostics-candidate-meta"><span>${window.taskbarLyricsI18n.t("UI_Album_12")}${escapeHtml(diagnosticString(candidate?.album))}</span><span>${window.taskbarLyricsI18n.t("UI_Duration")}${escapeHtml(formatDiagnosticDuration(candidate?.durationSeconds ?? candidate?.duration))}</span><span>${window.taskbarLyricsI18n.t("UI_QueryVariant")}${escapeHtml(diagnosticString(candidate?.queryVariantId))}</span><span>${window.taskbarLyricsI18n.t("UI_CandidateID")}<code title="${escapeHtml(candidateId)}">${escapeHtml(candidateId)}</code></span>${metadataKeys.length ? `<span>${window.taskbarLyricsI18n.t("UI_Metadata")}${escapeHtml(metadataKeys.join("、"))}</span>` : ""}</div>
+                ${reasons.length ? `<ul class="diagnostics-reasons" aria-label="${window.taskbarLyricsI18n.t("UI_RejectionReason")}">${reasons.map(reason => `<li>${escapeHtml(reason)}</li>`).join("")}</ul>` : ""}
               </div>
-              <div class="diagnostics-candidate-controls"><div class="diagnostics-candidate-summary"><div class="diagnostics-candidate-badges"><span class="diagnostics-badge" data-state="${candidateState}">${candidateStateLabel}</span>${admitted && candidate?.isHighConfidence ? '<span class="diagnostics-badge" data-state="high-confidence">高置信</span>' : ""}</div><strong class="diagnostics-score">${score === null ? "--" : score} 分</strong></div>${applyActions}</div>
+              <div class="diagnostics-candidate-controls"><div class="diagnostics-candidate-summary"><div class="diagnostics-candidate-badges"><span class="diagnostics-badge" data-state="${candidateState}">${candidateStateLabel}</span>${admitted && candidate?.isHighConfidence ? `<span class="diagnostics-badge" data-state="high-confidence">${window.taskbarLyricsI18n.t("UI_HighConfidence")}</span>` : ""}</div><strong class="diagnostics-score">${score === null ? "--" : score} ${window.taskbarLyricsI18n.t("UI_Points")}</strong></div>${applyActions}</div>
             </article>`;
           }).join("")
-          : `<div class="diagnostics-candidate-empty">该来源没有返回候选。</div>`;
+          : `<div class="diagnostics-candidate-empty">${window.taskbarLyricsI18n.t("UI_ThisSourceReturnedNoCandidates")}</div>`;
         return `<details class="diagnostics-provider" open>
-          <summary class="diagnostics-provider-head"><span class="diagnostics-provider-heading"><span class="diagnostics-provider-title"><strong>${escapeHtml(providerId)}</strong><span class="diagnostics-badge" data-state="${providerStateClass}">${escapeHtml(diagnosticProviderStateLabel(providerState))}</span>${selectedBadge}</span>${detail ? `<span class="diagnostics-provider-detail" title="${escapeHtml(detail)}">${escapeHtml(detail)}</span>` : ""}</span><span class="diagnostics-provider-toggle-meta"><span>${candidates.length} 个候选</span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 4 4 4-4 4"></path></svg></span></summary>
+          <summary class="diagnostics-provider-head"><span class="diagnostics-provider-heading"><span class="diagnostics-provider-title"><strong>${escapeHtml(providerId)}</strong><span class="diagnostics-badge" data-state="${providerStateClass}">${escapeHtml(diagnosticProviderStateLabel(providerState))}</span>${selectedBadge}</span>${detail ? `<span class="diagnostics-provider-detail" title="${escapeHtml(detail)}">${escapeHtml(detail)}</span>` : ""}</span><span class="diagnostics-provider-toggle-meta"><span>${candidates.length} ${window.taskbarLyricsI18n.t("UI_Candidates")}</span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 4 4 4-4 4"></path></svg></span></summary>
           <div class="diagnostics-candidates">${candidateMarkup}</div>
         </details>`;
       }).join("");
@@ -684,10 +686,10 @@
       }
 
       container.innerHTML = variants.map((variant, index) => {
-        const title = diagnosticString(variant?.title, "未知查询");
-        const artist = diagnosticArtists(variant?.artists, "未知歌手");
+        const title = diagnosticString(variant?.title, window.taskbarLyricsI18n.t("UI_UnknownQuery"));
+        const artist = diagnosticArtists(variant?.artists, window.taskbarLyricsI18n.t("UI_UnknownArtist"));
         const reasons = Array.isArray(variant?.relaxationReasons) ? variant.relaxationReasons.filter(Boolean) : [];
-        return `<div class="diagnostics-variant"><span class="diagnostics-variant-index">${index + 1}</span><div class="diagnostics-variant-copy"><strong title="${escapeHtml(title)}">${escapeHtml(title)}</strong><small>${escapeHtml(artist)} · ${escapeHtml(diagnosticString(variant?.album))} · ${escapeHtml(formatDiagnosticDuration(variant?.durationSeconds ?? variant?.duration))}</small></div><span class="diagnostics-variant-reasons">${escapeHtml(reasons.length ? reasons.join("、") : "严格匹配")}</span></div>`;
+        return `<div class="diagnostics-variant"><span class="diagnostics-variant-index">${index + 1}</span><div class="diagnostics-variant-copy"><strong title="${escapeHtml(title)}">${escapeHtml(title)}</strong><small>${escapeHtml(artist)} · ${escapeHtml(diagnosticString(variant?.album))} · ${escapeHtml(formatDiagnosticDuration(variant?.durationSeconds ?? variant?.duration))}</small></div><span class="diagnostics-variant-reasons">${escapeHtml(reasons.length ? reasons.join("、") : window.taskbarLyricsI18n.t("UI_StrictMatch"))}</span></div>`;
       }).join("");
     }
 
@@ -695,8 +697,8 @@
       const selection = report?.selection;
       const container = $("#lyricDiagnosticsSelection");
       if (!selection || typeof selection !== "object") {
-        const message = diagnosticString(report?.error, "没有候选通过完整校验。");
-        container.innerHTML = `<div class="diagnostics-selection-empty"><strong>未找到可用歌词</strong><small>${escapeHtml(message)}</small></div>`;
+        const message = diagnosticString(report?.error, window.taskbarLyricsI18n.t("UI_NoCandidatePassedAllChecks"));
+        container.innerHTML = `<div class="diagnostics-selection-empty"><strong>${window.taskbarLyricsI18n.t("UI_NoUsableLyricsFound")}</strong><small>${escapeHtml(message)}</small></div>`;
         return;
       }
 
@@ -706,7 +708,7 @@
       const diagnosticsMarkup = diagnostics.length
         ? `<div class="diagnostics-selection-meta">${diagnostics.map(([key, value]) => `<span>${escapeHtml(key)}：<code>${escapeHtml(value)}</code></span>`).join("")}</div>`
         : "";
-      container.innerHTML = `<div class="diagnostics-selection-card is-selected"><div class="diagnostics-selection-title"><strong>${escapeHtml(diagnosticString(selection.providerId, "未知来源"))}</strong><span class="diagnostics-badge" data-state="selected">已采用</span></div><div class="diagnostics-selection-meta"><span>候选 ID：<code>${escapeHtml(diagnosticString(selection.candidateId))}</code></span><span>获取方式：${escapeHtml(diagnosticString(selection.acquisition))}</span><span>格式：${escapeHtml(diagnosticString(selection.format))}</span><span>时序：${escapeHtml(diagnosticString(selection.timingKind))} / ${escapeHtml(diagnosticString(selection.timingProvenance))}</span><span>歌词行数：${escapeHtml(diagnosticString(selection.lineCount, "0"))}</span></div>${diagnosticsMarkup}</div>`;
+      container.innerHTML = `<div class="diagnostics-selection-card is-selected"><div class="diagnostics-selection-title"><strong>${escapeHtml(diagnosticString(selection.providerId, window.taskbarLyricsI18n.t("UI_UnknownSource")))}</strong><span class="diagnostics-badge" data-state="selected">${window.taskbarLyricsI18n.t("UI_Selected")}</span></div><div class="diagnostics-selection-meta"><span>${window.taskbarLyricsI18n.t("UI_CandidateID")}<code>${escapeHtml(diagnosticString(selection.candidateId))}</code></span><span>${window.taskbarLyricsI18n.t("UI_Acquisition")}${escapeHtml(diagnosticString(selection.acquisition))}</span><span>${window.taskbarLyricsI18n.t("UI_Format")}${escapeHtml(diagnosticString(selection.format))}</span><span>${window.taskbarLyricsI18n.t("UI_Timing")}${escapeHtml(diagnosticString(selection.timingKind))} / ${escapeHtml(diagnosticString(selection.timingProvenance))}</span><span>${window.taskbarLyricsI18n.t("UI_LyricLines_13")}${escapeHtml(diagnosticString(selection.lineCount, "0"))}</span></div>${diagnosticsMarkup}</div>`;
     }
 
     function renderLyricDiagnosticsState(applyOnly = false) {
@@ -717,22 +719,22 @@
       const selectionPanel = $("#lyricDiagnosticsSelectionPanel");
       const report = current.report;
       const track = current.track ?? report?.effectiveTrack ?? report?.originalTrack;
-      const title = diagnosticString(track?.title, "当前歌曲");
+      const title = diagnosticString(track?.title, window.taskbarLyricsI18n.t("UI_CurrentTrack"));
       const apply = current.apply;
-      let message = "尚未查找。点击“查找歌词”查看当前歌曲的匹配结果。";
-      if (current.status === "running") message = `正在查找“${title}”的歌词…`;
-      else if (current.status === "success") message = report?.selection ? "匹配完成，已找到可用歌词。" : "匹配完成，但没有候选通过完整校验。";
-      else if (current.status === "empty") message = diagnosticString(current.message, "当前没有可匹配的 SMTC 歌曲。");
-      else if (current.status === "error") message = diagnosticString(current.message, "歌词匹配失败，请稍后重试。");
-      if (apply?.status === "running") message = diagnosticString(apply.message, "正在应用当前歌词…");
-      else if (apply?.status === "success") message = diagnosticString(apply.message, "已应用当前歌词。");
-      else if (apply?.status === "error") message = diagnosticString(apply.message, "应用当前歌词失败。");
+      let message = window.taskbarLyricsI18n.t("UI_NoSearchYetClickFindLyricsToSeeMatches");
+      if (current.status === "running") message = window.taskbarLyricsI18n.format("UI_SearchingForLyricsFor", title);
+      else if (current.status === "success") message = report?.selection ? window.taskbarLyricsI18n.t("UI_MatchingCompleteUsableLyricsFound") : window.taskbarLyricsI18n.t("UI_MatchingCompleteNoCandidatePassedAllChecks");
+      else if (current.status === "empty") message = diagnosticString(current.message, window.taskbarLyricsI18n.t("UI_NoSMTCTrackAvailableForMatching"));
+      else if (current.status === "error") message = diagnosticString(current.message, window.taskbarLyricsI18n.t("UI_LyricMatchingFailedPleaseRetryLater"));
+      if (apply?.status === "running") message = diagnosticString(apply.message, window.taskbarLyricsI18n.t("UI_ApplyingCurrentLyrics"));
+      else if (apply?.status === "success") message = diagnosticString(apply.message, window.taskbarLyricsI18n.t("UI_CurrentLyricsApplied"));
+      else if (apply?.status === "error") message = diagnosticString(apply.message, window.taskbarLyricsI18n.t("UI_FailedToApplyCurrentLyrics"));
       status.dataset.state = apply?.status === "running" ? "running" : apply?.status === "error" ? "error" : apply?.status === "success" ? "success" : current.status;
       status.textContent = message;
       const applyBusy = current.apply?.status === "running";
       button.disabled = current.status === "running" || applyBusy;
       button.setAttribute("aria-busy", String(current.status === "running" || applyBusy));
-      button.innerHTML = current.status === "running" ? '<span class="spinner" aria-hidden="true"></span>查找中…' : current.status === "idle" ? "查找歌词" : "重新查找";
+      button.innerHTML = current.status === "running" ? `<span class="spinner" aria-hidden="true"></span>${window.taskbarLyricsI18n.t("UI_Searching")}` : current.status === "idle" ? window.taskbarLyricsI18n.t("UI_FindLyrics") : window.taskbarLyricsI18n.t("UI_SearchAgain");
 
       if (applyOnly) { updateLyricDiagnosticsApplyState(); return; }
       diagnosticApplyFocus = null;
@@ -742,7 +744,7 @@
       selectionPanel.hidden = !report || current.status !== "success";
       if (report && current.status === "success") {
         const capturedAt = formatDiagnosticTimestamp(report.capturedAtUtc);
-        $("#lyricDiagnosticsCapturedAt").textContent = capturedAt ? `捕获于 ${capturedAt}` : "";
+        $("#lyricDiagnosticsCapturedAt").textContent = capturedAt ? window.taskbarLyricsI18n.format("UI_CapturedAt", capturedAt) : "";
         renderLyricDiagnosticsProviders(report);
         renderLyricDiagnosticsVariants(report);
         renderLyricDiagnosticsSelection(report);
@@ -785,7 +787,7 @@
         status: status === "success" && !report ? "error" : status,
         track,
         report,
-        message: diagnosticString(payload.message, status === "success" && !report ? "匹配结果无效。" : ""),
+        message: diagnosticString(payload.message, status === "success" && !report ? window.taskbarLyricsI18n.t("UI_InvalidMatchingResult") : ""),
         apply
       };
       renderLyricDiagnosticsState(hasApply && report === previousReport && lyricDiagnosticsState.status === "success");
@@ -847,9 +849,9 @@
       trackOffsetData.totalCount = Number(payload.totalCount) || 0;
       trackOffsetData.unfilteredCount = Number(payload.unfilteredCount) || 0;
       const sources = [...new Set((payload.lyricSources ?? []).filter(Boolean))]
-        .sort((a, b) => sourceDisplayName(a).localeCompare(sourceDisplayName(b), "zh-CN"));
+        .sort((a, b) => sourceDisplayName(a).localeCompare(sourceDisplayName(b), window.taskbarLyricsI18n.locale));
       selectOptions.trackOffsetSourceFilter = [
-        { value: "All", label: "全部歌词源" },
+        { value: "All", label: window.taskbarLyricsI18n.t("UI_AllLyricSources") },
         ...sources.map(source => ({ value: source, label: sourceDisplayName(source) }))
       ];
       if (state && !selectOptions.trackOffsetSourceFilter.some(option => option.value === state.trackOffsetSourceFilter)) {
@@ -904,8 +906,8 @@
       $("#confirmAddPlayerSource").hidden = !adding;
       $("#savePlayerInfoButton").hidden = adding;
       if (adding) {
-        $("#playerSettingsTitle").textContent = "添加播放器";
-        $("#playerSettingsAdapter").textContent = "从媒体会话中选择播放器";
+        $("#playerSettingsTitle").textContent = window.taskbarLyricsI18n.t("UI_AddPlayer");
+        $("#playerSettingsAdapter").textContent = window.taskbarLyricsI18n.t("UI_ChooseAPlayerFromMediaSessions");
         $("#playerSettingsLogo").innerHTML = defaultPlayerIcon();
         $("#playerSettingsLogo").classList.remove("custom-player-icon");
         $("#playerRecognitionToggle").checked = newPlayerEnabled;
@@ -956,9 +958,9 @@
       list.innerHTML = providers.map((item, index) => {
         const name = lyricProviderDefaults.find(known => known.providerId === item.providerId).name;
         return `<div class="priority-item lyric-provider-item ${item.enabled ? "" : "disabled"}" data-lyric-provider-item="${item.providerId}">
-          <button class="drag-handle" type="button" draggable="true" data-lyric-provider-drag="${item.providerId}" aria-label="拖动 ${name} 调整信任顺序" aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="5" cy="4" r="1.2"/><circle cx="11" cy="4" r="1.2"/><circle cx="5" cy="8" r="1.2"/><circle cx="11" cy="8" r="1.2"/><circle cx="5" cy="12" r="1.2"/><circle cx="11" cy="12" r="1.2"/></svg></button>
+          <button class="drag-handle" type="button" draggable="true" data-lyric-provider-drag="${item.providerId}" aria-label="${window.taskbarLyricsI18n.t("UI_Drag")} ${name} ${window.taskbarLyricsI18n.t("UI_AdjustTrustOrder")}" aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="5" cy="4" r="1.2"/><circle cx="11" cy="4" r="1.2"/><circle cx="5" cy="8" r="1.2"/><circle cx="11" cy="8" r="1.2"/><circle cx="5" cy="12" r="1.2"/><circle cx="11" cy="12" r="1.2"/></svg></button>
           <span class="priority-number">${index + 1}</span><span class="priority-name">${name}</span>
-          <label class="switch"><input type="checkbox" data-lyric-provider-toggle="${item.providerId}" aria-label="启用 ${name} 在线歌词源" ${item.enabled ? "checked" : ""}><span class="switch-track"></span></label>
+          <label class="switch"><input type="checkbox" data-lyric-provider-toggle="${item.providerId}" aria-label="${window.taskbarLyricsI18n.t("UI_Enable")} ${name} ${window.taskbarLyricsI18n.t("UI_OnlineLyricSource")}" ${item.enabled ? "checked" : ""}><span class="switch-track"></span></label>
         </div>`;
       }).join("");
       $("#lyricProviderEmptyHint").hidden = providers.some(item => item.enabled);
@@ -972,7 +974,7 @@
       const index = providers.findIndex(item => item.providerId === providerId);
       if (index < 0) return;
       const name = lyricProviderDefaults.find(item => item.providerId === providerId).name;
-      $("#lyricProviderOrderAnnouncement").textContent = `${name} 已移至第 ${index + 1} 位，共 ${providers.length} 位`;
+      $("#lyricProviderOrderAnnouncement").textContent = window.taskbarLyricsI18n.format("UI_MovedToPositionOf", name, index + 1, providers.length);
     }
 
     function commitLyricProviders() {
@@ -1120,15 +1122,15 @@
 
     function markSaved() {
       $("#saveState").dataset.state = "applying";
-      $("#saveState").textContent = "正在应用…";
+      $("#saveState").textContent = window.taskbarLyricsI18n.t("UI_Applying");
     }
 
     function setSettingsSaveResult(payload = {}) {
       const success = payload.success === true;
       $("#saveState").dataset.state = success ? "success" : "error";
       $("#saveState").textContent = success
-        ? "更改已实时应用"
-        : "设置已应用，但保存失败；重启后可能恢复";
+        ? window.taskbarLyricsI18n.t("UI_ChangesAppliedImmediately")
+        : window.taskbarLyricsI18n.t("UI_SettingsAppliedButCouldNotBeSavedTheyMay");
     }
 
     function showToast(message) {
@@ -1155,9 +1157,9 @@
       const status = $("#spectrumAudioAccessStatus");
       const fallbackMessage = granted
         ? modeEnabled
-          ? "已允许；仅在频谱需要显示时读取系统播放声音。"
-          : "已允许；频谱关闭时不会读取系统播放声音。"
-        : "尚未允许读取系统播放声音。";
+          ? window.taskbarLyricsI18n.t("UI_AllowedSystemAudioIsCapturedOnlyWhileTheSpectrum")
+          : window.taskbarLyricsI18n.t("UI_AllowedSystemAudioIsNotCapturedWhileTheSpectrum")
+        : window.taskbarLyricsI18n.t("UI_SystemAudioCaptureHasNotBeenAllowed");
       status.textContent = spectrumCaptureState.message || fallbackMessage;
       status.dataset.state = spectrumCaptureState.state || (granted ? "waiting" : "notGranted");
       $("#retrySpectrumAudioAccessButton").hidden = !captureBlocked;
@@ -1165,21 +1167,21 @@
       const tuningAvailable = granted && modeEnabled;
       $("#spectrumTuningButton").disabled = !tuningAvailable;
       $("#spectrumTuningDescription").textContent = tuningAvailable
-        ? "打开滑块面板，实时调节频谱参数（自动保存）。"
+        ? window.taskbarLyricsI18n.t("UI_OpenSlidersToAdjustSpectrumParametersLiveChangesSave")
         : granted
-          ? "请先在“歌词”页将“显示频谱”改为非关闭模式。"
-          : "请先在“歌词”页启用频谱并允许读取系统播放声音。";
+          ? window.taskbarLyricsI18n.t("UI_ChooseASpectrumModeOtherThanOffOnThe")
+          : window.taskbarLyricsI18n.t("UI_EnableTheSpectrumAndAllowSystemAudioCaptureOn");
     }
 
     function requestSpectrumDisplayMode(mode) {
       if (!state || !selectOptions.spectrumDisplayMode.some(option => option.value === mode)) return;
       if (mode === "Disabled") {
-        spectrumCaptureState = { state: "disabled", message: "频谱已关闭，不会读取系统播放声音。" };
+        spectrumCaptureState = { state: "disabled", message: window.taskbarLyricsI18n.t("UI_SpectrumIsOffSystemAudioIsNotBeingCaptured") };
         commitSetting("spectrumDisplayMode", mode);
         return;
       }
       if (state.spectrumAudioAccessGranted) {
-        spectrumCaptureState = { state: "waiting", message: "已允许；仅在频谱需要显示时读取系统播放声音。" };
+        spectrumCaptureState = { state: "waiting", message: window.taskbarLyricsI18n.t("UI_AllowedSystemAudioIsCapturedOnlyWhileTheSpectrum") };
         commitSetting("spectrumDisplayMode", mode);
         return;
       }
@@ -1197,7 +1199,7 @@
       };
       renderSpectrumAudioAccess();
       if (spectrumCaptureState.state === "blocked" && state?.spectrumAudioAccessGranted && state.spectrumDisplayMode !== "Disabled") {
-        $("#spectrumCaptureFailureMessage").textContent = spectrumCaptureState.message || "系统音频采集被系统或安全软件阻止，歌词显示不受影响。";
+        $("#spectrumCaptureFailureMessage").textContent = spectrumCaptureState.message || window.taskbarLyricsI18n.t("UI_AudioCaptureIsBlockedByWindowsOrSecuritySoftware");
         const dialog = $("#spectrumCaptureFailureDialog");
         if (!dialog.open) dialog.showModal();
       }
@@ -1239,7 +1241,7 @@
     function syncSelectTrigger(trigger) {
       const options = selectOptions[trigger.dataset.setting] ?? [];
       const selected = options.find(option => String(option.value) === String(state[trigger.dataset.setting]));
-      trigger.querySelector(".select-trigger-value").textContent = selected?.label ?? "请选择";
+      trigger.querySelector(".select-trigger-value").textContent = selected?.label ?? window.taskbarLyricsI18n.t("UI_Select");
     }
 
     function syncWindowModeSelection() {
@@ -1274,17 +1276,17 @@
       const focusKey = focusAttribute ? document.activeElement.getAttribute(focusAttribute) : null;
       const recordingKey = activeHotkeyRecorder?.dataset.hotkeyBinding;
       const enabled = Boolean(state.enableGlobalMediaHotkeys);
-      $("#mediaHotkeyMasterStatus").textContent = enabled ? "已启用" : "已关闭";
+      $("#mediaHotkeyMasterStatus").textContent = enabled ? window.taskbarLyricsI18n.t("UI_Enabled") : window.taskbarLyricsI18n.t("UI_Off");
       $("#mediaHotkeyList").innerHTML = (state.mediaHotkeys ?? []).map(definition => `
-        <div class="media-hotkey-row"><div class="setting-label"><strong>${escapeHtml(definition.displayName)}</strong></div><div class="media-hotkey-controls"><button class="control media-hotkey-recorder" type="button" data-hotkey-binding="${escapeHtml(definition.settingKey)}" aria-label="录制${escapeHtml(definition.displayName)}快捷键"></button><output class="media-hotkey-status" data-hotkey-status="${escapeHtml(definition.statusKey)}" aria-live="polite"></output><div class="media-hotkey-actions"><label class="switch"><input type="checkbox" data-hotkey-enabled="${escapeHtml(definition.settingKey)}" aria-label="启用${escapeHtml(definition.displayName)}快捷键" ${definition.isEnabled !== false ? "checked" : ""}><span class="switch-track"></span></label><button class="btn ghost small" type="button" data-hotkey-clear="${escapeHtml(definition.settingKey)}" aria-label="清空${escapeHtml(definition.displayName)}快捷键">清空</button><button class="btn ghost small media-hotkey-reset" type="button" data-hotkey-reset="${escapeHtml(definition.action)}" aria-label="恢复${escapeHtml(definition.displayName)}默认快捷键">恢复</button></div></div></div>`).join("");
+        <div class="media-hotkey-row"><div class="setting-label"><strong>${escapeHtml(definition.displayName)}</strong></div><div class="media-hotkey-controls"><button class="control media-hotkey-recorder" type="button" data-hotkey-binding="${escapeHtml(definition.settingKey)}" aria-label="${window.taskbarLyricsI18n.t("UI_Record")}${escapeHtml(definition.displayName)}${window.taskbarLyricsI18n.t("UI_Shortcuts")}"></button><output class="media-hotkey-status" data-hotkey-status="${escapeHtml(definition.statusKey)}" aria-live="polite"></output><div class="media-hotkey-actions"><label class="switch"><input type="checkbox" data-hotkey-enabled="${escapeHtml(definition.settingKey)}" aria-label="${window.taskbarLyricsI18n.t("UI_Enable")}${escapeHtml(definition.displayName)}${window.taskbarLyricsI18n.t("UI_Shortcuts")}" ${definition.isEnabled !== false ? "checked" : ""}><span class="switch-track"></span></label><button class="btn ghost small" type="button" data-hotkey-clear="${escapeHtml(definition.settingKey)}" aria-label="${window.taskbarLyricsI18n.t("UI_Clear")}${escapeHtml(definition.displayName)}${window.taskbarLyricsI18n.t("UI_Shortcuts")}">${window.taskbarLyricsI18n.t("UI_Clear")}</button><button class="btn ghost small media-hotkey-reset" type="button" data-hotkey-reset="${escapeHtml(definition.action)}" aria-label="${window.taskbarLyricsI18n.t("UI_Restore")}${escapeHtml(definition.displayName)}${window.taskbarLyricsI18n.t("UI_DefaultShortcut")}">${window.taskbarLyricsI18n.t("UI_Restore")}</button></div></div></div>`).join("");
       activeHotkeyRecorder = recordingKey
         ? [...$$('[data-hotkey-binding]')].find(button => button.dataset.hotkeyBinding === recordingKey) ?? null : null;
       if (activeHotkeyRecorder) {
         activeHotkeyRecorder.classList.add("recording");
-        activeHotkeyRecorder.textContent = "按下组合键…";
+        activeHotkeyRecorder.textContent = window.taskbarLyricsI18n.t("UI_PressAKeyCombination");
       }
       $$('[data-hotkey-binding]').forEach(button => {
-        if (button !== activeHotkeyRecorder) button.textContent = state[button.dataset.hotkeyBinding] || "未设置";
+        if (button !== activeHotkeyRecorder) button.textContent = state[button.dataset.hotkeyBinding] || window.taskbarLyricsI18n.t("UI_NotSet");
       });
       $$('[data-hotkey-status]').forEach(output => {
         const definition = state.mediaHotkeys.find(item => item.statusKey === output.dataset.hotkeyStatus);
@@ -1301,13 +1303,13 @@
     function renderDisplayMonitorOption(display, mode, selected) {
       const displayId = escapeHtml(display.id);
       const displayName = escapeHtml(display.name);
-      const primaryBadge = display.isPrimary ? '<span class="monitor-badge">主显示器</span>' : "";
+      const primaryBadge = display.isPrimary ? `<span class="monitor-badge">${window.taskbarLyricsI18n.t("UI_PrimaryDisplay")}</span>` : "";
       const copy = `<span class="monitor-option-copy"><span class="monitor-option-title"><strong title="${displayName}">${displayName}</strong>${primaryBadge}</span><small>${Number(display.width) || 0} × ${Number(display.height) || 0}</small></span>`;
       if (mode === "All") {
         return `<div class="monitor-option is-readonly" data-display-id="${displayId}">${copy}</div>`;
       }
 
-      return `<label class="monitor-option">${copy}<input type="checkbox" data-display-id="${displayId}" ${selected.has(display.id) ? "checked" : ""} aria-label="在 ${displayName} 显示歌词"></label>`;
+      return `<label class="monitor-option">${copy}<input type="checkbox" data-display-id="${displayId}" ${selected.has(display.id) ? "checked" : ""} aria-label="${window.taskbarLyricsI18n.t("UI_On")} ${displayName} ${window.taskbarLyricsI18n.t("UI_ShowLyrics")}"></label>`;
     }
 
     function renderDisplayMonitors() {
@@ -1321,19 +1323,19 @@
       list.dataset.mode = mode;
       list.innerHTML = displays.length
         ? displays.map(display => renderDisplayMonitorOption(display, mode, selected)).join("")
-        : '<div class="monitor-hint">暂未检测到显示器。</div>';
+        : `<div class="monitor-hint">${window.taskbarLyricsI18n.t("UI_NoDisplaysDetected")}</div>`;
       const focusedDisplay = [...list.querySelectorAll("input[data-display-id]")]
         .find(control => control.dataset.displayId === focusedDisplayId);
       focusedDisplay?.focus({ preventScroll: true });
       const connectedIds = new Set(displays.map(display => display.id));
       const connectedSelectedCount = [...selected].filter(id => connectedIds.has(id)).length;
       $("#displayMonitorHint").textContent = displays.length === 0
-        ? "连接显示器后，此列表将自动更新。"
+        ? window.taskbarLyricsI18n.t("UI_ThisListUpdatesAutomaticallyWhenDisplaysAreConnected")
         : mode === "All"
-          ? `已连接 ${displays.length} 台显示器，歌词将在全部显示器显示。`
+          ? window.taskbarLyricsI18n.format("UI_DisplaysConnectedLyricsWillAppearOnAllDisplays", displays.length)
           : connectedSelectedCount > 0
-            ? `已选择 ${connectedSelectedCount}/${displays.length} 台显示器。`
-            : "未选择显示器时，将临时显示在主显示器。";
+            ? window.taskbarLyricsI18n.format("UI_DisplaysSelected", connectedSelectedCount, displays.length)
+            : window.taskbarLyricsI18n.t("UI_IfNoneAreSelectedLyricsTemporarilyAppearOnThe");
     }
 
     function cancelHotkeyRecording() {
@@ -1348,7 +1350,7 @@
       cancelHotkeyRecording();
       activeHotkeyRecorder = button;
       button.classList.add("recording");
-      button.textContent = "按下组合键…";
+      button.textContent = window.taskbarLyricsI18n.t("UI_PressAKeyCombination");
       button.focus({ preventScroll: true });
     }
 
@@ -1400,10 +1402,10 @@
       return `#FF${normalized.slice(1)}`;
     }
 
-    function setState(nextState, fonts = []) {
+    function setState(nextState, fonts = [], languages = []) {
       pendingRangePreviews.clear();
       liveRangeValues.clear();
-      const previousPage = state?.page ?? "sources";
+      const previousPage = state?.page ?? (initialPageId || "sources");
       const previousCustom = state?.customForegroundColor;
       const previousTrackOffsetSourceFilter = state?.trackOffsetSourceFilter ?? "All";
       const previousTrackOffsetSort = state?.trackOffsetSort ?? "updated";
@@ -1413,6 +1415,12 @@
         trackOffsetSourceFilter: previousTrackOffsetSourceFilter,
         trackOffsetSort: previousTrackOffsetSort
       }, foregroundColor);
+      const uiLanguageOptions = (Array.isArray(languages) ? languages : [])
+        .filter(option => option && typeof option.value === "string" && typeof option.name === "string" && option.name.length > 0)
+        .map(option => ({ value: option.value, label: option.name }));
+      selectOptions.uiLanguage = uiLanguageOptions;
+      if (uiLanguageOptions.length > 0 && !uiLanguageOptions.some(option => option.value === state.uiLanguage)) state.uiLanguage = "";
+      $("#uiLanguageRow")?.toggleAttribute("hidden", uiLanguageOptions.length === 0);
       const incomingOffsets = nextState.playerLyricOffsets ?? {};
       const incomingDefaults = nextState.defaultPlayerLyricOffsets ?? {};
       const defaultOffsetFor = source => {
@@ -1485,7 +1493,7 @@
       setAvailableFonts(fonts);
       const version = nextState.appVersion || "--";
       $(".version-badge").textContent = `Version ${version}`;
-      if (updateState === "idle") $("#updateStatusDetail").textContent = `当前版本 ${version}`;
+      if (updateState === "idle") $("#updateStatusDetail").textContent = window.taskbarLyricsI18n.format("UI_CurrentVersion_14", version);
       refresh();
     }
 
@@ -1571,7 +1579,7 @@
           (key === "controlPanelTriggerLyrics" && !(state.showCover !== false && state.controlPanelTriggerCover) ||
            key === "controlPanelTriggerCover" && !state.controlPanelTriggerLyrics)) {
         syncControls();
-        showToast("至少选择一个可用触发区域。");
+        showToast(window.taskbarLyricsI18n.t("UI_SelectAtLeastOneAvailableActivationArea"));
         return;
       }
       pendingRangePreviews.delete(key);
@@ -1752,14 +1760,14 @@
       const checkButton = $("#checkUpdateButton");
       const releaseButton = $("#openReleaseButton");
       const version = state?.appVersion ?? "--";
-      title.textContent = status === "checking" ? "正在检查更新…"
-        : status === "available" ? `发现新版本 ${payload.version ?? ""}`
-        : status === "latest" ? "当前已是最新版本"
-        : status === "error" ? "检查更新失败"
-        : "尚未检查更新";
-      detail.textContent = payload.message || `当前版本 ${version}`;
+      title.textContent = status === "checking" ? window.taskbarLyricsI18n.t("UI_CheckingForUpdates")
+        : status === "available" ? window.taskbarLyricsI18n.format("UI_NewVersionAvailable", payload.version ?? "")
+        : status === "latest" ? window.taskbarLyricsI18n.t("UI_YouAreUpToDate")
+        : status === "error" ? window.taskbarLyricsI18n.t("UI_UpdateCheckFailed")
+        : window.taskbarLyricsI18n.t("UI_UpdatesNotCheckedYet");
+      detail.textContent = payload.message || window.taskbarLyricsI18n.format("UI_CurrentVersion_14", version);
       checkButton.disabled = status === "checking";
-      checkButton.innerHTML = status === "checking" ? '<span class="spinner" aria-hidden="true"></span>检查中' : status === "available" ? "重新检查" : "检查更新";
+      checkButton.innerHTML = status === "checking" ? `<span class="spinner" aria-hidden="true"></span>${window.taskbarLyricsI18n.t("UI_Checking")}` : status === "available" ? window.taskbarLyricsI18n.t("UI_CheckAgain") : window.taskbarLyricsI18n.t("UI_CheckForUpdates");
       releaseButton.hidden = status !== "available";
       updateReleaseUrl = payload.url ?? "";
     }
@@ -1851,7 +1859,7 @@
       if ($("[data-floating-width]")) $("[data-floating-width]").textContent = `${formatLayoutMetric(state.floatingWindowWidth)} px`;
       const appearanceSummary = $("[data-embedded-appearance-summary]");
       if (appearanceSummary) {
-        appearanceSummary.textContent = `背景${state.showBackground ? "开启" : "关闭"} · 边框${state.showBorder ? "开启" : "关闭"}`;
+        appearanceSummary.textContent = window.taskbarLyricsI18n.format("UI_BackgroundBorder", state.showBackground ? window.taskbarLyricsI18n.t("UI_On_15") : window.taskbarLyricsI18n.t("UI_Close"), state.showBorder ? window.taskbarLyricsI18n.t("UI_On_15") : window.taskbarLyricsI18n.t("UI_Close"));
         appearanceSummary.title = appearanceSummary.textContent;
       }
       if ($("[data-floating-scale]")) $("[data-floating-scale]").textContent = `${formatLayoutMetric(state.floatingLyricsLayoutScalePercent)}%`;
@@ -1860,7 +1868,7 @@
         $("[data-effective-font-size]").textContent = `${formatLayoutMetric(state.effectiveFontSize)} px`;
         $("[data-effective-cover-size]").textContent = showCover
           ? `${formatLayoutMetric(state.effectiveCoverSize)} px`
-          : "已隐藏";
+          : window.taskbarLyricsI18n.t("UI_Hidden");
         $("[data-effective-cover-gap]").textContent = `${formatLayoutMetric(state.effectiveCoverGap)} px`;
         $("[data-effective-cover-gap-item]").hidden = !showCover;
       }
@@ -1880,7 +1888,7 @@
     function formatLayoutMetric(value) {
       const numeric = Number(value);
       return Number.isFinite(numeric)
-        ? numeric.toLocaleString("zh-CN", { maximumFractionDigits: 2 })
+        ? numeric.toLocaleString(window.taskbarLyricsI18n.locale, { maximumFractionDigits: 2 })
         : "--";
     }
 
@@ -1909,9 +1917,9 @@
       updateOutputs();
       if (announceNextLayoutPreview) {
         const coverAnnouncement = state.showCover === false
-          ? "封面已隐藏。"
-          : `封面 ${formatLayoutMetric(state.effectiveCoverSize)} 像素，间距 ${formatLayoutMetric(state.effectiveCoverGap)} 像素。`;
-        $("#layoutScaleAnnouncement").textContent = `歌词区域缩放已设为 ${formatLayoutMetric(state.lyricsLayoutScalePercent)}%，实际字号 ${formatLayoutMetric(state.effectiveFontSize)} 像素，${coverAnnouncement}`;
+          ? window.taskbarLyricsI18n.t("UI_CoverArtHidden")
+          : window.taskbarLyricsI18n.format("UI_CoverPxSpacingPx", formatLayoutMetric(state.effectiveCoverSize), formatLayoutMetric(state.effectiveCoverGap));
+        $("#layoutScaleAnnouncement").textContent = window.taskbarLyricsI18n.format("UI_LyricScaleSetToEffectiveFontSizePx", formatLayoutMetric(state.lyricsLayoutScalePercent), formatLayoutMetric(state.effectiveFontSize), coverAnnouncement);
         announceNextLayoutPreview = false;
       }
     }
@@ -2165,7 +2173,7 @@
         }
         const binding = getRecordedHotkey(event);
         if (!binding) {
-          if (!["Control", "Alt", "Shift", "Meta"].includes(event.key)) activeHotkeyRecorder.textContent = "请使用 Ctrl、Alt 或 Shift";
+          if (!["Control", "Alt", "Shift", "Meta"].includes(event.key)) activeHotkeyRecorder.textContent = window.taskbarLyricsI18n.t("UI_UseCtrlAltOrShift");
           return;
         }
         const button = activeHotkeyRecorder;
@@ -2481,7 +2489,7 @@
 
     $("#sidebarToggle").addEventListener("click", () => {
       const collapsed = $("#appShell").classList.toggle("sidebar-collapsed");
-      $("#sidebarToggle").setAttribute("aria-label", collapsed ? "展开侧栏" : "折叠侧栏");
+      $("#sidebarToggle").setAttribute("aria-label", collapsed ? window.taskbarLyricsI18n.t("UI_ExpandSidebar") : window.taskbarLyricsI18n.t("UI_CollapseSidebar"));
     });
     $$("dialog").forEach(d => d.addEventListener("cancel", event => {
       if (event.target !== d) return;
@@ -2491,7 +2499,7 @@
     $("#restoreButton").addEventListener("click", () => $("#restoreDialog").showModal());
     $("#clearCacheButton").addEventListener("click", () => $("#clearDialog").showModal());
     $("#confirmRestore").addEventListener("click", () => { closeDialogWithAnimation($("#restoreDialog")); resetState(); });
-    $("#confirmClear").addEventListener("click", () => { closeDialogWithAnimation($("#clearDialog")); bridge.post({ type: "clearCache" }); showToast("歌词、封面缓存及指定记录已清理"); });
+    $("#confirmClear").addEventListener("click", () => { closeDialogWithAnimation($("#clearDialog")); bridge.post({ type: "clearCache" }); showToast(window.taskbarLyricsI18n.t("UI_LyricCacheCoverCacheAndSavedSelectionsCleared")); });
     $("#confirmSpectrumAudioAccess").addEventListener("click", () => {
       const mode = pendingSpectrumDisplayMode;
       if (!mode) return;
@@ -2506,7 +2514,7 @@
       markSaved();
     });
     $$('[data-retry-spectrum-capture]').forEach(button => button.addEventListener("click", () => {
-      spectrumCaptureState = { state: "waiting", message: "正在重试系统音频采集…" };
+      spectrumCaptureState = { state: "waiting", message: window.taskbarLyricsI18n.t("UI_RetryingSystemAudioCapture") };
       renderSpectrumAudioAccess();
       closeDialogWithAnimation($("#spectrumCaptureFailureDialog"));
       bridge.post({ type: "retrySpectrumCapture" });
@@ -2565,7 +2573,7 @@
       lyricDiagnosticsState.apply = {
         status: "running",
         key,
-        message: mode === "remember" ? "正在获取、应用并写入歌词缓存…" : "正在获取并应用歌词…"
+        message: mode === "remember" ? window.taskbarLyricsI18n.t("UI_FetchingApplyingAndCachingLyrics") : window.taskbarLyricsI18n.t("UI_FetchingAndApplyingLyrics")
       };
       renderLyricDiagnosticsState(true);
       bridge.post({
@@ -2577,7 +2585,7 @@
     $("#repositoryButton").addEventListener("click", openRepository);
     $$('[data-repository-link]').forEach(button => button.addEventListener("click", openRepository));
     $("#checkUpdateButton").addEventListener("click", () => {
-      setUpdateStatus({ state: "checking", message: "正在连接 GitHub Releases" });
+      setUpdateStatus({ state: "checking", message: window.taskbarLyricsI18n.t("UI_ConnectingToGitHubReleases") });
       bridge.post({ type: "checkForUpdates" });
     });
     $("#openReleaseButton").addEventListener("click", () => { if (updateReleaseUrl) bridge.post({ type: "openExternalLink", value: updateReleaseUrl }); });
@@ -2607,7 +2615,7 @@
       else if (actionType === "close") bridge.post({ type: "windowClose" });
     });
 
-    $("#colorPresets").innerHTML = presetColors.map(color => `<button class="color-preset" type="button" style="--preset:${color}" data-preset-color-value="${color}" aria-label="选择 ${color}"></button>`).join("");
+    $("#colorPresets").innerHTML = presetColors.map(color => `<button class="color-preset" type="button" style="--preset:${color}" data-preset-color-value="${color}" aria-label="${window.taskbarLyricsI18n.t("UI_Select_16")} ${color}"></button>`).join("");
     $("#addPlayerSourceButton").addEventListener("click", openAddPlayerDrawer);
     $("#refreshPlayerSessionsButton").addEventListener("click", () => requestPlayerSessions());
     $("#availablePlayerSessions").addEventListener("click", event => {
@@ -2630,7 +2638,7 @@
       const file = event.target.files?.[0];
       if (!file) return;
       if (!["image/png", "image/jpeg", "image/webp"].includes(file.type) || file.size > 128 * 1024 || file.size === 0) {
-        $("#customPlayerIconStatus").textContent = "请选择不超过 128 KB 的 PNG、JPEG 或 WebP 图片。";
+        $("#customPlayerIconStatus").textContent = window.taskbarLyricsI18n.t("UI_ChooseAPNGJPEGOrWebPImageUpTo");
         event.target.value = "";
         return;
       }
@@ -2650,7 +2658,7 @@
       reader.onerror = () => {
         if (readToken !== playerIconReadToken) return;
         playerIconReading = false;
-        $("#customPlayerIconStatus").textContent = "图标读取失败，请重试。";
+        $("#customPlayerIconStatus").textContent = window.taskbarLyricsI18n.t("UI_CannotReadTheIconPleaseRetry");
         event.target.value = "";
         updateAddPlayerButton();
       };
@@ -2662,7 +2670,7 @@
       playerInfoBusy = true;
       updateAddPlayerButton();
       bridge.post({ type: "addPlayerSource", value: playerInfoPayload() });
-      $("#playerDiscoveryStatus").textContent = "正在添加播放器…";
+      $("#playerDiscoveryStatus").textContent = window.taskbarLyricsI18n.t("UI_AddingPlayer");
     });
     $("#savePlayerInfoButton").addEventListener("click", () => {
       if ($("#savePlayerInfoButton").disabled) return;
@@ -2682,7 +2690,7 @@
       if (message?.version !== 1 || !message.type) return;
       switch (message.type) {
         case "settingsState":
-          setState(message.payload?.settings ?? {}, message.payload?.fonts ?? []);
+          setState(message.payload?.settings ?? {}, message.payload?.fonts ?? [], message.payload?.uiLanguages ?? []);
           break;
         case "playerSessions":
           renderAvailablePlayerSessions(message.payload);
@@ -2690,8 +2698,8 @@
         case "playerSourceActionResult":
           pendingPlayerSourceAction = null;
           playerInfoBusy = false;
-          if (playerDrawerMode === "add") $("#playerDiscoveryStatus").textContent = message.payload?.message ?? "操作未完成，请重试。";
-          else showToast(message.payload?.message ?? "操作未完成，请重试。");
+          if (playerDrawerMode === "add") $("#playerDiscoveryStatus").textContent = message.payload?.message ?? window.taskbarLyricsI18n.t("UI_OperationIncompletePleaseRetry");
+          else showToast(message.payload?.message ?? window.taskbarLyricsI18n.t("UI_OperationIncompletePleaseRetry"));
           updateAddPlayerButton();
           break;
         case "lyricsLayoutPreview":
@@ -2730,6 +2738,29 @@
       }
     }
 
+    function applyInitialPage(pageId) {
+      const pages = $$("[data-page]");
+      const nextPage = pages.find(page => page.dataset.page === pageId);
+      if (!nextPage) return;
+      pages.forEach(page => {
+        page.classList.remove("transitioning");
+        page.classList.toggle("active", page === nextPage);
+        page.style.transform = "";
+      });
+      setPageInteractionState(pages, nextPage);
+      $$("[data-nav]").forEach(button => {
+        const active = button.dataset.nav === pageId;
+        button.classList.toggle("active", active);
+        if (active) button.setAttribute("aria-current", "page");
+        else button.removeAttribute("aria-current");
+      });
+      $("#pageTitle").textContent = pageMeta[pageId][0];
+      $("#pageSubtitle").textContent = pageMeta[pageId][1];
+    }
+
+    initialPageId = typeof window.taskbarLyricsInitialPage === "string" ? window.taskbarLyricsInitialPage : "";
+    if (pageMeta[initialPageId]) applyInitialPage(initialPageId);
+    document.documentElement.removeAttribute("data-settings-boot");
     initializeGettingStarted();
     window.settingsApp = { receive };
     setPageInteractionState($$("[data-page]"), document.querySelector("[data-page].active"));

@@ -250,6 +250,8 @@
     .page { display: none; position: absolute; inset: 0; height: 100%; overflow: auto; padding: 22px 28px 30px; background: var(--background); }
     .page.active, .page.transitioning { display: block; }
     .page.active { z-index: 1; }
+    html[data-settings-boot="pending"] .page-stack,
+    html[data-settings-boot="pending"] .title-block { visibility: hidden; }
     .page.transitioning { z-index: 2; pointer-events: none; }
     .page-inner { min-width: 0; width: 100%; display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
 
@@ -768,6 +770,7 @@
     #customPlayerIconPreview .preset-player-icon { width: 34px; height: 34px; }
     #customPlayerIconPreview img { width: 40px; height: 40px; object-fit: contain; border-radius: 5px; }
     #customPlayerIcon[hidden] { display: none; }
+    #uiLanguageRow[hidden] { display: none; }
     #clearCustomPlayerIconButton[hidden] { display: none; }
     #confirmAddPlayerSource[hidden], #savePlayerInfoButton[hidden] { display: none; }
     .player-icon-meta { display: flex; align-items: center; justify-content: space-between; gap: 6px; }

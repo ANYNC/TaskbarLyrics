@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { JSDOM } from "jsdom";
+import { JSDOM } from "./helpers/localized-dom.js";
 import { describe, expect, it, vi } from "vitest";
 
 async function createPresentation({ reducedMotion = false } = {}) {

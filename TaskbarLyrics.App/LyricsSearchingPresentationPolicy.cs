@@ -19,9 +19,9 @@ internal static class LyricsSearchingPresentationPolicy
 
         if (current.Length == 0)
         {
-            current = LyricSyncService.SearchingText;
+            current = Text.T("UI_SearchingForLyrics");
         }
 
-        return new LyricsSearchingPresentation(current, LyricSyncService.SearchingText);
+        return new LyricsSearchingPresentation(current, Text.T("UI_SearchingForLyrics"));
     }
 }

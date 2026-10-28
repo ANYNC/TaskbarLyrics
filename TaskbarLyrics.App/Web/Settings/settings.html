@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-settings-boot="pending">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>TaskbarLyrics 设置</title>
+  <title>{{UI_TaskbarLyricsSettings}}</title>
   <link rel="stylesheet" href="settings.css">
   <link rel="stylesheet" href="player-compatibility.css">
 </head>
@@ -21,38 +21,38 @@
   </div>
 
   <div id="appShell" class="app-shell">
-    <aside class="sidebar" aria-label="设置导航">
+    <aside class="sidebar" aria-label="{{UI_SettingsNavigation}}">
       <div class="brand" data-caption-drag>
         <div class="brand-mark" aria-hidden="true">TL</div>
-        <div class="brand-copy"><strong>TaskbarLyrics</strong><small>桌面歌词工具</small></div>
+        <div class="brand-copy"><strong>TaskbarLyrics</strong><small>{{UI_DesktopLyrics}}</small></div>
       </div>
 
       <nav class="nav">
-        <button class="nav-item" data-nav="gettingStarted" data-tooltip="开始使用" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 10 7-10 7Z"/></svg><span>开始使用</span></button>
-        <button class="nav-item active" aria-current="page" data-nav="sources" data-tooltip="播放源" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4v16M10 7h8M10 12h8M10 17h5"/></svg><span>播放源</span></button>
-        <button class="nav-item" data-nav="lyrics" data-tooltip="歌词" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M4 12h16M4 17h12"/></svg><span>歌词</span></button>
-        <button class="nav-item" data-nav="displayArea" data-tooltip="显示与外观" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg><span>显示与外观</span></button>
-        <button class="nav-item" data-nav="general" data-tooltip="常规" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1l2-1.5-2-3.4-2.4 1A8 8 0 0 0 15 6l-.3-2.6h-4L10.4 6A8 8 0 0 0 9 7.1l-2.4-1-2 3.4L6.7 11a7 7 0 0 0 0 2l-2.1 1.5 2 3.4 2.4-1a8 8 0 0 0 1.4.8l.3 2.9h4l.3-2.9a8 8 0 0 0 1.4-.8l2.4 1 2-3.4-2-1.5c.1-.3.2-.7.2-1Z"/></svg><span>常规</span></button>
-        <button class="nav-item" data-nav="shortcuts" data-tooltip="快捷键" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10h.01M10 10h.01M13 10h4M7 14h6M16 14h1"/></svg><span>快捷键</span></button>
-        <button class="nav-item" data-nav="trackOffsets" data-tooltip="单曲偏移" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M4 12h16M4 17h9"/><path d="M18 15v6M15 18h6"/></svg><span>单曲偏移</span></button>
-        <button class="nav-item" data-nav="advanced" data-tooltip="高级" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 4-4 16M5 8l-3 4 3 4M19 8l3 4-3 4"/></svg><span>高级</span></button>
-        <button class="nav-item" data-nav="lyricDiagnostics" data-tooltip="歌词匹配" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4z"/><path d="M8 9h8M8 13h5"/><circle cx="17" cy="16" r="3"/><path d="m19.2 18.2 1.8 1.8"/></svg><span>歌词匹配</span></button>
-        <button class="nav-item" data-nav="about" data-tooltip="关于" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg><span>关于</span></button>
+        <button class="nav-item" data-nav="gettingStarted" data-tooltip="{{UI_GetStarted}}" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 10 7-10 7Z"/></svg><span>{{UI_GetStarted}}</span></button>
+        <button class="nav-item active" aria-current="page" data-nav="sources" data-tooltip="{{UI_Sources}}" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4v16M10 7h8M10 12h8M10 17h5"/></svg><span>{{UI_Sources}}</span></button>
+        <button class="nav-item" data-nav="lyrics" data-tooltip="{{UI_Lyrics}}" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M4 12h16M4 17h12"/></svg><span>{{UI_Lyrics}}</span></button>
+        <button class="nav-item" data-nav="displayArea" data-tooltip="{{UI_DisplayAppearance}}" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg><span>{{UI_DisplayAppearance}}</span></button>
+        <button class="nav-item" data-nav="general" data-tooltip="{{UI_General}}" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1l2-1.5-2-3.4-2.4 1A8 8 0 0 0 15 6l-.3-2.6h-4L10.4 6A8 8 0 0 0 9 7.1l-2.4-1-2 3.4L6.7 11a7 7 0 0 0 0 2l-2.1 1.5 2 3.4 2.4-1a8 8 0 0 0 1.4.8l.3 2.9h4l.3-2.9a8 8 0 0 0 1.4-.8l2.4 1 2-3.4-2-1.5c.1-.3.2-.7.2-1Z"/></svg><span>{{UI_General}}</span></button>
+        <button class="nav-item" data-nav="shortcuts" data-tooltip="{{UI_Shortcuts}}" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10h.01M10 10h.01M13 10h4M7 14h6M16 14h1"/></svg><span>{{UI_Shortcuts}}</span></button>
+        <button class="nav-item" data-nav="trackOffsets" data-tooltip="{{UI_TrackOffsets}}" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M4 12h16M4 17h9"/><path d="M18 15v6M15 18h6"/></svg><span>{{UI_TrackOffsets}}</span></button>
+        <button class="nav-item" data-nav="advanced" data-tooltip="{{UI_Advanced}}" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 4-4 16M5 8l-3 4 3 4M19 8l3 4-3 4"/></svg><span>{{UI_Advanced}}</span></button>
+        <button class="nav-item" data-nav="lyricDiagnostics" data-tooltip="{{UI_LyricMatching}}" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4z"/><path d="M8 9h8M8 13h5"/><circle cx="17" cy="16" r="3"/><path d="m19.2 18.2 1.8 1.8"/></svg><span>{{UI_LyricMatching}}</span></button>
+        <button class="nav-item" data-nav="about" data-tooltip="{{UI_About}}" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg><span>{{UI_About}}</span></button>
       </nav>
 
       <div class="sidebar-footer">
-        <button id="restoreButton" class="btn secondary sidebar-footer-action" type="button" data-tooltip="恢复默认" aria-label="恢复默认"><svg class="sidebar-footer-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8.1 8.1 0 0 0-15.5-2"/><path d="M4 5v4h4"/><path d="M4 13a8.1 8.1 0 0 0 15.5 2"/><path d="M20 19v-4h-4"/></svg><span class="sidebar-footer-label">恢复默认</span></button>
-        <button id="sidebarToggle" class="icon-button" type="button" aria-label="折叠侧栏"><svg id="collapseIcon" viewBox="0 0 24 24"><path d="m14.5 6-6 6 6 6"/></svg></button>
+        <button id="restoreButton" class="btn secondary sidebar-footer-action" type="button" data-tooltip="{{UI_RestoreDefaults}}" aria-label="{{UI_RestoreDefaults}}"><svg class="sidebar-footer-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8.1 8.1 0 0 0-15.5-2"/><path d="M4 5v4h4"/><path d="M4 13a8.1 8.1 0 0 0 15.5 2"/><path d="M20 19v-4h-4"/></svg><span class="sidebar-footer-label">{{UI_RestoreDefaults}}</span></button>
+        <button id="sidebarToggle" class="icon-button" type="button" aria-label="{{UI_CollapseSidebar}}"><svg id="collapseIcon" viewBox="0 0 24 24"><path d="m14.5 6-6 6 6 6"/></svg></button>
       </div>
     </aside>
 
     <main class="workspace">
       <header class="topbar" data-caption-drag>
-        <div class="title-block"><h1 id="pageTitle">播放源</h1><div class="title-sub"><p id="pageSubtitle">选择需要监听的音乐软件，并配置各播放器的歌词设置。</p><span id="saveState" class="save-state" data-state="success" aria-live="polite">更改已实时应用</span></div></div>
-        <div class="caption-controls" role="group" aria-label="窗口控制">
-          <button class="caption-button" type="button" data-window-action="minimize" aria-label="最小化"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6h8"/></svg></button>
-          <button class="caption-button" type="button" data-window-action="maximize" aria-label="最大化"><svg class="caption-glyph-max" viewBox="0 0 12 12" aria-hidden="true"><rect x="3" y="3" width="6" height="6" rx="1"/></svg><svg class="caption-glyph-restore" viewBox="0 0 12 12" aria-hidden="true" hidden><path d="M4.5 2.5h5v5"/><rect x="2.5" y="4.5" width="5" height="5" rx="1"/></svg></button>
-          <button class="caption-button close" type="button" data-window-action="close" aria-label="关闭"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 3l6 6M9 3l-6 6"/></svg></button>
+        <div class="title-block"><h1 id="pageTitle">{{UI_Sources}}</h1><div class="title-sub"><p id="pageSubtitle">{{UI_ChooseMusicPlayersToMonitorAndConfigureTheirLyric}}</p><span id="saveState" class="save-state" data-state="success" aria-live="polite">{{UI_ChangesAppliedImmediately}}</span></div></div>
+        <div class="caption-controls" role="group" aria-label="{{UI_WindowControls}}">
+          <button class="caption-button" type="button" data-window-action="minimize" aria-label="{{UI_Minimize}}"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6h8"/></svg></button>
+          <button class="caption-button" type="button" data-window-action="maximize" aria-label="{{UI_Maximize}}"><svg class="caption-glyph-max" viewBox="0 0 12 12" aria-hidden="true"><rect x="3" y="3" width="6" height="6" rx="1"/></svg><svg class="caption-glyph-restore" viewBox="0 0 12 12" aria-hidden="true" hidden><path d="M4.5 2.5h5v5"/><rect x="2.5" y="4.5" width="5" height="5" rx="1"/></svg></button>
+          <button class="caption-button close" type="button" data-window-action="close" aria-label="{{UI_Close}}"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 3l6 6M9 3l-6 6"/></svg></button>
         </div>
       </header>
 
@@ -61,12 +61,12 @@
           <div class="page-inner">
             <section class="panel getting-started-panel">
               <aside class="getting-started-selector">
-                <div class="getting-started-list-heading"><h2 id="gettingStartedHeading" tabindex="-1">选择播放器</h2><span id="gettingStartedCount" aria-label="播放器数量"></span></div>
-                <label class="getting-started-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg><input id="gettingStartedSearch" type="search" placeholder="搜索播放器…" aria-label="搜索播放器" aria-controls="gettingStartedPlayerList" autocomplete="off" spellcheck="false"></label>
+                <div class="getting-started-list-heading"><h2 id="gettingStartedHeading" tabindex="-1">{{UI_ChooseAPlayer}}</h2><span id="gettingStartedCount" aria-label="{{UI_PlayerCount}}"></span></div>
+                <label class="getting-started-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg><input id="gettingStartedSearch" type="search" placeholder="{{UI_SearchPlayers}}" aria-label="{{UI_SearchPlayers_2}}" aria-controls="gettingStartedPlayerList" autocomplete="off" spellcheck="false"></label>
                 <fieldset class="getting-started-players">
-                  <legend class="getting-started-sr-only">你主要使用哪个播放器？</legend>
+                  <legend class="getting-started-sr-only">{{UI_WhichPlayerDoYouUseMost}}</legend>
                   <div id="gettingStartedPlayerList" class="getting-started-player-list"></div>
-                  <p id="gettingStartedNoResults" class="getting-started-note" hidden>未找到匹配项，可选择下方的其他播放器。</p>
+                  <p id="gettingStartedNoResults" class="getting-started-note" hidden>{{UI_NoMatchesYouCanChooseOtherPlayerBelow}}</p>
                   <div id="gettingStartedOther" class="getting-started-other"></div>
                 </fieldset>
                 <span id="gettingStartedSearchStatus" class="getting-started-sr-only" role="status"></span>
@@ -74,9 +74,9 @@
               <div class="getting-started-content">
                 <section id="gettingStartedGuidance" class="getting-started-guidance" aria-live="polite" hidden></section>
                 <div class="getting-started-footer">
-                  <p id="gettingStartedAddNote" class="getting-started-note" hidden>播放歌曲后，在媒体会话中选择并添加此播放器。</p>
-                  <div class="getting-started-actions"><button class="btn" type="button" data-getting-started-done><span data-getting-started-action-label>查看安装说明</span><svg viewBox="0 0 24 24" aria-hidden="true" data-getting-started-external><path d="M14 3h7v7M21 3l-10 10M10 3H4a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1v-6"/></svg></button><button class="btn ghost" type="button" data-getting-started-later>跳过引导</button></div>
-                  <p class="getting-started-note">选择仅用于查看说明，不改变播放源设置。</p>
+                  <p id="gettingStartedAddNote" class="getting-started-note" hidden>{{UI_PlayASongThenSelectAndAddThePlayer}}</p>
+                  <div class="getting-started-actions"><button class="btn" type="button" data-getting-started-done><span data-getting-started-action-label>{{UI_ViewSetupGuide}}</span><svg viewBox="0 0 24 24" aria-hidden="true" data-getting-started-external><path d="M14 3h7v7M21 3l-10 10M10 3H4a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1v-6"/></svg></button><button class="btn ghost" type="button" data-getting-started-later>{{UI_SkipSetup}}</button></div>
+                  <p class="getting-started-note">{{UI_ThisSelectionOnlyChangesTheGuideNotYourSource}}</p>
                 </div>
               </div>
             </section>
@@ -85,14 +85,14 @@
         <section class="page active" data-page="sources" aria-labelledby="sourcesHeading">
           <div class="page-inner">
             <section class="panel">
-              <div class="panel-head"><div><h2 id="sourcesHeading" tabindex="-1">播放器</h2><p>拖动卡片调整同时播放时的选择顺序；点击齿轮配置歌词源与同步偏移。</p></div><div class="source-panel-actions"><span id="sourceCount" class="source-count"></span><button id="addPlayerSourceButton" class="btn secondary small" type="button">添加播放器</button></div></div>
+              <div class="panel-head"><div><h2 id="sourcesHeading" tabindex="-1">{{UI_Players}}</h2><p>{{UI_DragCardsToSetPriorityWhenMultiplePlayersAre}}</p></div><div class="source-panel-actions"><span id="sourceCount" class="source-count"></span><button id="addPlayerSourceButton" class="btn secondary small" type="button">{{UI_AddPlayer}}</button></div></div>
               <div class="panel-body"><div id="sourceGrid" class="source-grid"></div><span id="sourceOrderAnnouncement" class="sr-only" aria-live="polite"></span></div>
             </section>
             <section class="panel">
-              <div class="panel-head"><div><h2>本地歌词</h2><p>优先从音乐所在目录匹配同名歌词文件。</p></div></div>
+              <div class="panel-head"><div><h2>{{UI_LocalLyrics}}</h2><p>{{UI_PreferMatchingLyricFilesInTheSameFolderAs}}</p></div></div>
               <div class="settings">
-                <div class="setting-row compact"><div class="setting-label"><strong>优先使用本地歌词</strong><small>支持 .lrc、.qrc 和 .krc 文件。</small></div><label class="switch"><input type="checkbox" data-setting="enableLocalLyrics" aria-label="优先使用本地歌词"><span class="switch-track"></span></label></div>
-                <div class="setting-row child" data-depends="enableLocalLyrics"><div class="setting-label"><strong>本地音乐目录</strong><small>每行一个目录；关闭上方开关后保留内容。</small></div><div class="folder-control"><textarea class="control" data-setting="localMusicFolders" aria-label="本地音乐目录"></textarea><button id="browseButton" class="btn secondary" type="button">浏览</button></div></div>
+                <div class="setting-row compact"><div class="setting-label"><strong>{{UI_PreferLocalLyrics}}</strong><small>{{UI_SupportsLrcQrcAndKrcFiles}}</small></div><label class="switch"><input type="checkbox" data-setting="enableLocalLyrics" aria-label="{{UI_PreferLocalLyrics}}"><span class="switch-track"></span></label></div>
+                <div class="setting-row child" data-depends="enableLocalLyrics"><div class="setting-label"><strong>{{UI_LocalMusicFolders}}</strong><small>{{UI_OneFolderPerLineFoldersAreRetainedWhenThe}}</small></div><div class="folder-control"><textarea class="control" data-setting="localMusicFolders" aria-label="{{UI_LocalMusicFolders}}"></textarea><button id="browseButton" class="btn secondary" type="button">{{UI_Browse}}</button></div></div>
               </div>
             </section>
           </div>
@@ -101,9 +101,9 @@
         <section class="page" data-page="shortcuts" aria-labelledby="shortcutsHeading">
           <div class="page-inner">
             <section class="panel">
-              <div class="panel-head"><div><h2 id="shortcutsHeading" tabindex="-1">全局快捷键</h2><p>控制播放器和歌词显示。单项关闭保留组合键，清空后不再注册；录制时可按 Backspace 或 Delete 清空。</p></div><span id="mediaHotkeyMasterStatus" class="source-count"></span></div>
+              <div class="panel-head"><div><h2 id="shortcutsHeading" tabindex="-1">{{UI_GlobalShortcuts}}</h2><p>{{UI_ControlPlaybackAndLyricsDisablingAShortcutKeepsIts}}</p></div><span id="mediaHotkeyMasterStatus" class="source-count"></span></div>
               <div class="settings">
-                <div class="setting-row compact"><div class="setting-label"><strong>启用全局快捷键</strong><small>关闭后保留现有组合键，但不会向 Windows 注册。</small></div><label class="switch"><input type="checkbox" data-setting="enableGlobalMediaHotkeys" aria-label="启用全局快捷键"><span class="switch-track"></span></label></div>
+                <div class="setting-row compact"><div class="setting-label"><strong>{{UI_EnableGlobalShortcuts}}</strong><small>{{UI_KeepsExistingShortcutsWhenOffWithoutRegisteringThemWith}}</small></div><label class="switch"><input type="checkbox" data-setting="enableGlobalMediaHotkeys" aria-label="{{UI_EnableGlobalShortcuts}}"><span class="switch-track"></span></label></div>
                 <div id="mediaHotkeyList" class="media-hotkey-list"></div>
               </div>
             </section>
@@ -113,19 +113,19 @@
         <section class="page" data-page="lyrics" aria-labelledby="lyricsHeading">
           <div class="page-inner">
             <section class="panel">
-              <div class="panel-head"><div><h2 id="lyricsHeading" tabindex="-1">显示行为</h2><p>控制歌词何时出现，以及翻译和逐字扫描的显示方式。</p></div></div>
+              <div class="panel-head"><div><h2 id="lyricsHeading" tabindex="-1">{{UI_DisplayBehavior}}</h2><p>{{UI_ChooseWhenLyricsAppearAndHowTranslationsAndWord}}</p></div></div>
               <div class="settings">
-                <div class="setting-row compact"><div class="setting-label"><strong>启动时显示歌词</strong></div><label class="switch"><input type="checkbox" data-setting="showLyricsOnStartup" aria-label="启动时显示歌词"><span class="switch-track"></span></label></div>
-                <div class="setting-row compact"><div class="setting-label"><strong>无播放时自动隐藏</strong><small>未检测到播放媒体时隐藏歌词区域；暂停播放不会隐藏。</small></div><label class="switch"><input type="checkbox" data-setting="autoHideWhenNoPlayback" aria-label="无播放时自动隐藏"><span class="switch-track"></span></label></div>
-                <div class="setting-row compact"><div class="setting-label"><strong>显示歌词翻译</strong></div><label class="switch"><input type="checkbox" data-setting="showLyricTranslation" aria-label="显示歌词翻译"><span class="switch-track"></span></label></div>
-                <div class="setting-row compact"><div class="setting-label"><strong>逐字扫描</strong></div><label class="switch"><input type="checkbox" data-setting="enableWordScanning" aria-label="逐字扫描"><span class="switch-track"></span></label></div>
+                <div class="setting-row compact"><div class="setting-label"><strong>{{UI_ShowLyricsOnStartup}}</strong></div><label class="switch"><input type="checkbox" data-setting="showLyricsOnStartup" aria-label="{{UI_ShowLyricsOnStartup}}"><span class="switch-track"></span></label></div>
+                <div class="setting-row compact"><div class="setting-label"><strong>{{UI_HideWhenNoMediaIsActive}}</strong><small>{{UI_HideTheLyricAreaWhenNoMediaIsDetected}}</small></div><label class="switch"><input type="checkbox" data-setting="autoHideWhenNoPlayback" aria-label="{{UI_HideWhenNoMediaIsActive}}"><span class="switch-track"></span></label></div>
+                <div class="setting-row compact"><div class="setting-label"><strong>{{UI_ShowLyricTranslations}}</strong></div><label class="switch"><input type="checkbox" data-setting="showLyricTranslation" aria-label="{{UI_ShowLyricTranslations}}"><span class="switch-track"></span></label></div>
+                <div class="setting-row compact"><div class="setting-label"><strong>{{UI_WordHighlighting}}</strong></div><label class="switch"><input type="checkbox" data-setting="enableWordScanning" aria-label="{{UI_WordHighlighting}}"><span class="switch-track"></span></label></div>
               </div>
             </section>
             <section class="panel">
-              <div class="panel-head"><div><h2>频谱</h2><p>在纯音乐或无歌词时显示实时音频频谱。</p></div></div>
+              <div class="panel-head"><div><h2>{{UI_Spectrum}}</h2><p>{{UI_ShowALiveAudioSpectrumForInstrumentalTracksOr}}</p></div></div>
               <div class="settings">
-                <div class="setting-row"><div class="setting-label"><strong>显示频谱</strong><small>频谱默认关闭；启用后仅在需要显示时读取扬声器或耳机当前播放的声音。</small></div><button class="control select-trigger" type="button" data-setting="spectrumDisplayMode" aria-label="显示频谱" aria-haspopup="listbox" aria-expanded="false"><span class="select-trigger-value"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
-                <div class="setting-row compact"><div class="setting-label"><strong>系统音频访问</strong><small id="spectrumAudioAccessStatus" class="spectrum-audio-status" role="status" aria-live="polite">频谱已关闭，不会读取系统播放声音。</small></div><div class="setting-inline-actions"><button id="retrySpectrumAudioAccessButton" class="btn secondary small" type="button" data-retry-spectrum-capture hidden>重试</button><button id="revokeSpectrumAudioAccessButton" class="btn ghost small" type="button" hidden>停止并撤销</button></div></div>
+                <div class="setting-row"><div class="setting-label"><strong>{{UI_ShowSpectrum}}</strong><small>{{UI_OffByDefaultWhenEnabledReadsSpeakerOrHeadphone}}</small></div><button class="control select-trigger" type="button" data-setting="spectrumDisplayMode" aria-label="{{UI_ShowSpectrum}}" aria-haspopup="listbox" aria-expanded="false"><span class="select-trigger-value"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+                <div class="setting-row compact"><div class="setting-label"><strong>{{UI_SystemAudioAccess}}</strong><small id="spectrumAudioAccessStatus" class="spectrum-audio-status" role="status" aria-live="polite">{{UI_SpectrumIsOffSystemAudioIsNotBeingCaptured}}</small></div><div class="setting-inline-actions"><button id="retrySpectrumAudioAccessButton" class="btn secondary small" type="button" data-retry-spectrum-capture hidden>{{UI_Retry}}</button><button id="revokeSpectrumAudioAccessButton" class="btn ghost small" type="button" hidden>{{UI_StopAndRevoke}}</button></div></div>
               </div>
             </section>
           </div>
@@ -134,25 +134,25 @@
         <section class="page" data-page="trackOffsets" aria-labelledby="trackOffsetsHeading">
           <div class="page-inner">
             <section class="panel">
-              <div class="panel-head"><div><h2 id="trackOffsetsHeading" tabindex="-1">当前歌曲</h2><p>偏移按歌曲和歌词源分别保存，修改后会立即应用。</p></div><span id="currentTrackOffsetBadge" class="source-count">等待播放</span></div>
+              <div class="panel-head"><div><h2 id="trackOffsetsHeading" tabindex="-1">{{UI_CurrentTrack}}</h2><p>{{UI_OffsetsAreSavedPerTrackAndLyricSourceAnd}}</p></div><span id="currentTrackOffsetBadge" class="source-count">{{UI_WaitingForPlayback}}</span></div>
               <div id="currentTrackOffset" class="current-track-offset"></div>
             </section>
             <section class="panel">
-              <div class="panel-head"><div><h2>已配置歌曲</h2><p>搜索、调整或删除已经保存的单曲歌词偏移。</p></div><span id="trackOffsetCount" class="source-count">0 首</span></div>
+              <div class="panel-head"><div><h2>{{UI_ConfiguredTracks}}</h2><p>{{UI_SearchAdjustOrDeleteSavedTrackLyricOffsets}}</p></div><span id="trackOffsetCount" class="source-count">{{UI_0Tracks}}</span></div>
               <div class="track-offset-toolbar">
-                <div class="track-offset-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m16 16 4 4"/></svg><input id="trackOffsetSearch" class="control" type="search" placeholder="搜索歌曲或歌手" aria-label="搜索歌曲或歌手"></div>
-                <button class="control select-trigger compact-select" type="button" data-setting="trackOffsetSourceFilter" aria-label="筛选歌词源" aria-haspopup="listbox" aria-expanded="false"><span class="select-trigger-value"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-                <button class="control select-trigger compact-select" type="button" data-setting="trackOffsetSort" aria-label="单曲偏移排序方式" aria-haspopup="listbox" aria-expanded="false"><span class="select-trigger-value"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+                <div class="track-offset-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m16 16 4 4"/></svg><input id="trackOffsetSearch" class="control" type="search" placeholder="{{UI_SearchSongsOrArtists}}" aria-label="{{UI_SearchSongsOrArtists}}"></div>
+                <button class="control select-trigger compact-select" type="button" data-setting="trackOffsetSourceFilter" aria-label="{{UI_FilterLyricSources}}" aria-haspopup="listbox" aria-expanded="false"><span class="select-trigger-value"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+                <button class="control select-trigger compact-select" type="button" data-setting="trackOffsetSort" aria-label="{{UI_SortTrackOffsets}}" aria-haspopup="listbox" aria-expanded="false"><span class="select-trigger-value"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
               </div>
               <div id="trackOffsetList" class="track-offset-list"></div>
               <div class="track-offset-footer">
-                <p>单曲偏移属于用户数据，不会随恢复默认设置或清理歌词缓存被删除。</p>
-                <nav id="trackOffsetPagination" class="track-offset-pagination" aria-label="已配置歌曲分页" hidden>
-                  <button id="trackOffsetPreviousPage" class="track-offset-page-button" type="button" aria-label="上一页"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button>
+                <p>{{UI_TrackOffsetsAreUserDataRestoringDefaultsOrClearing}}</p>
+                <nav id="trackOffsetPagination" class="track-offset-pagination" aria-label="{{UI_ConfiguredTracksPagination}}" hidden>
+                  <button id="trackOffsetPreviousPage" class="track-offset-page-button" type="button" aria-label="{{UI_PreviousPage}}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button>
                   <span id="trackOffsetPageStatus" aria-live="polite">1 / 1</span>
-                  <button id="trackOffsetNextPage" class="track-offset-page-button" type="button" aria-label="下一页"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+                  <button id="trackOffsetNextPage" class="track-offset-page-button" type="button" aria-label="{{UI_NextPage}}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
                 </nav>
-                <button id="clearTrackOffsetsButton" class="btn destructive small" type="button" disabled>清除全部偏移</button>
+                <button id="clearTrackOffsetsButton" class="btn destructive small" type="button" disabled>{{UI_ClearAllOffsets}}</button>
               </div>
             </section>
           </div>
@@ -160,139 +160,139 @@
 
         <section class="page" data-page="displayArea" aria-labelledby="displayAreaHeading">
   <div class="page-inner">
-    <div class="live-note"><div class="live-note-copy"><strong>设置即时生效</strong><small>请直接查看歌词窗口，真实效果会随参数同步更新。</small></div><button id="showLyricsWindowButton" class="btn ghost" type="button" data-show-lyrics-window="">显示歌词窗口</button></div>
+    <div class="live-note"><div class="live-note-copy"><strong>{{UI_SettingsApplyImmediately}}</strong><small>{{UI_CheckTheLyricWindowToSeeChangesAsYou}}</small></div><button id="showLyricsWindowButton" class="btn ghost" type="button" data-show-lyrics-window="">{{UI_ShowLyricWindow}}</button></div>
     <section class="panel display-presentation">
-      <div class="panel-head"><div><h2 id="displayAreaHeading" tabindex="-1">显示方式</h2><p>选择歌词显示的位置，调整当前模式的尺寸、交互与外观。</p></div><div class="display-mode-actions"><span>模式设置分别保留</span>
+      <div class="panel-head"><div><h2 id="displayAreaHeading" tabindex="-1">{{UI_DisplayMode}}</h2><p>{{UI_ChooseWhereLyricsAppearAndAdjustTheSizeInteraction}}</p></div><div class="display-mode-actions"><span>{{UI_EachModeKeepsItsOwnSettings}}</span>
         <!-- Lucide rotate-ccw (ISC), bundled in Assets/Icons/Lucide. -->
-        <button class="btn ghost small display-mode-reset" type="button" data-reset-window-mode="embedded" data-presentation-mode="embedded" aria-label="恢复此模式默认：任务栏嵌入"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg><span>恢复此模式默认</span></button>
-        <button class="btn ghost small display-mode-reset" type="button" data-reset-window-mode="floating" data-presentation-mode="floating" hidden aria-label="恢复此模式默认：悬浮窗口"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg><span>恢复此模式默认</span></button>
+        <button class="btn ghost small display-mode-reset" type="button" data-reset-window-mode="embedded" data-presentation-mode="embedded" aria-label="{{UI_RestoreModeDefaultsTaskbarEmbedded}}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg><span>{{UI_RestoreModeDefaults}}</span></button>
+        <button class="btn ghost small display-mode-reset" type="button" data-reset-window-mode="floating" data-presentation-mode="floating" hidden aria-label="{{UI_RestoreModeDefaultsFloatingWindow}}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg><span>{{UI_RestoreModeDefaults}}</span></button>
       </div></div>
-      <fieldset class="window-mode-picker"><legend class="sr-only">歌词窗口显示方式</legend><div class="window-mode-options"><div class="window-mode-card embedded-window-mode-card"><label class="window-mode-choice"><input class="sr-only" type="radio" name="windowPresentationMode" value="embedded" data-window-mode="embedded"><svg class="window-mode-diagram" viewBox="0 0 72 48" aria-hidden="true"><rect x="1" y="1" width="70" height="46" rx="5"/><rect class="mode-diagram-window" x="15" y="8" width="39" height="25" rx="2"/><path d="M2 38h68"/><path class="mode-diagram-lyrics" d="M9 42h3m4 0h3m6 0h28"/></svg><span class="window-mode-copy"><span class="window-mode-title"><strong>任务栏嵌入</strong></span><small>融入任务栏，随时看见歌词。</small></span><span class="window-mode-radio" aria-hidden="true"></span></label></div><div class="window-mode-card floating-window-mode-card"><label class="window-mode-choice"><input class="sr-only" type="radio" name="windowPresentationMode" value="floating" data-window-mode="floating"><svg class="window-mode-diagram" viewBox="0 0 72 48" aria-hidden="true"><rect x="1" y="1" width="70" height="46" rx="5"/><rect class="mode-diagram-window" x="15" y="8" width="39" height="25" rx="2"/><path d="M2 38h68"/><rect class="mode-diagram-card" x="23" y="20" width="38" height="14" rx="3"/><path class="mode-diagram-lyrics" d="M29 25h5m4 0h17m-26 5h23"/></svg><span class="window-mode-copy"><span class="window-mode-title"><strong>悬浮窗口</strong></span><small>独立显示，自由摆放与调整。</small></span><span class="window-mode-radio" aria-hidden="true"></span></label></div></div></fieldset>
+      <fieldset class="window-mode-picker"><legend class="sr-only">{{UI_LyricWindowDisplayMode}}</legend><div class="window-mode-options"><div class="window-mode-card embedded-window-mode-card"><label class="window-mode-choice"><input class="sr-only" type="radio" name="windowPresentationMode" value="embedded" data-window-mode="embedded"><svg class="window-mode-diagram" viewBox="0 0 72 48" aria-hidden="true"><rect x="1" y="1" width="70" height="46" rx="5"/><rect class="mode-diagram-window" x="15" y="8" width="39" height="25" rx="2"/><path d="M2 38h68"/><path class="mode-diagram-lyrics" d="M9 42h3m4 0h3m6 0h28"/></svg><span class="window-mode-copy"><span class="window-mode-title"><strong>{{UI_TaskbarEmbedded}}</strong></span><small>{{UI_KeepLyricsVisibleInsideTheTaskbar}}</small></span><span class="window-mode-radio" aria-hidden="true"></span></label></div><div class="window-mode-card floating-window-mode-card"><label class="window-mode-choice"><input class="sr-only" type="radio" name="windowPresentationMode" value="floating" data-window-mode="floating"><svg class="window-mode-diagram" viewBox="0 0 72 48" aria-hidden="true"><rect x="1" y="1" width="70" height="46" rx="5"/><rect class="mode-diagram-window" x="15" y="8" width="39" height="25" rx="2"/><path d="M2 38h68"/><rect class="mode-diagram-card" x="23" y="20" width="38" height="14" rx="3"/><path class="mode-diagram-lyrics" d="M29 25h5m4 0h17m-26 5h23"/></svg><span class="window-mode-copy"><span class="window-mode-title"><strong>{{UI_FloatingWindow}}</strong></span><small>{{UI_DisplayIndependentlyWithFreePositioningAndResizing}}</small></span><span class="window-mode-radio" aria-hidden="true"></span></label></div></div></fieldset>
       <div class="embedded-mode-note" data-presentation-mode="embedded"><small id="taskbarEmbeddingStatus" class="mode-status" role="status" hidden=""></small></div>
       <div class="display-layout">
         <div class="display-settings-column">
           <section class="display-setting-group" data-display-group="size" aria-labelledby="displaySizeHeading">
-            <div class="display-group-heading"><h3 id="displaySizeHeading">尺寸</h3></div>
+            <div class="display-group-heading"><h3 id="displaySizeHeading">{{UI_Size}}</h3></div>
             <div data-presentation-mode="embedded" class="embedded-window-mode-settings"><div id="embeddedWindowWidthRow" class="window-mode-setting-row window-width-setting is-disabled" data-embedded-only="">
-                        <label class="window-mode-setting-copy" for="embeddedWindowWidth"><strong>窗口长度</strong><small>横向调整宽度，纵向调整高度。</small></label>
-                        <div class="slider-number-control"><input type="range" min="100" max="1400" step="1" data-setting="windowWidth" aria-label="任务栏嵌入窗口长度滑块" disabled=""><label class="unit-input compact-number-input pixel-input"><input id="embeddedWindowWidth" type="number" min="100" max="1400" step="1" data-setting="windowWidth" aria-label="任务栏嵌入窗口长度数值" disabled=""><span>px</span></label></div>
-                      </div><div data-embedded-only="" class="window-mode-setting-row layout-scale-row"><label class="window-mode-setting-copy" for="embeddedLayoutScale"><strong>整体缩放</strong><small>同步调整文字、封面与间距。</small></label><div class="layout-scale-control"><div class="slider-number-control"><input id="embeddedLayoutScale" type="range" min="25" max="300" step="5" data-setting="lyricsLayoutScalePercent" aria-label="歌词区域缩放"><label class="unit-input compact-number-input percentage-input"><input type="number" min="25" max="300" step="1" data-setting="lyricsLayoutScalePercent" aria-label="歌词区域缩放百分比"><span>%</span></label></div><div class="mode-scale-footer"><output id="layoutScalePreview" class="layout-scale-preview"><span>字号 <strong data-effective-font-size="">14 px</strong></span><span>封面 <strong data-effective-cover-size="">34 px</strong></span><span data-effective-cover-gap-item="">间距 <strong data-effective-cover-gap="">8 px</strong></span></output><button class="btn ghost small" type="button" data-reset-layout-scale="" aria-label="恢复歌词区域缩放到 100%" title="恢复到 100%">恢复 100%</button></div><span id="layoutScaleAnnouncement" class="sr-only" aria-live="polite"></span></div></div>
+                        <label class="window-mode-setting-copy" for="embeddedWindowWidth"><strong>{{UI_WindowLength}}</strong><small>{{UI_AdjustsWidthOnHorizontalTaskbarsAndHeightOnVertical}}</small></label>
+                        <div class="slider-number-control"><input type="range" min="100" max="1400" step="1" data-setting="windowWidth" aria-label="{{UI_EmbeddedWindowLengthSlider}}" disabled=""><label class="unit-input compact-number-input pixel-input"><input id="embeddedWindowWidth" type="number" min="100" max="1400" step="1" data-setting="windowWidth" aria-label="{{UI_EmbeddedWindowLengthValue}}" disabled=""><span>px</span></label></div>
+                      </div><div data-embedded-only="" class="window-mode-setting-row layout-scale-row"><label class="window-mode-setting-copy" for="embeddedLayoutScale"><strong>{{UI_OverallScale}}</strong><small>{{UI_ScaleTextCoverArtAndSpacingTogether}}</small></label><div class="layout-scale-control"><div class="slider-number-control"><input id="embeddedLayoutScale" type="range" min="25" max="300" step="5" data-setting="lyricsLayoutScalePercent" aria-label="{{UI_LyricAreaScale}}"><label class="unit-input compact-number-input percentage-input"><input type="number" min="25" max="300" step="1" data-setting="lyricsLayoutScalePercent" aria-label="{{UI_LyricAreaScalePercentage}}"><span>%</span></label></div><div class="mode-scale-footer"><output id="layoutScalePreview" class="layout-scale-preview"><span>{{UI_FontSize}} <strong data-effective-font-size="">14 px</strong></span><span>{{UI_CoverArt}} <strong data-effective-cover-size="">34 px</strong></span><span data-effective-cover-gap-item="">{{UI_Spacing}} <strong data-effective-cover-gap="">8 px</strong></span></output><button class="btn ghost small" type="button" data-reset-layout-scale="" aria-label="{{UI_ResetLyricAreaScaleTo100}}" title="{{UI_ResetTo100}}">{{UI_Reset100}}</button></div><span id="layoutScaleAnnouncement" class="sr-only" aria-live="polite"></span></div></div>
 </div>
-            <div data-presentation-mode="floating" class="floating-window-mode-settings" hidden=""><div class="mode-dimension-readout"><span>宽度 <strong data-floating-width="">420 px</strong></span><span>缩放 <strong data-floating-scale="">100%</strong></span></div><p class="display-group-note">右上角拉伸调整尺寸。</p></div>
+            <div data-presentation-mode="floating" class="floating-window-mode-settings" hidden=""><div class="mode-dimension-readout"><span>{{UI_Width}} <strong data-floating-width="">420 px</strong></span><span>{{UI_Scale}} <strong data-floating-scale="">100%</strong></span></div><p class="display-group-note">{{UI_ResizeUsingTheUpperRightCorner}}</p></div>
           <details class="advanced-size-panel">
-                  <summary class="advanced-size-summary"><div class="setting-label"><strong>高级尺寸微调</strong><small>编辑缩放前的基础值；最终尺寸还会乘以整体缩放倍率。</small></div><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"></path></svg></summary>
+                  <summary class="advanced-size-summary"><div class="setting-label"><strong>{{UI_AdvancedSizeAdjustment}}</strong><small>{{UI_EditBaseValuesBeforeScalingTheOverallScaleIs}}</small></div><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"></path></svg></summary>
                   <div class="advanced-size-settings">
-                    <div class="setting-row"><div class="setting-label"><strong>基础字号</strong><small>连续渲染值保留小数，范围 6～96 px。</small></div><div class="stepper"><button type="button" data-step-target="fontSize" data-delta="-1" aria-label="减小基础字号">−</button><input class="control" type="number" min="6" max="96" step="0.1" data-setting="fontSize" aria-label="基础字号"><button type="button" data-step-target="fontSize" data-delta="1" aria-label="增大基础字号">+</button></div></div>
-                    <div class="setting-row" data-depends="showCover"><div class="setting-label"><strong>基础封面大小</strong><small>实际布局会对齐到整数像素，范围 12～200 px。</small></div><div class="stepper"><button type="button" data-step-target="coverSize" data-delta="-1" aria-label="减小基础封面">−</button><input class="control" type="number" min="12" max="200" step="1" data-setting="coverSize" aria-label="基础封面大小"><button type="button" data-step-target="coverSize" data-delta="1" aria-label="增大基础封面">+</button></div></div>
-                    <div class="setting-row" data-depends="showCover"><div class="setting-label"><strong>基础封面间距</strong><small>封面与歌词之间的缩放前距离。</small></div><div class="slider-number-control"><input type="range" min="0" max="240" step="1" data-setting="coverGap" aria-label="基础封面间距滑块"><label class="unit-input compact-number-input pixel-input"><input type="number" min="0" max="240" step="1" data-setting="coverGap" aria-label="基础封面间距数值"><span>px</span></label></div></div>
-                    <div class="setting-row" data-depends="showCover"><div class="setting-label"><strong>基础封面圆角</strong><small>不超过基础封面尺寸的一半。</small></div><div class="slider-number-control"><input type="range" min="0" max="100" step="1" data-setting="coverCornerRadius" aria-label="基础封面圆角滑块"><label class="unit-input compact-number-input pixel-input"><input type="number" min="0" max="100" step="1" data-setting="coverCornerRadius" aria-label="基础封面圆角数值"><span>px</span></label></div></div>
-                    <div class="advanced-size-actions"><button class="btn ghost small" type="button" data-reset-layout-base="">重置基础尺寸</button></div>
+                    <div class="setting-row"><div class="setting-label"><strong>{{UI_BaseFontSize}}</strong><small>{{UI_FractionalRenderingValuesArePreservedRange696Px}}</small></div><div class="stepper"><button type="button" data-step-target="fontSize" data-delta="-1" aria-label="{{UI_DecreaseBaseFontSize}}">−</button><input class="control" type="number" min="6" max="96" step="0.1" data-setting="fontSize" aria-label="{{UI_BaseFontSize}}"><button type="button" data-step-target="fontSize" data-delta="1" aria-label="{{UI_IncreaseBaseFontSize}}">+</button></div></div>
+                    <div class="setting-row" data-depends="showCover"><div class="setting-label"><strong>{{UI_BaseCoverSize}}</strong><small>{{UI_LayoutSnapsToWholePixelsRange12200Px}}</small></div><div class="stepper"><button type="button" data-step-target="coverSize" data-delta="-1" aria-label="{{UI_DecreaseBaseCoverSize}}">−</button><input class="control" type="number" min="12" max="200" step="1" data-setting="coverSize" aria-label="{{UI_BaseCoverSize}}"><button type="button" data-step-target="coverSize" data-delta="1" aria-label="{{UI_IncreaseBaseCoverSize}}">+</button></div></div>
+                    <div class="setting-row" data-depends="showCover"><div class="setting-label"><strong>{{UI_BaseCoverSpacing}}</strong><small>{{UI_DistanceBetweenCoverArtAndLyricsBeforeScaling}}</small></div><div class="slider-number-control"><input type="range" min="0" max="240" step="1" data-setting="coverGap" aria-label="{{UI_BaseCoverSpacingSlider}}"><label class="unit-input compact-number-input pixel-input"><input type="number" min="0" max="240" step="1" data-setting="coverGap" aria-label="{{UI_BaseCoverSpacingValue}}"><span>px</span></label></div></div>
+                    <div class="setting-row" data-depends="showCover"><div class="setting-label"><strong>{{UI_BaseCoverCornerRadius}}</strong><small>{{UI_CannotExceedHalfTheBaseCoverSize}}</small></div><div class="slider-number-control"><input type="range" min="0" max="100" step="1" data-setting="coverCornerRadius" aria-label="{{UI_BaseCoverCornerRadiusSlider}}"><label class="unit-input compact-number-input pixel-input"><input type="number" min="0" max="100" step="1" data-setting="coverCornerRadius" aria-label="{{UI_BaseCoverCornerRadiusValue}}"><span>px</span></label></div></div>
+                    <div class="advanced-size-actions"><button class="btn ghost small" type="button" data-reset-layout-base="">{{UI_ResetBaseSize}}</button></div>
                   </div>
                 </details></section>
           <section class="display-setting-group" data-display-group="position" aria-labelledby="displayPositionHeading">
-  <div class="display-group-heading"><h3 id="displayPositionHeading">位置</h3></div>
-  <div data-presentation-mode="embedded" class="embedded-window-mode-settings"><div class="window-mode-setting-row" data-embedded-only=""><label class="window-mode-setting-copy" for="embeddedXOffsetSlider"><strong>水平偏移</strong></label><div class="slider-number-control"><input id="embeddedXOffsetSlider" type="range" min="-2000" max="2000" step="1" data-setting="xOffset" aria-label="X 偏移滑块"><label class="unit-input compact-number-input pixel-input"><input type="number" min="-2000" max="2000" step="1" inputmode="numeric" data-setting="xOffset" aria-label="X 偏移数值"><span>px</span></label></div></div><div class="window-mode-setting-row" data-embedded-only=""><label class="window-mode-setting-copy" for="embeddedYOffsetSlider"><strong>垂直偏移</strong></label><div class="slider-number-control"><input id="embeddedYOffsetSlider" type="range" min="-2000" max="2000" step="1" data-setting="yOffset" aria-label="Y 偏移滑块"><label class="unit-input compact-number-input pixel-input"><input type="number" min="-2000" max="2000" step="1" inputmode="numeric" data-setting="yOffset" aria-label="Y 偏移数值"><span>px</span></label></div></div></div>
-  <div data-presentation-mode="floating" class="floating-window-mode-settings" hidden=""><p class="display-group-note">展开后拖动点阵锚点移动卡片。</p><div id="floatingTopmostRow" class="window-mode-setting-row is-disabled" data-depends="useFloatingWindow">
-                        <div class="window-mode-setting-copy"><strong id="floatingLayerLabel">显示层级</strong><small>桌面：位于应用下方；窗口：全屏时避让；全屏：保持置顶，独占全屏可能不支持。</small></div>
+  <div class="display-group-heading"><h3 id="displayPositionHeading">{{UI_Position}}</h3></div>
+  <div data-presentation-mode="embedded" class="embedded-window-mode-settings"><div class="window-mode-setting-row" data-embedded-only=""><label class="window-mode-setting-copy" for="embeddedXOffsetSlider"><strong>{{UI_HorizontalOffset}}</strong></label><div class="slider-number-control"><input id="embeddedXOffsetSlider" type="range" min="-2000" max="2000" step="1" data-setting="xOffset" aria-label="{{UI_XOffsetSlider}}"><label class="unit-input compact-number-input pixel-input"><input type="number" min="-2000" max="2000" step="1" inputmode="numeric" data-setting="xOffset" aria-label="{{UI_XOffsetValue}}"><span>px</span></label></div></div><div class="window-mode-setting-row" data-embedded-only=""><label class="window-mode-setting-copy" for="embeddedYOffsetSlider"><strong>{{UI_VerticalOffset}}</strong></label><div class="slider-number-control"><input id="embeddedYOffsetSlider" type="range" min="-2000" max="2000" step="1" data-setting="yOffset" aria-label="{{UI_YOffsetSlider}}"><label class="unit-input compact-number-input pixel-input"><input type="number" min="-2000" max="2000" step="1" inputmode="numeric" data-setting="yOffset" aria-label="{{UI_YOffsetValue}}"><span>px</span></label></div></div></div>
+  <div data-presentation-mode="floating" class="floating-window-mode-settings" hidden=""><p class="display-group-note">{{UI_ExpandThePanelThenDragTheDottedHandleTo}}</p><div id="floatingTopmostRow" class="window-mode-setting-row is-disabled" data-depends="useFloatingWindow">
+                        <div class="window-mode-setting-copy"><strong id="floatingLayerLabel">{{UI_WindowLayer}}</strong><small>{{UI_DesktopBelowAppsWindowYieldsToFullscreenAppsFullscreen}}</small></div>
                         <div class="monitor-mode layout-options" role="radiogroup" aria-labelledby="floatingLayerLabel">
-                          <label><input type="radio" name="floatingWindowLayer" data-setting="floatingWindowLayer" value="Desktop" disabled=""><span>桌面</span></label>
-                          <label><input type="radio" name="floatingWindowLayer" data-setting="floatingWindowLayer" value="Window" disabled=""><span>窗口</span></label>
-                          <label><input type="radio" name="floatingWindowLayer" data-setting="floatingWindowLayer" value="Fullscreen" disabled=""><span>全屏</span></label>
+                          <label><input type="radio" name="floatingWindowLayer" data-setting="floatingWindowLayer" value="Desktop" disabled=""><span>{{UI_Desktop}}</span></label>
+                          <label><input type="radio" name="floatingWindowLayer" data-setting="floatingWindowLayer" value="Window" disabled=""><span>{{UI_Window}}</span></label>
+                          <label><input type="radio" name="floatingWindowLayer" data-setting="floatingWindowLayer" value="Fullscreen" disabled=""><span>{{UI_Fullscreen}}</span></label>
                         </div>
                       </div></div>
 </section>
-          <section class="display-setting-group" data-display-group="controls" aria-label="播放控制面板">
-            <div data-presentation-mode="embedded" class="embedded-window-mode-settings"><div id="embeddedControlPanelRow" class="window-mode-setting-row display-group-heading" data-embedded-only=""><h3><label class="window-mode-setting-copy" for="embeddedControlPanelToggle">播放控制面板</label></h3><label class="switch small"><input id="embeddedControlPanelToggle" type="checkbox" data-setting="enableControlPanel" aria-label="启用任务栏播放控制面板"><span class="switch-track"></span></label></div><div data-panel-options=""><div class="window-mode-setting-row panel-trigger-row child" data-depends="enableControlPanel" data-embedded-only="">
-                        <span id="panelTriggerMethodLabel" class="panel-trigger-label">触发方式</span>
+          <section class="display-setting-group" data-display-group="controls" aria-label="{{UI_PlaybackControlPanel}}">
+            <div data-presentation-mode="embedded" class="embedded-window-mode-settings"><div id="embeddedControlPanelRow" class="window-mode-setting-row display-group-heading" data-embedded-only=""><h3><label class="window-mode-setting-copy" for="embeddedControlPanelToggle">{{UI_PlaybackControlPanel}}</label></h3><label class="switch small"><input id="embeddedControlPanelToggle" type="checkbox" data-setting="enableControlPanel" aria-label="{{UI_EnableTaskbarPlaybackControls}}"><span class="switch-track"></span></label></div><div data-panel-options=""><div class="window-mode-setting-row panel-trigger-row child" data-depends="enableControlPanel" data-embedded-only="">
+                        <span id="panelTriggerMethodLabel" class="panel-trigger-label">{{UI_Activation}}</span>
                         <div class="monitor-mode layout-options" role="radiogroup" aria-labelledby="panelTriggerMethodLabel">
-                          <label><input type="radio" name="controlPanelTriggerMethod" data-setting="controlPanelTriggerMethod" value="Click"><span>点击</span></label>
-                          <label><input type="radio" name="controlPanelTriggerMethod" data-setting="controlPanelTriggerMethod" value="Hover"><span>悬停</span></label>
+                          <label><input type="radio" name="controlPanelTriggerMethod" data-setting="controlPanelTriggerMethod" value="Click"><span>{{UI_Click}}</span></label>
+                          <label><input type="radio" name="controlPanelTriggerMethod" data-setting="controlPanelTriggerMethod" value="Hover"><span>{{UI_Hover}}</span></label>
                         </div>
                       </div>
 <div class="window-mode-setting-row panel-trigger-row child" data-depends="enableControlPanel" data-embedded-only="">
-                        <span id="panelTriggerAreaLabel" class="panel-trigger-label">触发区域</span>
+                        <span id="panelTriggerAreaLabel" class="panel-trigger-label">{{UI_ActivationArea}}</span>
                         <div class="panel-trigger-areas" role="group" aria-labelledby="panelTriggerAreaLabel">
-                          <label class="panel-trigger-chip"><input type="checkbox" data-setting="controlPanelTriggerCover"><span>封面</span></label>
-                          <label class="panel-trigger-chip"><input type="checkbox" data-setting="controlPanelTriggerLyrics"><span>歌词</span></label>
+                          <label class="panel-trigger-chip"><input type="checkbox" data-setting="controlPanelTriggerCover"><span>{{UI_CoverArt}}</span></label>
+                          <label class="panel-trigger-chip"><input type="checkbox" data-setting="controlPanelTriggerLyrics"><span>{{UI_Lyrics}}</span></label>
                         </div>
                       </div></div><div class="panel-material-controls"><div class="window-mode-setting-row panel-material-setting is-disabled" data-embedded-only="" data-depends="enableControlPanel">
-                        <label class="window-mode-setting-copy" for="embeddedPanelBlurAmount"><strong>模糊</strong></label>
-                        <div class="slider-number-control"><input type="range" min="0" max="64" step="1" data-setting="embeddedPanelBlurAmount" aria-label="任务栏面板模糊"><label class="unit-input compact-number-input"><input id="embeddedPanelBlurAmount" type="number" min="0" max="64" step="1" data-setting="embeddedPanelBlurAmount" aria-label="任务栏面板模糊数值"><span>px</span></label></div>
+                        <label class="window-mode-setting-copy" for="embeddedPanelBlurAmount"><strong>{{UI_Blur}}</strong></label>
+                        <div class="slider-number-control"><input type="range" min="0" max="64" step="1" data-setting="embeddedPanelBlurAmount" aria-label="{{UI_TaskbarPanelBlur}}"><label class="unit-input compact-number-input"><input id="embeddedPanelBlurAmount" type="number" min="0" max="64" step="1" data-setting="embeddedPanelBlurAmount" aria-label="{{UI_TaskbarPanelBlurValue}}"><span>px</span></label></div>
                       </div><div class="window-mode-setting-row panel-material-setting is-disabled" data-embedded-only="" data-depends="enableControlPanel">
-                        <label class="window-mode-setting-copy" for="embeddedPanelBrightness"><strong>亮度</strong></label>
-                        <div class="slider-number-control"><input type="range" min="0" max="100" step="1" data-setting="embeddedPanelBrightness" data-value-scale="100" aria-label="任务栏面板亮度"><label class="unit-input compact-number-input percentage-input"><input id="embeddedPanelBrightness" type="number" min="0" max="100" step="1" data-setting="embeddedPanelBrightness" data-value-scale="100" aria-label="任务栏面板亮度百分比"><span>%</span></label></div>
+                        <label class="window-mode-setting-copy" for="embeddedPanelBrightness"><strong>{{UI_Brightness}}</strong></label>
+                        <div class="slider-number-control"><input type="range" min="0" max="100" step="1" data-setting="embeddedPanelBrightness" data-value-scale="100" aria-label="{{UI_TaskbarPanelBrightness}}"><label class="unit-input compact-number-input percentage-input"><input id="embeddedPanelBrightness" type="number" min="0" max="100" step="1" data-setting="embeddedPanelBrightness" data-value-scale="100" aria-label="{{UI_TaskbarPanelBrightnessPercentage}}"><span>%</span></label></div>
                       </div><div class="window-mode-setting-row panel-material-setting is-disabled" data-embedded-only="" data-depends="enableControlPanel">
-                        <label class="window-mode-setting-copy" for="embeddedPanelTintOpacity"><strong>不透明度</strong></label>
-                        <div class="slider-number-control"><input type="range" min="0" max="100" step="1" data-setting="embeddedPanelTintOpacity" data-value-scale="100" aria-label="任务栏面板不透明度"><label class="unit-input compact-number-input percentage-input"><input id="embeddedPanelTintOpacity" type="number" min="0" max="100" step="1" data-setting="embeddedPanelTintOpacity" data-value-scale="100" aria-label="任务栏面板不透明度百分比"><span>%</span></label></div>
+                        <label class="window-mode-setting-copy" for="embeddedPanelTintOpacity"><strong>{{UI_Opacity}}</strong></label>
+                        <div class="slider-number-control"><input type="range" min="0" max="100" step="1" data-setting="embeddedPanelTintOpacity" data-value-scale="100" aria-label="{{UI_TaskbarPanelOpacity}}"><label class="unit-input compact-number-input percentage-input"><input id="embeddedPanelTintOpacity" type="number" min="0" max="100" step="1" data-setting="embeddedPanelTintOpacity" data-value-scale="100" aria-label="{{UI_TaskbarPanelOpacityPercentage}}"><span>%</span></label></div>
                       </div></div></div>
-            <div data-presentation-mode="floating" class="floating-window-mode-settings" hidden=""><div class="window-mode-setting-row display-group-heading" data-depends="useFloatingWindow"><h3><label class="window-mode-setting-copy" for="floatingControlPanelToggle">播放控制面板</label></h3><label class="switch small"><input id="floatingControlPanelToggle" type="checkbox" data-setting="enableFloatingControlPanel" aria-label="启用浮窗播放控制面板" disabled=""><span class="switch-track"></span></label></div></div>
+            <div data-presentation-mode="floating" class="floating-window-mode-settings" hidden=""><div class="window-mode-setting-row display-group-heading" data-depends="useFloatingWindow"><h3><label class="window-mode-setting-copy" for="floatingControlPanelToggle">{{UI_PlaybackControlPanel}}</label></h3><label class="switch small"><input id="floatingControlPanelToggle" type="checkbox" data-setting="enableFloatingControlPanel" aria-label="{{UI_EnableFloatingPlaybackControls}}" disabled=""><span class="switch-track"></span></label></div></div>
           </section>
           <section class="display-setting-group" data-display-group="floating-background" data-presentation-mode="floating" aria-labelledby="floatingBackgroundHeading" hidden>
             <div data-presentation-mode="floating" class="floating-window-mode-settings" hidden>
-              <div class="display-group-heading"><h3 id="floatingBackgroundHeading">浮窗背景</h3></div>
-              <div class="window-mode-setting-row" data-floating-only><label class="window-mode-setting-copy" for="floatingBackgroundToggle"><strong>始终显示歌词背景</strong><small id="floatingBackgroundDescription">鼠标移开后，仍保留封面与歌词区域的背景。</small></label><label class="switch"><input id="floatingBackgroundToggle" type="checkbox" data-setting="showFloatingBackground" aria-label="始终显示歌词背景" aria-describedby="floatingBackgroundDescription" disabled><span class="switch-track"></span></label></div>
-              <p class="display-group-note">以下材质同时用于歌词背景和展开的播放控制面板。开启歌词背景后，锁定浮窗或关闭播放控制仍保留模糊效果，背景区域无法鼠标穿透。</p>
+              <div class="display-group-heading"><h3 id="floatingBackgroundHeading">{{UI_FloatingBackground}}</h3></div>
+              <div class="window-mode-setting-row" data-floating-only><label class="window-mode-setting-copy" for="floatingBackgroundToggle"><strong>{{UI_AlwaysShowLyricBackground}}</strong><small id="floatingBackgroundDescription">{{UI_KeepTheCoverAndLyricBackgroundVisibleWhenThe}}</small></label><label class="switch"><input id="floatingBackgroundToggle" type="checkbox" data-setting="showFloatingBackground" aria-label="{{UI_AlwaysShowLyricBackground}}" aria-describedby="floatingBackgroundDescription" disabled><span class="switch-track"></span></label></div>
+              <p class="display-group-note">{{UI_ThisMaterialAppliesToTheLyricBackgroundAndExpanded}}</p>
               <div class="panel-material-controls"><div class="window-mode-setting-row panel-material-setting is-disabled" data-floating-only="">
-                        <label class="window-mode-setting-copy" for="floatingPanelBlurAmount"><strong>模糊</strong></label>
-                        <div class="slider-number-control"><input type="range" min="0" max="64" step="1" data-setting="floatingPanelBlurAmount" aria-label="浮窗卡片模糊"><label class="unit-input compact-number-input"><input id="floatingPanelBlurAmount" type="number" min="0" max="64" step="1" data-setting="floatingPanelBlurAmount" aria-label="浮窗卡片模糊数值"><span>px</span></label></div>
+                        <label class="window-mode-setting-copy" for="floatingPanelBlurAmount"><strong>{{UI_Blur}}</strong></label>
+                        <div class="slider-number-control"><input type="range" min="0" max="64" step="1" data-setting="floatingPanelBlurAmount" aria-label="{{UI_FloatingCardBlur}}"><label class="unit-input compact-number-input"><input id="floatingPanelBlurAmount" type="number" min="0" max="64" step="1" data-setting="floatingPanelBlurAmount" aria-label="{{UI_FloatingCardBlurValue}}"><span>px</span></label></div>
                       </div><div class="window-mode-setting-row panel-material-setting is-disabled" data-floating-only="">
-                        <label class="window-mode-setting-copy" for="floatingPanelBrightness"><strong>亮度</strong></label>
-                        <div class="slider-number-control"><input type="range" min="0" max="100" step="1" data-setting="floatingPanelBrightness" data-value-scale="100" aria-label="浮窗卡片亮度"><label class="unit-input compact-number-input percentage-input"><input id="floatingPanelBrightness" type="number" min="0" max="100" step="1" data-setting="floatingPanelBrightness" data-value-scale="100" aria-label="浮窗卡片亮度百分比"><span>%</span></label></div>
+                        <label class="window-mode-setting-copy" for="floatingPanelBrightness"><strong>{{UI_Brightness}}</strong></label>
+                        <div class="slider-number-control"><input type="range" min="0" max="100" step="1" data-setting="floatingPanelBrightness" data-value-scale="100" aria-label="{{UI_FloatingCardBrightness}}"><label class="unit-input compact-number-input percentage-input"><input id="floatingPanelBrightness" type="number" min="0" max="100" step="1" data-setting="floatingPanelBrightness" data-value-scale="100" aria-label="{{UI_FloatingCardBrightnessPercentage}}"><span>%</span></label></div>
                       </div><div class="window-mode-setting-row panel-material-setting is-disabled" data-floating-only="">
-                        <label class="window-mode-setting-copy" for="floatingPanelTintOpacity"><strong>不透明度</strong></label>
-                        <div class="slider-number-control"><input type="range" min="0" max="100" step="1" data-setting="floatingPanelTintOpacity" data-value-scale="100" aria-label="浮窗卡片不透明度"><label class="unit-input compact-number-input percentage-input"><input id="floatingPanelTintOpacity" type="number" min="0" max="100" step="1" data-setting="floatingPanelTintOpacity" data-value-scale="100" aria-label="浮窗卡片不透明度百分比"><span>%</span></label></div>
+                        <label class="window-mode-setting-copy" for="floatingPanelTintOpacity"><strong>{{UI_Opacity}}</strong></label>
+                        <div class="slider-number-control"><input type="range" min="0" max="100" step="1" data-setting="floatingPanelTintOpacity" data-value-scale="100" aria-label="{{UI_FloatingCardOpacity}}"><label class="unit-input compact-number-input percentage-input"><input id="floatingPanelTintOpacity" type="number" min="0" max="100" step="1" data-setting="floatingPanelTintOpacity" data-value-scale="100" aria-label="{{UI_FloatingCardOpacityPercentage}}"><span>%</span></label></div>
                       </div></div></div>
           </section>
-          <section class="display-setting-group" data-display-group="appearance" aria-label="歌词背景与边框" data-presentation-mode="embedded"><div data-presentation-mode="embedded" class="embedded-window-mode-settings"><details class="mode-details"><summary><span>歌词背景与边框</span><small data-embedded-appearance-summary="">背景关闭 · 边框关闭</small></summary>
-                      <div data-embedded-only="" class="window-mode-setting-row compact"><div class="window-mode-setting-copy"><strong>显示背景</strong></div><label class="switch"><input type="checkbox" data-setting="showBackground" aria-label="显示背景"><span class="switch-track"></span></label></div>
-                      <div data-embedded-only="" class="window-mode-setting-row child" data-depends="showBackground"><div class="window-mode-setting-copy"><strong>背景不透明度</strong></div><div class="slider-number-control"><input type="range" min="0" max="1" step="0.05" data-setting="backgroundOpacity" aria-label="背景不透明度滑块"><label class="unit-input compact-number-input percentage-input"><input type="number" min="0" max="100" step="5" data-setting="backgroundOpacity" data-value-scale="100" aria-label="背景不透明度百分比"><span>%</span></label></div></div>
-                      <div data-embedded-only="" class="window-mode-setting-row compact"><div class="window-mode-setting-copy"><strong>显示边框</strong></div><label class="switch"><input type="checkbox" data-setting="showBorder" aria-label="显示边框"><span class="switch-track"></span></label></div>
+          <section class="display-setting-group" data-display-group="appearance" aria-label="{{UI_LyricBackgroundBorder}}" data-presentation-mode="embedded"><div data-presentation-mode="embedded" class="embedded-window-mode-settings"><details class="mode-details"><summary><span>{{UI_LyricBackgroundBorder}}</span><small data-embedded-appearance-summary="">{{UI_BackgroundOffBorderOff}}</small></summary>
+                      <div data-embedded-only="" class="window-mode-setting-row compact"><div class="window-mode-setting-copy"><strong>{{UI_ShowBackground}}</strong></div><label class="switch"><input type="checkbox" data-setting="showBackground" aria-label="{{UI_ShowBackground}}"><span class="switch-track"></span></label></div>
+                      <div data-embedded-only="" class="window-mode-setting-row child" data-depends="showBackground"><div class="window-mode-setting-copy"><strong>{{UI_BackgroundOpacity}}</strong></div><div class="slider-number-control"><input type="range" min="0" max="1" step="0.05" data-setting="backgroundOpacity" aria-label="{{UI_BackgroundOpacitySlider}}"><label class="unit-input compact-number-input percentage-input"><input type="number" min="0" max="100" step="5" data-setting="backgroundOpacity" data-value-scale="100" aria-label="{{UI_BackgroundOpacityPercentage}}"><span>%</span></label></div></div>
+                      <div data-embedded-only="" class="window-mode-setting-row compact"><div class="window-mode-setting-copy"><strong>{{UI_ShowBorder}}</strong></div><label class="switch"><input type="checkbox" data-setting="showBorder" aria-label="{{UI_ShowBorder}}"><span class="switch-track"></span></label></div>
                       </details></div></section>
         </div>
-        <aside class="display-preview" aria-labelledby="displayPreviewHeading"><div class="display-preview-sticky"><div class="display-preview-heading"><h3 id="displayPreviewHeading">模式演示</h3><span data-presentation-status role="status">固定示例</span></div><div class="display-preview-stage"><video data-presentation-video muted playsinline preload="none" poster="media/embedded-poster.png?v=floating-transparent-hq-v4" aria-label="任务栏嵌入模式演示"></video></div><div class="display-preview-actions"><div><strong data-presentation-name>任务栏嵌入</strong><p data-presentation-description>歌词保留在任务栏，播放面板在附近独立出现。</p></div><button class="btn secondary small" type="button" data-replay-presentation aria-label="重播当前模式演示"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8M3 3v5h5"/></svg>重播演示</button></div><p class="display-preview-note">首次打开此页或切换模式时演示一次。演示使用固定参数，调整设置请查看实际歌词窗口。</p></div></aside>
+        <aside class="display-preview" aria-labelledby="displayPreviewHeading"><div class="display-preview-sticky"><div class="display-preview-heading"><h3 id="displayPreviewHeading">{{UI_ModeDemo}}</h3><span data-presentation-status role="status">{{UI_FixedExample}}</span></div><div class="display-preview-stage"><video data-presentation-video muted playsinline preload="none" poster="media/embedded-poster.png?v=floating-transparent-hq-v4" aria-label="{{UI_TaskbarEmbeddedModeDemo}}"></video></div><div class="display-preview-actions"><div><strong data-presentation-name>{{UI_TaskbarEmbedded}}</strong><p data-presentation-description>{{UI_LyricsStayInTheTaskbarWithPlaybackControlsNearby}}</p></div><button class="btn secondary small" type="button" data-replay-presentation aria-label="{{UI_ReplayCurrentModeDemo}}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8M3 3v5h5"/></svg>{{UI_ReplayDemo}}</button></div><p class="display-preview-note">{{UI_PlaysOnceWhenThisPageOpensOrTheMode}}</p></div></aside>
       </div>
     </section>
     <section class="panel" data-display-group="lyrics" aria-labelledby="displayLyricsHeading">
-      <div class="panel-head"><div><h2 id="displayLyricsHeading">歌词布局</h2><p>两种显示方式共用歌词行数、对齐方式和封面位置。</p></div></div>
+      <div class="panel-head"><div><h2 id="displayLyricsHeading">{{UI_LyricLayout}}</h2><p>{{UI_BothDisplayModesShareLineCountAlignmentAndCover}}</p></div></div>
       <div class="settings">
         <div class="setting-row compact layout-choice-row">
-          <div class="setting-label"><strong id="lyricsLineCountLabel">歌词行数</strong><small>单行仅显示当前歌词，适合小任务栏。</small></div>
+          <div class="setting-label"><strong id="lyricsLineCountLabel">{{UI_LyricLines}}</strong><small>{{UI_SingleLineShowsOnlyTheCurrentLyricSuitableFor}}</small></div>
           <div class="monitor-mode layout-options" role="radiogroup" aria-labelledby="lyricsLineCountLabel">
-            <label><input type="radio" name="singleLineLyrics" value="false" data-value-type="boolean" data-setting="singleLineLyrics"><span>双行</span></label>
-            <label><input type="radio" name="singleLineLyrics" value="true" data-value-type="boolean" data-setting="singleLineLyrics"><span>单行</span></label>
+            <label><input type="radio" name="singleLineLyrics" value="false" data-value-type="boolean" data-setting="singleLineLyrics"><span>{{UI_TwoLines}}</span></label>
+            <label><input type="radio" name="singleLineLyrics" value="true" data-value-type="boolean" data-setting="singleLineLyrics"><span>{{UI_SingleLine}}</span></label>
           </div>
         </div>
         <div class="setting-row compact layout-choice-row">
-          <div class="setting-label"><strong id="lyricsTextAlignmentLabel">歌词对齐</strong></div>
+          <div class="setting-label"><strong id="lyricsTextAlignmentLabel">{{UI_LyricAlignment}}</strong></div>
           <div class="monitor-mode layout-options" role="radiogroup" aria-labelledby="lyricsTextAlignmentLabel">
-            <label><input type="radio" name="lyricsTextAlignment" value="Left" data-setting="lyricsTextAlignment" aria-label="歌词左对齐或上对齐"><span>左 / 上</span></label>
-            <label><input type="radio" name="lyricsTextAlignment" value="Center" data-setting="lyricsTextAlignment" aria-label="歌词居中"><span>居中</span></label>
-            <label><input type="radio" name="lyricsTextAlignment" value="Right" data-setting="lyricsTextAlignment" aria-label="歌词右对齐或下对齐"><span>右 / 下</span></label>
+            <label><input type="radio" name="lyricsTextAlignment" value="Left" data-setting="lyricsTextAlignment" aria-label="{{UI_AlignLyricsLeftOrTop}}"><span>{{UI_LeftTop}}</span></label>
+            <label><input type="radio" name="lyricsTextAlignment" value="Center" data-setting="lyricsTextAlignment" aria-label="{{UI_CenterLyrics}}"><span>{{UI_Center}}</span></label>
+            <label><input type="radio" name="lyricsTextAlignment" value="Right" data-setting="lyricsTextAlignment" aria-label="{{UI_AlignLyricsRightOrBottom}}"><span>{{UI_RightBottom}}</span></label>
           </div>
         </div>
         <div class="setting-row compact layout-choice-row">
-          <div class="setting-label"><strong id="coverDisplayLabel">封面</strong></div>
+          <div class="setting-label"><strong id="coverDisplayLabel">{{UI_CoverArt}}</strong></div>
           <div class="monitor-mode layout-options" role="radiogroup" aria-labelledby="coverDisplayLabel" data-cover-display-options="" data-settings="showCover coverPosition">
-            <label><input type="radio" name="coverDisplayMode" value="Hidden" data-cover-display="" aria-label="隐藏封面"><span>隐藏</span></label>
-            <label><input type="radio" name="coverDisplayMode" value="Left" data-cover-display="" aria-label="封面在歌词左侧或上方"><span>左侧 / 上方</span></label>
-            <label><input type="radio" name="coverDisplayMode" value="Right" data-cover-display="" aria-label="封面在歌词右侧或下方"><span>右侧 / 下方</span></label>
+            <label><input type="radio" name="coverDisplayMode" value="Hidden" data-cover-display="" aria-label="{{UI_HideCoverArt}}"><span>{{UI_Hide}}</span></label>
+            <label><input type="radio" name="coverDisplayMode" value="Left" data-cover-display="" aria-label="{{UI_CoverArtLeftOfOrAboveLyrics}}"><span>{{UI_LeftAbove}}</span></label>
+            <label><input type="radio" name="coverDisplayMode" value="Right" data-cover-display="" aria-label="{{UI_CoverArtRightOfOrBelowLyrics}}"><span>{{UI_RightBelow}}</span></label>
           </div>
         </div>
       </div>
     </section>
     <div class="panel">
-              <div class="panel-head"><div><h2>文字样式</h2><p>调整字体、字重、颜色和复杂背景下的可读性。字号属于基础尺寸，见上方「尺寸 → 高级尺寸微调」。</p></div></div>
+              <div class="panel-head"><div><h2>{{UI_TextStyle}}</h2><p>{{UI_AdjustFontWeightColorAndReadabilityOnComplexBackgrounds}}</p></div></div>
               <div class="settings">
-                <div class="setting-row"><div class="setting-label"><strong>字体</strong></div><button id="fontFamilySelect" class="control select-trigger" type="button" data-setting="fontFamily" aria-label="字体" aria-haspopup="listbox" aria-expanded="false"><span class="select-trigger-value"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg></button></div>
-                <div class="setting-row"><div class="setting-label"><strong>字重</strong></div><button class="control select-trigger" type="button" data-setting="fontWeight" aria-label="字重" aria-haspopup="listbox" aria-expanded="false"><span class="select-trigger-value"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg></button></div>
-                <div class="setting-row"><div class="setting-label"><strong>文字颜色</strong></div><div class="color-mode-control"><button class="control select-trigger" type="button" data-setting="foregroundColorMode" aria-label="文字颜色模式" aria-haspopup="listbox" aria-expanded="false"><span class="select-trigger-value"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg></button><div class="preset-color-readout" data-preset-color=""><span class="color-swatch" data-mode-swatch=""></span><span data-mode-value="">#FFFFFF</span></div><div class="color-control custom-color-control" data-custom-color="" hidden=""><button id="colorPickerButton" class="color-picker-button" type="button" data-setting="foregroundColor" aria-label="打开自定义取色器" aria-haspopup="dialog" aria-expanded="false"><span class="color-swatch" data-color-swatch=""></span><span>选择颜色</span></button><input class="control color-value-input" data-color-text="foregroundColor" aria-label="自定义文字颜色值" aria-describedby="foregroundColorError" aria-invalid="false" maxlength="7" spellcheck="false"><small id="foregroundColorError" class="input-error" hidden="">请输入类似 #FFFFFF 的颜色值。</small></div></div></div>
-                <div class="setting-row compact"><div class="setting-label"><strong>文字阴影</strong></div><label class="switch"><input type="checkbox" data-setting="showTextShadow" aria-label="文字阴影"><span class="switch-track"></span></label></div>
+                <div class="setting-row"><div class="setting-label"><strong>{{UI_Font}}</strong></div><button id="fontFamilySelect" class="control select-trigger" type="button" data-setting="fontFamily" aria-label="{{UI_Font}}" aria-haspopup="listbox" aria-expanded="false"><span class="select-trigger-value"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg></button></div>
+                <div class="setting-row"><div class="setting-label"><strong>{{UI_FontWeight}}</strong></div><button class="control select-trigger" type="button" data-setting="fontWeight" aria-label="{{UI_FontWeight}}" aria-haspopup="listbox" aria-expanded="false"><span class="select-trigger-value"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg></button></div>
+                <div class="setting-row"><div class="setting-label"><strong>{{UI_TextColor}}</strong></div><div class="color-mode-control"><button class="control select-trigger" type="button" data-setting="foregroundColorMode" aria-label="{{UI_TextColorMode}}" aria-haspopup="listbox" aria-expanded="false"><span class="select-trigger-value"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg></button><div class="preset-color-readout" data-preset-color=""><span class="color-swatch" data-mode-swatch=""></span><span data-mode-value="">#FFFFFF</span></div><div class="color-control custom-color-control" data-custom-color="" hidden=""><button id="colorPickerButton" class="color-picker-button" type="button" data-setting="foregroundColor" aria-label="{{UI_OpenCustomColorPicker}}" aria-haspopup="dialog" aria-expanded="false"><span class="color-swatch" data-color-swatch=""></span><span>{{UI_ChooseColor}}</span></button><input class="control color-value-input" data-color-text="foregroundColor" aria-label="{{UI_CustomTextColorValue}}" aria-describedby="foregroundColorError" aria-invalid="false" maxlength="7" spellcheck="false"><small id="foregroundColorError" class="input-error" hidden="">{{UI_EnterAColorSuchAsFFFFFF}}</small></div></div></div>
+                <div class="setting-row compact"><div class="setting-label"><strong>{{UI_TextShadow}}</strong></div><label class="switch"><input type="checkbox" data-setting="showTextShadow" aria-label="{{UI_TextShadow}}"><span class="switch-track"></span></label></div>
               </div>
             </div>
 <section class="panel">
-              <div class="panel-head"><div><h2>显示器</h2><p>两种显示方式共用显示器选择。</p></div></div>
+              <div class="panel-head"><div><h2>{{UI_Displays}}</h2><p>{{UI_BothDisplayModesShareTheDisplaySelection}}</p></div></div>
               <div class="settings">
-                <div class="setting-row monitor-setting-row"><div class="setting-label"><strong>显示器</strong><small>选择显示歌词的屏幕，适用于两种模式。</small></div><div class="monitor-selection"><div class="monitor-mode" role="radiogroup" aria-label="歌词显示器模式"><label><input type="radio" name="lyricsDisplayMode" value="All" data-display-mode=""><span>全部显示器</span></label><label><input type="radio" name="lyricsDisplayMode" value="Selected" data-display-mode=""><span>指定显示器</span></label></div><span id="displayMonitorListLabel" class="sr-only">选择显示歌词的显示器</span><div id="displayMonitorList" class="monitor-list" role="group" aria-labelledby="displayMonitorListLabel"></div><small id="displayMonitorHint" class="monitor-hint" role="status"></small></div></div>
+                <div class="setting-row monitor-setting-row"><div class="setting-label"><strong>{{UI_Displays}}</strong><small>{{UI_ChooseScreensForLyricsInBothModes}}</small></div><div class="monitor-selection"><div class="monitor-mode" role="radiogroup" aria-label="{{UI_LyricDisplaySelectionMode}}"><label><input type="radio" name="lyricsDisplayMode" value="All" data-display-mode=""><span>{{UI_AllDisplays}}</span></label><label><input type="radio" name="lyricsDisplayMode" value="Selected" data-display-mode=""><span>{{UI_SelectedDisplays}}</span></label></div><span id="displayMonitorListLabel" class="sr-only">{{UI_ChooseDisplaysForLyrics}}</span><div id="displayMonitorList" class="monitor-list" role="group" aria-labelledby="displayMonitorListLabel"></div><small id="displayMonitorHint" class="monitor-hint" role="status"></small></div></div>
               </div>
             </section>
   </div>
@@ -300,13 +300,14 @@
 
         <section class="page" data-page="general" aria-labelledby="generalHeading">
           <div class="page-inner">
-            <section class="panel"><div class="panel-head"><div><h2 id="generalHeading" tabindex="-1">启动与后台</h2><p>控制 TaskbarLyrics 的日常运行行为。</p></div></div><div class="settings">
-              <div class="setting-row compact"><div class="setting-label"><strong>开机自动启动</strong></div><label class="switch"><input type="checkbox" data-setting="startWithWindows" aria-label="开机自动启动"><span class="switch-track"></span></label></div>
+            <section class="panel"><div class="panel-head"><div><h2 id="generalHeading" tabindex="-1">{{UI_StartupBackground}}</h2><p>{{UI_ManageEverydayTaskbarLyricsBehavior}}</p></div></div><div class="settings">
+              <div class="setting-row compact"><div class="setting-label"><strong>{{UI_StartWithWindows}}</strong></div><label class="switch"><input type="checkbox" data-setting="startWithWindows" aria-label="{{UI_StartWithWindows}}"><span class="switch-track"></span></label></div>
             </div></section>
             <section class="panel">
-              <div class="panel-head"><div><h2>应用界面</h2><p>统一应用工具界面的显示主题。</p></div></div>
+              <div class="panel-head"><div><h2>{{UI_AppInterface}}</h2><p>{{UI_SetAConsistentThemeForAppTools}}</p></div></div>
               <div class="settings">
-                <div class="setting-row"><div class="setting-label"><strong>界面主题</strong><small>统一控制设置页、SMTC 监视器、频谱调试和托盘菜单的显示主题。</small></div><div class="theme-segmented" data-setting="toolWindowTheme" role="radiogroup" aria-label="界面主题"><button type="button" role="radio" data-theme-value="System" aria-checked="false"><svg viewBox="0 0 24 24" aria-hidden="true"><rect width="20" height="14" x="2" y="3" rx="2"/><path d="M8 21h8m-4-4v4"/></svg><span>跟随系统</span></button><button type="button" role="radio" data-theme-value="Light" aria-checked="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></svg><span>浅色</span></button><button type="button" role="radio" data-theme-value="Dark" aria-checked="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"/></svg><span>深色</span></button></div></div>
+                <div class="setting-row"><div class="setting-label"><strong>{{UI_InterfaceTheme}}</strong><small>{{UI_ApplyOneThemeToSettingsTheSMTCMonitorSpectrum}}</small></div><div class="theme-segmented" data-setting="toolWindowTheme" role="radiogroup" aria-label="{{UI_InterfaceTheme}}"><button type="button" role="radio" data-theme-value="System" aria-checked="false"><svg viewBox="0 0 24 24" aria-hidden="true"><rect width="20" height="14" x="2" y="3" rx="2"/><path d="M8 21h8m-4-4v4"/></svg><span>{{UI_FollowSystem}}</span></button><button type="button" role="radio" data-theme-value="Light" aria-checked="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></svg><span>{{UI_Light}}</span></button><button type="button" role="radio" data-theme-value="Dark" aria-checked="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"/></svg><span>{{UI_Dark}}</span></button></div></div>
+                <div class="setting-row" id="uiLanguageRow" hidden><div class="setting-label"><strong>{{UI_InterfaceLanguage}}</strong></div><button class="control select-trigger compact-select" type="button" data-setting="uiLanguage" aria-label="{{UI_InterfaceLanguage}}" aria-haspopup="listbox" aria-expanded="false"><span class="select-trigger-value"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
               </div>
             </section>
           </div>
@@ -314,14 +315,14 @@
 
         <section class="page" data-page="advanced" aria-labelledby="advancedHeading">
           <div class="page-inner">
-            <section class="panel"><div class="panel-head"><div><h2 id="advancedHeading" tabindex="-1">诊断工具</h2><p>这些选项仅用于定位播放同步和频谱问题。</p></div></div><div class="settings">
-              <div class="setting-row compact"><div class="setting-label"><strong>SMTC 时间轴监视器</strong><small>打开一次性监视窗口，关闭后不会在后台继续运行。</small></div><button id="smtcMonitorButton" class="btn secondary" type="button">打开监视</button></div>
-              <div class="setting-row compact"><div class="setting-label"><strong>频谱调试</strong><small id="spectrumTuningDescription">打开滑块面板，实时调节频谱参数（自动保存）。</small></div><button id="spectrumTuningButton" class="btn secondary" type="button" aria-describedby="spectrumTuningDescription">打开调试</button></div>
+            <section class="panel"><div class="panel-head"><div><h2 id="advancedHeading" tabindex="-1">{{UI_DiagnosticTools}}</h2><p>{{UI_TheseToolsHelpDiagnosePlaybackSynchronizationAndSpectrumIssues}}</p></div></div><div class="settings">
+              <div class="setting-row compact"><div class="setting-label"><strong>{{UI_SMTCTimelineMonitor}}</strong><small>{{UI_OpensATemporaryMonitorItStopsRunningWhenClosed}}</small></div><button id="smtcMonitorButton" class="btn secondary" type="button">{{UI_OpenMonitor}}</button></div>
+              <div class="setting-row compact"><div class="setting-label"><strong>{{UI_SpectrumTuning}}</strong><small id="spectrumTuningDescription">{{UI_OpenSlidersToAdjustSpectrumParametersLiveChangesSave}}</small></div><button id="spectrumTuningButton" class="btn secondary" type="button" aria-describedby="spectrumTuningDescription">{{UI_OpenTuning}}</button></div>
             </div></section>
-            <section class="panel"><div class="panel-head"><div><h2>歌词提示</h2></div></div><div class="settings">
-              <div class="setting-row compact"><div class="setting-label"><strong>显示歌词检索提示</strong><small>关闭后，仅隐藏“正在检索歌词...”提示，歌名、歌手与封面正常显示。</small></div><label class="switch"><input type="checkbox" data-setting="showLyricSearchStatus" aria-label="显示歌词检索提示"><span class="switch-track"></span></label></div>
+            <section class="panel"><div class="panel-head"><div><h2>{{UI_LyricStatusHints}}</h2></div></div><div class="settings">
+              <div class="setting-row compact"><div class="setting-label"><strong>{{UI_ShowLyricSearchHints}}</strong><small>{{UI_HidesOnlyTheSearchingForLyricsHintTrackTitle}}</small></div><label class="switch"><input type="checkbox" data-setting="showLyricSearchStatus" aria-label="{{UI_ShowLyricSearchHints}}"><span class="switch-track"></span></label></div>
             </div></section>
-            <section class="panel"><div class="panel-head"><div><h2>数据维护</h2><p>清理缓存不会删除应用设置。</p></div></div><div class="settings"><div class="setting-row compact"><div class="setting-label"><strong>歌词与封面缓存</strong><small>清理后首次重新匹配可能稍慢，并会删除歌词匹配中“使用并记住”的指定记录。</small></div><button id="clearCacheButton" class="btn destructive" type="button">清除缓存</button></div></div></section>
+            <section class="panel"><div class="panel-head"><div><h2>{{UI_DataMaintenance}}</h2><p>{{UI_ClearingTheCacheDoesNotDeleteAppSettings}}</p></div></div><div class="settings"><div class="setting-row compact"><div class="setting-label"><strong>{{UI_LyricCoverCache}}</strong><small>{{UI_TheFirstMatchMayBeSlowerAfterClearingSaved}}</small></div><button id="clearCacheButton" class="btn destructive" type="button">{{UI_ClearCache}}</button></div></div></section>
           </div>
         </section>
 
@@ -329,30 +330,30 @@
           <div class="page-inner diagnostics-page">
             <section class="panel diagnostics-run-panel">
               <div class="panel-head">
-                <div><h2 id="lyricDiagnosticsHeading" tabindex="-1">歌词匹配</h2><p>查找当前 SMTC 歌曲的歌词候选，比较匹配分并选择结果。</p></div>
-                <button id="runLyricDiagnosticsButton" class="btn" type="button">查找歌词</button>
+                <div><h2 id="lyricDiagnosticsHeading" tabindex="-1">{{UI_LyricMatching}}</h2><p>{{UI_FindLyricCandidatesForTheCurrentSMTCTrackCompare}}</p></div>
+                <button id="runLyricDiagnosticsButton" class="btn" type="button">{{UI_FindLyrics}}</button>
               </div>
-              <div id="lyricDiagnosticsStatus" class="diagnostics-status" data-state="idle" role="status" aria-live="polite">尚未查找。点击“查找歌词”查看当前歌曲的匹配结果。</div>
+              <div id="lyricDiagnosticsStatus" class="diagnostics-status" data-state="idle" role="status" aria-live="polite">{{UI_NoSearchYetClickFindLyricsToSeeMatches}}</div>
             </section>
 
             <section id="lyricDiagnosticsTrackPanel" class="panel diagnostics-track-panel" hidden>
-              <div class="panel-head"><div><h2>当前歌曲</h2><p>本次匹配使用当前捕获的 SMTC 元数据，不会自动修改歌词缓存或设置；“使用并记住”会创建指定记录，清除歌词缓存时会一并删除。</p></div><span id="lyricDiagnosticsCapturedAt" class="source-count"></span></div>
+              <div class="panel-head"><div><h2>{{UI_CurrentTrack}}</h2><p>{{UI_UsesTheCapturedSMTCMetadataWithoutAutomaticallyChangingCaches}}</p></div><span id="lyricDiagnosticsCapturedAt" class="source-count"></span></div>
               <div id="lyricDiagnosticsTrack" class="diagnostics-track"></div>
             </section>
 
             <section id="lyricDiagnosticsReportPanel" class="panel" hidden>
-              <div class="panel-head"><div><h2>匹配结果</h2><p>候选按歌词源分组；每项保留源返回的元数据、身份匹配分和拒绝原因。多个源达到 95 分时优先选用可信度更高的源；均未达 95 分时从 80 分以上候选中按可信顺序选用。</p></div><span id="lyricDiagnosticsProviderCount" class="source-count"></span></div>
+              <div class="panel-head"><div><h2>{{UI_MatchingResults}}</h2><p>{{UI_CandidatesAreGroupedBySourceWithMetadataIdentityScores}}</p></div><span id="lyricDiagnosticsProviderCount" class="source-count"></span></div>
               <div id="lyricDiagnosticsReportSummary" class="diagnostics-report-summary"></div>
               <div id="lyricDiagnosticsProviders" class="diagnostics-providers"></div>
             </section>
 
             <section id="lyricDiagnosticsVariantsPanel" class="panel" hidden>
-              <div class="panel-head"><div><h2>检索变体</h2><p>当严格身份没有结果时，系统会按顺序放宽查询条件。</p></div></div>
+              <div class="panel-head"><div><h2>{{UI_SearchVariants}}</h2><p>{{UI_SearchCriteriaAreRelaxedInOrderIfStrictIdentity}}</p></div></div>
               <div id="lyricDiagnosticsVariants" class="diagnostics-variants"></div>
             </section>
 
             <section id="lyricDiagnosticsSelectionPanel" class="panel" hidden>
-              <div class="panel-head"><div><h2>最终结果</h2><p>以下是本次匹配最终采用的歌词内容；空结果表示没有通过完整校验的候选。</p></div></div>
+              <div class="panel-head"><div><h2>{{UI_FinalResult}}</h2><p>{{UI_LyricsSelectedByThisRunAnEmptyResultMeans}}</p></div></div>
               <div id="lyricDiagnosticsSelection" class="diagnostics-selection"></div>
             </section>
           </div>
@@ -362,108 +363,109 @@
           <div class="about-layout">
             <section class="panel about-product">
               <div class="about-logo" aria-hidden="true">TL</div>
-              <div class="about-copy"><div class="about-title-row"><h2 id="aboutHeading" tabindex="-1">TaskbarLyrics</h2><span class="version-badge">Version --</span></div><p>TaskbarLyrics 是一款利用任务栏闲置区域展示歌词的开源、<del class="easter-egg" title="以前轻量，更新很多版后就不轻量了">轻量</del>、现代化工具。</p></div>
-              <button id="repositoryButton" class="btn ghost" type="button">GitHub 仓库</button>
+              <div class="about-copy"><div class="about-title-row"><h2 id="aboutHeading" tabindex="-1">TaskbarLyrics</h2><span class="version-badge">Version --</span></div><p>{{UI_TaskbarLyricsIsAnOpenSource}}<del class="easter-egg" title="{{UI_ItUsedToBeLightweightBeforeAllThoseUpdates}}">{{UI_Lightweight}}</del>{{UI_ModernToolThatDisplaysLyricsInUnusedTaskbarSpace}}</p></div>
+              <button id="repositoryButton" class="btn ghost" type="button">{{UI_GitHubRepository}}</button>
             </section>
             <section class="panel">
-              <div class="panel-head"><div><h2>更新</h2><p>保持应用处于最新稳定版本。</p></div></div>
-              <div class="settings"><div class="setting-row compact"><div class="setting-label"><strong>自动检查更新</strong><small>每天最多检查一次，并通过系统通知提醒。</small></div><label class="switch"><input type="checkbox" data-setting="autoCheckUpdates" aria-label="自动检查更新"><span class="switch-track"></span></label></div></div>
-              <div class="update-summary"><div class="update-status"><strong id="updateStatusTitle">尚未检查更新</strong><small id="updateStatusDetail">当前版本 --</small></div><div class="update-actions"><button id="checkUpdateButton" class="btn" type="button">检查更新</button><button id="openReleaseButton" class="btn secondary" type="button" hidden>打开发布页</button></div></div>
+              <div class="panel-head"><div><h2>{{UI_Updates}}</h2><p>{{UI_KeepTheAppOnTheLatestStableVersion}}</p></div></div>
+              <div class="settings"><div class="setting-row compact"><div class="setting-label"><strong>{{UI_CheckForUpdatesAutomatically}}</strong><small>{{UI_ChecksAtMostOnceADayAndUsesSystem}}</small></div><label class="switch"><input type="checkbox" data-setting="autoCheckUpdates" aria-label="{{UI_CheckForUpdatesAutomatically}}"><span class="switch-track"></span></label></div></div>
+              <div class="update-summary"><div class="update-status"><strong id="updateStatusTitle">{{UI_UpdatesNotCheckedYet}}</strong><small id="updateStatusDetail">{{UI_CurrentVersion}}</small></div><div class="update-actions"><button id="checkUpdateButton" class="btn" type="button">{{UI_CheckForUpdates}}</button><button id="openReleaseButton" class="btn secondary" type="button" hidden>{{UI_OpenReleasePage}}</button></div></div>
             </section>
             <section class="panel">
-              <div class="panel-head"><div><h2>开源与技术</h2><p>项目源代码、许可证和主要技术信息。</p></div></div>
+              <div class="panel-head"><div><h2>{{UI_OpenSourceTechnology}}</h2><p>{{UI_SourceCodeLicenseAndKeyTechnologies}}</p></div></div>
               <div class="resource-list">
-                <div class="resource-item"><span>开源许可证</span><strong>MIT License</strong><span></span></div>
-                <div class="resource-item"><span>源代码</span><strong>GitHub</strong><button class="btn ghost small" type="button" data-repository-link>打开仓库</button></div>
-                <div class="resource-item"><span>界面技术</span><strong>WPF + WebView2</strong><span></span></div>
-                <div class="resource-item"><span>主要依赖</span><strong>WPF-UI / WebView2 / Lyricify</strong><span></span></div>
+                <div class="resource-item"><span>{{UI_OpenSourceLicense}}</span><strong>MIT License</strong><span></span></div>
+                <div class="resource-item"><span>{{UI_SourceCode}}</span><strong>GitHub</strong><button class="btn ghost small" type="button" data-repository-link>{{UI_OpenRepository}}</button></div>
+                <div class="resource-item"><span>{{UI_UITechnology}}</span><strong>WPF + WebView2</strong><span></span></div>
+                <div class="resource-item"><span>{{UI_MainDependencies}}</span><strong>WPF-UI / WebView2 / Lyricify</strong><span></span></div>
               </div>
             </section>
-            <div class="about-footer">TaskbarLyrics 是自由开源软件。</div>
+            <div class="about-footer">{{UI_TaskbarLyricsIsFreeAndOpenSourceSoftware}}</div>
           </div>
         </section>
       </div>
     </main>
   </div>
 
-  <dialog id="restoreDialog" aria-labelledby="restoreDialogTitle" aria-describedby="restoreDialogDescription"><div class="dialog-body"><h2 id="restoreDialogTitle">恢复默认设置？</h2><p id="restoreDialogDescription">设置将恢复为默认值，并立即应用到歌词窗口。已确认的系统音频采集授权会保留，频谱将关闭。</p></div><div class="dialog-actions"><button class="btn ghost" type="button" data-dialog-cancel="restoreDialog">取消</button><button id="confirmRestore" class="btn" type="button">恢复默认</button></div></dialog>
-  <dialog id="clearDialog" aria-labelledby="clearDialogTitle" aria-describedby="clearDialogDescription"><div class="dialog-body"><h2 id="clearDialogTitle">清除歌词与封面缓存？</h2><p id="clearDialogDescription">将删除歌词、封面缓存，以及歌词匹配中“使用并记住”的指定记录；应用设置不会受到影响。</p></div><div class="dialog-actions"><button class="btn ghost" type="button" data-dialog-cancel="clearDialog">取消</button><button id="confirmClear" class="btn destructive" type="button">清除缓存</button></div></dialog>
-  <dialog id="deleteTrackOffsetDialog" aria-labelledby="deleteTrackOffsetDialogTitle" aria-describedby="deleteTrackOffsetDialogDescription"><div class="dialog-body"><h2 id="deleteTrackOffsetDialogTitle">删除这条单曲偏移？</h2><p id="deleteTrackOffsetDialogDescription">删除后，这首歌曲在对应歌词源下将恢复为仅使用播放器偏移。</p></div><div class="dialog-actions"><button class="btn ghost" type="button" data-dialog-cancel="deleteTrackOffsetDialog">取消</button><button id="confirmDeleteTrackOffset" class="btn destructive" type="button">删除偏移</button></div></dialog>
-  <dialog id="clearTrackOffsetsDialog" aria-labelledby="clearTrackOffsetsDialogTitle" aria-describedby="clearTrackOffsetsDialogDescription"><div class="dialog-body"><h2 id="clearTrackOffsetsDialogTitle">清除全部单曲偏移？</h2><p id="clearTrackOffsetsDialogDescription">所有歌曲和歌词源的单独修正都会被删除，此操作不会影响播放器偏移。</p></div><div class="dialog-actions"><button class="btn ghost" type="button" data-dialog-cancel="clearTrackOffsetsDialog">取消</button><button id="confirmClearTrackOffsets" class="btn destructive" type="button">全部清除</button></div></dialog>
-  <dialog id="spectrumAudioConsentDialog" aria-labelledby="spectrumAudioConsentTitle" aria-describedby="spectrumAudioConsentDescription"><div class="dialog-body"><h2 id="spectrumAudioConsentTitle">启用系统音频频谱</h2><p id="spectrumAudioConsentDescription">为了生成频谱，TaskbarLyrics 需要读取扬声器或耳机当前正在播放的声音。不会读取物理麦克风，不会保存或上传音频；部分安全软件可能将系统音频采集显示为“麦克风”或“音频记录器”。</p></div><div class="dialog-actions"><button class="btn ghost" type="button" data-dialog-cancel="spectrumAudioConsentDialog">暂不启用</button><button id="confirmSpectrumAudioAccess" class="btn" type="button">启用频谱</button></div></dialog>
-  <dialog id="spectrumCaptureFailureDialog" aria-labelledby="spectrumCaptureFailureTitle" aria-describedby="spectrumCaptureFailureMessage"><div class="dialog-body"><h2 id="spectrumCaptureFailureTitle">无法读取系统播放声音</h2><p id="spectrumCaptureFailureMessage">系统音频采集被系统或安全软件阻止，歌词显示不受影响。</p></div><div class="dialog-actions"><button id="disableSpectrumButton" class="btn ghost" type="button">关闭频谱</button><button id="retrySpectrumCaptureButton" class="btn" type="button" data-retry-spectrum-capture>重试</button></div></dialog>
-  <dialog id="removePlayerDialog" aria-labelledby="removePlayerDialogTitle" aria-describedby="removePlayerDialogDescription"><div class="dialog-body"><h2 id="removePlayerDialogTitle">移除这个播放器？</h2><p id="removePlayerDialogDescription">将删除此播放器的歌词源顺序和同步偏移设置。</p></div><div class="dialog-actions"><button class="btn ghost" type="button" data-dialog-cancel="removePlayerDialog">取消</button><button id="confirmRemovePlayerSource" class="btn destructive" type="button">移除</button></div></dialog>
+  <dialog id="restoreDialog" aria-labelledby="restoreDialogTitle" aria-describedby="restoreDialogDescription"><div class="dialog-body"><h2 id="restoreDialogTitle">{{UI_RestoreDefaultSettings}}</h2><p id="restoreDialogDescription">{{UI_SettingsWillResetAndApplyImmediatelyExistingSystemAudio}}</p></div><div class="dialog-actions"><button class="btn ghost" type="button" data-dialog-cancel="restoreDialog">{{UI_Cancel}}</button><button id="confirmRestore" class="btn" type="button">{{UI_RestoreDefaults}}</button></div></dialog>
+  <dialog id="clearDialog" aria-labelledby="clearDialogTitle" aria-describedby="clearDialogDescription"><div class="dialog-body"><h2 id="clearDialogTitle">{{UI_ClearLyricAndCoverCache}}</h2><p id="clearDialogDescription">{{UI_DeletesCachedLyricsCoversAndSavedUseAndRemember}}</p></div><div class="dialog-actions"><button class="btn ghost" type="button" data-dialog-cancel="clearDialog">{{UI_Cancel}}</button><button id="confirmClear" class="btn destructive" type="button">{{UI_ClearCache}}</button></div></dialog>
+  <dialog id="deleteTrackOffsetDialog" aria-labelledby="deleteTrackOffsetDialogTitle" aria-describedby="deleteTrackOffsetDialogDescription"><div class="dialog-body"><h2 id="deleteTrackOffsetDialogTitle">{{UI_DeleteThisTrackOffset}}</h2><p id="deleteTrackOffsetDialogDescription">{{UI_ThisTrackAndLyricSourceWillRevertToUsing}}</p></div><div class="dialog-actions"><button class="btn ghost" type="button" data-dialog-cancel="deleteTrackOffsetDialog">{{UI_Cancel}}</button><button id="confirmDeleteTrackOffset" class="btn destructive" type="button">{{UI_DeleteOffset}}</button></div></dialog>
+  <dialog id="clearTrackOffsetsDialog" aria-labelledby="clearTrackOffsetsDialogTitle" aria-describedby="clearTrackOffsetsDialogDescription"><div class="dialog-body"><h2 id="clearTrackOffsetsDialogTitle">{{UI_ClearAllTrackOffsets}}</h2><p id="clearTrackOffsetsDialogDescription">{{UI_DeletesIndividualAdjustmentsForAllTracksAndLyricSources}}</p></div><div class="dialog-actions"><button class="btn ghost" type="button" data-dialog-cancel="clearTrackOffsetsDialog">{{UI_Cancel}}</button><button id="confirmClearTrackOffsets" class="btn destructive" type="button">{{UI_ClearAll}}</button></div></dialog>
+  <dialog id="spectrumAudioConsentDialog" aria-labelledby="spectrumAudioConsentTitle" aria-describedby="spectrumAudioConsentDescription"><div class="dialog-body"><h2 id="spectrumAudioConsentTitle">{{UI_EnableSystemAudioSpectrum}}</h2><p id="spectrumAudioConsentDescription">{{UI_TaskbarLyricsNeedsSpeakerOrHeadphoneOutputToGenerateThe}}</p></div><div class="dialog-actions"><button class="btn ghost" type="button" data-dialog-cancel="spectrumAudioConsentDialog">{{UI_NotNow}}</button><button id="confirmSpectrumAudioAccess" class="btn" type="button">{{UI_EnableSpectrum}}</button></div></dialog>
+  <dialog id="spectrumCaptureFailureDialog" aria-labelledby="spectrumCaptureFailureTitle" aria-describedby="spectrumCaptureFailureMessage"><div class="dialog-body"><h2 id="spectrumCaptureFailureTitle">{{UI_CannotCaptureSystemAudio}}</h2><p id="spectrumCaptureFailureMessage">{{UI_AudioCaptureIsBlockedByWindowsOrSecuritySoftware}}</p></div><div class="dialog-actions"><button id="disableSpectrumButton" class="btn ghost" type="button">{{UI_TurnOffSpectrum}}</button><button id="retrySpectrumCaptureButton" class="btn" type="button" data-retry-spectrum-capture>{{UI_Retry}}</button></div></dialog>
+  <dialog id="removePlayerDialog" aria-labelledby="removePlayerDialogTitle" aria-describedby="removePlayerDialogDescription"><div class="dialog-body"><h2 id="removePlayerDialogTitle">{{UI_RemoveThisPlayer}}</h2><p id="removePlayerDialogDescription">{{UI_DeletesThisPlayerSLyricSourceOrderAndSynchronization}}</p></div><div class="dialog-actions"><button class="btn ghost" type="button" data-dialog-cancel="removePlayerDialog">{{UI_Cancel}}</button><button id="confirmRemovePlayerSource" class="btn destructive" type="button">{{UI_Remove}}</button></div></dialog>
   <dialog id="playerSettingsDialog" class="player-settings-dialog" aria-labelledby="playerSettingsTitle">
     <div class="player-drawer-header">
       <span id="playerSettingsLogo" class="source-logo" aria-hidden="true"></span>
-      <div class="player-drawer-heading"><h2 id="playerSettingsTitle">播放器设置</h2><p id="playerSettingsAdapter"></p></div>
-      <button class="icon-button" type="button" data-dialog-cancel="playerSettingsDialog" aria-label="关闭播放器设置"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+      <div class="player-drawer-heading"><h2 id="playerSettingsTitle">{{UI_PlayerSettings}}</h2><p id="playerSettingsAdapter"></p></div>
+      <button class="icon-button" type="button" data-dialog-cancel="playerSettingsDialog" aria-label="{{UI_ClosePlayerSettings}}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
     </div>
     <div id="playerDrawerBody" class="player-drawer-body">
       <section id="playerCompatibilitySection" class="player-setting-section player-compatibility-section" hidden></section>
       <section id="playerDiscoverySection" class="player-setting-section player-drawer-discovery" aria-labelledby="playerDiscoveryTitle" hidden>
-        <div class="player-discovery-head"><strong id="playerDiscoveryTitle">检测到的媒体会话</strong><button id="refreshPlayerSessionsButton" class="btn ghost small" type="button">刷新</button></div>
-        <div id="availablePlayerSessions" class="available-player-sessions" role="group" aria-label="检测到的媒体会话"></div>
+        <div class="player-discovery-head"><strong id="playerDiscoveryTitle">{{UI_DetectedMediaSessions}}</strong><button id="refreshPlayerSessionsButton" class="btn ghost small" type="button">{{UI_Refresh}}</button></div>
+        <div id="availablePlayerSessions" class="available-player-sessions" role="group" aria-label="{{UI_DetectedMediaSessions}}"></div>
         <p id="playerDiscoveryStatus" class="player-discovery-status" role="status" aria-live="polite"></p>
       </section>
       <section id="playerRecognitionSection" class="player-setting-section" hidden>
-        <div class="setting-row compact"><div class="setting-label"><strong>播放器识别</strong><small>关闭后不再监听此播放器，已有偏移设置会保留。</small></div><label class="switch"><input id="playerRecognitionToggle" type="checkbox" aria-label="启用播放器识别"><span class="switch-track"></span></label></div>
+        <div class="setting-row compact"><div class="setting-label"><strong>{{UI_PlayerRecognition}}</strong><small>{{UI_StopMonitoringThisPlayerWhenOffExistingOffsetSettings}}</small></div><label class="switch"><input id="playerRecognitionToggle" type="checkbox" aria-label="{{UI_EnablePlayerRecognition}}"><span class="switch-track"></span></label></div>
       </section>
-      <section id="playerCardInfoSection" class="player-setting-section player-card-info-section" aria-label="播放器卡片信息" hidden>
+      <section id="playerCardInfoSection" class="player-setting-section player-card-info-section" aria-label="{{UI_PlayerCardInformation}}" hidden>
         <div id="selectedPlayerSession" class="selected-player-session">
           <div class="player-card-identity-row">
-            <button id="chooseCustomPlayerIconButton" class="custom-player-icon-tile" type="button" aria-label="上传播放器图标" aria-describedby="customPlayerIconStatus" disabled><span id="customPlayerIconPreview" aria-hidden="true"><img class="default-player-icon" src="../../Assets/PlayerIcons/Presets/music-player.svg" alt=""></span></button>
+            <button id="chooseCustomPlayerIconButton" class="custom-player-icon-tile" type="button" aria-label="{{UI_UploadPlayerIcon}}" aria-describedby="customPlayerIconStatus" disabled><span id="customPlayerIconPreview" aria-hidden="true"><img class="default-player-icon" src="../../Assets/PlayerIcons/Presets/music-player.svg" alt=""></span></button>
             <input id="customPlayerIcon" type="file" accept="image/png,image/jpeg,image/webp" hidden tabindex="-1">
             <div class="player-name-field">
-              <label for="customPlayerName">显示名称</label>
-              <input id="customPlayerName" class="control" type="text" maxlength="80" autocomplete="off" placeholder="先选择媒体会话" disabled>
+              <label for="customPlayerName">{{UI_DisplayName}}</label>
+              <input id="customPlayerName" class="control" type="text" maxlength="80" autocomplete="off" placeholder="{{UI_SelectAMediaSessionFirst}}" disabled>
             </div>
           </div>
           <div class="player-icon-meta">
-            <small id="customPlayerIconStatus" role="status" aria-live="polite">点击图标上传 PNG、JPEG 或 WebP 图片，最大 128 KB。</small>
-            <button id="clearCustomPlayerIconButton" class="btn ghost small" type="button" hidden>恢复默认图标</button>
+            <small id="customPlayerIconStatus" role="status" aria-live="polite">{{UI_ClickToUploadAPNGJPEGOrWebPImage}}</small>
+            <button id="clearCustomPlayerIconButton" class="btn ghost small" type="button" hidden>{{UI_RestoreDefaultIcon}}</button>
           </div>
         </div>
         <div class="player-setting-actions">
-          <button id="confirmAddPlayerSource" class="btn small" type="button" disabled>添加播放器</button>
-          <button id="savePlayerInfoButton" class="btn small" type="button" hidden>保存播放器信息</button>
+          <button id="confirmAddPlayerSource" class="btn small" type="button" disabled>{{UI_AddPlayer}}</button>
+          <button id="savePlayerInfoButton" class="btn small" type="button" hidden>{{UI_SavePlayerInformation}}</button>
         </div>
       </section>
       <section id="playerAdvancedSettings" class="player-setting-section">
-        <div class="player-offset-copy"><div><strong>歌词同步偏移</strong><small>正值让歌词提前，负值让歌词延后。</small></div><output id="playerOffsetStatus" class="player-offset-status">同步</output></div>
+        <div class="player-offset-copy"><div><strong>{{UI_LyricSynchronizationOffset}}</strong><small>{{UI_PositiveValuesAdvanceLyricsNegativeValuesDelayThem}}</small></div><output id="playerOffsetStatus" class="player-offset-status">{{UI_InSync}}</output></div>
         <div class="player-offset-control">
           <div class="stepper player-offset-stepper">
-            <button type="button" data-player-offset-delta="-100" aria-label="延后 100 毫秒">−</button>
-            <input id="playerOffsetInput" class="control" type="number" min="-5000" max="5000" step="10" inputmode="numeric" aria-label="歌词同步偏移毫秒">
-            <button type="button" data-player-offset-delta="100" aria-label="提前 100 毫秒">+</button>
+            <button type="button" data-player-offset-delta="-100" aria-label="{{UI_DelayBy100Milliseconds}}">−</button>
+            <input id="playerOffsetInput" class="control" type="number" min="-5000" max="5000" step="10" inputmode="numeric" aria-label="{{UI_LyricSynchronizationOffsetInMilliseconds}}">
+            <button type="button" data-player-offset-delta="100" aria-label="{{UI_AdvanceBy100Milliseconds}}">+</button>
           </div>
           <span class="player-offset-unit">ms</span>
         </div>
-        <div class="player-setting-actions"><button id="resetPlayerOffsetButton" class="btn ghost small" type="button">恢复推荐偏移</button></div>
+        <div class="player-setting-actions"><button id="resetPlayerOffsetButton" class="btn ghost small" type="button">{{UI_RestoreRecommendedOffset}}</button></div>
       </section>
       <section id="playerTrustSection" class="player-setting-section">
-        <div class="player-offset-copy"><div><strong>在线歌词源信任顺序</strong><small>拖动左侧手柄排序；优先采用更可信且匹配达标的歌词。右侧可关闭自动查询。</small></div></div>
-        <div id="lyricProviderList" class="lyric-provider-list" aria-label="在线歌词源信任顺序"></div>
+        <div class="player-offset-copy"><div><strong>{{UI_OnlineLyricSourceTrustOrder}}</strong><small>{{UI_DragHandlesOnTheLeftToSortTrustedSources}}</small></div></div>
+        <div id="lyricProviderList" class="lyric-provider-list" aria-label="{{UI_OnlineLyricSourceTrustOrder}}"></div>
         <span id="lyricProviderOrderAnnouncement" class="sr-only" aria-live="polite"></span>
-        <p id="lyricProviderEmptyHint" class="player-settings-note" hidden>全部在线歌词源已关闭，仅尝试本地歌词。</p>
+        <p id="lyricProviderEmptyHint" class="player-settings-note" hidden>{{UI_AllOnlineSourcesAreOffOnlyLocalLyricsWill}}</p>
       </section>
-      <div id="playerRemoveActions" class="player-setting-actions" hidden><button id="removePlayerSourceButton" class="btn ghost small" type="button" hidden>移除此播放器</button></div>
+      <div id="playerRemoveActions" class="player-setting-actions" hidden><button id="removePlayerSourceButton" class="btn ghost small" type="button" hidden>{{UI_RemoveThisPlayer_3}}</button></div>
     </div>
   </dialog>
-  <div id="selectPopover" class="select-popover"><div id="selectListbox" class="select-listbox" role="listbox" tabindex="-1" aria-label="选项"></div></div>
-  <div id="colorPopover" class="color-popover" role="dialog" aria-label="选择自定义颜色">
+  <div id="selectPopover" class="select-popover"><div id="selectListbox" class="select-listbox" role="listbox" tabindex="-1" aria-label="{{UI_Options}}"></div></div>
+  <div id="colorPopover" class="color-popover" role="dialog" aria-label="{{UI_ChooseCustomColor}}">
     <div id="colorArea" class="color-area" aria-hidden="true"><span id="colorCursor" class="color-cursor"></span></div>
-    <div class="color-axis-controls" aria-label="颜色饱和度和明度">
-      <label class="color-axis-control"><span>饱和度</span><input id="colorSaturationSlider" class="color-axis-slider" type="range" min="0" max="100" step="1" value="100" aria-label="颜色饱和度"></label>
-      <label class="color-axis-control"><span>明度</span><input id="colorBrightnessSlider" class="color-axis-slider" type="range" min="0" max="100" step="1" value="100" aria-label="颜色明度"></label>
+    <div class="color-axis-controls" aria-label="{{UI_ColorSaturationAndBrightness}}">
+      <label class="color-axis-control"><span>{{UI_Saturation}}</span><input id="colorSaturationSlider" class="color-axis-slider" type="range" min="0" max="100" step="1" value="100" aria-label="{{UI_ColorSaturation}}"></label>
+      <label class="color-axis-control"><span>{{UI_Brightness_4}}</span><input id="colorBrightnessSlider" class="color-axis-slider" type="range" min="0" max="100" step="1" value="100" aria-label="{{UI_ColorBrightness}}"></label>
     </div>
-    <div class="slider-number-control color-hue-control"><input id="hueSlider" class="hue-slider" type="range" min="0" max="360" step="1" aria-label="色相滑块"><label class="unit-input compact-number-input degree-input"><input id="hueNumberInput" type="number" min="0" max="360" step="1" aria-label="色相数值"><span>°</span></label></div>
-    <div id="colorPresets" class="color-presets" aria-label="常用颜色"></div>
-    <div class="color-draft-row"><span id="colorDraftPreview" class="color-draft-preview"></span><input id="colorDraftInput" class="control color-value-input" aria-label="颜色十六进制值" aria-describedby="colorDraftError" aria-invalid="false" maxlength="7" spellcheck="false"><small id="colorDraftError" class="input-error" hidden>请输入类似 #FFFFFF 的颜色值。</small></div>
-    <div class="color-popover-actions"><button id="colorCancelButton" class="btn ghost small" type="button">取消</button><button id="colorApplyButton" class="btn small" type="button">应用</button></div>
+    <div class="slider-number-control color-hue-control"><input id="hueSlider" class="hue-slider" type="range" min="0" max="360" step="1" aria-label="{{UI_HueSlider}}"><label class="unit-input compact-number-input degree-input"><input id="hueNumberInput" type="number" min="0" max="360" step="1" aria-label="{{UI_HueValue}}"><span>°</span></label></div>
+    <div id="colorPresets" class="color-presets" aria-label="{{UI_PresetColors}}"></div>
+    <div class="color-draft-row"><span id="colorDraftPreview" class="color-draft-preview"></span><input id="colorDraftInput" class="control color-value-input" aria-label="{{UI_HexColorValue}}" aria-describedby="colorDraftError" aria-invalid="false" maxlength="7" spellcheck="false"><small id="colorDraftError" class="input-error" hidden>{{UI_EnterAColorSuchAsFFFFFF}}</small></div>
+    <div class="color-popover-actions"><button id="colorCancelButton" class="btn ghost small" type="button">{{UI_Cancel}}</button><button id="colorApplyButton" class="btn small" type="button">{{UI_Apply}}</button></div>
   </div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
+  <script>window.taskbarLyricsI18n.translateDocument();</script>
   <script src="bridge.js"></script>
   <script src="hotkeys.js"></script>
   <script src="state.js"></script>
@@ -471,5 +473,6 @@
   <script src="display-presentation.js"></script>
   <script src="player-compatibility.js"></script>
   <script src="settings.js"></script>
+  <script>document.documentElement.removeAttribute("data-settings-boot");</script>
 </body>
 </html>

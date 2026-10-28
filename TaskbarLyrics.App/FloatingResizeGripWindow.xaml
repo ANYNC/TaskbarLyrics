@@ -1,11 +1,12 @@
 <Window x:Class="TaskbarLyrics.App.FloatingResizeGripWindow" x:ClassModifier="internal"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:local="clr-namespace:TaskbarLyrics.App"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="调整浮窗大小" WindowStyle="None" ResizeMode="NoResize"
+        Title="{local:Translate Text='UI_ResizeFloatingWindow'}" WindowStyle="None" ResizeMode="NoResize"
         ShowInTaskbar="False" ShowActivated="False" AllowsTransparency="True" Background="Transparent"
         Width="24" Height="24" UseLayoutRounding="True" PreviewKeyDown="OnPreviewKeyDown">
     <Thumb x:Name="Grip" Cursor="SizeNESW" IsTabStop="False"
-           AutomationProperties.Name="调整浮窗大小：左右调整宽度，上下调整缩放"
+           AutomationProperties.Name="{local:Translate Text='UI_ResizeFloatingWindowHorizontallyForWidthVerticallyForScale'}"
            DragStarted="OnDragStarted" DragDelta="OnDragDelta" DragCompleted="OnDragCompleted">
         <Thumb.Template>
             <ControlTemplate TargetType="Thumb">

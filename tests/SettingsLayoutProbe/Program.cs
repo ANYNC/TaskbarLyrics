@@ -39,6 +39,14 @@ internal static class Program
             controller = await environment.CreateCoreWebView2ControllerAsync(new WindowInteropHelper(window).Handle)
                 .WaitAsync(TimeSpan.FromSeconds(30));
             var web = controller.CoreWebView2;
+            var resources = new YamlDotNet.Serialization.DeserializerBuilder().Build()
+                .Deserialize<Dictionary<string, Dictionary<string, string>>>(
+                    await File.ReadAllTextAsync(Path.Combine(repository, "TaskbarLyrics.App", "text.yaml")));
+            var locale = Environment.GetEnvironmentVariable("TASKBARLYRICS_PROBE_LANGUAGE") == "EN" ? "EN" : "Zh-CN";
+            var configuration = JsonSerializer.Serialize(new { language = locale, strings = resources[locale] });
+            await web.AddScriptToExecuteOnDocumentCreatedAsync(
+                $"window.taskbarLyricsLocale = {configuration};\n" +
+                await File.ReadAllTextAsync(Path.Combine(repository, "TaskbarLyrics.App", "text.js")));
             web.SetVirtualHostNameToFolderMapping("settings-layout.test",
                 Path.Combine(repository, "TaskbarLyrics.App"), CoreWebView2HostResourceAccessKind.DenyCors);
             var loaded = new TaskCompletionSource();
