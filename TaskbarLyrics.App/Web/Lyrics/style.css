@@ -495,6 +495,12 @@ html, body {
   transition-duration: 760ms;
 }
 
+/* Standard rolls interpolate opacity in the RAF loop; avoid interpolating
+   each RAF target a second time in CSS. Translation pairs retain CSS fades. */
+.track.animating:not(.translation-pair-animating) {
+  --line-opacity-duration: 0ms;
+}
+
 .track.no-anim {
   transition: none !important;
 }
@@ -515,7 +521,7 @@ html, body {
   text-shadow: var(--text-shadow);
   overflow: visible;
   transition:
-    opacity 560ms cubic-bezier(0.22, 0.72, 0.24, 1),
+    opacity var(--line-opacity-duration, 560ms) cubic-bezier(0.22, 0.72, 0.24, 1),
     color 280ms ease,
     transform 560ms cubic-bezier(0.22, 0.72, 0.24, 1);
 }
@@ -533,7 +539,7 @@ html, body {
 
 .line.word-scan-smoothing {
   transition:
-    opacity 560ms cubic-bezier(0.22, 0.72, 0.24, 1),
+    opacity var(--line-opacity-duration, 560ms) cubic-bezier(0.22, 0.72, 0.24, 1),
     color 280ms ease,
     transform 560ms cubic-bezier(0.22, 0.72, 0.24, 1),
     --word-scan-progress 90ms linear;
@@ -544,6 +550,24 @@ html, body {
   width: 100%;
   min-width: 0;
   overflow: hidden;
+}
+
+/* In two-row rolls, paint entering text at its destination row, then use a
+   counter-translation to preserve its visual position. Paired with exact
+   CSS-pitch travel, this keeps the final glyph raster origin unchanged. */
+:root:not(.vertical-taskbar):not(.single-line) .track.stable-promotion .next-line {
+  --promotion-paint-offset-y: calc(-1 * var(--line-pitch));
+}
+
+:root:not(.vertical-taskbar):not(.single-line) .track.stable-promotion .next-line:not(.incoming-line) {
+  --promotion-paint-offset-y: calc(var(--primary-offset-y) - var(--secondary-offset-y) - var(--line-pitch));
+}
+
+:root:not(.vertical-taskbar):not(.single-line) .track.stable-promotion .next-line .line-text-viewport {
+  position: relative;
+  top: var(--promotion-paint-offset-y);
+  transform: translateY(calc(-1 * var(--promotion-paint-offset-y)));
+  will-change: transform;
 }
 
 .line-text-stack {

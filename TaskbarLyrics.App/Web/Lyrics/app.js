@@ -539,7 +539,12 @@ function resolveTranslationDisplay(line) {
 
 function setTrackOffset(rowCount) {
   const vertical = root.classList.contains("vertical-taskbar");
-  const offset = snapToPhysicalPixel((vertical ? 1 : -1) * linePitchPx * rowCount);
+  const distance = (vertical ? 1 : -1) * linePitchPx * rowCount;
+  // The destination-origin text layers must travel exactly one CSS row.
+  // Rounding only this distance would restore a fractional offset at handoff.
+  const offset = !vertical && trackEl.classList.contains("stable-promotion")
+    ? distance
+    : snapToPhysicalPixel(distance);
   if (offset === 0) {
     trackEl.style.removeProperty("transform");
     return;
@@ -1685,7 +1690,7 @@ function cancelActiveTransition() {
   presentationCoordinator.takeLatest();
   clearSpectrumExitStyles();
   trackEl.classList.add("no-anim");
-  trackEl.classList.remove("animating", "vertical-roll", "single-line-roll");
+  trackEl.classList.remove("animating", "vertical-roll", "single-line-roll", "stable-promotion");
   clearRollEdgeMask();
   trackEl.classList.remove("translation-pair-animating");
   currentLineEl.classList.remove("leaving");
@@ -1939,7 +1944,7 @@ function finalizeTransition(
   setSecondaryLine(upcomingNext);
   setLineWordScanProgress(nextLineEl, null);
   setIncomingLine("");
-  trackEl.classList.remove("animating", "vertical-roll", "single-line-roll");
+  trackEl.classList.remove("animating", "vertical-roll", "single-line-roll", "stable-promotion");
   clearRollEdgeMask();
   currentLineEl.classList.remove("leaving");
   nextLineEl.classList.remove("promoting");
@@ -2173,8 +2178,10 @@ function startStandardTransition(
   transitionPromotedLine = promoted;
   transitionPromotedLineIndex = currentLineIndex;
   transitionWordScanProgress = wordScanProgress;
-  transitionBaseNextOpacity = secondaryOpacity;
-  const nextFontSize = Number.parseFloat(window.getComputedStyle(nextLineEl).fontSize || "12");
+  const nextStyle = window.getComputedStyle(nextLineEl);
+  const visibleNextOpacity = Number.parseFloat(nextStyle.opacity);
+  transitionBaseNextOpacity = Number.isFinite(visibleNextOpacity) ? clamp01(visibleNextOpacity) : secondaryOpacity;
+  const nextFontSize = Number.parseFloat(nextStyle.fontSize || "12");
   const currentFontSize = Number.parseFloat(window.getComputedStyle(currentLineEl).fontSize || "13");
   const promotionStartScale = currentFontSize > 0
     ? clamp01(nextFontSize / currentFontSize)
@@ -2199,14 +2206,18 @@ function startStandardTransition(
 
   // Render with final font metrics from the start, then animate only the visual scale.
   trackEl.classList.add("no-anim");
+  trackEl.classList.toggle("stable-promotion",
+    !root.classList.contains("vertical-taskbar") && !root.classList.contains("single-line"));
   trackEl.classList.remove("animating");
   currentLineEl.classList.remove("leaving");
   nextLineEl.classList.remove("promoting");
   setTrackOffset(0);
   setLineText(nextLineEl, nextLineTextEl, nextLineScanTextEl, promoted);
   setIncomingLine(upcoming);
-  currentLineEl.style.opacity = "";
-  nextLineEl.style.opacity = "";
+  // Seed both channels before .leaving is applied. The RAF loop owns opacity
+  // during this roll, so CSS must not expose its leaving opacity for one frame.
+  currentLineEl.style.opacity = String(currentLineRestOpacity);
+  nextLineEl.style.opacity = String(transitionBaseNextOpacity);
   nextLineEl.style.fontSize = `${currentFontSize.toFixed(3)}px`;
   nextLineEl.style.setProperty("--promotion-scale", promotionStartScale.toFixed(6));
   nextLineEl.style.transform = "translateY(0px) scale(var(--promotion-scale))";
@@ -2216,7 +2227,18 @@ function startStandardTransition(
   trackEl.classList.remove("no-anim");
 
   const onTransitionEnd = (event) => {
-    if (!event || event.target !== trackEl || event.propertyName !== "transform") {
+    if (!event || event.propertyName !== "transform" ||
+        (event.target !== trackEl && event.target !== nextLineEl)) {
+      return;
+    }
+
+    // Both transforms start together. The first end event must not tear down
+    // the other transform if the browser is still running it.
+    const transformStillRunning = [trackEl, nextLineEl].some(element =>
+      element.getAnimations?.().some(animation =>
+        animation.transitionProperty === "transform" &&
+        animation.playState !== "finished" && animation.playState !== "idle"));
+    if (transformStillRunning) {
       return;
     }
 
@@ -2236,11 +2258,7 @@ function startStandardTransition(
     nextLineEl.style.setProperty("--promotion-scale", "1");
     nextLineEl.style.removeProperty("transform");
     trackEl.classList.add("animating");
-    context.requestFrame(() => {
-      if (context.isCurrent()) {
-        setTrackOffset(1);
-      }
-    });
+    setTrackOffset(1);
   });
   context.scheduleFallback(context.finish, transitionDurationMs + 120);
 }
