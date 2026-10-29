@@ -10,7 +10,7 @@
 <body>
   <div id="layout" class="layout">
     <div class="shell">
-      <button id="cover" class="cover tl-placeholder" type="button" draggable="false" aria-label="展开播放控制" aria-expanded="false">
+      <button id="cover" class="cover tl-placeholder" type="button" draggable="false" aria-label="{{UI_ExpandPlaybackControls}}" aria-expanded="false">
         <span id="coverFallback" class="cover-fallback">TL</span>
         <img id="coverImage" class="cover-image" alt="" draggable="false" />
         <img id="coverImageNext" class="cover-image" alt="" draggable="false" />
@@ -108,7 +108,8 @@
     </div>
   </div>
 
-  <script>
+  <script>window.taskbarLyricsI18n.translateDocument();
+
 {{APP_JS}}
   </script>
 </body>

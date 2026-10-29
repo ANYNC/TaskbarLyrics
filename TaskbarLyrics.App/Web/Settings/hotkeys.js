@@ -1,12 +1,12 @@
 (() => {
   const labels = {
-    disabled: "已关闭",
-    unassigned: "未设置",
-    invalid: "组合无效",
-    duplicate: "与其他快捷键重复",
-    registered: "已注册",
-    occupied: "已被系统或其他应用占用",
-    notRegistered: "未注册"
+    disabled: window.taskbarLyricsI18n.t("UI_Off"),
+    unassigned: window.taskbarLyricsI18n.t("UI_NotSet"),
+    invalid: window.taskbarLyricsI18n.t("UI_InvalidCombination"),
+    duplicate: window.taskbarLyricsI18n.t("UI_DuplicateShortcut"),
+    registered: window.taskbarLyricsI18n.t("UI_Registered"),
+    occupied: window.taskbarLyricsI18n.t("UI_InUseByWindowsOrAnotherApp"),
+    notRegistered: window.taskbarLyricsI18n.t("UI_NotRegistered")
   };
 
   window.taskbarLyricsHotkeys = {

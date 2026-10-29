@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>频谱调试</title>
+  <title>{{UI_SpectrumTuning}}</title>
   <style>
     :root {
       color-scheme: dark;
@@ -154,45 +154,45 @@
   <div class="window">
     <header class="titlebar" data-caption-drag>
       <div class="titles">
-        <h1>频谱调试</h1>
-        <p>实时调节，自动保存</p>
+        <h1>{{UI_SpectrumTuning}}</h1>
+        <p>{{UI_LiveAdjustmentAutomaticallySaved}}</p>
       </div>
       <div class="spacer"></div>
       <div class="caption-controls">
-        <button class="caption-button" type="button" data-window-action="minimize" aria-label="最小化"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6h8"/></svg></button>
-        <button class="caption-button close" type="button" data-window-action="close" aria-label="关闭"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 3l6 6M9 3l-6 6"/></svg></button>
+        <button class="caption-button" type="button" data-window-action="minimize" aria-label="{{UI_Minimize}}"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6h8"/></svg></button>
+        <button class="caption-button close" type="button" data-window-action="close" aria-label="{{UI_Close}}"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 3l6 6M9 3l-6 6"/></svg></button>
       </div>
     </header>
 
     <div class="toolbar">
-      <span class="label">预设</span>
+      <span class="label">{{UI_Presets}}</span>
       <div class="segmented" id="presets">
-        <button type="button" data-preset="default" class="active">默认</button>
-        <button type="button" data-preset="soft">柔和</button>
-        <button type="button" data-preset="dynamic">动感</button>
-        <button type="button" data-preset="minimal">极简</button>
+        <button type="button" data-preset="default" class="active">{{UI_Default}}</button>
+        <button type="button" data-preset="soft">{{UI_Soft}}</button>
+        <button type="button" data-preset="dynamic">{{UI_Dynamic}}</button>
+        <button type="button" data-preset="minimal">{{UI_Minimal}}</button>
       </div>
-      <span class="toolbar-note"><span class="toolbar-note-text tooltip-trigger" tabindex="0" data-tip="频谱效果持续优化中，欢迎向作者反馈更合适的参数方案。">频谱效果持续优化中，欢迎向作者反馈更合适的参数方案。</span></span>
+      <span class="toolbar-note"><span class="toolbar-note-text tooltip-trigger" tabindex="0" data-tip="{{UI_SpectrumEffectsAreBeingImprovedFeedbackOnBetterParameters}}">{{UI_SpectrumEffectsAreBeingImprovedFeedbackOnBetterParameters}}</span></span>
       <div class="right">
-        <button class="btn ghost" type="button" id="previewPauseBtn" aria-pressed="false"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3v10M11 3v10"/></svg><span>暂停预览</span></button>
-        <button class="btn ghost" type="button" id="compareBtn" title="仅对比前端升降速度和柱子外观">按住对比默认外观</button>
-        <button class="btn secondary" type="button" id="resetBtn">重置默认</button>
+        <button class="btn ghost" type="button" id="previewPauseBtn" aria-pressed="false"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3v10M11 3v10"/></svg><span>{{UI_PausePreview}}</span></button>
+        <button class="btn ghost" type="button" id="compareBtn" title="{{UI_ComparesOnlyFrontendAnimationSpeedAndBarAppearance}}">{{UI_HoldToCompareDefaultAppearance}}</button>
+        <button class="btn secondary" type="button" id="resetBtn">{{UI_ResetDefaults}}</button>
       </div>
     </div>
 
     <div class="preview-wrap">
       <div class="preview">
         <canvas id="canvas" width="500" height="132"></canvas>
-        <span class="badge" id="previewBadge">等待实际输出</span>
-        <span class="meter" id="meter">32 柱 · 0 fps</span>
+        <span class="badge" id="previewBadge">{{UI_WaitingForActualOutput}}</span>
+        <span class="meter" id="meter">{{UI_32Bars0Fps}}</span>
       </div>
     </div>
 
     <div class="diag">
-      <div class="cell"><div class="k">播放/纯音乐</div><div class="v ok" id="dPlay">—</div></div>
-      <div class="cell"><div class="k">输入峰值</div><div class="v" id="dIn">—</div></div>
-      <div class="cell"><div class="k">输出峰值</div><div class="v" id="dOut">—</div></div>
-      <div class="cell"><div class="k">格式</div><div class="v" id="dFmt">—</div></div>
+      <div class="cell"><div class="k">{{UI_PlayingInstrumental}}</div><div class="v ok" id="dPlay">—</div></div>
+      <div class="cell"><div class="k">{{UI_InputPeak}}</div><div class="v" id="dIn">—</div></div>
+      <div class="cell"><div class="k">{{UI_OutputPeak}}</div><div class="v" id="dOut">—</div></div>
+      <div class="cell"><div class="k">{{UI_Format_22}}</div><div class="v" id="dFmt">—</div></div>
     </div>
 
     <section class="sliders" id="sliders"></section>
@@ -201,7 +201,8 @@
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <div class="parameter-tooltip" id="parameterTooltip" role="tooltip" data-state="closed"></div>
 
-  <script>
+  <script>window.taskbarLyricsI18n.translateDocument();
+
     const $ = s => document.querySelector(s);
     const bridge = { post(m) { window.chrome?.webview?.postMessage(JSON.stringify(m)); } };
     const canvas = $("#canvas"); const ctx = canvas.getContext("2d");
@@ -221,31 +222,31 @@
     syncThemeColors();
 
     const defs = [
-      { key: "SampleWindow", label: "FFT 窗口", suffix: "", min: 512, max: 2048, step: 512, value: 2048, group: "采集", desc: "FFT 采样窗口大小，越大频率分辨率越高、响应越慢", snap: "fft" },
-      { key: "UpdateIntervalMs", label: "更新间隔", suffix: "ms", min: 16, max: 100, step: 1, value: 16, group: "采集", desc: "频谱采集与刷新间隔，越小越流畅、越耗 CPU" },
-      { key: "BarCount", label: "柱数", suffix: "柱", min: 8, max: 32, step: 1, value: 32, group: "频段", desc: "频谱柱数上限；显示区域宽度不足时会动态合并相邻频段，实际显示柱数可能减少" },
-      { key: "MinFrequency", label: "最低频率", suffix: "Hz", min: 20, max: 20000, step: 1, value: 28, group: "频段", desc: "频谱显示范围的最低频率，仅需低于最高频率", scale: "frequency" },
-      { key: "MaxFrequency", label: "最高频率", suffix: "Hz", min: 20, max: 20000, step: 1, value: 4000, group: "频段", desc: "频谱显示范围的最高频率，仅需高于最低频率", scale: "frequency" },
-      { key: "FrequencyDistributionBias", label: "频段分布偏移", suffix: "", min: -1, max: 1, step: 0.05, value: 0, group: "频段", desc: "改变柱子在频率范围内的分配；负值偏向高频，0 保持当前分布，正值给低频分配更多柱子" },
-      { key: "PeakInitial", label: "峰值初始值", suffix: "", min: 0.004, max: 0.16, step: 0.001, value: 0.06, group: "峰值", desc: "峰值跟踪的起始参考值" },
-      { key: "PeakDecay", label: "峰值衰减", suffix: "", min: 0.85, max: 0.995, step: 0.001, value: 0.85, group: "峰值", desc: "峰值随时间衰减的速率，越大衰减越慢" },
-      { key: "PeakFloor", label: "峰值下限", suffix: "", min: 0.003, max: 0.08, step: 0.001, value: 0.012, group: "峰值", desc: "峰值下限，避免静音时柱子完全归零" },
-      { key: "PeakCeiling", label: "峰值上限", suffix: "", min: 0.04, max: 1.0, step: 0.01, value: 0.8, group: "峰值", desc: "峰值上限，限制最大幅度，防止爆顶" },
-      { key: "NoiseFloor", label: "噪声门", suffix: "", min: 0, max: 0.2, step: 0.001, value: 0, group: "峰值", desc: "噪声门限，低于此值的信号被忽略" },
-      { key: "OutputCurve", label: "输出曲线", suffix: "", min: 0.25, max: 1.5, step: 0.01, value: 1.5, group: "整形", desc: "输出 Gamma 曲线，<1 提亮弱信号、>1 拉开强弱差" },
-      { key: "LowBandGain", label: "低频增益", suffix: "", min: 0.2, max: 3.5, step: 0.01, value: 1.2, group: "整形", desc: "最低频段的增益，提升低频存在感" },
-      { key: "BandGainStep", label: "频段增益斜率", suffix: "", min: -0.04, max: 0.1, step: 0.001, value: 0.05, group: "整形", desc: "增益随频段升高而变化的斜率" },
-      { key: "FrequencyWeightBase", label: "频率权重基准", suffix: "", min: 0.2, max: 2.2, step: 0.01, value: 0.92, group: "整形", desc: "频率权重曲线的基准值" },
-      { key: "FrequencyWeightSlope", label: "频率权重斜率", suffix: "", min: -0.08, max: 0.16, step: 0.001, value: 0.01, group: "整形", desc: "频率权重随频率升高而变化的斜率" },
-      { key: "BackendAttack", label: "后端上升速度", suffix: "", min: 0.05, max: 1.0, step: 0.01, value: 0.86, group: "响应", desc: "后端峰值上升跟随速度，越大越跟手" },
-      { key: "BackendRelease", label: "后端下降速度", suffix: "", min: 0.02, max: 1.0, step: 0.01, value: 0.48, group: "响应", desc: "后端峰值下降速度，越大回落越快" },
-      { key: "FrontendRise", label: "前端上升速度", suffix: "", min: 0.02, max: 1.0, step: 0.01, value: 0.7, group: "响应", desc: "显示柱上升速度，越大起跳越快" },
-      { key: "FrontendFall", label: "前端下降速度", suffix: "", min: 0.02, max: 1.0, step: 0.01, value: 0.35, group: "响应", desc: "显示柱下降速度，越大消失越快" },
-      { key: "MinBarHeight", label: "最小柱高", suffix: "px", min: 1, max: 14, step: 0.5, value: 6, group: "外观", desc: "柱子最小高度，避免完全消失" },
-      { key: "BarHeightRange", label: "柱高范围", suffix: "px", min: 4, max: 36, step: 0.5, value: 26, group: "外观", desc: "柱子从最小到最大的高度跨度" },
-      { key: "BarOpacity", label: "柱子透明度", suffix: "", min: 0.2, max: 1.0, step: 0.01, value: 0.8, group: "外观", desc: "柱子不透明度" },
+      { key: "SampleWindow", label: window.taskbarLyricsI18n.t("UI_FFTWindow"), suffix: "", min: 512, max: 2048, step: 512, value: 2048, group: window.taskbarLyricsI18n.t("UI_Capture"), desc: window.taskbarLyricsI18n.t("UI_FFTSampleWindowSizeLargerWindowsImproveFrequencyResolution"), snap: "fft" },
+      { key: "UpdateIntervalMs", label: window.taskbarLyricsI18n.t("UI_UpdateInterval"), suffix: "ms", min: 16, max: 100, step: 1, value: 16, group: window.taskbarLyricsI18n.t("UI_Capture"), desc: window.taskbarLyricsI18n.t("UI_CaptureAndRefreshIntervalShorterIntervalsLookSmootherAnd") },
+      { key: "BarCount", label: window.taskbarLyricsI18n.t("UI_BarCount"), suffix: window.taskbarLyricsI18n.t("UI_Bars"), min: 8, max: 32, step: 1, value: 32, group: window.taskbarLyricsI18n.t("UI_FrequencyBands"), desc: window.taskbarLyricsI18n.t("UI_MaximumBarCountAdjacentBandsMergeIfTheDisplay") },
+      { key: "MinFrequency", label: window.taskbarLyricsI18n.t("UI_MinimumFrequency"), suffix: "Hz", min: 20, max: 20000, step: 1, value: 28, group: window.taskbarLyricsI18n.t("UI_FrequencyBands"), desc: window.taskbarLyricsI18n.t("UI_LowestDisplayedFrequencyMustBeBelowTheMaximum"), scale: "frequency" },
+      { key: "MaxFrequency", label: window.taskbarLyricsI18n.t("UI_MaximumFrequency"), suffix: "Hz", min: 20, max: 20000, step: 1, value: 4000, group: window.taskbarLyricsI18n.t("UI_FrequencyBands"), desc: window.taskbarLyricsI18n.t("UI_HighestDisplayedFrequencyMustBeAboveTheMinimum"), scale: "frequency" },
+      { key: "FrequencyDistributionBias", label: window.taskbarLyricsI18n.t("UI_BandDistributionBias"), suffix: "", min: -1, max: 1, step: 0.05, value: 0, group: window.taskbarLyricsI18n.t("UI_FrequencyBands"), desc: window.taskbarLyricsI18n.t("UI_ChangesFrequencyAllocationNegativeFavorsHighsZeroKeepsThe") },
+      { key: "PeakInitial", label: window.taskbarLyricsI18n.t("UI_InitialPeak"), suffix: "", min: 0.004, max: 0.16, step: 0.001, value: 0.06, group: window.taskbarLyricsI18n.t("UI_Peak"), desc: window.taskbarLyricsI18n.t("UI_StartingReferenceForPeakTracking") },
+      { key: "PeakDecay", label: window.taskbarLyricsI18n.t("UI_PeakDecay"), suffix: "", min: 0.85, max: 0.995, step: 0.001, value: 0.85, group: window.taskbarLyricsI18n.t("UI_Peak"), desc: window.taskbarLyricsI18n.t("UI_PeakDecayFactorLargerValuesDecayMoreSlowly") },
+      { key: "PeakFloor", label: window.taskbarLyricsI18n.t("UI_MinimumPeak"), suffix: "", min: 0.003, max: 0.08, step: 0.001, value: 0.012, group: window.taskbarLyricsI18n.t("UI_Peak"), desc: window.taskbarLyricsI18n.t("UI_PeakFloorPreventingBarsFromFullyDisappearingInSilence") },
+      { key: "PeakCeiling", label: window.taskbarLyricsI18n.t("UI_MaximumPeak"), suffix: "", min: 0.04, max: 1.0, step: 0.01, value: 0.8, group: window.taskbarLyricsI18n.t("UI_Peak"), desc: window.taskbarLyricsI18n.t("UI_PeakCeilingLimitingAmplitudeToAvoidClipping") },
+      { key: "NoiseFloor", label: window.taskbarLyricsI18n.t("UI_NoiseGate"), suffix: "", min: 0, max: 0.2, step: 0.001, value: 0, group: window.taskbarLyricsI18n.t("UI_Peak"), desc: window.taskbarLyricsI18n.t("UI_SignalsBelowThisThresholdAreIgnored") },
+      { key: "OutputCurve", label: window.taskbarLyricsI18n.t("UI_OutputCurve"), suffix: "", min: 0.25, max: 1.5, step: 0.01, value: 1.5, group: window.taskbarLyricsI18n.t("UI_Shaping"), desc: `${window.taskbarLyricsI18n.t("UI_OutputGammaCurve")}<${window.taskbarLyricsI18n.t("UI_1BrightensWeakSignals")}>${window.taskbarLyricsI18n.t("UI_1IncreasesContrastBetweenStrongAndWeakSignals")}` },
+      { key: "LowBandGain", label: window.taskbarLyricsI18n.t("UI_BassGain"), suffix: "", min: 0.2, max: 3.5, step: 0.01, value: 1.2, group: window.taskbarLyricsI18n.t("UI_Shaping"), desc: window.taskbarLyricsI18n.t("UI_GainForTheLowestFrequencyBandEnhancingBassPresence") },
+      { key: "BandGainStep", label: window.taskbarLyricsI18n.t("UI_BandGainSlope"), suffix: "", min: -0.04, max: 0.1, step: 0.001, value: 0.05, group: window.taskbarLyricsI18n.t("UI_Shaping"), desc: window.taskbarLyricsI18n.t("UI_GainChangeAsFrequencyBandsIncrease") },
+      { key: "FrequencyWeightBase", label: window.taskbarLyricsI18n.t("UI_FrequencyWeightBaseline"), suffix: "", min: 0.2, max: 2.2, step: 0.01, value: 0.92, group: window.taskbarLyricsI18n.t("UI_Shaping"), desc: window.taskbarLyricsI18n.t("UI_BaselineForTheFrequencyWeightingCurve") },
+      { key: "FrequencyWeightSlope", label: window.taskbarLyricsI18n.t("UI_FrequencyWeightSlope"), suffix: "", min: -0.08, max: 0.16, step: 0.001, value: 0.01, group: window.taskbarLyricsI18n.t("UI_Shaping"), desc: window.taskbarLyricsI18n.t("UI_WeightChangeAsFrequencyIncreases") },
+      { key: "BackendAttack", label: window.taskbarLyricsI18n.t("UI_BackendRiseSpeed"), suffix: "", min: 0.05, max: 1.0, step: 0.01, value: 0.86, group: window.taskbarLyricsI18n.t("UI_Response"), desc: window.taskbarLyricsI18n.t("UI_PeakRiseTrackingSpeedHigherValuesRespondFaster") },
+      { key: "BackendRelease", label: window.taskbarLyricsI18n.t("UI_BackendFallSpeed"), suffix: "", min: 0.02, max: 1.0, step: 0.01, value: 0.48, group: window.taskbarLyricsI18n.t("UI_Response"), desc: window.taskbarLyricsI18n.t("UI_PeakFallSpeedHigherValuesFallFaster") },
+      { key: "FrontendRise", label: window.taskbarLyricsI18n.t("UI_FrontendRiseSpeed"), suffix: "", min: 0.02, max: 1.0, step: 0.01, value: 0.7, group: window.taskbarLyricsI18n.t("UI_Response"), desc: window.taskbarLyricsI18n.t("UI_DisplayBarRiseSpeedHigherValuesRiseFaster") },
+      { key: "FrontendFall", label: window.taskbarLyricsI18n.t("UI_FrontendFallSpeed"), suffix: "", min: 0.02, max: 1.0, step: 0.01, value: 0.35, group: window.taskbarLyricsI18n.t("UI_Response"), desc: window.taskbarLyricsI18n.t("UI_DisplayBarFallSpeedHigherValuesDisappearFaster") },
+      { key: "MinBarHeight", label: window.taskbarLyricsI18n.t("UI_MinimumBarHeight"), suffix: "px", min: 1, max: 14, step: 0.5, value: 6, group: window.taskbarLyricsI18n.t("UI_Appearance"), desc: window.taskbarLyricsI18n.t("UI_MinimumBarHeightPreventingBarsFromDisappearingCompletely") },
+      { key: "BarHeightRange", label: window.taskbarLyricsI18n.t("UI_BarHeightRange"), suffix: "px", min: 4, max: 36, step: 0.5, value: 26, group: window.taskbarLyricsI18n.t("UI_Appearance"), desc: window.taskbarLyricsI18n.t("UI_HeightSpanFromTheShortestToTheTallestBar") },
+      { key: "BarOpacity", label: window.taskbarLyricsI18n.t("UI_BarTransparency"), suffix: "", min: 0.2, max: 1.0, step: 0.01, value: 0.8, group: window.taskbarLyricsI18n.t("UI_Appearance"), desc: window.taskbarLyricsI18n.t("UI_BarOpacity") },
     ];
-    const groupDesc = { "采集": "采集与刷新", "频段": "频率范围与分布", "峰值": "峰值跟踪与噪声门", "整形": "增益与曲线", "响应": "升降速度", "外观": "柱子外观" };
+    const groupDesc = { "采集": window.taskbarLyricsI18n.t("UI_CaptureRefresh"), "频段": window.taskbarLyricsI18n.t("UI_FrequencyRangeDistribution"), "峰值": window.taskbarLyricsI18n.t("UI_PeakTrackingNoiseGate"), "整形": window.taskbarLyricsI18n.t("UI_GainCurves"), "响应": window.taskbarLyricsI18n.t("UI_RiseFallSpeed"), "外观": window.taskbarLyricsI18n.t("UI_BarAppearance") };
     const presets = {
       default: {},
       soft: { PeakCeiling: 0.3, OutputCurve: 0.7, LowBandGain: 1.2, FrontendFall: 0.2, BarOpacity: 0.9, BarHeightRange: 18 },
@@ -285,25 +286,25 @@
     function build() {
       const wrap = $("#sliders"); wrap.innerHTML = "";
       let lastGroup = null, groupHead = null, groupCount = 0;
-      const finalize = () => { if (groupHead) { const c = groupHead.querySelector(".group-count"); c.textContent = `已改 ${groupCount} 项`; c.classList.toggle("show", groupCount > 0); } };
+      const finalize = () => { if (groupHead) { const c = groupHead.querySelector(".group-count"); c.textContent = window.taskbarLyricsI18n.format("UI_Changed", groupCount); c.classList.toggle("show", groupCount > 0); } };
       state.forEach(d => {
         if (d.group !== lastGroup) { finalize(); lastGroup = d.group; groupCount = 0; groupHead = document.createElement("div"); groupHead.className = "group-head"; groupHead.innerHTML = `<span class="group-title">${d.group}</span><span class="group-desc">${groupDesc[d.group] || ""}</span><span class="group-count"></span>`; wrap.appendChild(groupHead); }
         const modded = Math.abs(d.value - defaultsMap[d.key]) > 1e-9;
         if (modded) groupCount++;
         const row = document.createElement("div"); row.className = `row${modded ? " modded" : ""}`;
-        row.innerHTML = `<span class="mod" title="已修改"></span>`;
+        row.innerHTML = `<span class="mod" title="${window.taskbarLyricsI18n.t("UI_Modified")}"></span>`;
         const label = document.createElement("span"); label.className = "lbl";
         const labelText = document.createElement("span"); labelText.className = "label-text tooltip-trigger"; labelText.textContent = d.label;
         labelText.tabIndex = 0;
-        labelText.dataset.tip = `${d.desc}\n范围 ${d.min}–${d.max} · 默认 ${defaultsMap[d.key]}`;
+        labelText.dataset.tip = window.taskbarLyricsI18n.format("UI_RangeDefault", d.desc, d.min, d.max, defaultsMap[d.key]);
         label.appendChild(labelText); row.appendChild(label);
         const sc = document.createElement("div"); sc.className = "slider-cell";
         const dp = d.scale === "frequency" ? frequencyRatio(defaultsMap[d.key]) * 100 : (defaultsMap[d.key] - d.min) / (d.max - d.min) * 100;
-        sc.innerHTML = `<span class="default-tick" style="left:${dp}%" title="默认值"></span>`;
+        sc.innerHTML = `<span class="default-tick" style="left:${dp}%" title="${window.taskbarLyricsI18n.t("UI_DefaultValue")}"></span>`;
         const input = document.createElement("input"); input.type = "range"; input.min = d.scale === "frequency" ? 0 : d.min; input.max = d.scale === "frequency" ? 1000 : d.max; input.step = d.scale === "frequency" ? 1 : d.step; input.value = sliderPosition(d); input.setAttribute("aria-label", d.label);
         sc.appendChild(input); row.appendChild(sc);
-        const val = document.createElement("span"); val.className = "value"; val.textContent = fmtValue(d); val.title = "点击输入";
-        const reset = document.createElement("button"); reset.className = "reset"; reset.type = "button"; reset.title = "恢复该项默认"; reset.setAttribute("aria-label", `恢复${d.label}默认`); reset.innerHTML = `<svg viewBox="0 0 16 16"><path d="M3 8a5 5 0 1 0 1.5-3.5M3 3v3h3"/></svg>`;
+        const val = document.createElement("span"); val.className = "value"; val.textContent = fmtValue(d); val.title = window.taskbarLyricsI18n.t("UI_ClickToEnter");
+        const reset = document.createElement("button"); reset.className = "reset"; reset.type = "button"; reset.title = window.taskbarLyricsI18n.t("UI_RestoreThisDefault"); reset.setAttribute("aria-label", window.taskbarLyricsI18n.format("UI_RestoreDefault", d.label)); reset.innerHTML = `<svg viewBox="0 0 16 16"><path d="M3 8a5 5 0 1 0 1.5-3.5M3 3v3h3"/></svg>`;
         const refresh = () => { input.value = sliderPosition(d); val.textContent = fmtValue(d); syncProgress(input); const m = Math.abs(d.value - defaultsMap[d.key]) > 1e-9; row.classList.toggle("modded", m); recount(); };
         input.addEventListener("input", () => { const v = constrainParameterValue(d, valueFromSlider(d, input.value)); d.value = v; refresh(); commitTuningChange({ type: "update", key: d.key, value: v }); });
         val.addEventListener("click", () => startEdit(val, input, d, refresh));
@@ -317,7 +318,7 @@
     function recount() {
       const groups = {};
       state.forEach(d => { if (Math.abs(d.value - defaultsMap[d.key]) > 1e-9) groups[d.group] = (groups[d.group] || 0) + 1; });
-      document.querySelectorAll(".group-head").forEach(gh => { const name = gh.querySelector(".group-title").textContent; const c = gh.querySelector(".group-count"); const n = groups[name] || 0; c.textContent = `已改 ${n} 项`; c.classList.toggle("show", n > 0); });
+      document.querySelectorAll(".group-head").forEach(gh => { const name = gh.querySelector(".group-title").textContent; const c = gh.querySelector(".group-count"); const n = groups[name] || 0; c.textContent = window.taskbarLyricsI18n.format("UI_Changed", n); c.classList.toggle("show", n > 0); });
     }
     function restoreParameterDefault(d) {
       const otherKey = d.key === "MinFrequency" ? "MaxFrequency" : d.key === "MaxFrequency" ? "MinFrequency" : null;
@@ -335,8 +336,8 @@
         ? { type: "updateAll", values: { [d.key]: d.value, [otherKey]: other.value } }
         : { type: "update", key: d.key, value: d.value });
       showToast(conflicts
-        ? `${d.label}与${other.label}已恢复默认，以保持频段有效`
-        : `${d.label} 已恢复默认`);
+        ? window.taskbarLyricsI18n.format("UI_ResetAndToKeepTheFrequencyRangeValid", d.label, other.label)
+        : window.taskbarLyricsI18n.format("UI_ResetToDefault", d.label));
     }
     const parameterTooltip = $("#parameterTooltip");
     let tooltipTarget = null;
@@ -399,7 +400,7 @@
     }
     function setDiagnostics(d) {
       if (!d) return;
-      $("#dPlay").textContent = `${d.IsPlaying ? '是' : '否'} / ${d.IsPureMusicMode ? '是' : '否'}`;
+      $("#dPlay").textContent = `${d.IsPlaying ? window.taskbarLyricsI18n.t("UI_Yes") : window.taskbarLyricsI18n.t("UI_No")} / ${d.IsPureMusicMode ? window.taskbarLyricsI18n.t("UI_Yes") : window.taskbarLyricsI18n.t("UI_No")}`;
       $("#dPlay").className = `v ${d.IsPlaying ? 'ok' : 'warn'}`;
       $("#dIn").textContent = (d.InputPeak ?? 0).toFixed(4);
       $("#dOut").textContent = (d.OutputPeak ?? 0).toFixed(4);
@@ -442,7 +443,7 @@
     function syncPreviewBadge() {
       const badge = $("#previewBadge");
       badge.className = `badge${compare ? " compare" : ""}`;
-      badge.textContent = previewPaused ? "预览已暂停" : compare ? "默认外观对比" : captureAvailable ? "实际输出" : "等待实际输出";
+      badge.textContent = previewPaused ? window.taskbarLyricsI18n.t("UI_PreviewPaused") : compare ? window.taskbarLyricsI18n.t("UI_DefaultAppearanceComparison") : captureAvailable ? window.taskbarLyricsI18n.t("UI_ActualOutput") : window.taskbarLyricsI18n.t("UI_WaitingForActualOutput");
     }
     new ResizeObserver(resizeCanvas).observe(canvas);
     resizeCanvas();
@@ -482,11 +483,11 @@
       ctx.textAlign = "right"; ctx.fillText(formatFrequency(maxFrequency), trackX + trackWidth, trackY + trackHeight + 10);
       frames++;
       if (now - lastFpsT >= 500) { fps = Math.round(frames * 1000 / (now - lastFpsT)); frames = 0; lastFpsT = now; }
-      $("#meter").textContent = `${barVals.length} 柱 · ${fps} fps · 峰值 ${outPeak.toFixed(2)}`;
+      $("#meter").textContent = window.taskbarLyricsI18n.format("UI_BarsFpsPeak", barVals.length, fps, outPeak.toFixed(2));
       requestAnimationFrame(loop);
     }
 
-    $("#presets").addEventListener("click", e => { const b = e.target.closest("button[data-preset]"); if (!b) return; applyPreset(b.dataset.preset); showToast(`已载入「${b.textContent}」`); });
+    $("#presets").addEventListener("click", e => { const b = e.target.closest("button[data-preset]"); if (!b) return; applyPreset(b.dataset.preset); showToast(window.taskbarLyricsI18n.format("UI_Loaded", b.textContent)); });
     function applyPreset(name) {
       const p = presets[name];
       state.forEach(d => { d.value = p.hasOwnProperty(d.key) ? p[d.key] : defaultsMap[d.key]; });
@@ -497,7 +498,7 @@
       document.querySelectorAll("#presets button").forEach(b => b.classList.toggle("active", b.dataset.preset === name));
       bridge.post({ type: "updateAll", values: Object.fromEntries(state.map(s => [s.key, s.value])) });
     }
-    $("#resetBtn").addEventListener("click", () => { bridge.post({ type: "reset" }); showToast("已重置为默认参数"); });
+    $("#resetBtn").addEventListener("click", () => { bridge.post({ type: "reset" }); showToast(window.taskbarLyricsI18n.t("UI_ResetToDefaultParameters")); });
     const cmpBtn = $("#compareBtn");
     const setCompare = v => { compare = v; cmpBtn.classList.toggle("active", v); syncPreviewBadge(); };
     cmpBtn.addEventListener("mousedown", () => setCompare(true)); cmpBtn.addEventListener("mouseup", () => setCompare(false)); cmpBtn.addEventListener("mouseleave", () => setCompare(false));
@@ -508,7 +509,7 @@
       if (previewPaused) targetBars = barVals.slice();
       pausePreviewBtn.classList.toggle("active", previewPaused);
       pausePreviewBtn.setAttribute("aria-pressed", previewPaused.toString());
-      pausePreviewBtn.querySelector("span").textContent = previewPaused ? "继续预览" : "暂停预览";
+      pausePreviewBtn.querySelector("span").textContent = previewPaused ? window.taskbarLyricsI18n.t("UI_ResumePreview") : window.taskbarLyricsI18n.t("UI_PausePreview");
       pausePreviewBtn.querySelector("path").setAttribute("d", previewPaused ? "M4 3l8 5-8 5z" : "M5 3v10M11 3v10");
       syncPreviewBadge();
     });

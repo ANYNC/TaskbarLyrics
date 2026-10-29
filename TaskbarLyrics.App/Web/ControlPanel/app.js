@@ -103,7 +103,7 @@ function paintPlaybackState(playing) {
   isPlaying = playing === true;
   playIcon.toggleAttribute("hidden", isPlaying);
   pauseIcon.toggleAttribute("hidden", !isPlaying);
-  playPause.setAttribute("aria-label", isPlaying ? "暂停" : "播放");
+  playPause.setAttribute("aria-label", isPlaying ? window.taskbarLyricsI18n.t("UI_Pause") : window.taskbarLyricsI18n.t("UI_Play"));
 }
 
 previous.addEventListener("click", () => post("mediaAction", { action: "previous" }));
@@ -155,8 +155,8 @@ window.controlPanel = {
       const data = message.payload;
       if (!data || typeof data !== "object") return;
       const hasTrack = data.hasTrack === true;
-      const nextTitle = hasTrack ? data.title || "未知歌曲" : "暂无播放";
-      const nextArtist = hasTrack ? data.artist || "未知歌手" : "当前没有播放内容";
+      const nextTitle = hasTrack ? data.title || window.taskbarLyricsI18n.t("UI_UnknownSong") : window.taskbarLyricsI18n.t("UI_NothingPlaying");
+      const nextArtist = hasTrack ? data.artist || window.taskbarLyricsI18n.t("UI_UnknownArtist") : window.taskbarLyricsI18n.t("UI_NoMediaIsCurrentlyPlaying");
       if (title.textContent !== nextTitle || artist.textContent !== nextArtist) hideMetadataTooltip();
       title.textContent = nextTitle;
       artist.textContent = nextArtist;

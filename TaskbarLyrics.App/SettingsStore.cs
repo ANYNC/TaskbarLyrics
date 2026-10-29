@@ -40,6 +40,7 @@ public sealed class SettingsStore
                 settings.FloatingLyricsLayoutScalePercent = settings.LyricsLayoutScalePercent;
             if (!document.RootElement.TryGetProperty(nameof(AppSettings.EnableFloatingControlPanel), out _))
                 settings.EnableFloatingControlPanel = settings.EnableControlPanel;
+            settings.UiLanguage = Text.NormalizeLanguagePreference(settings.UiLanguage);
             settings.NormalizePlayerSources();
             settings.NormalizeLyricsLayout();
             settings.NormalizeDisplaySelection();
@@ -62,6 +63,7 @@ public sealed class SettingsStore
             settings.NormalizeLyricsLayout();
             settings.NormalizeDisplaySelection();
             settings.NormalizeWindowLayout();
+            settings.UiLanguage = Text.NormalizeLanguagePreference(settings.UiLanguage);
             var directory = Path.GetDirectoryName(_filePath);
             if (!string.IsNullOrWhiteSpace(directory))
             {

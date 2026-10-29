@@ -87,8 +87,8 @@ public partial class LyricsControlPanelWindow : Window, IDisposable
         if (_disposed) return;
         var identity = track is null ? string.Empty : LyricSyncService.BuildStableTrackIdentity(track);
         if (_trackIdentity != identity) { _trackIdentity = identity; _seeking = false; _pendingSeek = null; }
-        var title = track is null ? "暂无播放" : string.IsNullOrEmpty(track.Title) ? "未知歌曲" : track.Title;
-        var artist = track is null ? "当前没有播放内容" : string.IsNullOrEmpty(track.Artist) ? "未知歌手" : track.Artist;
+        var title = track is null ? Text.T("UI_NothingPlaying") : string.IsNullOrEmpty(track.Title) ? Text.T("UI_UnknownSong") : track.Title;
+        var artist = track is null ? Text.T("UI_NoMediaIsCurrentlyPlaying") : string.IsNullOrEmpty(track.Artist) ? Text.T("UI_UnknownArtist") : track.Artist;
         if (TitleText.Text != title) { TitleText.Text = title; TitleText.ToolTip = title; }
         if (ArtistText.Text != artist) { ArtistText.Text = artist; ArtistText.ToolTip = artist; }
         SourceText.Text = sourceBadge.DisplayName ?? string.Empty;
@@ -163,7 +163,7 @@ public partial class LyricsControlPanelWindow : Window, IDisposable
         _playing = playing;
         PlayGlyph.Visibility = playing ? Visibility.Collapsed : Visibility.Visible;
         PauseGlyph.Visibility = playing ? Visibility.Visible : Visibility.Collapsed;
-        AutomationProperties.SetName(PlayButton, playing ? "暂停" : "播放");
+        AutomationProperties.SetName(PlayButton, playing ? Text.T("UI_Pause") : Text.T("UI_Play"));
     }
 
     internal void TrackHoverSource(Window source, Rect boundsPx)

@@ -120,9 +120,31 @@ public partial class SmtcTimelineMonitorWindow : Wpf.Ui.Controls.FluentWindow
         core.Settings.IsBuiltInErrorPageEnabled = false;
         core.WebMessageReceived += WebMessageReceived;
 
+        await core.AddScriptToExecuteOnDocumentCreatedAsync(Text.CreateWebBootstrap());
+        if (_isClosed) return;
+
         var htmlPath = Path.Combine(AppContext.BaseDirectory, "Web", "SmtcMonitor", "index.html");
         MonitorWebView.Source = new Uri(htmlPath);
         _isWebReady = true;
+    }
+
+    internal void ReloadForUiLanguage()
+    {
+        TaskObserver.Observe(ReloadForUiLanguageAsync(), "SMTC monitor language reload");
+    }
+
+    private async Task ReloadForUiLanguageAsync()
+    {
+        if (_isClosed || MonitorWebView.CoreWebView2 is null)
+        {
+            return;
+        }
+
+        await MonitorWebView.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(Text.CreateWebBootstrap());
+        if (!_isClosed)
+        {
+            MonitorWebView.CoreWebView2.Reload();
+        }
     }
 
     private void PushDiagnostics()
@@ -243,7 +265,7 @@ public partial class SmtcTimelineMonitorWindow : Wpf.Ui.Controls.FluentWindow
             string.IsNullOrWhiteSpace(textElement.GetString()))
         {
             Log.Diagnostic("SMTC-WEB", "CopyFailed Reason='InvalidTextPayload'");
-            DispatchToWeb("copyResult", new { success = false, message = "没有可复制的诊断数据。" }, "SMTC copy result");
+            DispatchToWeb("copyResult", new { success = false, message = Text.T("UI_NoDiagnosticDataToCopy") }, "SMTC copy result");
             return;
         }
 
@@ -257,7 +279,7 @@ public partial class SmtcTimelineMonitorWindow : Wpf.Ui.Controls.FluentWindow
             Log.Diagnostic(
                 "SMTC-WEB",
                 $"CopyFailed Reason='ClipboardException' Exception='{exception.GetType().Name}' HResult=0x{exception.HResult:X8}");
-            DispatchToWeb("copyResult", new { success = false, message = "复制失败，请重试。" }, "SMTC copy result");
+            DispatchToWeb("copyResult", new { success = false, message = Text.T("UI_CopyFailedPleaseRetry") }, "SMTC copy result");
         }
     }
 

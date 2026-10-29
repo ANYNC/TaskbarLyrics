@@ -38,6 +38,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
     private string _lastCurrentTrackOffsetPayloadJson = string.Empty;
     private TrackOffsetQueryPayload _trackOffsetQuery = new();
     private string? _pendingPage;
+    private string _currentPage = "sources";
     private bool _pendingFocusCurrentTrack;
     private bool _hasPendingPreviewChanges;
     private string? _taskbarEmbeddingStatus;
@@ -237,9 +238,36 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         core.Settings.IsBuiltInErrorPageEnabled = false;
         core.WebMessageReceived += SettingsWebView_WebMessageReceived;
 
+        await core.AddScriptToExecuteOnDocumentCreatedAsync(CreateInitialPageScript(_pendingPage));
+        await core.AddScriptToExecuteOnDocumentCreatedAsync(Text.CreateWebBootstrap());
+        if (_isClosed) return;
+
         var htmlPath = Path.Combine(AppContext.BaseDirectory, "Web", "Settings", "settings.html");
         SettingsWebView.Source = new Uri(htmlPath);
         _isWebReady = true;
+    }
+
+    internal void ReloadForUiLanguage()
+    {
+        TaskObserver.Observe(ReloadForUiLanguageAsync(), "settings web view language reload");
+    }
+
+    private async Task ReloadForUiLanguageAsync()
+    {
+        if (_isClosed || SettingsWebView.CoreWebView2 is null)
+        {
+            return;
+        }
+
+        Title = Text.T("UI_TaskbarLyricsSettings_27");
+        // The reload resets the web page to its default tab; render the current tab on first paint and keep it.
+        _pendingPage = _currentPage;
+        await SettingsWebView.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(CreateInitialPageScript(_currentPage));
+        await SettingsWebView.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(Text.CreateWebBootstrap());
+        if (!_isClosed)
+        {
+            SettingsWebView.CoreWebView2.Reload();
+        }
     }
 
     private void SettingsWebView_WebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
@@ -322,7 +350,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 else if (_isWebReady && SettingsWebView.CoreWebView2 is not null)
                 {
                     await SettingsWebView.ExecuteScriptAsync(WebViewMessageScriptFactory.Dispatch(
-                        "settingsApp", "playerSourceActionResult", new { message = "无法添加播放器，请刷新媒体会话后重试。" }));
+                        "settingsApp", "playerSourceActionResult", new { message = Text.T("UI_CannotAddThePlayerRefreshMediaSessionsAndRetry") }));
                 }
                 break;
             case "removePlayerSource":
@@ -344,7 +372,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 else if (_isWebReady && SettingsWebView.CoreWebView2 is not null)
                 {
                     await SettingsWebView.ExecuteScriptAsync(WebViewMessageScriptFactory.Dispatch(
-                        "settingsApp", "playerSourceActionResult", new { message = "无法保存播放器信息，请重试。" }));
+                        "settingsApp", "playerSourceActionResult", new { message = Text.T("UI_CannotSavePlayerInformationPleaseRetry") }));
                 }
                 break;
             case "resetDefaults":
@@ -480,7 +508,8 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             WebViewMessageScriptFactory.Dispatch("settingsApp", "settingsState", new
             {
                 settings = payload,
-                fonts = FontCatalogService.GetOptions()
+                fonts = FontCatalogService.GetOptions(),
+                uiLanguages = CreateUiLanguageOptions()
             }));
     }
 
@@ -556,7 +585,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 await PushLyricDiagnosticsStateAsync(new
                 {
                     status = "empty",
-                    message = "未检测到可检索的当前歌曲，请先开始播放。"
+                    message = Text.T("UI_NoCurrentTrackAvailableStartPlaybackFirst")
                 });
                 return;
             }
@@ -600,7 +629,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             await PushLyricDiagnosticsStateAsync(new
             {
                 status = "error",
-                message = "歌词匹配失败，请稍后重试。"
+                message = Text.T("UI_LyricMatchingFailedPleaseRetryLater")
             });
         }
         finally
@@ -643,7 +672,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 providerId,
                 candidateId,
                 mode,
-                "匹配候选已失效，请重新查找。");
+                Text.T("UI_ThisCandidateHasExpiredSearchAgain"));
             return;
         }
 
@@ -662,8 +691,8 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 candidateId,
                 mode,
                 mode == LyricDiagnosticApplyMode.Remember
-                    ? "正在获取、应用并写入歌词缓存…"
-                    : "正在获取并应用歌词…");
+                    ? Text.T("UI_FetchingApplyingAndCachingLyrics")
+                    : Text.T("UI_FetchingAndApplyingLyrics"));
             var context = await _getCurrentTrackLyricsContext();
             cancellation.Token.ThrowIfCancellationRequested();
             if (context is null ||
@@ -675,7 +704,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                     providerId,
                     candidateId,
                     mode,
-                    "当前没有可应用歌词的歌曲，请重新查找。");
+                    Text.T("UI_NoCurrentTrackToApplyLyricsToSearchAgain"));
                 return;
             }
 
@@ -697,7 +726,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                     providerId,
                     candidateId,
                     mode,
-                    "候选歌词未通过内容校验，请重新查找或选择其他候选。");
+                    Text.T("UI_CandidateLyricsFailedContentValidationSearchAgainOrChoose"));
                 return;
             }
 
@@ -713,7 +742,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                     providerId,
                     candidateId,
                     mode,
-                    "当前歌曲已切换，请重新查找。");
+                    Text.T("UI_TheCurrentTrackHasChangedSearchAgain"));
                 return;
             }
 
@@ -730,8 +759,8 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                     candidateId,
                     mode,
                     remembered.IsSaved
-                        ? "已应用并写入歌词缓存；再次匹配到相同标题和歌手时会直接使用。"
-                        : $"歌词已应用，但未能写入歌词缓存：{remembered.FailureReason ?? "请检查日志。"}");
+                        ? Text.T("UI_AppliedAndCachedTracksWithTheSameTitleAnd")
+                        : Text.Format("Lyrics_CacheSaveFailed", remembered.FailureReason ?? Text.T("UI_PleaseCheckTheLogs")));
                 return;
             }
 
@@ -740,7 +769,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 providerId,
                 candidateId,
                 mode,
-                "已应用当前歌词。");
+                Text.T("UI_CurrentLyricsApplied"));
         }
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
         {
@@ -756,7 +785,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                     providerId,
                     candidateId,
                     mode,
-                    "应用歌词失败，请重新查找或选择其他候选。");
+                    Text.T("UI_CannotApplyLyricsSearchAgainOrChooseAnotherCandidate"));
             }
         }
         finally
@@ -955,7 +984,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         var context = await _getCurrentTrackLyricsContext();
         if (context is null || string.IsNullOrWhiteSpace(context.LyricSource))
         {
-            await PushTrackOffsetSaveStatusAsync(false, "歌词源尚未确定，暂时无法保存单曲偏移。");
+            await PushTrackOffsetSaveStatusAsync(false, Text.T("UI_ALyricSourceHasNotBeenSelectedTrackOffsets"));
             return;
         }
 
@@ -972,7 +1001,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         var mutation = DeserializeTrackOffsetMutation(value);
         if (mutation?.Key is null)
         {
-            await PushTrackOffsetSaveStatusAsync(false, "偏移记录无效。");
+            await PushTrackOffsetSaveStatusAsync(false, Text.T("UI_InvalidOffsetRecord"));
             return;
         }
 
@@ -987,7 +1016,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         var key = DeserializeTrackOffsetKey(value);
         if (key is null)
         {
-            await PushTrackOffsetSaveStatusAsync(false, "偏移记录无效。");
+            await PushTrackOffsetSaveStatusAsync(false, Text.T("UI_InvalidOffsetRecord"));
             return;
         }
 
@@ -1008,7 +1037,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         await PushTrackOffsetEntriesToWebAsync(_trackOffsetQuery);
         await PushTrackOffsetSaveStatusAsync(
             result.IsSaved,
-            result.IsSaved ? "单曲偏移已保存" : "单曲偏移保存失败，请稍后重试。");
+            result.IsSaved ? Text.T("UI_TrackOffsetSaved") : Text.T("UI_CannotSaveTrackOffsetPleaseRetryLater"));
     }
 
     private async Task PushTrackOffsetSaveStatusAsync(bool isSaved, string message)
@@ -1049,6 +1078,11 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
     private async Task HandleSettingsPageChangedAsync(JsonElement? value)
     {
         var page = value is { ValueKind: JsonValueKind.String } ? value.Value.GetString() : null;
+        if (!string.IsNullOrWhiteSpace(page))
+        {
+            _currentPage = page;
+        }
+
         _isTrackOffsetsPageActive = page == "trackOffsets";
         if (page == "gettingStarted" && !_settings.HasSeenGettingStarted)
         {
@@ -1093,11 +1127,11 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                         : "waiting";
         var message = state switch
         {
-            "notGranted" => "尚未允许读取系统播放声音。",
-            "disabled" => "频谱已关闭，不会读取系统播放声音。",
-            "blocked" => "系统音频采集被系统或安全软件阻止。",
-            "capturing" => "正在读取系统播放声音并生成频谱。",
-            _ => "已允许；仅在频谱需要显示时读取系统播放声音。"
+            "notGranted" => Text.T("UI_SystemAudioCaptureHasNotBeenAllowed"),
+            "disabled" => Text.T("UI_SpectrumIsOffSystemAudioIsNotBeingCaptured"),
+            "blocked" => Text.T("UI_SystemAudioCaptureIsBlockedByWindowsOrSecurity"),
+            "capturing" => Text.T("UI_CapturingSystemAudioAndGeneratingTheSpectrum"),
+            _ => Text.T("UI_AllowedSystemAudioIsCapturedOnlyWhileTheSpectrum")
         };
         var payload = new { state, message };
         var json = JsonSerializer.Serialize(payload, SettingsWebJson.Options);
@@ -1121,7 +1155,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         var payload = new
         {
             state = "waiting",
-            message = "正在重新连接系统音频…"
+            message = Text.T("UI_ReconnectingSystemAudio")
         };
         _lastSpectrumCaptureStateJson = JsonSerializer.Serialize(payload, SettingsWebJson.Options);
         await SettingsWebView.ExecuteScriptAsync(
@@ -1219,6 +1253,23 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             : JsonSerializer.Deserialize<TrackLyricOffsetRecordKey>(value.Value.GetRawText(), SettingsWebJson.Options);
     }
 
+    private static string CreateInitialPageScript(string? page) =>
+        $"window.taskbarLyricsInitialPage = {JsonSerializer.Serialize(page ?? string.Empty)};";
+
+    private static List<WebLanguageOption> CreateUiLanguageOptions()
+    {
+        var options = new List<WebLanguageOption>
+        {
+            new() { Value = string.Empty, Name = Text.T("UI_AutoDetect") }
+        };
+        options.AddRange(Text.Languages.Select(language => new WebLanguageOption
+        {
+            Value = language.Id,
+            Name = language.Name
+        }));
+        return options;
+    }
+
     private WebSettingsPayload CreateSettingsPayload()
     {
         _settings.NormalizePlayerSources();
@@ -1297,6 +1348,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             ShowLyricSearchStatus = _settings.ShowLyricSearchStatus,
             EnableWordScanning = _settings.EnableWordScanning,
             ToolWindowTheme = _settings.ToolWindowTheme,
+            UiLanguage = _settings.UiLanguage,
             SpectrumDisplayMode = _settings.SpectrumDisplayMode.ToString(),
             SpectrumAudioAccessGranted = _settings.SpectrumAudioAccessGranted,
             FontSize = _settings.FontSize,
@@ -1637,6 +1689,9 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                     _settings.ForceAlwaysOnTop = layer == FloatingWindowLayer.Fullscreen;
                 }
                 break;
+            case "uiLanguage":
+                _settings.UiLanguage = Text.NormalizeLanguagePreference(ReadString(element, _settings.UiLanguage));
+                break;
             case "useFloatingWindow":
                 ApplyFloatingWindowSetting(ReadBool(element, _settings.UseFloatingWindow));
                 break;
@@ -1939,7 +1994,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
     {
         using var dialog = new Forms.FolderBrowserDialog
         {
-            Description = "选择本地音乐目录",
+            Description = Text.T("UI_ChooseALocalMusicFolder"),
             UseDescriptionForTitle = true,
             ShowNewFolderButton = true
         };
@@ -1973,7 +2028,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         await PushUpdateStatusToWebAsync(new UpdateStatusPayload
         {
             State = "checking",
-            Message = "正在检查更新..."
+            Message = Text.T("UI_CheckingForUpdates_26")
         });
 
         try
@@ -1984,7 +2039,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 await PushUpdateStatusToWebAsync(new UpdateStatusPayload
                 {
                     State = "error",
-                    Message = "没有读取到最新版本信息。"
+                    Message = Text.T("UI_CouldNotReadTheLatestVersionInformation")
                 });
                 return;
             }
@@ -1993,8 +2048,8 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             {
                 State = result.HasUpdate ? "available" : "latest",
                 Message = result.HasUpdate
-                    ? $"发现新版本 {result.Version}，当前版本 {result.CurrentVersion}。"
-                    : $"当前已是最新版本：{result.CurrentVersion}。",
+                    ? Text.Format("Update_Available", result.Version, result.CurrentVersion)
+                    : Text.Format("Update_Current", result.CurrentVersion),
                 Version = result.Version,
                 Url = result.Url
             });
@@ -2004,7 +2059,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             await PushUpdateStatusToWebAsync(new UpdateStatusPayload
             {
                 State = "error",
-                Message = "检查更新失败，请稍后重试。"
+                Message = Text.T("UI_UpdateCheckFailedPleaseRetryLater")
             });
         }
     }
@@ -2348,8 +2403,15 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         public int OffsetMilliseconds { get; set; }
     }
 
+    private sealed class WebLanguageOption
+    {
+        public string Value { get; set; } = "";
+        public string Name { get; set; } = "";
+    }
+
     private sealed class WebSettingsPayload
     {
+        public string UiLanguage { get; set; } = "";
         public List<string> SourceRecognitionOrder { get; set; } = new();
         public List<CustomPlayerSource> CustomPlayerSources { get; set; } = [];
         public bool EnableNetease { get; set; }

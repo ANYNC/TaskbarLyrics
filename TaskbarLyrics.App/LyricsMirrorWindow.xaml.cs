@@ -319,6 +319,16 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
         }
     }
 
+    internal void ReloadForUiLanguage()
+    {
+        if (_isDisposed || !_isWebReady)
+        {
+            return;
+        }
+
+        LyricsWebView.NavigateToString(MainWindow.GetLyricsWebUiHtml());
+    }
+
     private void OnNavigationCompleted(object? sender, CoreWebView2NavigationCompletedEventArgs e)
     {
         if (!e.IsSuccess || _isDisposed)

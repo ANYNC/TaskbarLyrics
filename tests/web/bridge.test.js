@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { JSDOM } from "jsdom";
+import { JSDOM } from "./helpers/localized-dom.js";
 import { describe, expect, it } from "vitest";
 
 const root = new URL("../..", import.meta.url);
@@ -3045,6 +3045,50 @@ describe("settings WebView bridge", () => {
     dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings: { showCover: true, coverPosition: "Left", lyricsTextAlignment: "Right", horizontalAnchor: "Center" }, fonts: [] } });
     expect(document.querySelector('[data-setting="horizontalAnchor"]')).toBeNull();
     expect(sent).toHaveLength(finalCount);
+  });
+
+  it("lists interface languages from the host catalog and posts the selected language", async () => {
+    const { dom, sent, script } = await createSettingsDom();
+    enableDialogDomSupport(dom);
+    dom.window.eval(script);
+    const document = dom.window.document;
+    const uiLanguages = [
+      { value: "", name: "自动检测" },
+      { value: "Zh-CN", name: "简体中文" },
+      { value: "EN", name: "English" },
+      { value: "Zh-Hant", name: "繁體中文" }
+    ];
+    dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings: {}, fonts: [], uiLanguages } });
+    dom.window.settingsApp.receive({ version: 1, type: "navigate", payload: { page: "general" } });
+
+    const row = document.querySelector("#uiLanguageRow");
+    expect(row.hidden).toBe(false);
+    expect(row.querySelector(".setting-label strong").textContent).toBe("语言\\Language");
+    const trigger = row.querySelector('[data-setting="uiLanguage"]');
+    expect(trigger.querySelector(".select-trigger-value").textContent).toBe("自动检测");
+
+    trigger.click();
+    expect([...document.querySelectorAll("#selectListbox .select-option span")].map(span => span.textContent))
+      .toEqual(["自动检测", "简体中文", "English", "繁體中文"]);
+    document.querySelector('#selectListbox [data-option-index="3"]').click();
+    expect(sent.at(-1)).toEqual({ version: 1, type: "update", payload: { key: "uiLanguage", value: "Zh-Hant" } });
+
+    dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings: { uiLanguage: "Zh-Hant" }, fonts: [], uiLanguages } });
+    expect(trigger.querySelector(".select-trigger-value").textContent).toBe("繁體中文");
+    dom.window.close();
+  });
+
+  it("hides the interface-language row when the host sends no language catalog", async () => {
+    const { dom, script } = await createSettingsDom();
+    dom.window.eval(script);
+    const document = dom.window.document;
+
+    dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings: {}, fonts: [] } });
+
+    expect(document.querySelector("#uiLanguageRow").hidden).toBe(true);
+    expect(document.querySelector('[data-setting="uiLanguage"]').querySelector(".select-trigger-value").textContent)
+      .toBe(dom.window.taskbarLyricsI18n.t("UI_Select"));
+    dom.window.close();
   });
 
 });

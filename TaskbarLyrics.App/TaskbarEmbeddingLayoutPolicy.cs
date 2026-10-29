@@ -209,7 +209,7 @@ internal static class TaskbarEmbeddingLayoutPolicy
             return new TaskbarEmbeddingLayoutResult(
                 false,
                 false,
-                "当前任务栏空间不足，无法嵌入显示。请切换到悬浮窗口。");
+                Text.T("Display_InsufficientSpace"));
         }
 
         safeSettings.WindowWidth = FindSafeWindowWidth(constraints.MaxWidth);
@@ -222,14 +222,14 @@ internal static class TaskbarEmbeddingLayoutPolicy
             return new TaskbarEmbeddingLayoutResult(
                 false,
                 false,
-                "当前任务栏空间不足，无法嵌入显示。请切换到悬浮窗口。");
+                Text.T("Display_InsufficientSpace"));
         }
 
         CopyLayoutValues(safeSettings, settings);
         return new TaskbarEmbeddingLayoutResult(
             true,
             true,
-            "当前布局超出任务栏，已恢复默认尺寸与位置，并按任务栏空间调整。");
+            Text.T("Display_LayoutReset"));
     }
 
     public static void ClampToConstraints(

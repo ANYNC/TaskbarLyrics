@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { JSDOM } from "jsdom";
+import { JSDOM } from "./localized-dom.js";
 
 const root = new URL("../../../TaskbarLyrics.App/Web/Lyrics/", import.meta.url);
 let assets;

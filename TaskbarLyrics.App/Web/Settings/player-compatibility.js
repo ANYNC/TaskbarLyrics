@@ -1,61 +1,61 @@
 (() => {
   const profiles = {
     netease: {
-      name: "网易云音乐", icon: "网易云音乐.png", search: "netease cloudmusic wangyiyun",
-      level: "setup", label: "需配置", information: "支持", progress: "支持", preparation: "inflink-rs",
-      summary: "安装 inflink-rs 后，即可同步歌词。",
-      detailsLabel: "配置步骤",
-      steps: ["按 BetterNCM 官方说明确认版本兼容并安装。", "在插件商店安装 inflink-rs，重启网易云音乐。"],
-      link: "https://github.com/apoint123/inflink-rs", linkLabel: "官方安装说明",
-      note: "第三方插件的版本要求以官方说明为准，本软件不会自动安装。"
+      name: window.taskbarLyricsI18n.t("UI_NetEaseCloudMusic"), icon: "网易云音乐.png", search: "netease cloudmusic wangyiyun",
+      level: "setup", label: window.taskbarLyricsI18n.t("UI_SetupRequired"), information: window.taskbarLyricsI18n.t("UI_Supported"), progress: window.taskbarLyricsI18n.t("UI_Supported"), preparation: "inflink-rs",
+      summary: window.taskbarLyricsI18n.t("UI_InstallInflinkRsToEnableLyricSynchronization"),
+      detailsLabel: window.taskbarLyricsI18n.t("UI_SetupSteps"),
+      steps: [window.taskbarLyricsI18n.t("UI_CheckVersionCompatibilityAndInstallBetterNCMUsingItsOfficial"), window.taskbarLyricsI18n.t("UI_InstallInflinkRsFromThePluginStoreThenRestart")],
+      link: "https://github.com/apoint123/inflink-rs", linkLabel: window.taskbarLyricsI18n.t("UI_OfficialSetupGuide"),
+      note: window.taskbarLyricsI18n.t("UI_CheckTheOfficialGuideForThirdPartyPluginRequirements")
     },
     qqmusic: {
-      name: "QQ 音乐", icon: "QQ音乐.png", search: "qqmusic",
-      level: "supported", label: "支持", information: "支持", progress: "支持", preparation: "无需配置",
-      summary: "完美支持，直接播放即可。"
+      name: window.taskbarLyricsI18n.t("UI_QQMusic"), icon: "QQ音乐.png", search: "qqmusic",
+      level: "supported", label: window.taskbarLyricsI18n.t("UI_Supported"), information: window.taskbarLyricsI18n.t("UI_Supported"), progress: window.taskbarLyricsI18n.t("UI_Supported"), preparation: window.taskbarLyricsI18n.t("UI_NoSetupNeeded"),
+      summary: window.taskbarLyricsI18n.t("UI_FullySupportedJustStartPlaying")
     },
     kugou: {
-      name: "酷狗音乐", icon: "酷狗音乐.png", search: "kugou",
-      level: "limited", label: "有限支持", information: "支持", progress: "不支持", preparation: "无需配置",
-      summary: "缺少时间轴信息，歌词无法稳定同步。",
-      detailsLabel: "无法同步时",
-      link: "https://github.com/MoeKoeMusic/MoeKoeMusic", linkPrefix: "使用第三方酷狗播放器", linkLabel: "【MoeKoeMusic】"
+      name: window.taskbarLyricsI18n.t("UI_KugouMusic"), icon: "酷狗音乐.png", search: "kugou",
+      level: "limited", label: window.taskbarLyricsI18n.t("UI_LimitedSupport"), information: window.taskbarLyricsI18n.t("UI_Supported"), progress: window.taskbarLyricsI18n.t("UI_Unsupported"), preparation: window.taskbarLyricsI18n.t("UI_NoSetupNeeded"),
+      summary: window.taskbarLyricsI18n.t("UI_TimelineDataIsMissingSoLyricsCannotSynchronizeReliably"),
+      detailsLabel: window.taskbarLyricsI18n.t("UI_IfLyricsDoNotSynchronize"),
+      link: "https://github.com/MoeKoeMusic/MoeKoeMusic", linkPrefix: window.taskbarLyricsI18n.t("UI_TryTheThirdPartyKugouPlayer"), linkLabel: "【MoeKoeMusic】"
     },
     spotify: {
       name: "Spotify", icon: "spotify.png",
-      level: "supported", label: "支持", information: "支持", progress: "支持", preparation: "无需配置",
-      summary: "完美支持，直接播放即可。"
+      level: "supported", label: window.taskbarLyricsI18n.t("UI_Supported"), information: window.taskbarLyricsI18n.t("UI_Supported"), progress: window.taskbarLyricsI18n.t("UI_Supported"), preparation: window.taskbarLyricsI18n.t("UI_NoSetupNeeded"),
+      summary: window.taskbarLyricsI18n.t("UI_FullySupportedJustStartPlaying")
     },
     applemusic: {
       name: "Apple Music", icon: "Apple Music.png.png", search: "applemusic 苹果音乐",
-      level: "supported", label: "支持", information: "支持", progress: "不精准", preparation: "无需配置",
-      summary: "支持播放，时间轴信息不精准。"
+      level: "supported", label: window.taskbarLyricsI18n.t("UI_Supported"), information: window.taskbarLyricsI18n.t("UI_Supported"), progress: window.taskbarLyricsI18n.t("UI_Imprecise"), preparation: window.taskbarLyricsI18n.t("UI_NoSetupNeeded"),
+      summary: window.taskbarLyricsI18n.t("UI_PlaybackIsSupportedButTimelineDataIsImprecise")
     },
     sodamusic: {
-      name: "汽水音乐", icon: "Soda Music.png", search: "soda music qishui",
-      level: "supported", label: "支持", information: "支持", progress: "支持", preparation: "无需配置",
-      summary: "完美支持，直接播放即可。"
+      name: window.taskbarLyricsI18n.t("UI_SodaMusic"), icon: "Soda Music.png", search: "soda music qishui",
+      level: "supported", label: window.taskbarLyricsI18n.t("UI_Supported"), information: window.taskbarLyricsI18n.t("UI_Supported"), progress: window.taskbarLyricsI18n.t("UI_Supported"), preparation: window.taskbarLyricsI18n.t("UI_NoSetupNeeded"),
+      summary: window.taskbarLyricsI18n.t("UI_FullySupportedJustStartPlaying")
     },
     foobar2000: {
       name: "foobar2000", icon: "Foobar2000.png", search: "foobar foobra2000",
-      level: "setup", label: "需配置", information: "支持", progress: "支持", preparation: "foo_mediacontrol",
-      summary: "安装 foo_mediacontrol 插件补全时间轴信息。",
-      detailsLabel: "配置步骤",
-      steps: ["从 foo_mediacontrol 项目获取适合当前 foobar2000 版本的插件。", "按照项目说明安装插件并重启 foobar2000。"],
-      link: "https://github.com/ungive/foo_mediacontrol", linkLabel: "官方插件说明",
-      note: "第三方插件的版本要求以项目说明为准，本软件不会自动安装。"
+      level: "setup", label: window.taskbarLyricsI18n.t("UI_SetupRequired"), information: window.taskbarLyricsI18n.t("UI_Supported"), progress: window.taskbarLyricsI18n.t("UI_Supported"), preparation: "foo_mediacontrol",
+      summary: window.taskbarLyricsI18n.t("UI_InstallFooMediacontrolToProvideTimelineData"),
+      detailsLabel: window.taskbarLyricsI18n.t("UI_SetupSteps"),
+      steps: [window.taskbarLyricsI18n.t("UI_GetTheFooMediacontrolPluginMatchingYourFoobar2000Version"), window.taskbarLyricsI18n.t("UI_FollowTheProjectInstructionsToInstallThePluginAnd")],
+      link: "https://github.com/ungive/foo_mediacontrol", linkLabel: window.taskbarLyricsI18n.t("UI_OfficialPluginGuide"),
+      note: window.taskbarLyricsI18n.t("UI_CheckTheProjectGuideForThirdPartyPluginRequirements")
     },
     browser: {
-      name: "浏览器", icon: "Browser.png", search: "browser chrome edge firefox",
-      level: "conditional", label: "视网站而定", information: "视网站而定", progress: "视网站而定", preparation: "系统媒体会话",
-      summary: "需要网站提供完整媒体信息和进度。"
+      name: window.taskbarLyricsI18n.t("UI_Browser"), icon: "Browser.png", search: "browser chrome edge firefox",
+      level: "conditional", label: window.taskbarLyricsI18n.t("UI_DependsOnTheWebsite"), information: window.taskbarLyricsI18n.t("UI_DependsOnTheWebsite"), progress: window.taskbarLyricsI18n.t("UI_DependsOnTheWebsite"), preparation: window.taskbarLyricsI18n.t("UI_SystemMediaSession"),
+      summary: window.taskbarLyricsI18n.t("UI_TheWebsiteMustProvideCompleteMediaInformationAndPlayback")
     },
     other: {
-      name: "其他播放器", icon: "Presets/music-player.svg", requiresAdding: true,
-      level: "unknown", label: "待确认", information: "待确认", progress: "待确认", preparation: "系统媒体会话",
-      summary: "提供完整系统媒体信息和进度的播放器才可同步。",
-      detailsLabel: "如何确认",
-      steps: ["播放歌曲，在“播放源 → 添加播放器”中选择媒体会话。", "在“高级 → SMTC 时间轴监视器”检查歌曲信息和进度。"]
+      name: window.taskbarLyricsI18n.t("UI_OtherPlayer"), icon: "Presets/music-player.svg", requiresAdding: true,
+      level: "unknown", label: window.taskbarLyricsI18n.t("UI_Unverified"), information: window.taskbarLyricsI18n.t("UI_Unverified"), progress: window.taskbarLyricsI18n.t("UI_Unverified"), preparation: window.taskbarLyricsI18n.t("UI_SystemMediaSession"),
+      summary: window.taskbarLyricsI18n.t("UI_SynchronizationRequiresAPlayerThatProvidesCompleteSystemMedia"),
+      detailsLabel: window.taskbarLyricsI18n.t("UI_HowToCheck"),
+      steps: [window.taskbarLyricsI18n.t("UI_PlayASongThenSelectItsMediaSessionIn"), window.taskbarLyricsI18n.t("UI_CheckTrackInformationAndProgressInAdvancedSMTCTimeline")]
     }
   };
 
@@ -100,15 +100,15 @@
     container.innerHTML = `<div class="player-compatibility${onboarding ? " is-onboarding" : ""}" data-support-level="${profile.level}">
       <div class="compatibility-heading">${onboarding
         ? `<div class="compatibility-player"><img class="${playerId === "other" ? "default-player-icon" : ""}" src="../../Assets/PlayerIcons/${profile.icon}" alt="" draggable="false"><h2>${profile.name}</h2></div>`
-        : "<strong>兼容性参考</strong>"}<span class="compatibility-level"><span aria-hidden="true">${mark}</span> ${onboarding && profile.level === "setup" ? "需配置插件" : profile.label}</span></div>
+        : `<strong>${window.taskbarLyricsI18n.t("UI_CompatibilityReference")}</strong>`}<span class="compatibility-level"><span aria-hidden="true">${mark}</span> ${onboarding && profile.level === "setup" ? window.taskbarLyricsI18n.t("UI_PluginRequired") : profile.label}</span></div>
       ${onboarding ? summary : ""}
       <div class="compatibility-overview">
         <dl class="compatibility-metrics">
-          <div><dt>${onboarding ? "歌曲识别" : "歌曲信息"}</dt><dd>${profile.information}</dd></div>
-          <div><dt>${onboarding ? "歌词同步" : "时间轴信息"}</dt><dd>${profile.progress}${explainSetup ? "，需配置插件" : ""}</dd></div>
-          <div><dt>使用准备</dt><dd>${explainSetup ? "安装 " : ""}${profile.preparation}</dd></div>
+          <div><dt>${onboarding ? window.taskbarLyricsI18n.t("UI_TrackRecognition") : window.taskbarLyricsI18n.t("UI_TrackInformation")}</dt><dd>${profile.information}</dd></div>
+          <div><dt>${onboarding ? window.taskbarLyricsI18n.t("UI_LyricSynchronization") : window.taskbarLyricsI18n.t("UI_TimelineInformation")}</dt><dd>${profile.progress}${explainSetup ? window.taskbarLyricsI18n.t("UI_PluginRequired_1") : ""}</dd></div>
+          <div><dt>${window.taskbarLyricsI18n.t("UI_Preparation")}</dt><dd>${explainSetup ? window.taskbarLyricsI18n.t("UI_Install") : ""}${profile.preparation}</dd></div>
         </dl>
-        ${onboarding ? '<p class="compatibility-reference-note">兼容性参考，非实时检测结果。</p>' : ""}
+        ${onboarding ? `<p class="compatibility-reference-note">${window.taskbarLyricsI18n.t("UI_CompatibilityReferenceNotALiveTest")}</p>` : ""}
       </div>
       ${onboarding ? "" : summary}
       ${profile.detailsLabel ? `<div class="compatibility-details"><h3 class="compatibility-details-title">${profile.detailsLabel}</h3>
@@ -116,7 +116,7 @@
         ${profile.link && !(onboarding && profile.level === "setup") ? `<div class="compatibility-resource">${profile.linkPrefix ?? ""}<button class="${profile.linkPrefix ? "compatibility-link" : "btn secondary small"}" type="button" data-compatibility-link>${profile.linkLabel}</button></div>` : ""}
         ${profile.note ? `<p class="compatibility-note">${profile.note}</p>` : ""}</div>` : ""}
     </div>`;
-    container.setAttribute("aria-label", "播放器兼容性参考，非实时检测结果");
+    container.setAttribute("aria-label", window.taskbarLyricsI18n.t("UI_PlayerCompatibilityReferenceNotALiveTest"));
     container.hidden = false;
     container.querySelector("[data-compatibility-link]")?.addEventListener("click", () => current.onOpenLink?.(profile.link));
   }
