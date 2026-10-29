@@ -835,6 +835,22 @@ html, body {
   transition: opacity 260ms ease;
 }
 
+/* Align both the spectrum box and the bars when they leave unused space. */
+.spectrum-layer,
+.spectrum {
+  justify-content: flex-start;
+}
+
+.layout[data-text-alignment="Center"] .spectrum-layer,
+.layout[data-text-alignment="Center"] .spectrum {
+  justify-content: center;
+}
+
+.layout[data-text-alignment="Right"] .spectrum-layer,
+.layout[data-text-alignment="Right"] .spectrum {
+  justify-content: flex-end;
+}
+
 .spectrum span {
   width: var(--spectrum-fitted-bar-width, var(--spectrum-bar-width));
   flex: 0 0 var(--spectrum-fitted-bar-width, var(--spectrum-bar-width));
