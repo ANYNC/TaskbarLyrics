@@ -26,13 +26,16 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
     private bool _isSpectrumScriptPending;
     private bool _isDisposed;
     private bool _isContentVisible = true;
+    private readonly LyricsDisplayDiagnostics _displayDiagnostics;
 
     public LyricsMirrorWindow(DisplayMonitor displayMonitor, Action<Window, Rect, DisplayMonitor, Action<bool>, ControlPanelTriggerArea, ControlPanelActivation> onCoverClicked,
         IAppCompositionRoot compositionRoot, Action? onSurfaceHidden = null)
     {
         InitializeComponent();
+        _displayDiagnostics = new LyricsDisplayDiagnostics(this);
         _onSurfaceHidden = onSurfaceHidden;
         _embeddedTaskbarAnchor.SurfaceHidden += OnEmbeddedSurfaceHidden;
+        _embeddedTaskbarAnchor.AttachmentLost += OnEmbeddedAttachmentLost;
         _regionVisibility = new LyricsRegionVisibilityController(Dispatcher,
             (generation, phase) => TaskObserver.Observe(SendRegionVisibilityAsync(generation, phase), "mirror region visibility"),
             (visible, interactive) =>
@@ -54,15 +57,41 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
         SourceInitialized += OnSourceInitialized;
         IsVisibleChanged += OnIsVisibleChanged;
         Closed += OnClosed;
+        RecordDisplayDiagnostics("Created");
     }
 
     internal bool IsEmbeddedInTaskbar => _embeddedTaskbarAnchor.IsAttached;
+    internal bool NeedsWindowReplacement { get; private set; }
+    internal event EventHandler? RecreateWindowRequested;
     internal bool IsEmbeddedSurfaceHidden => _embeddedTaskbarAnchor.IsSurfaceHidden;
     internal DisplayMonitor DisplayMonitor => _settings.UseFloatingWindow ? _floatingPlacement.Display ?? _displayMonitor : _displayMonitor;
     internal bool IsContentVisible => _isContentVisible && _isWebReady && _regionVisibility.IsInteractive && !IsEmbeddedSurfaceHidden;
     internal LyricsRegionVisibilityController RegionVisibility => _regionVisibility;
 
     private void OnEmbeddedSurfaceHidden(object? sender, EventArgs e) => _onSurfaceHidden?.Invoke();
+
+    internal void RecordDisplayDiagnostics(string stage, bool capture = false)
+    {
+        if (!LyricsDisplayDiagnostics.Enabled) return;
+        string ReadState() => $"Target='{_displayMonitor.Id}' Bounds={_displayMonitor.Bounds} " +
+            $"Disposed={_isDisposed} RecreateRequested={NeedsWindowReplacement} WebReady={_isWebReady} " +
+            $"ContentVisible={_isContentVisible} Region={_regionVisibility.Phase} SurfaceHidden={IsEmbeddedSurfaceHidden}";
+        _displayDiagnostics.Record(stage, ReadState());
+        if (capture)
+            TaskObserver.Observe(_displayDiagnostics.CaptureAsync(stage, () =>
+            {
+                MainWindow.TryGetLyricsWebViewController(LyricsWebView, out var controller, out _);
+                return new LyricsDisplaySnapshot(RootBorder, LyricsWebView, LyricsWebView.CoreWebView2, controller, ReadState());
+            }), "mirror display diagnostic snapshot");
+    }
+
+    private void OnEmbeddedAttachmentLost(object? sender, EventArgs e)
+    {
+        if (_isDisposed || NeedsWindowReplacement) return;
+        NeedsWindowReplacement = true;
+        RecordDisplayDiagnostics("RecreationRequested");
+        RecreateWindowRequested?.Invoke(this, EventArgs.Empty);
+    }
 
     private async Task SendRegionVisibilityAsync(int generation, LyricsRegionVisibilityPhase phase) =>
         await LyricsWebView.ExecuteScriptAsync(LyricsWebViewScriptFactory.SetRegionVisibility(
@@ -104,6 +133,7 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
     public void ApplySettings(AppSettings settings, bool keepControlPanelOpen = false, bool preserveFloatingPosition = false,
         Rect? floatingResizeAnchor = null)
     {
+        if (_isDisposed || NeedsWindowReplacement) return;
         _settings = settings.Clone();
         _floatingPlacement.Configure(_settings);
         if (_floatingPlacement.IsDragging) return;
@@ -154,6 +184,12 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
         var attachResult = !_settings.UseFloatingWindow
             ? _embeddedTaskbarAnchor.Attach(this, _settings, _displayMonitor)
             : EmbeddedTaskbarAttachResult.Unavailable;
+        if (attachResult == EmbeddedTaskbarAttachResult.WindowReplacementRequired ||
+            (_embeddedTaskbarAnchor.IsAttached && !EmbeddedTaskbarEmbeddingPolicy.ShouldKeepEmbedded(attachResult)))
+        {
+            OnEmbeddedAttachmentLost(this, EventArgs.Empty);
+            return;
+        }
         if (EmbeddedTaskbarEmbeddingPolicy.ShouldKeepEmbedded(attachResult))
         {
             ExecutePendingScript("style");
@@ -202,6 +238,8 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
         }
 
         _isDisposed = true;
+        RecordDisplayDiagnostics("Dispose");
+        _displayDiagnostics.Dispose();
         _regionVisibility.Dispose();
         Loaded -= OnLoaded;
         SourceInitialized -= OnSourceInitialized;
@@ -214,6 +252,7 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
         }
         LyricsWebView.Dispose();
         _embeddedTaskbarAnchor.SurfaceHidden -= OnEmbeddedSurfaceHidden;
+        _embeddedTaskbarAnchor.AttachmentLost -= OnEmbeddedAttachmentLost;
         _embeddedTaskbarAnchor.Dispose();
         _smartTopmostController.Dispose();
     }
@@ -235,6 +274,7 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
 
     private void OnIsVisibleChanged(object sender, DependencyPropertyChangedEventArgs e)
     {
+        RecordDisplayDiagnostics("VisibilityChanged", capture: true);
         _smartTopmostController.OnWindowVisibilityChanged(IsVisible);
     }
 
@@ -331,6 +371,7 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
 
     private void OnNavigationCompleted(object? sender, CoreWebView2NavigationCompletedEventArgs e)
     {
+        RecordDisplayDiagnostics($"NavigationCompleted-{e.IsSuccess}-{e.WebErrorStatus}");
         if (!e.IsSuccess || _isDisposed)
         {
             return;
@@ -352,6 +393,7 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
             {
                 ExecutePendingScript(slot);
             }
+            RecordDisplayDiagnostics("DocumentReady", capture: true);
         }), DispatcherPriority.Loaded);
     }
 

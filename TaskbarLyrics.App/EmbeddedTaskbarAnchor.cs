@@ -22,7 +22,8 @@ internal enum EmbeddedTaskbarAttachResult
 {
     Unavailable,
     Attached,
-    AttachedPositionPending
+    AttachedPositionPending,
+    WindowReplacementRequired
 }
 
 internal static class EmbeddedTaskbarEmbeddingPolicy
@@ -46,8 +47,9 @@ internal static class EmbeddedTaskbarEmbeddingPolicy
     // probes), so the host must replace the window instead of re-parenting in place.
     public static bool RequiresWindowReplacement(
         EmbeddedTaskbarDisplayTarget? attachedTarget,
-        DisplayMonitor? targetDisplay) =>
-        attachedTarget is { } attached && !attached.Matches(targetDisplay);
+        DisplayMonitor? targetDisplay,
+        bool nativeAttachmentChanged = false) =>
+        attachedTarget is { } attached && (nativeAttachmentChanged || !attached.Matches(targetDisplay));
 }
 
 internal static class EmbeddedTaskbarLayoutCalculator
@@ -168,6 +170,7 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
 
     public bool IsSurfaceHidden { get; private set; }
     public event EventHandler? SurfaceHidden;
+    public event EventHandler? AttachmentLost;
 
     public bool IsAttachedToDifferentTarget(DisplayMonitor? targetDisplay) =>
         EmbeddedTaskbarEmbeddingPolicy.RequiresWindowReplacement(_attachedDisplayTarget, targetDisplay);
@@ -194,7 +197,7 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
 
         if (HasAttachmentForDifferentTarget(hwnd, targetDisplay))
         {
-            Detach();
+            return EmbeddedTaskbarAttachResult.WindowReplacementRequired;
         }
 
         var taskbar = FindTaskbar(targetDisplay, out var taskbarDiagnostic);
@@ -205,14 +208,6 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
             return keptAttachment;
         }
 
-        if (_windowHandle != hwnd || _taskbarHandle != taskbar)
-        {
-            Detach();
-            _windowHandle = hwnd;
-            _taskbarHandle = taskbar;
-            CaptureOriginalStyles(hwnd);
-        }
-
         var isWindows11 = IsWindows11();
         var parent = isWindows11 ? taskbar : FindTaskbarContainer(taskbar);
         if (parent == IntPtr.Zero)
@@ -220,6 +215,25 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
             var keptAttachment = KeepExistingAttachmentIfValid(window, hwnd, settings, targetDisplay);
             ReportAttachOutcome(keptAttachment, "NoTaskbarContainer");
             return keptAttachment;
+        }
+
+        // The display ID can survive a taskbar replacement. Never re-parent an
+        // established HWND to the new native host: its composition surface may be lost.
+        if (EmbeddedTaskbarEmbeddingPolicy.RequiresWindowReplacement(_attachedDisplayTarget, targetDisplay,
+                _windowHandle != hwnd || _taskbarHandle != taskbar || _parentHandle != parent ||
+                !IsWindow(hwnd) || GetAncestor(hwnd, GetAncestorParent) != parent))
+        {
+            ReportAttachOutcome(EmbeddedTaskbarAttachResult.WindowReplacementRequired,
+                $"NativeHostTransition Candidate=0x{hwnd:X} Taskbar=0x{taskbar:X}");
+            return EmbeddedTaskbarAttachResult.WindowReplacementRequired;
+        }
+
+        if (_windowHandle != hwnd || _taskbarHandle != taskbar)
+        {
+            Detach();
+            _windowHandle = hwnd;
+            _taskbarHandle = taskbar;
+            CaptureOriginalStyles(hwnd);
         }
 
         if (_parentHandle != parent || GetAncestor(hwnd, GetAncestorParent) != parent)
@@ -367,11 +381,14 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
 
     private void RefreshAvailableSpace()
     {
-        if (!_disposed && _parentHandle != IntPtr.Zero && !IsWindow(_parentHandle))
+        if (!_disposed && _parentHandle != IntPtr.Zero &&
+            (!IsWindow(_parentHandle) || !IsWindow(_windowHandle) ||
+             GetAncestor(_windowHandle, GetAncestorParent) != _parentHandle))
         {
-            _changeObserver.Detach();
-            _occupiedSpace.SetEventMonitoring(false);
-            _occupiedSpace.Invalidate();
+            _spaceRefreshTimer?.Stop();
+            _eventRefreshTimer?.Stop();
+            InvalidateTaskbarTarget();
+            AttachmentLost?.Invoke(this, EventArgs.Empty);
             return;
         }
         if (!_disposed && _positionWindow is { IsVisible: true } window && _positionSettings is { } settings &&
@@ -484,10 +501,10 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
                 GetCurrentWindowBounds(hwnd, parentRect),
                 bounds))
         {
-            return true;
+            return RestoreTaskbarChildOrder(hwnd, parent);
         }
 
-        return TaskbarNativeMethods.SetWindowPos(
+        var positioned = TaskbarNativeMethods.SetWindowPos(
             hwnd,
             IntPtr.Zero,
             bounds.Left,
@@ -495,13 +512,49 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
             bounds.Width,
             bounds.Height,
             TaskbarNativeMethods.SWP_NOZORDER | TaskbarNativeMethods.SWP_NOACTIVATE);
+        return positioned && RestoreTaskbarChildOrder(hwnd, parent);
+    }
+
+    internal static bool RestoreTaskbarChildOrder(IntPtr hwnd, IntPtr parent)
+    {
+        if (!IsWindows11() || GetAncestor(hwnd, GetAncestorParent) != parent ||
+            !IsWindowVisible(hwnd) || !GetWindowRect(hwnd, out var windowRect)) return true;
+        _ = GetWindowThreadProcessId(parent, out var parentProcess);
+        if (parentProcess == 0) return true;
+        var visited = 0;
+        char[]? className = null;
+        // Explorer can insert its XAML host above an already attached lyrics child.
+        // Geometry polling must also repair this when the rectangle is unchanged.
+        for (var sibling = GetWindow(hwnd, 3); sibling != IntPtr.Zero && visited++ < 64; sibling = GetWindow(sibling, 3))
+        {
+            _ = GetWindowThreadProcessId(sibling, out var process);
+            if (process != parentProcess || !IsWindowVisible(sibling)) continue;
+            className ??= new char[128];
+            var classLength = GetClassName(sibling, className, className.Length);
+            if (!className.AsSpan(0, classLength).SequenceEqual("Windows.UI.Composition.DesktopWindowContentBridge") ||
+                !GetWindowRect(sibling, out var siblingRect) ||
+                EmbeddedTaskbarLayoutCalculator.CalculateIntersectionArea(
+                    new NativeRect(windowRect.Left, windowRect.Top, windowRect.Right, windowRect.Bottom),
+                    new NativeRect(siblingRect.Left, siblingRect.Top, siblingRect.Right, siblingRect.Bottom)) == 0) continue;
+
+            // Insert immediately above the occluding host. Keep any other foreground
+            // sibling ahead of us; this never promotes the taskbar or uses TOPMOST.
+            var insertAfter = GetWindow(sibling, 3);
+            var restored = TaskbarNativeMethods.SetWindowPos(hwnd, insertAfter, 0, 0, 0, 0,
+                TaskbarNativeMethods.SWP_NOMOVE | TaskbarNativeMethods.SWP_NOSIZE | TaskbarNativeMethods.SWP_NOACTIVATE);
+            if (restored)
+                Log.Diagnostic("EMBED", $"TaskbarChildOrderRestored Window=0x{hwnd:X} Parent=0x{parent:X} " +
+                    $"Occluder=0x{sibling:X} InsertAfter=0x{insertAfter:X}");
+            return restored;
+        }
+        return true;
     }
 
     private void ReportSpaceDiagnostic(string message)
     {
         if (_lastSpaceDiagnostic == message) return;
         _lastSpaceDiagnostic = message;
-        Log.Diagnostic("TASKBAR_SPACE", message);
+        Log.Diagnostic("TASKBAR_SPACE", $"{message} Window=0x{_windowHandle:X} Parent=0x{_parentHandle:X}");
     }
 
     private static EmbeddedTaskbarNativeBounds? GetCurrentWindowBounds(
@@ -660,7 +713,7 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
         }
 
         _lastAttachDiagnostic = summary;
-        Log.Diagnostic("EMBED", $"AttachResult={summary}");
+        Log.Diagnostic("EMBED", $"AttachResult={summary} Window=0x{_windowHandle:X} Taskbar=0x{_taskbarHandle:X} Parent=0x{_parentHandle:X}");
     }
 
     private static string DescribeTarget(DisplayMonitor? targetDisplay) =>
@@ -812,4 +865,13 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool IsWindow(IntPtr hwnd);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool IsWindowVisible(IntPtr hwnd);
+
+    [DllImport("user32.dll")] private static extern IntPtr GetWindow(IntPtr hwnd, uint command);
+    [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint processId);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern int GetClassName(IntPtr hwnd, [Out] char[] className, int maxCount);
 }

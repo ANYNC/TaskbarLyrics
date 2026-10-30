@@ -10,7 +10,6 @@ using Media = System.Windows.Media;
 using System.Windows.Threading;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
-using Microsoft.Win32;
 using TaskbarLyrics.Core.Abstractions;
 using TaskbarLyrics.Core.Models;
 using TaskbarLyrics.Core.Services;
@@ -100,6 +99,7 @@ public partial class MainWindow : Window, IDisposable
     private bool _hasReportedWebViewControllerMonitoringFailure;
     private int _displayLayoutRefreshPending;
     private int _isDisposed;
+    private bool _windowRecreationRequested;
     private bool _isClosingFromHost;
     private DisplayMonitor? _displayMonitor;
 
@@ -117,7 +117,9 @@ public partial class MainWindow : Window, IDisposable
         Action openSettings, Action toggleTranslation)
     {
         InitializeComponent();
+        _displayDiagnostics = new LyricsDisplayDiagnostics(this);
         _embeddedTaskbarAnchor.SurfaceHidden += OnEmbeddedSurfaceHidden;
+        _embeddedTaskbarAnchor.AttachmentLost += OnEmbeddedAttachmentLost;
         _regionVisibility = new LyricsRegionVisibilityController(Dispatcher,
             (generation, phase) => TaskObserver.Observe(ExecuteWebScriptAsync(LyricsWebViewScriptFactory.SetRegionVisibility(
                 generation, phase, TaskbarPlacementService.GetTaskbarEdge(PlacementDisplay))), "lyrics region visibility"),
@@ -160,13 +162,13 @@ public partial class MainWindow : Window, IDisposable
         IsVisibleChanged += OnIsVisibleChanged;
         Closing += OnClosing;
         Closed += OnClosed;
-        SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
         NativeWindowTheme.ThemeChanged += OnCoverThemeChanged;
 
         if (System.Windows.Application.Current is App app)
         {
             ApplySettings(app.Settings);
         }
+        RecordDisplayDiagnostics("Created");
     }
 
     public void ApplySettings(AppSettings settings, bool keepControlPanelOpen = false, bool preserveFloatingPosition = false,
@@ -287,6 +289,7 @@ public partial class MainWindow : Window, IDisposable
 
         CloseControlPanel();
         _displayMonitor = displayMonitor;
+        RecordDisplayDiagnostics("DisplayTargetChanged", capture: true);
         if (!_hasAppliedSettings)
         {
             return;
@@ -575,10 +578,12 @@ public partial class MainWindow : Window, IDisposable
             TaskbarPlacementService.ApplyToolWindowStyle(source.Handle);
             AttachToTaskbarHost();
         }
+        RecordDisplayDiagnostics("SourceInitialized");
     }
 
     private void OnIsVisibleChanged(object sender, DependencyPropertyChangedEventArgs e)
     {
+        RecordDisplayDiagnostics("VisibilityChanged", capture: true);
         _smartTopmostController.OnWindowVisibilityChanged(IsVisible);
 
         if (IsVisible)
@@ -632,6 +637,8 @@ public partial class MainWindow : Window, IDisposable
             return;
         }
 
+        RecordDisplayDiagnostics("Dispose");
+        _displayDiagnostics.Dispose();
         _floatingControls?.Dispose();
         _regionVisibility.Dispose();
 
@@ -646,7 +653,6 @@ public partial class MainWindow : Window, IDisposable
         _spectrumTimer.Stop();
         _timer.Tick -= OnTimerTick;
         _spectrumTimer.Tick -= OnSpectrumTimerTick;
-        SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
         NativeWindowTheme.ThemeChanged -= OnCoverThemeChanged;
         Loaded -= OnLoaded;
         SourceInitialized -= OnSourceInitialized;
@@ -675,6 +681,7 @@ public partial class MainWindow : Window, IDisposable
         _localMediaCoverProvider?.Dispose();
         _audioSpectrumService.Dispose();
         _embeddedTaskbarAnchor.SurfaceHidden -= OnEmbeddedSurfaceHidden;
+        _embeddedTaskbarAnchor.AttachmentLost -= OnEmbeddedAttachmentLost;
         _embeddedTaskbarAnchor.Dispose();
         _smartTopmostController.Dispose();
         (_musicSessionProvider as IDisposable)?.Dispose();
@@ -728,11 +735,6 @@ public partial class MainWindow : Window, IDisposable
 
         _smtcTimelineMonitorWindow = null;
         Log.SetVerboseEnabled(false);
-    }
-
-    private void OnDisplaySettingsChanged(object? sender, EventArgs e)
-    {
-        QueueDisplayLayoutRefresh();
     }
 
     private void OnCoverThemeChanged(object? sender, EventArgs e)
@@ -1324,6 +1326,7 @@ public partial class MainWindow : Window, IDisposable
         catch (Exception ex)
         {
             Debug.WriteLine(ex);
+            RecordDisplayDiagnostics($"WebInitializationFailed-{ex.GetType().Name}");
             _isWebViewReady = false;
             _isWebDocumentReady = false;
             _isShowingWebErrorPage = false;
@@ -1501,6 +1504,7 @@ public partial class MainWindow : Window, IDisposable
     private void OnLyricsWebViewNavigationCompleted(object? sender, CoreWebView2NavigationCompletedEventArgs e)
     {
         if (Volatile.Read(ref _isDisposed) != 0) return;
+        RecordDisplayDiagnostics($"NavigationCompleted-{e.IsSuccess}-{e.WebErrorStatus}");
         if (!e.IsSuccess)
         {
             _isWebDocumentReady = false;
@@ -1534,6 +1538,7 @@ public partial class MainWindow : Window, IDisposable
             RefreshLyricsWebViewLayout();
             _regionVisibility.OnDocumentReady();
             ReplayPresentationState();
+            RecordDisplayDiagnostics("DocumentReady", capture: true);
         }), DispatcherPriority.Loaded);
     }
 
@@ -1577,7 +1582,7 @@ public partial class MainWindow : Window, IDisposable
         }
     }
 
-    private static bool TryGetLyricsWebViewController(
+    internal static bool TryGetLyricsWebViewController(
         object webViewControl,
         out CoreWebView2Controller controller,
         out string failureReason)
@@ -1935,6 +1940,7 @@ public partial class MainWindow : Window, IDisposable
 
     private void AnchorToTaskbar()
     {
+        if (_windowRecreationRequested || Volatile.Read(ref _isDisposed) != 0) return;
         // Visibility polling and deferred taskbar notifications must not restore placement
         // while the resize gesture owns the window's position.
         if (_currentSettings.UseFloatingWindow && _floatingControls?.IsAdjustingSize == true) return;
@@ -1951,6 +1957,11 @@ public partial class MainWindow : Window, IDisposable
             }
 
             var attachResult = _embeddedTaskbarAnchor.Attach(this, _currentSettings, _displayMonitor);
+            if (attachResult == EmbeddedTaskbarAttachResult.WindowReplacementRequired)
+            {
+                DetachAndRequestRecreation();
+                return;
+            }
             if (EmbeddedTaskbarEmbeddingPolicy.ShouldKeepEmbedded(attachResult))
             {
                 return;
@@ -1969,6 +1980,9 @@ public partial class MainWindow : Window, IDisposable
 
     private void DetachAndRequestRecreation()
     {
+        if (_windowRecreationRequested || Volatile.Read(ref _isDisposed) != 0) return;
+        _windowRecreationRequested = true;
+        RecordDisplayDiagnostics("RecreationRequested");
         // Leaving an established cross-process embedding permanently invalidates
         // this HWND's layered composition surface: the window keeps its content
         // but DWM never composites it as a top-level window again (verified with
@@ -1978,6 +1992,8 @@ public partial class MainWindow : Window, IDisposable
         Log.Diagnostic("EMBED", "Established embedding left; requesting lyrics window recreation.");
         RecreateWindowRequested?.Invoke(this, EventArgs.Empty);
     }
+
+    private void OnEmbeddedAttachmentLost(object? sender, EventArgs e) => DetachAndRequestRecreation();
 
     protected override void OnDpiChanged(DpiScale oldDpi, DpiScale newDpi)
     {

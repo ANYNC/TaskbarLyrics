@@ -34,6 +34,9 @@ internal sealed class LyricsWindowHost : IDisposable
     private int _startupAbandoned;
     private Task? _dispatcherShutdown;
     private UISettings? _uiSettings;
+    private DisplayEnvironmentObserver? _displayObserver;
+    private bool _recreatingWindow;
+    private bool _recreationQueued;
 
     public LyricsWindowHost(
         AppSettings initialSettings,
@@ -67,11 +70,14 @@ internal sealed class LyricsWindowHost : IDisposable
 
     public void Show() => InvokeAsync(() =>
     {
+        _isVisible = true;
         if (_window is null)
         {
+            _displayObserver?.RequestRefresh();
             return;
         }
 
+        ApplySettingsOnWindowThread(_currentSettings);
         _window.Show();
         foreach (var mirrorWindow in _mirrorWindows.Values)
         {
@@ -83,6 +89,7 @@ internal sealed class LyricsWindowHost : IDisposable
 
     public void Hide() => InvokeAsync(() =>
     {
+        _isVisible = false;
         if (_window is null)
         {
             return;
@@ -239,7 +246,8 @@ internal sealed class LyricsWindowHost : IDisposable
     {
         try
         {
-            SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
+            _displayObserver?.Dispose();
+            _displayObserver = null;
             SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
             CloseMirrorWindows();
             _window?.CloseFromHost();
@@ -283,14 +291,14 @@ internal sealed class LyricsWindowHost : IDisposable
             _uiSettings.TextScaleFactorChanged += OnTextScaleFactorChanged;
             _trackLyricOffsetStore = trackLyricOffsetStore;
             _compositionRoot = compositionRoot;
+            _displayObserver = new DisplayEnvironmentObserver(RefreshDisplayEnvironment);
             _window = CreateAndWireLyricsWindow();
-            SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
             SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
             ApplySettingsOnWindowThread(initialSettings);
 
             if (Volatile.Read(ref _startupAbandoned) != 0)
             {
-                _window.CloseFromHost();
+                Close();
             }
             else _ready.TrySetResult();
             Dispatcher.Run();
@@ -307,6 +315,8 @@ internal sealed class LyricsWindowHost : IDisposable
         }
         finally
         {
+            _displayObserver?.Dispose();
+            _displayObserver = null;
             if (_uiSettings is not null) _uiSettings.TextScaleFactorChanged -= OnTextScaleFactorChanged;
             _uiSettings = null;
             _stopped.TrySetResult();
@@ -340,53 +350,61 @@ internal sealed class LyricsWindowHost : IDisposable
 
     private void OnLyricsWindowIsVisibleChanged(object? sender, DependencyPropertyChangedEventArgs e)
     {
-        if (_window is not null)
-        {
-            _isVisible = _window.IsVisible;
-        }
+        // Explorer hiding/destroying its child must not overwrite user intent.
+        if (_window?.IsVisible == true) _isVisible = true;
+        else if (System.Windows.Application.Current is App { UserWantsLyricsVisible: false }) _isVisible = false;
     }
 
     private void OnLyricsWindowClosed(object? sender, EventArgs e)
     {
-        lock (_previewGate)
-        {
-            _disposed = true;
-            _pendingPreviewSettings = null;
-        }
-        SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
-        SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
-        CloseMirrorWindows();
-        _isVisible = false;
-        TaskObserver.Observe(ShutdownDispatcherAsync(), "lyrics dispatcher shutdown");
+        if (_disposed || sender is not MainWindow window || window != _window) return;
+        UnwireLyricsWindow(window);
+        _window = null;
+        Log.Diagnostic("EMBED", "Lyrics window closed unexpectedly; scheduling display recovery.");
+        _displayObserver?.RequestRefresh();
     }
 
     private void OnLyricsWindowRecreateRequested(object? sender, EventArgs e)
     {
         // Defer until the current anchor/settings call stack completes on the old window.
-        if (_dispatcher is not null)
-            TaskObserver.Observe(_dispatcher.InvokeAsync(RecreateLyricsWindowAsync, DispatcherPriority.Normal).Task.Unwrap(),
-                "lyrics window recreation");
+        if (_disposed || _recreationQueued || sender != _window || _dispatcher is null) return;
+        _displayObserver?.RequestRefresh();
+        _recreationQueued = true;
+        TaskObserver.Observe(_dispatcher.InvokeAsync(async () =>
+        {
+            _recreationQueued = false;
+            await RecreateLyricsWindowAsync();
+        }, DispatcherPriority.Normal).Task.Unwrap(), "lyrics window recreation");
     }
 
     private async Task RecreateLyricsWindowAsync()
     {
-        if (_disposed || _window is null)
+        if (_disposed || _recreatingWindow)
         {
             return;
         }
 
-        var oldWindow = _window;
-        _window = null;
-        UnwireLyricsWindow(oldWindow);
-        oldWindow.CloseFromHost();
-        await FloatingMaterialCompositor.WaitForPendingShutdownAsync();
-        if (_disposed) return;
-        _window = CreateAndWireLyricsWindow();
-        ApplySettingsOnWindowThread(_currentSettings);
-        if (_isVisible)
+        _recreatingWindow = true;
+        try
         {
-            _window.Show();
+            var oldWindow = _window;
+            if (LyricsDisplayDiagnostics.Enabled)
+                Log.Diagnostic("DISPLAY_RECOVERY", $"RecreateBegin OldWindow={oldWindow?.DisplayDiagnosticId} UserVisible={_isVisible}");
+            _window = null;
+            if (oldWindow is not null)
+            {
+                UnwireLyricsWindow(oldWindow);
+                oldWindow.CloseFromHost();
+            }
+            await FloatingMaterialCompositor.WaitForPendingShutdownAsync();
+            if (_disposed) return;
+            _window = CreateAndWireLyricsWindow();
+            foreach (var mirror in _mirrorWindows.Values) _window.RegisterFloatingLyricsHost(mirror);
+            ApplySettingsOnWindowThread(_currentSettings);
+            if (_isVisible) _window.Show();
+            _window.RecordDisplayDiagnostics("RecreateCompleted", capture: true);
         }
+        finally { _recreatingWindow = false; }
     }
 
     private void OnFloatingSizePreviewRequested(FloatingWindowSize size, Window source, Rect anchor)
@@ -424,10 +442,16 @@ internal sealed class LyricsWindowHost : IDisposable
                 _pendingSizeCommit == FloatingWindowSize.FromSettings(settings);
             _pendingSizeCommit = null;
         }
+        var displays = DisplayMonitorService.GetDisplays();
         var targets = LyricsDisplayTargetSelector.Select(
-            DisplayMonitorService.GetDisplays(),
+            displays,
             _currentSettings.LyricsDisplayMode,
             _currentSettings.SelectedDisplayIds);
+        if (LyricsDisplayDiagnostics.Enabled)
+            Log.Diagnostic("DISPLAY_TARGET", $"Window={_window.DisplayDiagnosticId} Mode={_currentSettings.LyricsDisplayMode} " +
+                $"Selected='{string.Join(";", _currentSettings.SelectedDisplayIds)}' " +
+                $"Available='{string.Join(";", displays.Select(display => $"{display.Id}|Primary={display.IsPrimary}|{display.Bounds}|Dpi={display.PixelsPerDip}"))}' " +
+                $"Targets='{string.Join(";", targets.Select(display => display.Id))}'");
         if (targets.Count == 0)
         {
             return;
@@ -463,8 +487,8 @@ internal sealed class LyricsWindowHost : IDisposable
         foreach (var display in mirrorDisplays.Values)
         {
             if (_mirrorWindows.TryGetValue(display.Id, out var existingMirror) &&
-                _currentSettings.UseFloatingWindow &&
-                existingMirror.IsEmbeddedInTaskbar)
+                (existingMirror.NeedsWindowReplacement ||
+                 (_currentSettings.UseFloatingWindow && existingMirror.IsEmbeddedInTaskbar)))
             {
                 // A mirror that leaves cross-process taskbar embedding can no longer
                 // composite as a top-level layered window; replace it with a fresh one.
@@ -479,6 +503,8 @@ internal sealed class LyricsWindowHost : IDisposable
                     _window?.ToggleControlPanelNear(bounds, monitor, setExpanded, owner, area, activation), _compositionRoot!,
                     () => _window?.CloseControlPanel());
                 _mirrorWindows.Add(display.Id, mirrorWindow);
+                mirrorWindow.RecreateWindowRequested += OnMirrorWindowRecreateRequested;
+                mirrorWindow.Closed += OnMirrorWindowClosed;
                 _window?.RegisterFloatingLyricsHost(mirrorWindow);
             }
             else
@@ -514,9 +540,38 @@ internal sealed class LyricsWindowHost : IDisposable
         }
     }
 
-    private void OnDisplaySettingsChanged(object? sender, EventArgs e)
+    private void RefreshDisplayEnvironment()
     {
-        InvokeAsync(() => ApplySettingsOnWindowThread(_currentSettings));
+        if (LyricsDisplayDiagnostics.Enabled)
+            Log.Diagnostic("DISPLAY_RECOVERY", $"Refresh Window={_window?.DisplayDiagnosticId} UserVisible={_isVisible} " +
+                $"Disposed={_disposed} Recreating={_recreatingWindow} Queued={_recreationQueued}");
+        if (_disposed || _recreatingWindow || _recreationQueued) return;
+        if (_window is null)
+        {
+            TaskObserver.Observe(RecreateLyricsWindowAsync(), "lyrics display recovery");
+            return;
+        }
+        ApplySettingsOnWindowThread(_currentSettings);
+        _window?.QueueDisplayLayoutRefresh();
+        _window?.RecordDisplayDiagnostics("RecoveryPass", capture: true);
+        foreach (var mirror in _mirrorWindows.Values) mirror.RecordDisplayDiagnostics("RecoveryPass", capture: true);
+    }
+
+    private void OnMirrorWindowRecreateRequested(object? sender, EventArgs e) => _displayObserver?.RequestRefresh();
+
+    private void OnMirrorWindowClosed(object? sender, EventArgs e)
+    {
+        if (sender is not LyricsMirrorWindow mirror) return;
+        mirror.RecreateWindowRequested -= OnMirrorWindowRecreateRequested;
+        mirror.Closed -= OnMirrorWindowClosed;
+        var id = _mirrorWindows.FirstOrDefault(pair => pair.Value == mirror).Key;
+        if (id is null) return;
+        _mirrorWindows.Remove(id);
+        if (!_disposed)
+        {
+            _window?.CloseControlPanel();
+            _displayObserver?.RequestRefresh();
+        }
     }
 
     private void OnTextScaleFactorChanged(UISettings sender, object args) => InvokeAsync(() =>
@@ -530,7 +585,7 @@ internal sealed class LyricsWindowHost : IDisposable
     {
         // Taskbar size and edge changes update the work area without a resolution change.
         if (e.Category is UserPreferenceCategory.Desktop or UserPreferenceCategory.Window or UserPreferenceCategory.General)
-            InvokeAsync(() => ApplySettingsOnWindowThread(_currentSettings));
+            InvokeAsync(() => _displayObserver?.RequestRefresh());
     }
 
     private void CloseMirrorWindows()
@@ -543,6 +598,8 @@ internal sealed class LyricsWindowHost : IDisposable
 
         foreach (var mirrorWindow in _mirrorWindows.Values)
         {
+            mirrorWindow.RecreateWindowRequested -= OnMirrorWindowRecreateRequested;
+            mirrorWindow.Closed -= OnMirrorWindowClosed;
             mirrorWindow.Close();
         }
 

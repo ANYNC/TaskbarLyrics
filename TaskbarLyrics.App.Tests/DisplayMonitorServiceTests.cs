@@ -62,6 +62,17 @@ public sealed class DisplayMonitorServiceTests
         Assert.Empty(result);
     }
 
+    [Fact]
+    public void SelectedDisplayReturnsAfterDisconnectAndReconnectWithoutChangingStoredSelection()
+    {
+        var selection = new[] { Secondary.Id };
+        Assert.Equal([Secondary], LyricsDisplayTargetSelector.Select([Primary, Secondary], LyricsDisplayMode.Selected, selection));
+        Assert.Equal([Primary], LyricsDisplayTargetSelector.Select([Primary], LyricsDisplayMode.Selected, selection));
+        Assert.Empty(LyricsDisplayTargetSelector.Select([], LyricsDisplayMode.Selected, selection));
+        Assert.Equal([Secondary], LyricsDisplayTargetSelector.Select([Primary, Secondary], LyricsDisplayMode.Selected, selection));
+        Assert.Equal([Secondary.Id], selection);
+    }
+
     private static DisplayMonitor CreateDisplay(string id, bool isPrimary) =>
         new(
             id,

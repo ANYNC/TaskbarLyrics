@@ -66,4 +66,16 @@ public sealed class EmbeddedTaskbarEmbeddingPolicyTests
         Assert.False(EmbeddedTaskbarEmbeddingPolicy.RequiresWindowReplacement(null, display));
         Assert.False(EmbeddedTaskbarEmbeddingPolicy.RequiresWindowReplacement(null, null));
     }
+
+    [Fact]
+    public void SameDisplayWithReplacedTaskbarOrLostParentRequiresFreshWindow()
+    {
+        var display = CreateDisplay("display-b");
+        var attached = EmbeddedTaskbarDisplayTarget.Create(display);
+
+        Assert.True(EmbeddedTaskbarEmbeddingPolicy.RequiresWindowReplacement(attached, display, nativeAttachmentChanged: true));
+        Assert.False(EmbeddedTaskbarEmbeddingPolicy.RequiresWindowReplacement(null, display, nativeAttachmentChanged: true));
+        Assert.False(EmbeddedTaskbarEmbeddingPolicy.ShouldKeepEmbedded(EmbeddedTaskbarAttachResult.WindowReplacementRequired));
+    }
+
 }
