@@ -122,9 +122,13 @@
               </div>
             </section>
             <section class="panel">
-              <div class="panel-head"><div><h2>{{UI_Spectrum}}</h2><p>{{UI_ShowALiveAudioSpectrumForInstrumentalTracksOr}}</p></div></div>
+              <div class="panel-head"><div><h2>{{UI_FallbackHeading}}</h2><p>{{UI_FallbackDescription}}</p></div></div>
+              <div id="lyricsFallbackRules" class="fallback-rules"></div>
+            </section>
+            <section class="panel">
+              <div class="panel-head"><div><h2>{{UI_Spectrum}}</h2><p>{{UI_FallbackSpectrumDescription}}</p></div></div>
               <div class="settings">
-                <div class="setting-row"><div class="setting-label"><strong>{{UI_ShowSpectrum}}</strong><small>{{UI_OffByDefaultWhenEnabledReadsSpeakerOrHeadphone}}</small></div><button class="control select-trigger" type="button" data-setting="spectrumDisplayMode" aria-label="{{UI_ShowSpectrum}}" aria-haspopup="listbox" aria-expanded="false"><span class="select-trigger-value"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+                <div class="setting-row compact"><div class="setting-label"><strong>{{UI_FallbackSpectrumWithLyrics}}</strong></div><label class="switch"><input type="checkbox" id="fallbackSpectrumWithLyrics" aria-label="{{UI_FallbackSpectrumWithLyrics}}"><span class="switch-track"></span></label></div>
                 <div class="setting-row compact"><div class="setting-label"><strong>{{UI_SystemAudioAccess}}</strong><small id="spectrumAudioAccessStatus" class="spectrum-audio-status" role="status" aria-live="polite">{{UI_SpectrumIsOffSystemAudioIsNotBeingCaptured}}</small></div><div class="setting-inline-actions"><button id="retrySpectrumAudioAccessButton" class="btn secondary small" type="button" data-retry-spectrum-capture hidden>{{UI_Retry}}</button><button id="revokeSpectrumAudioAccessButton" class="btn ghost small" type="button" hidden>{{UI_StopAndRevoke}}</button></div></div>
               </div>
             </section>
@@ -319,9 +323,6 @@
             <section class="panel"><div class="panel-head"><div><h2 id="advancedHeading" tabindex="-1">{{UI_DiagnosticTools}}</h2><p>{{UI_TheseToolsHelpDiagnosePlaybackSynchronizationAndSpectrumIssues}}</p></div></div><div class="settings">
               <div class="setting-row compact"><div class="setting-label"><strong>{{UI_SMTCTimelineMonitor}}</strong><small>{{UI_OpensATemporaryMonitorItStopsRunningWhenClosed}}</small></div><button id="smtcMonitorButton" class="btn secondary" type="button">{{UI_OpenMonitor}}</button></div>
               <div class="setting-row compact"><div class="setting-label"><strong>{{UI_SpectrumTuning}}</strong><small id="spectrumTuningDescription">{{UI_OpenSlidersToAdjustSpectrumParametersLiveChangesSave}}</small></div><button id="spectrumTuningButton" class="btn secondary" type="button" aria-describedby="spectrumTuningDescription">{{UI_OpenTuning}}</button></div>
-            </div></section>
-            <section class="panel"><div class="panel-head"><div><h2>{{UI_LyricStatusHints}}</h2></div></div><div class="settings">
-              <div class="setting-row compact"><div class="setting-label"><strong>{{UI_ShowLyricSearchHints}}</strong><small>{{UI_HidesOnlyTheSearchingForLyricsHintTrackTitle}}</small></div><label class="switch"><input type="checkbox" data-setting="showLyricSearchStatus" aria-label="{{UI_ShowLyricSearchHints}}"><span class="switch-track"></span></label></div>
             </div></section>
             <section class="panel"><div class="panel-head"><div><h2>{{UI_DataMaintenance}}</h2><p>{{UI_ClearingTheCacheDoesNotDeleteAppSettings}}</p></div></div><div class="settings"><div class="setting-row compact"><div class="setting-label"><strong>{{UI_LyricCoverCache}}</strong><small>{{UI_TheFirstMatchMayBeSlowerAfterClearingSaved}}</small></div><button id="clearCacheButton" class="btn destructive" type="button">{{UI_ClearCache}}</button></div></div></section>
           </div>

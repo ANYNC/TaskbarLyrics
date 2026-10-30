@@ -33,6 +33,12 @@ public sealed class SettingsStore
             using var document = JsonDocument.Parse(json);
             MigrateLegacySpectrumSettings(document.RootElement, settings);
             MigrateSpectrumAudioAccess(document.RootElement, settings);
+            if (settings.LyricsFallback is not null)
+            {
+                settings.LyricsFallback = settings.GetLyricsFallback();
+                if (!settings.SpectrumAudioAccessGranted) settings.SetLegacySpectrumMode(SpectrumDisplayMode.Disabled);
+                settings.SyncFallbackSpectrumMode();
+            }
             MigrateTaskbarPresentation(document.RootElement, settings);
             if (!document.RootElement.TryGetProperty(nameof(AppSettings.FloatingWindowWidth), out _))
                 settings.FloatingWindowWidth = settings.WindowWidth;
@@ -59,6 +65,7 @@ public sealed class SettingsStore
         string? temporaryPath = null;
         try
         {
+            settings.SyncFallbackSpectrumMode();
             settings.NormalizePlayerSources();
             settings.NormalizeLyricsLayout();
             settings.NormalizeDisplaySelection();

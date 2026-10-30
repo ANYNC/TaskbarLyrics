@@ -24,6 +24,7 @@ let panelTriggerCover = true;
 let panelTriggerLyrics = false;
 let panelTriggerEnabled = true;
 let showLyricSearchStatus = true;
+let fallbackDisplayConfigured = false;
 let panelHoverTimer = 0;
 const coverImageEl = document.getElementById("coverImage");
 const coverImageNextEl = document.getElementById("coverImageNext");
@@ -526,7 +527,7 @@ function isWordScanResumeCatchUpLine(lineElement) {
 
 function toDisplayLine(line, fallback = " ") {
   const text = (line ?? "").toString().trim();
-  return text.length > 0 ? text : fallback;
+  return text.length > 0 ? text : fallbackDisplayConfigured && fallback === SEARCHING_TEXT ? " " : fallback;
 }
 
 function resolveTranslationDisplay(line) {
@@ -2391,7 +2392,7 @@ const lyricsApi = {
     scene = null) {
     const wasPlaying = isPlaybackPlaying;
     const nextIsPlaying = Boolean(isPlaying);
-    const displayCurrent = toDisplayLine(current, SEARCHING_TEXT);
+    const displayCurrent = toDisplayLine(current, fallbackDisplayConfigured ? " " : SEARCHING_TEXT);
     const displayNext = toDisplayLine(next, " ");
     const suppressSearchPrompt = !showLyricSearchStatus &&
       (scene === presentationApi.SCENES.SEARCHING || (!scene && isSearchingLine(displayCurrent)));
@@ -2610,6 +2611,7 @@ const lyricsApi = {
     }
 
     showLyricSearchStatus = payload.showLyricSearchStatus !== false;
+    fallbackDisplayConfigured = payload.fallbackDisplayConfigured === true;
 
     if (payload.coverTheme === "light" || payload.coverTheme === "dark") {
       root.dataset.coverTheme = payload.coverTheme;

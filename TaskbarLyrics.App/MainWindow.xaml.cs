@@ -56,7 +56,6 @@ public partial class MainWindow : Window, IDisposable
     private string _lastPushedFallbackCoverIdentity = string.Empty;
     private string? _lastLocalCoverLookupIdentity;
     private DateTimeOffset _nextLocalCoverLookupUtc;
-    private SpectrumDisplayMode _spectrumDisplayMode = SpectrumDisplayMode.Disabled;
     private float[] _spectrumSilence = new float[SpectrumTuningSettings.DefaultBarCount];
     private bool _spectrumPreviewEnabled;
     private bool _isSpectrumCaptureRequested;
@@ -238,8 +237,7 @@ public partial class MainWindow : Window, IDisposable
 
         if (changes.SpectrumDisplayChanged)
         {
-            _spectrumDisplayMode = snapshot.SpectrumDisplayMode;
-            if (_spectrumDisplayMode == SpectrumDisplayMode.Disabled)
+            if (!snapshot.GetLyricsFallback().UsesSpectrum)
             {
                 _isCurrentFramePureMusic = false;
                 _lyricsPresentationScene = ResolveCurrentLyricsPresentationScene();
@@ -841,7 +839,12 @@ public partial class MainWindow : Window, IDisposable
 
             if (IsLyricsNotFoundFrame(frame)) current = Text.T("Lyrics_NotFound");
             var next = frame.NextLine;
-            _lastWebCurrentLineIndex = frame.CurrentLineIndex;
+            var fallbackRules = _currentSettings.GetLyricsFallback();
+            var searching = _lyricSyncService.CurrentLyricAcquisition == LyricAcquisitionKind.Searching;
+            var fallback = searching ? fallbackRules.Searching
+                : frame.IsPureMusic ? fallbackRules.Instrumental
+                : IsLyricsNotFoundFrame(frame) ? fallbackRules.NotFound : null;
+            _lastWebCurrentLineIndex = fallback is null ? frame.CurrentLineIndex : -1;
             _lastWebTrackId = snapshot.Track is null
                 ? string.Empty
                 : LyricSyncService.BuildStableTrackIdentity(snapshot.Track);
@@ -851,22 +854,30 @@ public partial class MainWindow : Window, IDisposable
             _currentPlaybackPosition = snapshot.Position;
             _canSeek = snapshot.CanSeek;
             _lyricsPresentationScene = ResolveLyricsPresentationScene(frame);
-            if (_lyricsPresentationScene == LyricsPresentationScene.Searching)
+            if (fallback is not null)
             {
-                var searchingPresentation = LyricsSearchingPresentationPolicy.Create(_currentTrack);
-                current = searchingPresentation.Current;
-                next = searchingPresentation.Next;
+                var message = searching ? Text.T("UI_SearchingForLyrics")
+                    : frame.IsPureMusic ? Text.T("UI_Instrumental") : Text.T("Lyrics_NotFound");
+                var presentation = LyricsFallbackPresentationPolicy.Create(fallback, _currentTrack, message);
+                current = presentation.Current;
+                next = presentation.Next;
+                if (searching && _currentSettings.LyricsFallback is null)
+                {
+                    var legacy = LyricsSearchingPresentationPolicy.Create(_currentTrack);
+                    current = legacy.Current;
+                    next = legacy.Next;
+                }
             }
             UpdateSpectrumCaptureState();
-            var wordScanProgress = _currentSettings.EnableWordScanning
+            var wordScanProgress = fallback is null && _currentSettings.EnableWordScanning
                 ? frame.WordScanProgress
                 : null;
             UpdateLyricLines(
                 current,
                 next,
-                frame.CurrentTranslation,
-                frame.NextTranslation,
-                frame.HasTrackTranslation,
+                fallback is null ? frame.CurrentTranslation : null,
+                fallback is null ? frame.NextTranslation : null,
+                fallback is null && frame.HasTrackTranslation,
                 frame.LineProgress,
                 wordScanProgress);
             PushCurrentLyricsToWebView(isPlaybackFrame: true);
@@ -943,13 +954,8 @@ public partial class MainWindow : Window, IDisposable
 
     private bool ShouldShowSpectrum(LyricDisplayFrame frame)
     {
-        return _spectrumDisplayMode switch
-        {
-            SpectrumDisplayMode.Disabled => false,
-            SpectrumDisplayMode.Always => true,
-            SpectrumDisplayMode.PureMusicOrNoLyrics => frame.IsPureMusic || IsLyricsNotFoundFrame(frame),
-            _ => frame.IsPureMusic
-        };
+        return LyricsFallbackPresentationPolicy.ShouldShowSpectrum(
+            _currentSettings, frame, _lyricSyncService.CurrentLyricAcquisition == LyricAcquisitionKind.Searching);
     }
 
     private static bool IsLyricsNotFoundFrame(LyricDisplayFrame frame)
@@ -970,7 +976,7 @@ public partial class MainWindow : Window, IDisposable
             return LyricsPresentationScene.Searching;
         }
 
-        return frame.CurrentLineIndex >= 0
+        return !frame.IsPureMusic && frame.CurrentLineIndex >= 0
             ? LyricsPresentationScene.Lyrics
             : LyricsPresentationScene.Message;
     }

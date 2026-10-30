@@ -7,7 +7,7 @@ const read = relativePath => readFile(new URL(relativePath, root), "utf8");
 const settingsPages = ["gettingStarted", "sources", "shortcuts", "lyrics", "trackOffsets", "displayArea", "general", "advanced", "lyricDiagnostics", "about"];
 const persistedSettings = [
   "enableLocalLyrics", "localMusicFolders", "enableGlobalMediaHotkeys", "showLyricsOnStartup", "autoHideWhenNoPlayback",
-  "showLyricTranslation", "showLyricSearchStatus", "enableWordScanning", "spectrumDisplayMode", "lyricsLayoutScalePercent", "fontSize", "showCover", "singleLineLyrics",
+  "showLyricTranslation", "enableWordScanning", "lyricsLayoutScalePercent", "fontSize", "showCover", "singleLineLyrics",
   "enableControlPanel", "controlPanelTriggerMethod", "controlPanelTriggerCover", "controlPanelTriggerLyrics", "enableFloatingControlPanel", "floatingPanelBrightness", "floatingPanelTintOpacity", "floatingPanelBlurAmount", "embeddedPanelBrightness", "embeddedPanelTintOpacity", "embeddedPanelBlurAmount", "coverPosition", "coverSize", "coverGap", "coverCornerRadius", "fontFamily", "fontWeight", "lyricsTextAlignment", "foregroundColorMode",
   "showTextShadow", "toolWindowTheme", "showBackground", "showFloatingBackground", "backgroundOpacity", "showBorder", "windowWidth",
   "taskbarAvoidanceEnabled", "xOffset", "yOffset", "floatingWindowLayer", "startWithWindows", "autoCheckUpdates"
@@ -66,6 +66,90 @@ function enableDialogDomSupport(dom) {
 }
 
 describe("settings WebView bridge", () => {
+  it("configures each fallback line with metadata, editable literal text or no content", async () => {
+    const { dom, sent, script } = await createSettingsDom();
+    try {
+      dom.window.eval(script);
+      const document = dom.window.document;
+      dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings: {}, fonts: [] } });
+      dom.window.settingsApp.receive({ version: 1, type: "navigate", payload: { page: "lyrics" } });
+      const root = document.querySelector("#lyricsFallbackRules");
+      expect(root.querySelectorAll("[data-fallback-state]")).toHaveLength(3);
+      expect(root.querySelectorAll('[data-fallback-state="searching"] [data-fallback-mode]')).toHaveLength(0);
+      expect(root.querySelectorAll('[data-fallback-state="instrumental"] [data-fallback-mode]')).toHaveLength(2);
+      root.querySelector('[data-fallback-change="searching"]').click();
+      const field = root.querySelector('[data-fallback-state="searching"] [data-fallback-line="firstLine"]');
+      field.querySelector('[data-fallback-part="showArtist"]').click();
+      expect(sent.at(-1).payload.value.searching.firstLine).toMatchObject({ kind: "Metadata", showTitle: true, showArtist: false });
+      const input = field.querySelector('[data-fallback-text]');
+      input.focus();
+      input.value = "<b>My text</b>";
+      input.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+      expect(sent.at(-1).payload).toMatchObject({ key: "lyricsFallback", value: { searching: { firstLine: { kind: "Text", customText: "<b>My text</b>" } } } });
+      const preview = root.querySelector('[data-fallback-state="searching"] .fallback-lines');
+      expect(preview.firstElementChild.textContent).toBe("<b>My text</b>");
+      expect(preview.querySelector("b")).toBeNull();
+      const echo = JSON.parse(JSON.stringify(sent.at(-1).payload.value));
+      echo.searching.firstLine.customText = "Older echo";
+      echo.searching.firstLine.kind = "Metadata";
+      dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings: { lyricsFallback: echo } } });
+      expect(document.activeElement).toBe(input);
+      expect(input.value).toBe("<b>My text</b>");
+      expect(field.querySelector('[data-fallback-kind="Text"]').checked).toBe(true);
+      expect(preview.firstElementChild.textContent).toBe("<b>My text</b>");
+      field.querySelector('[data-fallback-kind="None"]').click();
+      expect(sent.at(-1).payload.value.searching.firstLine.kind).toBe("None");
+      root.querySelector('[data-fallback-change="notFound"]').click();
+      expect(document.querySelector("#fallback-editor-searching").hidden).toBe(true);
+      expect(document.querySelector("#fallback-editor-notFound").hidden).toBe(false);
+    } finally { dom.window.close(); }
+  });
+
+  it("switches fallback display modes from each card summary while its editor stays collapsed", async () => {
+    const { dom, sent, script } = await createSettingsDom();
+    try {
+      dom.window.eval(script);
+      const document = dom.window.document;
+      dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings: { spectrumAudioAccessGranted: true } } });
+      for (const key of ["instrumental", "notFound"]) {
+        const card = document.querySelector(`[data-fallback-state="${key}"]`);
+        const editor = card.querySelector(".fallback-editor");
+        const change = card.querySelector("[data-fallback-change]");
+        expect(card.querySelectorAll(".fallback-summary [data-fallback-mode]")).toHaveLength(2);
+        expect(editor.querySelector("[data-fallback-mode]")).toBeNull();
+        expect(editor.hidden).toBe(true);
+        card.querySelector('[data-fallback-mode="spectrum"]').click();
+        expect(sent.at(-1).payload.value[key].useSpectrum).toBe(true);
+        expect(card.querySelector(".fallback-bars")).not.toBeNull();
+        expect(editor.hidden).toBe(true);
+        expect(change.getAttribute("aria-expanded")).toBe("false");
+        const textRules = sent.at(-1).payload.value[key].firstLine;
+        card.querySelector('[data-fallback-mode="text"]').click();
+        expect(sent.at(-1).payload.value[key]).toMatchObject({ useSpectrum: false, firstLine: textRules });
+        expect(editor.hidden).toBe(true);
+        expect(card.querySelector(".fallback-bars")).toBeNull();
+      }
+    } finally { dom.window.close(); }
+  });
+
+  it("keeps no-lyrics spectrum independent from spectrum with regular lyrics", async () => {
+    const { dom, sent, script } = await createSettingsDom();
+    try {
+      dom.window.eval(script);
+      const document = dom.window.document;
+      dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings: { spectrumDisplayMode: "Disabled", spectrumAudioAccessGranted: true } } });
+      document.querySelector('[data-fallback-change="notFound"]').click();
+      document.querySelector('[data-fallback-state="notFound"] [data-fallback-mode="spectrum"]').click();
+      expect(sent.at(-1).payload.value).toMatchObject({ searching: { useSpectrum: false }, instrumental: { useSpectrum: false }, notFound: { useSpectrum: true }, spectrumWithLyrics: false });
+      const toggle = document.querySelector("#fallbackSpectrumWithLyrics");
+      toggle.checked = true;
+      toggle.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+      expect(sent.at(-1).payload.value.spectrumWithLyrics).toBe(true);
+      expect(sent.at(-1).payload.value.instrumental.useSpectrum).toBe(false);
+      expect(document.querySelector('[data-fallback-state="notFound"] .fallback-bars')).not.toBeNull();
+    } finally { dom.window.close(); }
+  });
+
   it("keeps collapsed navigation tooltips in viewport coordinates while the navigation scrolls", async () => {
     const { dom, script } = await createSettingsDom();
     try {
@@ -135,21 +219,20 @@ describe("settings WebView bridge", () => {
     } finally { dom.window.close(); }
   });
 
-  it("keeps the advanced search-status switch on for old settings and posts persisted V1 updates", async () => {
+  it("maps the legacy search hint preference into the new lyrics state editor", async () => {
     const { dom, sent, script } = await createSettingsDom();
     dom.window.eval(script);
     const document = dom.window.document;
     dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings: {}, fonts: [] } });
-    dom.window.settingsApp.receive({ version: 1, type: "navigate", payload: { page: "advanced" } });
-    const toggle = document.querySelector('input[data-setting="showLyricSearchStatus"]');
-    expect(toggle.closest('[data-page="advanced"]')).not.toBeNull();
-    expect(toggle.checked).toBe(true);
-    expect(toggle.getAttribute("aria-label")).toBe("显示歌词检索提示");
-    toggle.checked = false;
-    toggle.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
-    expect(sent.at(-1)).toEqual({ version: 1, type: "update", payload: { key: "showLyricSearchStatus", value: false } });
+    const root = document.querySelector('#lyricsFallbackRules');
+    expect(root.closest('[data-page="lyrics"]')).not.toBeNull();
+    expect(document.querySelector('[data-setting="showLyricSearchStatus"]')).toBeNull();
+    const field = root.querySelector('[data-fallback-state="searching"] [data-fallback-line="secondLine"]');
+    expect(field.querySelector('[data-fallback-kind="Text"]').checked).toBe(true);
+    field.querySelector('[data-fallback-kind="None"]').click();
+    expect(sent.at(-1)).toMatchObject({ version: 1, type: "update", payload: { key: "lyricsFallback", value: { searching: { secondLine: { kind: "None" } } } } });
     dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings: { showLyricSearchStatus: false }, fonts: [] } });
-    expect(toggle.checked).toBe(false);
+    expect(field.querySelector('[data-fallback-kind="None"]').checked).toBe(true);
     dom.window.close();
   });
 
@@ -1437,7 +1520,8 @@ describe("settings WebView bridge", () => {
       }
     });
 
-    const spectrumTrigger = document.querySelector('[data-setting="spectrumDisplayMode"]');
+    document.querySelector('[data-fallback-change="instrumental"]').click();
+    const spectrumTrigger = document.querySelector('[data-fallback-state="instrumental"] [data-fallback-mode="spectrum"]');
     const consentDialog = document.querySelector("#spectrumAudioConsentDialog");
     const showConsentDialog = consentDialog.showModal.bind(consentDialog);
     let focusWhenConsentOpened = null;
@@ -1456,14 +1540,14 @@ describe("settings WebView bridge", () => {
     consentDialog.querySelector('[data-dialog-cancel="spectrumAudioConsentDialog"]').click();
     consentDialog.dispatchEvent(new dom.window.Event("animationend"));
 
-    spectrumTrigger.click();
     focusWhenConsentOpened = null;
-    document.querySelector('#selectListbox [data-option-index="1"]').click();
+    spectrumTrigger.focus();
+    spectrumTrigger.click();
 
     expect(consentDialog.open).toBe(true);
     expect(focusWhenConsentOpened).toBe(spectrumTrigger);
     expect(sent.slice(beforeSelection)).toEqual([]);
-    expect(spectrumTrigger.querySelector(".select-trigger-value").textContent).toContain("关闭");
+    expect(spectrumTrigger.getAttribute("aria-pressed")).toBe("false");
     expect(document.querySelector("#spectrumTuningButton").disabled).toBe(true);
     expect(document.querySelector("#spectrumTuningDescription").textContent).toContain("“歌词”页");
 
@@ -1472,12 +1556,11 @@ describe("settings WebView bridge", () => {
     expect(sent.slice(beforeSelection)).toEqual([]);
 
     spectrumTrigger.click();
-    document.querySelector('#selectListbox [data-option-index="1"]').click();
     document.querySelector("#confirmSpectrumAudioAccess").click();
-    expect(sent.at(-1)).toEqual({
+    expect(sent.at(-1)).toMatchObject({
       version: 1,
       type: "confirmSpectrumAudioAccess",
-      payload: "PureMusicOnly"
+      payload: { spectrumDisplayMode: "PureMusicOnly", lyricsFallback: { instrumental: { useSpectrum: true } } }
     });
 
     consentDialog.dispatchEvent(new dom.window.Event("animationend"));
@@ -1485,17 +1568,16 @@ describe("settings WebView bridge", () => {
       version: 1,
       type: "settingsState",
       payload: {
-        settings: { spectrumDisplayMode: "Always", spectrumAudioAccessGranted: true },
+        settings: { spectrumDisplayMode: "Disabled", spectrumAudioAccessGranted: true },
         fonts: []
       }
     });
 
     spectrumTrigger.click();
-    document.querySelector('#selectListbox [data-option-index="1"]').click();
-    expect(sent.at(-1)).toEqual({
+    expect(sent.at(-1)).toMatchObject({
       version: 1,
       type: "update",
-      payload: { key: "spectrumDisplayMode", value: "PureMusicOnly" }
+      payload: { key: "lyricsFallback", value: { instrumental: { useSpectrum: true } } }
     });
     expect(consentDialog.open).toBe(false);
     expect(document.querySelector("#revokeSpectrumAudioAccessButton").hidden).toBe(false);
@@ -1521,7 +1603,7 @@ describe("settings WebView bridge", () => {
     dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings: {
       spectrumDisplayMode: "Disabled", spectrumAudioAccessGranted: granted
     } } });
-    expect(document.querySelector('[data-setting="spectrumDisplayMode"] .select-trigger-value').textContent).toContain("关闭");
+    expect(document.querySelector('#fallbackSpectrumWithLyrics').checked).toBe(false);
     expect(document.querySelector("#spectrumTuningButton").disabled).toBe(true);
     const initialCount = sent.length;
     dom.window.settingsApp.receive({ version: 1, type: "requestSpectrumDisplayMode", payload: { mode } });

@@ -93,6 +93,8 @@
       if (diagnosticApplyFocus && event.target !== diagnosticApplyFocus) diagnosticApplyFocus = null;
     });
     let pendingSpectrumDisplayMode = null;
+    let pendingFallbackSettings = null;
+    let openFallbackState = null;
     let spectrumCaptureState = { state: "disabled", message: "" };
 
     const $ = selector => document.querySelector(selector);
@@ -1173,7 +1175,284 @@
           : window.taskbarLyricsI18n.t("UI_EnableTheSpectrumAndAllowSystemAudioCaptureOn");
     }
 
+    function fallbackLabels() {
+      return {
+        searching: window.taskbarLyricsI18n.t("UI_Searching_18"),
+        instrumental: window.taskbarLyricsI18n.t("UI_Instrumental"),
+        notFound: window.taskbarLyricsI18n.t("UI_NoLyrics")
+      };
+    }
+
+    function fallbackMessage(key) {
+      return window.taskbarLyricsI18n.t(key === "searching" ? "UI_SearchingForLyrics" : key === "instrumental" ? "UI_Instrumental" : "Lyrics_NotFound");
+    }
+
+    function getFallbackRules() {
+      if (state?.lyricsFallback) return state.lyricsFallback;
+      const line = (kind, artist = false) => ({ kind, showTitle: true, showArtist: artist, customText: null });
+      const mode = state?.spectrumDisplayMode ?? "Disabled";
+      return {
+        version: 1,
+        searching: { useSpectrum: false, firstLine: line("Metadata", true), secondLine: line(state?.showLyricSearchStatus === false ? "None" : "Text") },
+        instrumental: { useSpectrum: mode !== "Disabled", firstLine: line("Text"), secondLine: line("None") },
+        notFound: { useSpectrum: ["Always", "PureMusicOrNoLyrics"].includes(mode), firstLine: line("Text"), secondLine: line("None") },
+        spectrumWithLyrics: mode === "Always"
+      };
+    }
+
+    function fallbackSpectrumMode(rules) {
+      const pure = rules.instrumental.useSpectrum, missing = rules.notFound.useSpectrum, lyrics = rules.spectrumWithLyrics;
+      return lyrics && pure && missing ? "Always" : !lyrics && pure && missing ? "PureMusicOrNoLyrics"
+        : !lyrics && pure && !missing ? "PureMusicOnly" : !lyrics && !pure && !missing ? "Disabled" : "Custom";
+    }
+
+    function commitFallbackChange(mutate) {
+      if (!state) return;
+      const rules = JSON.parse(JSON.stringify(getFallbackRules()));
+      mutate(rules);
+      rules.searching.useSpectrum = false;
+      const mode = fallbackSpectrumMode(rules);
+      if (mode !== "Disabled" && !state.spectrumAudioAccessGranted) {
+        pendingFallbackSettings = rules;
+        pendingSpectrumDisplayMode = mode;
+        renderFallbackRules();
+        $("#spectrumAudioConsentDialog").showModal();
+        return;
+      }
+      commitSetting("lyricsFallback", rules);
+    }
+
+    function fallbackLineText(line, key) {
+      if (line.kind === "None") return "";
+      if (line.kind === "Text") return line.customText ?? fallbackMessage(key);
+      return [line.showTitle ? window.taskbarLyricsI18n.t("UI_FallbackExampleTitle") : "",
+        line.showArtist ? window.taskbarLyricsI18n.t("UI_FallbackExampleArtist") : ""].filter(Boolean).join(" - ");
+    }
+
+    function initializeFallbackRules() {
+      const root = $("#lyricsFallbackRules");
+      const text = key => window.taskbarLyricsI18n.t(key);
+      for (const [key, name] of Object.entries(fallbackLabels())) {
+        const item = document.createElement("section");
+        item.className = "fallback-rule";
+        item.dataset.fallbackState = key;
+        const row = document.createElement("div");
+        row.className = "fallback-summary";
+        const title = document.createElement("strong");
+        title.textContent = name;
+        const preview = document.createElement("div");
+        preview.className = "fallback-preview";
+        const cover = document.createElement("span");
+        cover.className = "fallback-cover";
+        cover.textContent = "TL";
+        cover.setAttribute("aria-hidden", "true");
+        const lines = document.createElement("div");
+        lines.className = "fallback-lines";
+        preview.append(cover, lines);
+        const change = document.createElement("button");
+        change.type = "button";
+        change.className = "btn secondary small";
+        change.dataset.fallbackChange = key;
+        change.setAttribute("aria-controls", `fallback-editor-${key}`);
+        change.setAttribute("aria-label", `${text("UI_FallbackChange")} ${name}`);
+        row.append(title, preview);
+        const editor = document.createElement("div");
+        editor.className = "fallback-editor";
+        editor.id = `fallback-editor-${key}`;
+        editor.hidden = true;
+        if (key !== "searching") {
+          const modes = document.createElement("div");
+          modes.className = "fallback-modes";
+          modes.setAttribute("role", "group");
+          modes.setAttribute("aria-label", `${name} ${text("UI_DisplayMode")}`);
+          for (const [mode, label] of [["spectrum", "UI_Spectrum"], ["text", "UI_FallbackText"]]) {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "btn secondary small";
+            button.dataset.fallbackMode = mode;
+            button.textContent = text(label);
+            modes.append(button);
+          }
+          row.append(modes);
+        }
+        row.append(change);
+        const fields = document.createElement("div");
+        fields.className = "fallback-fields";
+        for (const [lineKey, lineLabel] of [["firstLine", "UI_FallbackFirstLine"], ["secondLine", "UI_FallbackSecondLine"]]) {
+          const field = document.createElement("fieldset");
+          field.className = "fallback-field";
+          field.dataset.fallbackLine = lineKey;
+          const legend = document.createElement("legend");
+          legend.textContent = text(lineLabel);
+          field.append(legend);
+          const radio = (kind, label) => {
+            const input = document.createElement("input");
+            input.type = "radio";
+            input.name = `fallback-${key}-${lineKey}`;
+            input.value = kind;
+            input.dataset.fallbackKind = kind;
+            input.setAttribute("aria-label", window.taskbarLyricsI18n.format("UI_FallbackControlLabel", name, text(lineLabel), text(label)));
+            return input;
+          };
+          const metadata = document.createElement("div");
+          metadata.className = "fallback-choice";
+          const parts = document.createElement("div");
+          parts.className = "fallback-metadata";
+          parts.setAttribute("role", "group");
+          parts.setAttribute("aria-label", `${text(lineLabel)} ${text("UI_FallbackMetadata")}`);
+          for (const [part, label] of [["showTitle", "UI_FallbackTitle"], ["showArtist", "UI_Artist"]]) {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "btn secondary small";
+            button.dataset.fallbackPart = part;
+            button.textContent = text(label);
+            parts.append(button);
+          }
+          metadata.append(radio("Metadata", "UI_FallbackMetadata"), parts);
+          const custom = document.createElement("div");
+          custom.className = "fallback-choice";
+          const input = document.createElement("input");
+          input.type = "text";
+          input.className = "fallback-text";
+          input.dataset.fallbackText = "";
+          input.maxLength = 120;
+          input.placeholder = text("UI_FallbackPlaceholder");
+          input.setAttribute("aria-label", window.taskbarLyricsI18n.format("UI_FallbackControlLabel", name, text(lineLabel), text("UI_FallbackEditable")));
+          custom.append(radio("Text", "UI_FallbackEditable"), input);
+          const none = document.createElement("label");
+          none.className = "fallback-choice";
+          const caption = document.createElement("span");
+          caption.textContent = text("UI_FallbackNone");
+          none.append(radio("None", "UI_FallbackNone"), caption);
+          field.append(metadata, custom, none);
+          fields.append(field);
+        }
+        const note = document.createElement("p");
+        note.className = "fallback-note";
+        note.textContent = text("UI_FallbackSpectrumNote");
+        editor.append(fields, note);
+        item.append(row, editor);
+        root.append(item);
+      }
+      const context = target => ({
+        key: target.closest("[data-fallback-state]").dataset.fallbackState,
+        line: target.closest("[data-fallback-line]")?.dataset.fallbackLine
+      });
+      root.addEventListener("click", event => {
+        const toggle = event.target.closest("[data-fallback-change]");
+        if (toggle) {
+          openFallbackState = openFallbackState === toggle.dataset.fallbackChange ? null : toggle.dataset.fallbackChange;
+          renderFallbackRules();
+          return;
+        }
+        const mode = event.target.closest("[data-fallback-mode]");
+        const part = event.target.closest("[data-fallback-part]");
+        if (!mode && !part) return;
+        const { key, line } = context(mode || part);
+        if (part) delete part.closest("[data-fallback-line]").querySelector("[data-fallback-text]").dataset.fallbackDraft;
+        commitFallbackChange(rules => {
+          if (mode) rules[key].useSpectrum = mode.dataset.fallbackMode === "spectrum";
+          else {
+            const value = rules[key][line], name = part.dataset.fallbackPart;
+            value.kind = "Metadata";
+            value[name] = !value[name];
+            if (!value.showTitle && !value.showArtist) value[name] = true;
+          }
+        });
+      });
+      root.addEventListener("change", event => {
+        const radio = event.target.closest("[data-fallback-kind]");
+        if (!radio) return;
+        const { key, line } = context(radio);
+        delete radio.closest("[data-fallback-line]").querySelector("[data-fallback-text]").dataset.fallbackDraft;
+        commitFallbackChange(rules => { rules[key][line].kind = radio.value; });
+        if (radio.value === "Text") radio.closest("[data-fallback-line]").querySelector("[data-fallback-text]").focus();
+      });
+      const updateText = event => {
+        const input = event.target.closest("[data-fallback-text]");
+        if (!input || !state) return;
+        if (event.type === "input") input.dataset.fallbackDraft = input.value;
+        const { key, line } = context(input);
+        if (event.type === "focusin" && getFallbackRules()[key][line].kind === "Text") return;
+        commitFallbackChange(rules => {
+          rules[key][line].kind = "Text";
+          if (event.type === "input") rules[key][line].customText = input.value;
+        });
+      };
+      root.addEventListener("focusin", updateText);
+      root.addEventListener("input", updateText);
+      root.addEventListener("focusout", event => {
+        if (event.target.matches("[data-fallback-text]")) delete event.target.dataset.fallbackDraft;
+      });
+      root.addEventListener("keydown", event => {
+        if (event.key !== "Escape" || !openFallbackState) return;
+        const key = openFallbackState;
+        openFallbackState = null;
+        renderFallbackRules();
+        root.querySelector(`[data-fallback-change="${key}"]`).focus();
+      });
+      $("#fallbackSpectrumWithLyrics").addEventListener("change", event => {
+        commitFallbackChange(rules => { rules.spectrumWithLyrics = event.target.checked; });
+      });
+    }
+
+    function renderFallbackRules() {
+      if (!state) return;
+      const rules = getFallbackRules();
+      for (const item of $$("#lyricsFallbackRules [data-fallback-state]")) {
+        const key = item.dataset.fallbackState, rule = rules[key];
+        const opened = openFallbackState === key;
+        const button = item.querySelector("[data-fallback-change]");
+        button.textContent = window.taskbarLyricsI18n.t(opened ? "UI_FallbackCollapse" : "UI_FallbackChange");
+        button.setAttribute("aria-expanded", String(opened));
+        item.querySelector(".fallback-editor").hidden = !opened;
+        item.querySelector(".fallback-fields").hidden = rule.useSpectrum;
+        item.querySelector(".fallback-note").hidden = !rule.useSpectrum && !state.singleLineLyrics;
+        item.querySelector(".fallback-note").textContent = window.taskbarLyricsI18n.t(rule.useSpectrum ? "UI_FallbackSpectrumNote" : "UI_FallbackSingleLineNote");
+        for (const mode of item.querySelectorAll("[data-fallback-mode]")) mode.setAttribute("aria-pressed", String((mode.dataset.fallbackMode === "spectrum") === rule.useSpectrum));
+        for (const field of item.querySelectorAll("[data-fallback-line]")) {
+          const line = rule[field.dataset.fallbackLine];
+          const input = field.querySelector("[data-fallback-text]");
+          if (document.activeElement === input && input.dataset.fallbackDraft !== undefined) {
+            line.kind = "Text";
+            line.customText = input.dataset.fallbackDraft;
+          }
+          for (const radio of field.querySelectorAll("[data-fallback-kind]")) radio.checked = radio.value === line.kind;
+          for (const part of field.querySelectorAll("[data-fallback-part]")) {
+            part.setAttribute("aria-pressed", String(line.kind === "Metadata" && line[part.dataset.fallbackPart]));
+            part.disabled = line.kind === "Metadata" && line[part.dataset.fallbackPart] && Number(line.showTitle) + Number(line.showArtist) === 1;
+          }
+          const text = line.customText ?? fallbackMessage(key);
+          if (document.activeElement !== input && input.value !== text) input.value = text;
+        }
+        const preview = item.querySelector(".fallback-lines");
+        preview.replaceChildren();
+        preview.classList.toggle("spectrum", rule.useSpectrum);
+        preview.classList.toggle("single", !rule.useSpectrum && state.singleLineLyrics === true);
+        if (rule.useSpectrum) {
+          const bars = document.createElement("div");
+          bars.className = "fallback-bars";
+          bars.setAttribute("aria-hidden", "true");
+          for (const height of [18, 32, 58, 79, 94, 62, 40, 73, 85, 54, 36, 65, 78, 44, 26]) {
+            const bar = document.createElement("i");
+            bar.style.height = `${height}%`;
+            bars.append(bar);
+          }
+          preview.append(bars);
+        } else {
+          for (const lineKey of ["firstLine", "secondLine"]) {
+            const span = document.createElement("span");
+            const input = item.querySelector(`[data-fallback-line="${lineKey}"] [data-fallback-text]`);
+            span.textContent = document.activeElement === input && rule[lineKey].kind === "Text" ? input.value : fallbackLineText(rule[lineKey], key);
+            preview.append(span);
+          }
+        }
+      }
+      $("#fallbackSpectrumWithLyrics").checked = rules.spectrumWithLyrics;
+    }
+
     function requestSpectrumDisplayMode(mode) {
+      pendingFallbackSettings = null;
       if (!state || !selectOptions.spectrumDisplayMode.some(option => option.value === mode)) return;
       if (mode === "Disabled") {
         spectrumCaptureState = { state: "disabled", message: window.taskbarLyricsI18n.t("UI_SpectrumIsOffSystemAudioIsNotBeingCaptured") };
@@ -1561,8 +1840,9 @@
         state.customForegroundColor = state.foregroundColor;
         state.foregroundColorMode = "Custom";
       }
+      if (key === "lyricsFallback") state.spectrumDisplayMode = fallbackSpectrumMode(value);
       if (key === "coverCornerRadius") state.coverCornerRadius = Math.min(state.coverCornerRadius, state.coverSize / 2);
-      syncColorMode(); applyDependencies(); syncLayoutBounds(); syncWindowBounds(); updateOutputs(); syncControls(); renderSpectrumAudioAccess();
+      syncColorMode(); applyDependencies(); syncLayoutBounds(); syncWindowBounds(); updateOutputs(); syncControls(); renderSpectrumAudioAccess(); renderFallbackRules();
       return previousCornerRadius;
     }
 
@@ -1938,6 +2218,7 @@
       applyDependencies();
       renderSpectrumAudioAccess();
       updateOutputs();
+      renderFallbackRules();
       renderTaskbarEmbeddingStatus();
       activatePage(state.page, false);
     }
@@ -2503,12 +2784,14 @@
     $("#confirmSpectrumAudioAccess").addEventListener("click", () => {
       const mode = pendingSpectrumDisplayMode;
       if (!mode) return;
+      const fallback = pendingFallbackSettings;
+      pendingFallbackSettings = null;
       pendingSpectrumDisplayMode = null;
       closeDialogWithAnimation($("#spectrumAudioConsentDialog"));
-      bridge.post({ type: "confirmSpectrumAudioAccess", value: mode });
+      bridge.post({ type: "confirmSpectrumAudioAccess", value: fallback ? { spectrumDisplayMode: mode, lyricsFallback: fallback } : mode });
       markSaved();
     });
-    $("#spectrumAudioConsentDialog").addEventListener("close", () => { pendingSpectrumDisplayMode = null; });
+    $("#spectrumAudioConsentDialog").addEventListener("close", () => { pendingSpectrumDisplayMode = null; pendingFallbackSettings = null; });
     $("#revokeSpectrumAudioAccessButton").addEventListener("click", () => {
       bridge.post({ type: "revokeSpectrumAudioAccess" });
       markSaved();
@@ -2762,6 +3045,7 @@
     if (pageMeta[initialPageId]) applyInitialPage(initialPageId);
     document.documentElement.removeAttribute("data-settings-boot");
     initializeGettingStarted();
+    initializeFallbackRules();
     window.settingsApp = { receive };
     setPageInteractionState($$("[data-page]"), document.querySelector("[data-page].active"));
     bridge.post({ type: "ready" });

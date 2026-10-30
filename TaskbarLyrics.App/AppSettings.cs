@@ -44,7 +44,8 @@ public enum SpectrumDisplayMode
     Disabled = -1,
     PureMusicOrNoLyrics,
     PureMusicOnly,
-    Always
+    Always,
+    Custom
 }
 
 public enum ToolWindowTheme
@@ -157,6 +158,36 @@ public sealed class AppSettings
     public string UiLanguage { get; set; } = "";
 
     public SpectrumDisplayMode SpectrumDisplayMode { get; set; } = SpectrumDisplayMode.Disabled;
+
+    public LyricsFallbackSettings? LyricsFallback { get; set; }
+
+    internal LyricsFallbackSettings GetLyricsFallback() =>
+        (LyricsFallback is { Version: 1 } ? LyricsFallback : LyricsFallbackSettings.FromLegacy(this)).Normalized();
+
+    internal void SetLegacySpectrumMode(SpectrumDisplayMode mode)
+    {
+        if (!Enum.IsDefined(mode) || mode == SpectrumDisplayMode.Custom) return;
+        SpectrumDisplayMode = mode;
+        if (LyricsFallback is null) return;
+        var rules = GetLyricsFallback();
+        LyricsFallback = rules with
+        {
+            Instrumental = rules.Instrumental with { UseSpectrum = mode != SpectrumDisplayMode.Disabled },
+            NotFound = rules.NotFound with { UseSpectrum = mode is SpectrumDisplayMode.PureMusicOrNoLyrics or SpectrumDisplayMode.Always },
+            SpectrumWithLyrics = mode == SpectrumDisplayMode.Always
+        };
+    }
+
+    internal void SyncFallbackSpectrumMode()
+    {
+        if (LyricsFallback is null) return;
+        var rules = GetLyricsFallback();
+        LyricsFallback = rules;
+        SpectrumDisplayMode = rules.SpectrumWithLyrics && rules.Instrumental.UseSpectrum && rules.NotFound.UseSpectrum ? SpectrumDisplayMode.Always
+            : !rules.SpectrumWithLyrics && rules.Instrumental.UseSpectrum && rules.NotFound.UseSpectrum ? SpectrumDisplayMode.PureMusicOrNoLyrics
+            : !rules.SpectrumWithLyrics && rules.Instrumental.UseSpectrum && !rules.NotFound.UseSpectrum ? SpectrumDisplayMode.PureMusicOnly
+            : !rules.UsesSpectrum ? SpectrumDisplayMode.Disabled : SpectrumDisplayMode.Custom;
+    }
 
     public bool SpectrumAudioAccessGranted { get; set; }
 
@@ -351,6 +382,7 @@ public sealed class AppSettings
         cloned.LocalMusicFolders = LocalMusicFolders.ToList();
         cloned.SelectedDisplayIds = (SelectedDisplayIds ?? []).ToList();
         cloned.SpectrumTuning = SpectrumTuning.Clone();
+        cloned.LyricsFallback = LyricsFallback?.Normalized();
         cloned.GlobalMediaHotkeys = (GlobalMediaHotkeys ?? new GlobalMediaHotkeySettings()).Clone();
         return cloned;
     }

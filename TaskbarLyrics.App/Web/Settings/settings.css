@@ -261,6 +261,45 @@
     .panel-head p { margin: 0; color: var(--muted-foreground); font-size: 11px; line-height: 1.5; }
     .panel-body { padding: 14px 18px; }
 
+    .fallback-rules { display: grid; gap: 12px; padding: 14px 18px; }
+    .fallback-rule { min-width: 0; border: 1px solid var(--border); border-radius: 9px; background: var(--background); }
+    .fallback-summary { display: grid; grid-template-columns: 106px minmax(0, 1fr) auto; gap: 16px; align-items: center; padding: 14px 16px; }
+    .fallback-summary:has(.fallback-modes) { grid-template-columns: 106px minmax(0, 1fr) auto auto; }
+    .fallback-summary > strong { font-size: 13px; font-weight: 600; }
+    .fallback-preview { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .fallback-cover { flex: 0 0 34px; width: 34px; height: 34px; display: grid; place-items: center; border: 1px solid var(--input); border-radius: 6px; background: var(--secondary); font-size: 11px; }
+    .fallback-lines { flex: 1; min-width: 0; display: grid; grid-template-rows: 21px 19px; }
+    .fallback-lines > span { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 13px; }
+    .fallback-lines > span + span { color: var(--muted-foreground); font-size: 12px; }
+    .fallback-lines.spectrum { grid-template-rows: 40px; }
+    .fallback-lines.single { grid-template-rows: 40px; align-items: center; }
+    .fallback-lines.single > span + span { display: none; }
+    .fallback-bars { display: flex; align-items: center; gap: 4px; height: 40px; max-width: 250px; padding-block: 4px; }
+    .fallback-bars i { flex: 1; min-width: 2px; max-width: 6px; background: currentColor; border-radius: 2px; }
+    .fallback-editor { padding: 16px; border-top: 1px solid var(--border); }
+    .fallback-modes { display: flex; gap: 4px; }
+    .fallback-modes button { white-space: nowrap; }
+    .fallback-modes button[aria-pressed="true"] { background: var(--accent); border-color: var(--ring); }
+    .fallback-fields { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; }
+    .fallback-field { display: grid; align-content: start; gap: 8px; min-width: 0; padding: 0; margin: 0; border: 0; }
+    .fallback-field legend { margin-bottom: 9px; padding: 0; font-size: 13px; font-weight: 600; }
+    .fallback-choice { display: flex; align-items: center; gap: 9px; min-width: 0; min-height: 46px; padding: 8px 10px; border: 1px solid var(--input); border-radius: 7px; background: var(--background); }
+    .fallback-choice:has(input[type="radio"]:checked) { border-color: var(--ring); background: var(--accent); }
+    .fallback-choice input[type="radio"] { flex: 0 0 14px; width: 14px; height: 14px; margin: 0; accent-color: var(--foreground); }
+    .fallback-metadata { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; flex: 1; min-width: 0; }
+    .fallback-metadata button { min-width: 0; }
+    .fallback-metadata button[aria-pressed="true"] { background: var(--secondary); border-color: var(--ring); }
+    .fallback-metadata button:disabled { opacity: 1; }
+    .fallback-choice .fallback-text { width: 100%; flex: 1; min-width: 0; border: 0; padding: 4px 2px; background: transparent; color: var(--foreground); font: inherit; font-size: 13px; }
+    .fallback-note { font-size: 12px; color: var(--muted-foreground); }
+    @media (max-width: 720px) {
+      .fallback-summary, .fallback-summary:has(.fallback-modes) { grid-template-columns: minmax(0, 1fr) auto; gap: 10px; }
+      .fallback-preview { grid-column: 1 / -1; grid-row: 2; }
+      .fallback-modes { grid-column: 1 / -1; grid-row: 3; justify-self: start; }
+      .fallback-summary > button { grid-column: 2; grid-row: 1; }
+      .fallback-fields { grid-template-columns: minmax(0, 1fr); }
+    }
+
     .source-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr));

@@ -180,7 +180,7 @@ public partial class App : System.Windows.Application, IDisposable
         var nextSettings = settings.Clone();
         if (!nextSettings.SpectrumAudioAccessGranted)
         {
-            nextSettings.SpectrumDisplayMode = SpectrumDisplayMode.Disabled;
+            nextSettings.SetLegacySpectrumMode(SpectrumDisplayMode.Disabled);
         }
 
         nextSettings.SpectrumTuning = Settings.SpectrumTuning.Clone();
@@ -464,7 +464,7 @@ public partial class App : System.Windows.Application, IDisposable
             return;
         }
 
-        Settings.SpectrumDisplayMode = mode;
+        Settings.SetLegacySpectrumMode(mode);
 
         _settingsStore?.Save(Settings);
         _lyricsWindowHost?.ApplySettings(Settings);

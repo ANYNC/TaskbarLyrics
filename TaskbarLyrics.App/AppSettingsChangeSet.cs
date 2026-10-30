@@ -66,14 +66,16 @@ internal readonly record struct AppSettingsChangeSet(
             current.ShowLyricTranslation != next.ShowLyricTranslation;
 
         var searchStatusDisplayChanged = isInitialApplication ||
-            current.ShowLyricSearchStatus != next.ShowLyricSearchStatus;
+            current.ShowLyricSearchStatus != next.ShowLyricSearchStatus ||
+            !Equals(current.LyricsFallback, next.LyricsFallback);
 
         var autoHideWhenNoPlaybackChanged = isInitialApplication ||
             current.AutoHideWhenNoPlayback != next.AutoHideWhenNoPlayback;
 
         var spectrumDisplayChanged = isInitialApplication ||
             current.SpectrumDisplayMode != next.SpectrumDisplayMode ||
-            current.SpectrumAudioAccessGranted != next.SpectrumAudioAccessGranted;
+            current.SpectrumAudioAccessGranted != next.SpectrumAudioAccessGranted ||
+            !Equals(current.LyricsFallback, next.LyricsFallback);
 
         var visualStyleChanged = isInitialApplication ||
             current.SingleLineLyrics != next.SingleLineLyrics ||

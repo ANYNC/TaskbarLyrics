@@ -30,6 +30,14 @@ async function createStatusDom() {
 }
 
 describe("search-status display preference", () => {
+  it("keeps configured empty fallback lines blank instead of restoring the searching prompt", async () => {
+    const { dom, receive, style, document } = await createStatusDom();
+    style({ fallbackDisplayConfigured: true, showLyricSearchStatus: true });
+    receive({ current: " ", next: " ", animateTransition: false });
+    expect(document.querySelector("#currentLineText").textContent.trim()).toBe("");
+    expect(document.querySelector("#nextLineText").textContent.trim()).toBe("");
+    dom.window.close();
+  });
   it("preserves the search presentation when the preference is absent", async () => {
     const { dom, receive, document } = await createStatusDom();
     receive({ animateTransition: false });

@@ -1164,15 +1164,31 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
 
     private async Task ConfirmSpectrumAudioAccessAsync(JsonElement? value)
     {
-        if (value is null ||
-            !Enum.TryParse<SpectrumDisplayMode>(ReadString(value.Value, string.Empty), true, out var mode) ||
+        LyricsFallbackSettings? fallback = null;
+        var modeValue = value;
+        if (value is { ValueKind: JsonValueKind.Object } payload)
+        {
+            if (!payload.TryGetProperty("lyricsFallback", out var rules) ||
+                !LyricsFallbackSettings.TryRead(rules, out fallback) ||
+                !payload.TryGetProperty("spectrumDisplayMode", out var requestedMode)) return;
+            modeValue = requestedMode;
+        }
+        if (modeValue is null ||
+            !Enum.TryParse<SpectrumDisplayMode>(ReadString(modeValue.Value, string.Empty), true, out var mode) ||
+            !Enum.IsDefined(mode) ||
+            (mode == SpectrumDisplayMode.Custom && fallback is null) ||
             mode == SpectrumDisplayMode.Disabled)
         {
             return;
         }
 
         _settings.SpectrumAudioAccessGranted = true;
-        _settings.SpectrumDisplayMode = mode;
+        if (fallback is not null)
+        {
+            _settings.LyricsFallback = fallback;
+            _settings.SyncFallbackSpectrumMode();
+        }
+        else _settings.SetLegacySpectrumMode(mode);
         await SaveSettingsAndNotifyWebAsync();
         await PushSettingsToWebAsync();
         await PushSpectrumCaptureStateAsync(force: true);
@@ -1195,7 +1211,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
     private async Task RevokeSpectrumAudioAccessAsync()
     {
         _settings.SpectrumAudioAccessGranted = false;
-        _settings.SpectrumDisplayMode = SpectrumDisplayMode.Disabled;
+        _settings.SetLegacySpectrumMode(SpectrumDisplayMode.Disabled);
         await SaveSettingsAndNotifyWebAsync();
         await PushSettingsToWebAsync();
         await PushSpectrumCaptureStateAsync(force: true);
@@ -1203,7 +1219,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
 
     private async Task DisableSpectrumAsync()
     {
-        _settings.SpectrumDisplayMode = SpectrumDisplayMode.Disabled;
+        _settings.SetLegacySpectrumMode(SpectrumDisplayMode.Disabled);
         await SaveSettingsAndNotifyWebAsync();
         await PushSettingsToWebAsync();
         await PushSpectrumCaptureStateAsync(force: true);
@@ -1346,6 +1362,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             AutoCheckUpdates = _settings.AutoCheckUpdates,
             ShowLyricTranslation = _settings.ShowLyricTranslation,
             ShowLyricSearchStatus = _settings.ShowLyricSearchStatus,
+            LyricsFallback = _settings.GetLyricsFallback(),
             EnableWordScanning = _settings.EnableWordScanning,
             ToolWindowTheme = _settings.ToolWindowTheme,
             UiLanguage = _settings.UiLanguage,
@@ -1650,6 +1667,14 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             case "showLyricSearchStatus":
                 _settings.ShowLyricSearchStatus = ReadBool(element, _settings.ShowLyricSearchStatus);
                 break;
+            case "lyricsFallback":
+                if (LyricsFallbackSettings.TryRead(element, out var fallback) &&
+                    (!fallback.UsesSpectrum || _settings.SpectrumAudioAccessGranted))
+                {
+                    _settings.LyricsFallback = fallback;
+                    _settings.SyncFallbackSpectrumMode();
+                }
+                break;
             case "enableWordScanning":
                 _settings.EnableWordScanning = ReadBool(element, _settings.EnableWordScanning);
                 break;
@@ -1663,10 +1688,10 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 var spectrumDisplayMode = ReadString(element, SpectrumDisplayMode.Disabled.ToString());
                 if (Enum.TryParse<SpectrumDisplayMode>(spectrumDisplayMode, true, out var parsedSpectrumDisplayMode))
                 {
-                    _settings.SpectrumDisplayMode = parsedSpectrumDisplayMode == SpectrumDisplayMode.Disabled ||
+                    _settings.SetLegacySpectrumMode(parsedSpectrumDisplayMode == SpectrumDisplayMode.Disabled ||
                         _settings.SpectrumAudioAccessGranted
                             ? parsedSpectrumDisplayMode
-                            : SpectrumDisplayMode.Disabled;
+                            : SpectrumDisplayMode.Disabled);
                 }
                 break;
             case "showBackground":
@@ -2284,6 +2309,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         target.LastNotifiedUpdateVersion = source.LastNotifiedUpdateVersion;
         target.ShowLyricTranslation = source.ShowLyricTranslation;
         target.ShowLyricSearchStatus = source.ShowLyricSearchStatus;
+        target.LyricsFallback = source.LyricsFallback?.Normalized();
         target.EnableWordScanning = source.EnableWordScanning;
         target.ToolWindowTheme = source.ToolWindowTheme;
         target.SpectrumDisplayMode = source.SpectrumDisplayMode;
@@ -2450,6 +2476,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         public bool AutoCheckUpdates { get; set; }
         public bool ShowLyricTranslation { get; set; }
         public bool ShowLyricSearchStatus { get; set; }
+        public LyricsFallbackSettings LyricsFallback { get; set; } = new();
         public bool EnableWordScanning { get; set; }
         public ToolWindowTheme ToolWindowTheme { get; set; }
         public string SpectrumDisplayMode { get; set; } = TaskbarLyrics.App.SpectrumDisplayMode.Disabled.ToString();
