@@ -168,8 +168,6 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
 
     public bool IsAttached => _windowHandle != IntPtr.Zero && _parentHandle != IntPtr.Zero;
 
-    public bool IsSurfaceHidden { get; private set; }
-    public event EventHandler? SurfaceHidden;
     public event EventHandler? AttachmentLost;
 
     public bool IsAttachedToDifferentTarget(DisplayMonitor? targetDisplay) =>
@@ -259,7 +257,8 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
 
         if (!isWindows11)
         {
-            SqueezeTaskList(parent, settings);
+            if (settings.TaskbarAvoidanceEnabled) SqueezeTaskList(parent, settings);
+            else RestoreTaskList();
         }
 
         var attachResult = EmbeddedTaskbarEmbeddingPolicy.FromPositionResult(
@@ -270,7 +269,6 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
 
     public void Detach()
     {
-        IsSurfaceHidden = false;
         _spaceRefreshTimer?.Stop();
         _eventRefreshTimer?.Stop();
         _changeObserver.Detach();
@@ -324,7 +322,8 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
         _positionWindow = window;
         _positionSettings = settings;
         _positionDisplay = display;
-        _occupiedSpace.SetEventMonitoring(_changeObserver.UpdateTarget(_taskbarHandle));
+        if (!settings.TaskbarAvoidanceEnabled) _changeObserver.Detach();
+        _occupiedSpace.SetEventMonitoring(settings.TaskbarAvoidanceEnabled && _changeObserver.UpdateTarget(_taskbarHandle));
         if (_eventRefreshTimer is null)
         {
             _eventRefreshTimer = new DispatcherTimer(DispatcherPriority.Normal, window.Dispatcher)
@@ -423,47 +422,40 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
             taskbarWidth, width, settings.HorizontalAnchor, settings.XOffset);
         var clientTop = EmbeddedTaskbarLayoutCalculator.CalculateVerticalTop(
             taskbarHeight, height, settings.YOffset, alignTop: metrics.IsVertical);
-        if (IsWindows11())
+        if (IsWindows11() && settings.TaskbarAvoidanceEnabled)
         {
             var occupied = _occupiedSpace.GetOccupiedBounds(parent, new Rect(
                 parentRect.Left, parentRect.Top,
                 parentRect.Right - parentRect.Left, parentRect.Bottom - parentRect.Top));
             var logical = occupied is null ? null : TaskbarOccupiedSpaceProvider.ToLogicalBounds(
                 occupied, metrics.IsVertical ? parentRect.Top : parentRect.Left, pixelsPerDip);
-            if (logical is null || !TaskbarFreeSpaceLayout.TryPlace(
+            if (logical is not null && TaskbarFreeSpaceLayout.TryPlace(
                     metrics.IsVertical ? taskbarHeight : taskbarWidth,
                     metrics.IsVertical ? height : width,
                     metrics.IsVertical ? clientTop : clientLeft,
                     logical, out var available))
             {
-                ReportSpaceDiagnostic(logical is null ? "WaitingForTaskbarBounds" : "NoFreeSpace");
-                if (!IsSurfaceHidden)
+                if (metrics.IsVertical)
                 {
-                    IsSurfaceHidden = true;
-                    SurfaceHidden?.Invoke(this, EventArgs.Empty);
+                    clientTop = available.Start;
+                    height = available.Length;
                 }
-                var current = GetCurrentWindowBounds(hwnd, parentRect);
-                // Keep the logical visibility and parent: zero native area cannot
-                // obscure buttons and can recover without re-parenting the HWND.
-                return current is { Width: 0, Height: 0 } || TaskbarNativeMethods.SetWindowPos(
-                    hwnd, IntPtr.Zero, 0, 0, 0, 0,
-                    TaskbarNativeMethods.SWP_NOMOVE | TaskbarNativeMethods.SWP_NOZORDER |
-                    TaskbarNativeMethods.SWP_NOACTIVATE);
-            }
-            if (metrics.IsVertical)
-            {
-                clientTop = available.Start;
-                height = available.Length;
+                else
+                {
+                    clientLeft = available.Start;
+                    width = available.Length;
+                }
+                ReportSpaceDiagnostic($"Left={clientLeft:F1} Top={clientTop:F1} Width={width:F1} Height={height:F1} Scale={pixelsPerDip:F2}");
             }
             else
             {
-                clientLeft = available.Start;
-                width = available.Length;
+                // Unknown or insufficient space uses the same configured bounds as
+                // disabling avoidance; keep polling so valid free space can recover.
+                ReportSpaceDiagnostic(logical is null ? "BoundsUnavailableFallback" : "NoFreeSpaceFallback");
             }
-            ReportSpaceDiagnostic($"Left={clientLeft:F1} Top={clientTop:F1} Width={width:F1} Height={height:F1} Scale={pixelsPerDip:F2}");
         }
+        else if (IsWindows11()) ReportSpaceDiagnostic("AvoidanceDisabled");
 
-        IsSurfaceHidden = false;
         if (window.Width != width)
         {
             window.Width = width;
@@ -685,7 +677,8 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
 
         if (!IsWindows11())
         {
-            SqueezeTaskList(_parentHandle, settings);
+            if (settings.TaskbarAvoidanceEnabled) SqueezeTaskList(_parentHandle, settings);
+            else RestoreTaskList();
         }
 
         return EmbeddedTaskbarEmbeddingPolicy.FromPositionResult(

@@ -13,7 +13,7 @@ public sealed partial class FloatingPanelInputTests
     [InlineData(1900, 100, 1.25)]
     [InlineData(-1400, -900, 1.5)]
     [InlineData(1900, -900, 2)]
-    public void SidebarRelocatesShrinksHidesAndRestoresWithoutChangingSettings(int left, int top, double scale)
+    public void SidebarAvoidsAndFallsBackWithoutChangingSettings(int left, int top, double scale)
     {
         RunSta(() =>
         {
@@ -45,12 +45,8 @@ public sealed partial class FloatingPanelInputTests
                     HorizontalAnchor = LyricsHorizontalAnchor.Right,
                     XOffset = 19
                 };
-                var hiddenEvents = 0;
-                anchor.SurfaceHidden += (_, _) => hiddenEvents++;
-
                 Assert.True(anchor.Position(childHandle, parentHandle, child, settings, display));
-                Assert.True(anchor.IsSurfaceHidden);
-                Assert.Equal(0, FloatingLyricsPanelController.GetBounds(child).Height);
+                AssertSidebarBounds(40, 420);
                 Assert.True(provider.PendingRead.Wait(TimeSpan.FromSeconds(5)));
                 Assert.True(anchor.Position(childHandle, parentHandle, child, settings, display));
                 AssertSidebarBounds(0, 292);
@@ -59,11 +55,9 @@ public sealed partial class FloatingPanelInputTests
                 AssertSidebarBounds(308, 420);
 
                 Refresh([new(0, 1000)]);
-                Assert.True(anchor.IsSurfaceHidden);
-                Assert.Equal(0, FloatingLyricsPanelController.GetBounds(child).Height);
-                Assert.Equal(2, hiddenEvents);
+                AssertSidebarBounds(40, 420);
                 Assert.True(anchor.Position(childHandle, parentHandle, child, settings, display));
-                Assert.Equal(2, hiddenEvents);
+                AssertSidebarBounds(40, 420);
 
                 Refresh([new(700, 1000)]);
                 AssertSidebarBounds(40, 420);
@@ -87,7 +81,6 @@ public sealed partial class FloatingPanelInputTests
                 void AssertSidebarBounds(double expectedTop, double expectedHeight)
                 {
                     var bounds = FloatingLyricsPanelController.GetBounds(child);
-                    Assert.False(anchor.IsSurfaceHidden);
                     Assert.Equal(left, bounds.Left);
                     Assert.Equal(Math.Round(top + expectedTop * scale, MidpointRounding.AwayFromZero), bounds.Top);
                     Assert.Equal(60 * scale, bounds.Width);
@@ -146,7 +139,7 @@ public sealed partial class FloatingPanelInputTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void EmbeddedSurfaceWithoutSpaceCancelsPanelPreparationAndRejectsLateClicks(bool useMirror)
+    public void EmbeddedSpaceFallbackKeepsPanelPreparationAndNativeArea(bool useMirror)
     {
         RunSta(() =>
         {
@@ -155,7 +148,7 @@ public sealed partial class FloatingPanelInputTests
             var main = new MainWindow(offsets, composition, () => { }, () => { });
             var display = DisplayMonitorService.GetDisplays().First(item => item.IsPrimary);
             var mirror = useMirror ? new LyricsMirrorWindow(display, (_, _, _, _, _, _) => { },
-                composition, () => main.CloseControlPanel()) : null;
+                composition) : null;
             var parent = new Window { Width = 1000, Height = 48, ShowInTaskbar = false, ShowActivated = false };
             const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
             var panel = (LyricsControlPanelWindow)typeof(MainWindow).GetMethod("CreateControlPanelWindow", flags)!.Invoke(main, null)!;
@@ -177,16 +170,10 @@ public sealed partial class FloatingPanelInputTests
 
                 Assert.True(anchor.Position(sourceHandle, parentHandle, source,
                     new AppSettings { UseFloatingWindow = false }, display));
-                Assert.True(anchor.IsSurfaceHidden);
-                Assert.False(panel.IsOpening);
-                Assert.False(expanded);
-                Assert.Equal(0, FloatingLyricsPanelController.GetBounds(source).Width);
-
-                main.ToggleControlPanelNear(new Rect(100, 100, 34, 34), display, value => expanded = value, source);
-                Assert.False(panel.IsOpening);
-                Assert.False(expanded);
+                Assert.True(panel.IsOpening);
+                Assert.True(expanded);
+                Assert.True(FloatingLyricsPanelController.GetBounds(source).Width > 0);
                 anchor.Detach();
-                Assert.False(anchor.IsSurfaceHidden);
             }
             finally
             {

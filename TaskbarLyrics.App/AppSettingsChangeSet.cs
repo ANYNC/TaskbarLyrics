@@ -119,6 +119,7 @@ internal readonly record struct AppSettingsChangeSet(
         var windowLayoutChanged = isInitialApplication ||
             current.GetWindowWidth() != next.GetWindowWidth() ||
             (!next.UseFloatingWindow && (current.HorizontalAnchor != next.HorizontalAnchor ||
+                current.TaskbarAvoidanceEnabled != next.TaskbarAvoidanceEnabled ||
                 current.XOffset != next.XOffset || current.YOffset != next.YOffset)) ||
             (next.UseFloatingWindow && current.FloatingWindowLayer != next.FloatingWindowLayer) ||
             current.UseFloatingWindow != next.UseFloatingWindow ||

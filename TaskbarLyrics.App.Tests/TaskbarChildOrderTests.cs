@@ -8,6 +8,164 @@ namespace TaskbarLyrics.App.Tests;
 public sealed partial class FloatingPanelInputTests
 {
     [Fact]
+    public void TaskbarAvoidanceDisabledSkipsReadsAndReenablingRestoresAvoidance()
+    {
+        RunSta(() =>
+        {
+            using var native = new ChildOrderWindows(contentBridge: true);
+            var reads = 0;
+            using var provider = new TaskbarOccupiedSpaceProvider((_, bounds, _) =>
+            {
+                reads++;
+                return [new(bounds.Left + 300, bounds.Right)];
+            }, TimeProvider.System);
+            using var anchor = new EmbeddedTaskbarAnchor(provider);
+            var layout = new Window { Width = 420, Height = 44 };
+            var settings = new AppSettings { TaskbarAvoidanceEnabled = false, XOffset = 80 };
+            try
+            {
+                Assert.True(anchor.Position(native.Lyrics, native.Parent, layout, settings, null));
+                ChildOrderWindows.GetWindowRect(native.Lyrics, out var configured);
+                Assert.Equal(420, configured.Right - configured.Left);
+                Assert.Equal(0, reads);
+                settings.TaskbarAvoidanceEnabled = true;
+                Assert.True(anchor.Position(native.Lyrics, native.Parent, layout, settings, null));
+                Assert.True(provider.PendingRead.Wait(TimeSpan.FromSeconds(5)));
+                Assert.True(anchor.Position(native.Lyrics, native.Parent, layout, settings, null));
+                ChildOrderWindows.GetWindowRect(native.Lyrics, out var avoided);
+                Assert.Equal(292, avoided.Right - avoided.Left);
+                settings.TaskbarAvoidanceEnabled = false;
+                var before = reads;
+                Assert.True(anchor.Position(native.Lyrics, native.Parent, layout, settings, null));
+                ChildOrderWindows.GetWindowRect(native.Lyrics, out var restored);
+                Assert.Equal(configured, restored);
+                Assert.Equal(before, reads);
+                Assert.Equal(native.Parent, GetAncestor(native.Lyrics, 1));
+                Assert.Equal(native.Foreground, ChildOrderWindows.GetWindow(native.Lyrics, 3));
+            }
+            finally { layout.Close(); }
+        });
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void TaskbarAvoidanceUnknownAndFullSpaceUseDisabledBoundsAndRecover(bool throwRead)
+    {
+        RunSta(() =>
+        {
+            using var native = new ChildOrderWindows(contentBridge: true);
+            var clock = new TaskbarSpaceClock();
+            var phase = 0;
+            using var provider = new TaskbarOccupiedSpaceProvider((_, bounds, _) => phase switch
+            {
+                0 when throwRead => throw new InvalidOperationException("Test UIA failure"),
+                0 => null,
+                2 => [new(bounds.Left, bounds.Right)],
+                _ => [new(bounds.Left + 300, bounds.Right)]
+            }, clock);
+            using var anchor = new EmbeddedTaskbarAnchor(provider);
+            var layout = new Window { Width = 420, Height = 44 };
+            var settings = new AppSettings { TaskbarAvoidanceEnabled = false, XOffset = 80 };
+            try
+            {
+                Assert.True(anchor.Position(native.Lyrics, native.Parent, layout, settings, null));
+                ChildOrderWindows.GetWindowRect(native.Lyrics, out var configured);
+                settings.TaskbarAvoidanceEnabled = true;
+                Refresh(0);
+                AssertBounds(configured);
+                Refresh(1);
+                ChildOrderWindows.GetWindowRect(native.Lyrics, out var avoided);
+                Assert.Equal(292, avoided.Right - avoided.Left);
+                Refresh(2);
+                AssertBounds(configured);
+                Refresh(3);
+                AssertBounds(avoided);
+                Assert.Equal(420, settings.WindowWidth);
+                Assert.Equal(80, settings.XOffset);
+                Assert.True(settings.TaskbarAvoidanceEnabled);
+
+                void Refresh(int next)
+                {
+                    phase = next;
+                    clock.Advance();
+                    Assert.True(anchor.Position(native.Lyrics, native.Parent, layout, settings, null));
+                    Assert.True(provider.PendingRead.Wait(TimeSpan.FromSeconds(5)));
+                    Assert.True(anchor.Position(native.Lyrics, native.Parent, layout, settings, null));
+                }
+                void AssertBounds(TaskbarNativeMethods.NativeRect expected)
+                {
+                    ChildOrderWindows.GetWindowRect(native.Lyrics, out var actual);
+                    Assert.Equal(expected, actual);
+                    Assert.Equal(native.Parent, GetAncestor(native.Lyrics, 1));
+                }
+            }
+            finally { layout.Close(); }
+        });
+    }
+
+    [Fact]
+    public void TaskbarAvoidanceBlockedReadFallsBackAfterCacheExpiryWithoutParallelQueries()
+    {
+        RunSta(() =>
+        {
+            using var native = new ChildOrderWindows(contentBridge: true);
+            using var entered = new ManualResetEventSlim();
+            using var release = new ManualResetEventSlim();
+            var clock = new TaskbarSpaceClock();
+            var reads = 0;
+            using var provider = new TaskbarOccupiedSpaceProvider((_, bounds, token) =>
+            {
+                if (Interlocked.Increment(ref reads) == 2)
+                {
+                    entered.Set();
+                    release.Wait(token);
+                }
+                return [new(bounds.Left + 300, bounds.Right)];
+            }, clock);
+            using var anchor = new EmbeddedTaskbarAnchor(provider);
+            var layout = new Window { Width = 420, Height = 44 };
+            var settings = new AppSettings { XOffset = 80 };
+            try
+            {
+                Assert.True(anchor.Position(native.Lyrics, native.Parent, layout, settings, null));
+                Assert.True(provider.PendingRead.Wait(TimeSpan.FromSeconds(5)));
+                Assert.True(anchor.Position(native.Lyrics, native.Parent, layout, settings, null));
+                ChildOrderWindows.GetWindowRect(native.Lyrics, out var avoided);
+                Assert.Equal(292, avoided.Right - avoided.Left);
+                clock.Advance();
+                Assert.True(anchor.Position(native.Lyrics, native.Parent, layout, settings, null));
+                Assert.True(entered.Wait(TimeSpan.FromSeconds(5)));
+                for (var pass = 0; pass < 5; pass++) clock.Advance();
+                Assert.False(provider.PendingRead.IsCompleted);
+                Assert.True(anchor.Position(native.Lyrics, native.Parent, layout, settings, null));
+                ChildOrderWindows.GetWindowRect(native.Lyrics, out var fallback);
+                Assert.Equal(420, fallback.Right - fallback.Left);
+                settings.TaskbarAvoidanceEnabled = false;
+                Assert.True(anchor.Position(native.Lyrics, native.Parent, layout, settings, null));
+                ChildOrderWindows.GetWindowRect(native.Lyrics, out var disabled);
+                Assert.Equal(disabled, fallback);
+                Assert.Equal(2, reads);
+                release.Set();
+                Assert.True(provider.PendingRead.Wait(TimeSpan.FromSeconds(5)));
+                settings.TaskbarAvoidanceEnabled = true;
+                clock.Advance();
+                Assert.True(anchor.Position(native.Lyrics, native.Parent, layout, settings, null));
+                Assert.True(provider.PendingRead.Wait(TimeSpan.FromSeconds(5)));
+                Assert.True(anchor.Position(native.Lyrics, native.Parent, layout, settings, null));
+                ChildOrderWindows.GetWindowRect(native.Lyrics, out var recovered);
+                Assert.Equal(avoided, recovered);
+            }
+            finally
+            {
+                release.Set();
+                Assert.True(provider.PendingRead.Wait(TimeSpan.FromSeconds(5)));
+                layout.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void TaskbarChildOrderRecoversAfterLateContentWithoutMovingOrActivating()
     {
         RunSta(() =>
@@ -60,7 +218,7 @@ public sealed partial class FloatingPanelInputTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void TaskbarChildOrderDoesNotRaiseSurfaceWithoutKnownFreeSpace(bool confirmedFull)
+    public void TaskbarChildOrderRestoresVisibleFallbackWithoutKnownFreeSpace(bool confirmedFull)
     {
         RunSta(() =>
         {
@@ -77,10 +235,10 @@ public sealed partial class FloatingPanelInputTests
                     Assert.True(provider.PendingRead.Wait(TimeSpan.FromSeconds(5)));
                     Assert.True(anchor.Position(native.Lyrics, native.Parent, layout, settings, null));
                 }
-                Assert.True(anchor.IsSurfaceHidden);
-                Assert.Equal(native.Content, ChildOrderWindows.GetWindow(native.Lyrics, 3));
+                Assert.Equal(native.Foreground, ChildOrderWindows.GetWindow(native.Lyrics, 3));
                 ChildOrderWindows.GetWindowRect(native.Lyrics, out var bounds);
-                Assert.Equal(0, bounds.Right - bounds.Left);
+                Assert.Equal(420, bounds.Right - bounds.Left);
+                Assert.Equal(44, bounds.Bottom - bounds.Top);
             }
             finally { layout.Close(); }
         });

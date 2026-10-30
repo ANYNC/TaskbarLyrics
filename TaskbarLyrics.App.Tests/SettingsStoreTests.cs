@@ -7,6 +7,23 @@ public sealed class SettingsStoreTests
 {
     [Theory]
     [InlineData("{}", true)]
+    [InlineData("{\"TaskbarAvoidanceEnabled\":false}", false)]
+    [InlineData("{\"TaskbarAvoidanceEnabled\":true}", true)]
+    public void TaskbarAvoidancePreferenceDefaultsOnAndRoundTrips(string json, bool expected)
+    {
+        using var files = new TestDirectory();
+        var path = Path.Combine(files.Path, "settings.json");
+        File.WriteAllText(path, json);
+        var store = new SettingsStore(path);
+        var loaded = store.Load();
+        Assert.Equal(expected, loaded.TaskbarAvoidanceEnabled);
+        Assert.Equal(expected, loaded.Clone().TaskbarAvoidanceEnabled);
+        Assert.True(store.Save(loaded));
+        Assert.Equal(expected, store.Load().TaskbarAvoidanceEnabled);
+    }
+
+    [Theory]
+    [InlineData("{}", true)]
     [InlineData("{\"ShowLyricSearchStatus\":false}", false)]
     [InlineData("{\"ShowLyricSearchStatus\":true}", true)]
     public void SearchStatusPreferenceDefaultsOnAndRoundTrips(string json, bool expected)

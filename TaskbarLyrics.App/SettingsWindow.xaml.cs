@@ -1391,6 +1391,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             WindowWidth = _settings.WindowWidth,
             FloatingWindowWidth = _settings.FloatingWindowWidth,
             HorizontalAnchor = _settings.HorizontalAnchor,
+            TaskbarAvoidanceEnabled = _settings.TaskbarAvoidanceEnabled,
             LyricsTextAlignment = _settings.LyricsTextAlignment,
             CoverPosition = _settings.CoverPosition,
             XOffset = _settings.XOffset,
@@ -1589,7 +1590,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         }
 
         if (_settings.UseFloatingWindow && key is "windowWidth" or "lyricsLayoutScalePercent" or
-            "horizontalAnchor" or "xOffset" or "yOffset" or "showBackground" or "backgroundOpacity" or
+            "taskbarAvoidanceEnabled" or "horizontalAnchor" or "xOffset" or "yOffset" or "showBackground" or "backgroundOpacity" or
             "showBorder" or "enableControlPanel" or "controlPanelTriggerMethod" or "controlPanelTriggerCover" or "controlPanelTriggerLyrics" or
             "embeddedPanelBrightness" or "embeddedPanelTintOpacity" or "embeddedPanelBlurAmount") return;
         if (!_settings.UseFloatingWindow && key is "forceAlwaysOnTop" or "floatingWindowLayer" or "enableFloatingControlPanel" or "showFloatingBackground" or
@@ -1790,6 +1791,9 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 {
                     _settings.HorizontalAnchor = anchor;
                 }
+                break;
+            case "taskbarAvoidanceEnabled":
+                _settings.TaskbarAvoidanceEnabled = ReadBool(element, _settings.TaskbarAvoidanceEnabled);
                 break;
             case "lyricsTextAlignment":
                 _settings.NormalizeLyricsTextAlignment();
@@ -2317,6 +2321,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         target.WindowWidth = source.WindowWidth;
         target.FloatingWindowWidth = source.FloatingWindowWidth;
         target.HorizontalAnchor = source.HorizontalAnchor;
+        target.TaskbarAvoidanceEnabled = source.TaskbarAvoidanceEnabled;
         target.LyricsTextAlignment = source.LyricsTextAlignment;
         target.CoverPosition = source.CoverPosition;
         target.XOffset = source.XOffset;
@@ -2485,6 +2490,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         public double WindowWidth { get; set; }
         public double FloatingWindowWidth { get; set; }
         public LyricsHorizontalAnchor HorizontalAnchor { get; set; }
+        public bool TaskbarAvoidanceEnabled { get; set; }
         public LyricsTextAlignment LyricsTextAlignment { get; set; }
         public CoverPosition CoverPosition { get; set; }
         public double XOffset { get; set; }

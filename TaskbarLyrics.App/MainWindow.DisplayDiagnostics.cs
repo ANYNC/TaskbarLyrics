@@ -22,5 +22,5 @@ public partial class MainWindow
         $"Disposed={_isDisposed} RecreateRequested={_windowRecreationRequested} " +
         $"WebReady={_isWebViewReady} DocumentReady={_isWebDocumentReady} Initializing={_isWebViewInitializing} " +
         $"ContentVisible={_isLyricsContentVisible} Region={_regionVisibility.Phase} " +
-        $"SurfaceHidden={_embeddedTaskbarAnchor.IsSurfaceHidden}";
+        $"TaskbarAvoidanceEnabled={_currentSettings.TaskbarAvoidanceEnabled}";
 }

@@ -288,6 +288,8 @@ public sealed class AppSettings
 
     public LyricsHorizontalAnchor HorizontalAnchor { get; set; } = LyricsHorizontalAnchor.Left;
 
+    public bool TaskbarAvoidanceEnabled { get; set; } = true;
+
     public LyricsTextAlignment LyricsTextAlignment { get; set; } = LyricsTextAlignment.Left;
 
     public CoverPosition CoverPosition { get; set; } = CoverPosition.Left;
@@ -508,6 +510,7 @@ public sealed class AppSettings
             ControlPanelTriggerCover = defaults.ControlPanelTriggerCover;
             ControlPanelTriggerLyrics = defaults.ControlPanelTriggerLyrics;
             HorizontalAnchor = defaults.HorizontalAnchor;
+            TaskbarAvoidanceEnabled = defaults.TaskbarAvoidanceEnabled;
             XOffset = defaults.XOffset;
             YOffset = defaults.YOffset;
             ShowBackground = defaults.ShowBackground;

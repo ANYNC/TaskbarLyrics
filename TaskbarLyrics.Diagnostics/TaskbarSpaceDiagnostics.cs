@@ -248,27 +248,31 @@ internal static class TaskbarSpaceDiagnostics
             GetWindowRect(childHandle, out var relocated);
             var safetyGapPixels = 8 * TaskbarPlacementService.GetPixelsPerDip(child);
             Require(relocated.Right > relocated.Left && relocated.Left >= parentRect.Left + 300 + safetyGapPixels - 1 &&
-                relocated.Right <= parentRect.Right && !anchor.IsSurfaceHidden,
+                relocated.Right <= parentRect.Right,
                 "Narrow left region did not relocate to the available right region.");
             results.Add(new { Stage = "RelocateAcrossControls", Passed = true, Left = relocated.Left, Width = relocated.Right - relocated.Left });
 
+            settings.TaskbarAvoidanceEnabled = false;
+            Require(anchor.Position(childHandle, parentHandle, child, settings, null), "Disabled avoidance positioning failed.");
+            GetWindowRect(childHandle, out var configured);
+            settings.TaskbarAvoidanceEnabled = true;
             spaceStage = 1;
             clock.Advance(TimeSpan.FromMilliseconds(500));
             provider.GetOccupiedBounds(parentHandle, ToRect(parentRect));
             await provider.PendingRead;
             anchor.Position(childHandle, parentHandle, child, settings, null);
-            GetWindowRect(childHandle, out var hidden);
-            Require(hidden.Right == hidden.Left && hidden.Bottom == hidden.Top && anchor.IsSurfaceHidden,
-                "Fully occupied taskbar did not hide the native surface.");
+            GetWindowRect(childHandle, out var fallback);
+            Require(fallback.Equals(configured) && fallback.Right > fallback.Left,
+                "Fully occupied taskbar did not use the configured fallback bounds.");
             spaceStage = 2;
             clock.Advance(TimeSpan.FromMilliseconds(500));
             provider.GetOccupiedBounds(parentHandle, ToRect(parentRect));
             await provider.PendingRead;
             anchor.Position(childHandle, parentHandle, child, settings, null);
             GetWindowRect(childHandle, out var restored);
-            Require(restored.Right > restored.Left && restored.Left == parentRect.Left && restored.Right < parentRect.Left + 400 && !anchor.IsSurfaceHidden,
+            Require(restored.Right > restored.Left && restored.Left == parentRect.Left && restored.Right < parentRect.Left + 400,
                 "Negative-origin surface did not recover into the free interval.");
-            results.Add(new { Stage = "NoSpaceAndNegativeOriginRecovery", Passed = true, RestoredWidth = restored.Right - restored.Left });
+            results.Add(new { Stage = "NoSpaceFallbackAndNegativeOriginRecovery", Passed = true, RestoredWidth = restored.Right - restored.Left });
 
             settings.YOffset = 40;
             foreach (var (side, left, top) in new[] { ("Left", -1400, -600), ("Right", 1900, 40) })
@@ -285,7 +289,7 @@ internal static class TaskbarSpaceDiagnostics
                 GetWindowRect(childHandle, out var relocatedSidebar);
                 Require(relocatedSidebar.Right - relocatedSidebar.Left == parentRect.Right - parentRect.Left &&
                     relocatedSidebar.Left == parentRect.Left && relocatedSidebar.Bottom <= parentRect.Bottom &&
-                    relocatedSidebar.Top >= parentRect.Top + 308 * sidebarScale - 1 && !anchor.IsSurfaceHidden,
+                    relocatedSidebar.Top >= parentRect.Top + 308 * sidebarScale - 1,
                     $"{side} sidebar did not relocate below the occupied controls.");
 
                 results.Add(new

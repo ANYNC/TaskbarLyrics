@@ -39,6 +39,7 @@
         lyricsTextAlignment: normalizeLyricsTextAlignment(nextState?.lyricsTextAlignment),
         singleLineLyrics: nextState?.singleLineLyrics === true,
         showLyricSearchStatus: nextState?.showLyricSearchStatus !== false,
+        taskbarAvoidanceEnabled: nextState?.taskbarAvoidanceEnabled !== false,
         coverPosition: nextState?.coverPosition === "Right" ? "Right" : "Left",
         embeddedPanelBrightness: Number.isFinite(Number(nextState?.embeddedPanelBrightness)) ? Math.min(1, Math.max(0, Number(nextState.embeddedPanelBrightness))) : panelMaterialDefaults.embeddedPanelBrightness,
         embeddedPanelTintOpacity: Number.isFinite(Number(nextState?.embeddedPanelTintOpacity)) ? Math.min(1, Math.max(0, Number(nextState.embeddedPanelTintOpacity))) : panelMaterialDefaults.embeddedPanelTintOpacity,

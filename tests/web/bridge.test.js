@@ -10,7 +10,7 @@ const persistedSettings = [
   "showLyricTranslation", "showLyricSearchStatus", "enableWordScanning", "spectrumDisplayMode", "lyricsLayoutScalePercent", "fontSize", "showCover", "singleLineLyrics",
   "enableControlPanel", "controlPanelTriggerMethod", "controlPanelTriggerCover", "controlPanelTriggerLyrics", "enableFloatingControlPanel", "floatingPanelBrightness", "floatingPanelTintOpacity", "floatingPanelBlurAmount", "embeddedPanelBrightness", "embeddedPanelTintOpacity", "embeddedPanelBlurAmount", "coverPosition", "coverSize", "coverGap", "coverCornerRadius", "fontFamily", "fontWeight", "lyricsTextAlignment", "foregroundColorMode",
   "showTextShadow", "toolWindowTheme", "showBackground", "showFloatingBackground", "backgroundOpacity", "showBorder", "windowWidth",
-  "xOffset", "yOffset", "floatingWindowLayer", "startWithWindows", "autoCheckUpdates"
+  "taskbarAvoidanceEnabled", "xOffset", "yOffset", "floatingWindowLayer", "startWithWindows", "autoCheckUpdates"
 ];
 
 async function createSettingsDom({ deferAnimationFrames = false, reducedMotion = false } = {}) {
@@ -1335,6 +1335,38 @@ describe("settings WebView bridge", () => {
       payload: { settings: { autoHideWhenNoPlayback: true }, fonts: [] }
     });
     expect(toggle.checked).toBe(true);
+  });
+
+  it("defaults taskbar avoidance on, posts V1 changes, and keeps it embedded-only", async () => {
+    const { dom, sent, script } = await createSettingsDom();
+    try {
+      const document = dom.window.document;
+      dom.window.eval(script);
+      const hydrate = settings => dom.window.settingsApp.receive({
+        version: 1, type: "settingsState", payload: { settings, fonts: [] }
+      });
+      hydrate({ useFloatingWindow: false });
+      const toggle = document.querySelector('input[data-setting="taskbarAvoidanceEnabled"]');
+      const row = toggle.closest('[data-presentation-mode]');
+      expect(toggle.checked).toBe(true);
+      expect(toggle.disabled).toBe(false);
+      expect(row.hidden).toBe(false);
+      toggle.checked = false;
+      toggle.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+      expect(sent.at(-1)).toEqual({
+        version: 1, type: "update", payload: { key: "taskbarAvoidanceEnabled", value: false }
+      });
+      hydrate({ useFloatingWindow: true, taskbarAvoidanceEnabled: false });
+      expect(toggle.checked).toBe(false);
+      expect(toggle.disabled).toBe(true);
+      expect(row.hidden).toBe(true);
+      hydrate({ useFloatingWindow: false, taskbarAvoidanceEnabled: false });
+      expect(toggle.checked).toBe(false);
+      expect(toggle.disabled).toBe(false);
+      toggle.checked = true;
+      toggle.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+      expect(sent.at(-1).payload).toEqual({ key: "taskbarAvoidanceEnabled", value: true });
+    } finally { dom.window.close(); }
   });
 
   it("renders connected displays and posts mode and multi-selection updates", async () => {

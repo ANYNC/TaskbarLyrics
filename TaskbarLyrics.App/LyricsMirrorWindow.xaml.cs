@@ -14,7 +14,6 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
     private static readonly string[] InitialScriptSlots = ["style", "lyrics", "cover", "spectrumTuning", "spectrum"];
     private readonly Dictionary<string, string> _pendingScripts = new(StringComparer.Ordinal);
     private readonly EmbeddedTaskbarAnchor _embeddedTaskbarAnchor = new();
-    private readonly Action? _onSurfaceHidden;
     private readonly SmartTopmostController _smartTopmostController;
     private readonly Action<Window, Rect, DisplayMonitor, Action<bool>, ControlPanelTriggerArea, ControlPanelActivation> _onCoverClicked;
     private readonly FloatingWindowPlacement _floatingPlacement;
@@ -29,12 +28,10 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
     private readonly LyricsDisplayDiagnostics _displayDiagnostics;
 
     public LyricsMirrorWindow(DisplayMonitor displayMonitor, Action<Window, Rect, DisplayMonitor, Action<bool>, ControlPanelTriggerArea, ControlPanelActivation> onCoverClicked,
-        IAppCompositionRoot compositionRoot, Action? onSurfaceHidden = null)
+        IAppCompositionRoot compositionRoot)
     {
         InitializeComponent();
         _displayDiagnostics = new LyricsDisplayDiagnostics(this);
-        _onSurfaceHidden = onSurfaceHidden;
-        _embeddedTaskbarAnchor.SurfaceHidden += OnEmbeddedSurfaceHidden;
         _embeddedTaskbarAnchor.AttachmentLost += OnEmbeddedAttachmentLost;
         _regionVisibility = new LyricsRegionVisibilityController(Dispatcher,
             (generation, phase) => TaskObserver.Observe(SendRegionVisibilityAsync(generation, phase), "mirror region visibility"),
@@ -63,19 +60,16 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
     internal bool IsEmbeddedInTaskbar => _embeddedTaskbarAnchor.IsAttached;
     internal bool NeedsWindowReplacement { get; private set; }
     internal event EventHandler? RecreateWindowRequested;
-    internal bool IsEmbeddedSurfaceHidden => _embeddedTaskbarAnchor.IsSurfaceHidden;
     internal DisplayMonitor DisplayMonitor => _settings.UseFloatingWindow ? _floatingPlacement.Display ?? _displayMonitor : _displayMonitor;
-    internal bool IsContentVisible => _isContentVisible && _isWebReady && _regionVisibility.IsInteractive && !IsEmbeddedSurfaceHidden;
+    internal bool IsContentVisible => _isContentVisible && _isWebReady && _regionVisibility.IsInteractive;
     internal LyricsRegionVisibilityController RegionVisibility => _regionVisibility;
-
-    private void OnEmbeddedSurfaceHidden(object? sender, EventArgs e) => _onSurfaceHidden?.Invoke();
 
     internal void RecordDisplayDiagnostics(string stage, bool capture = false)
     {
         if (!LyricsDisplayDiagnostics.Enabled) return;
         string ReadState() => $"Target='{_displayMonitor.Id}' Bounds={_displayMonitor.Bounds} " +
             $"Disposed={_isDisposed} RecreateRequested={NeedsWindowReplacement} WebReady={_isWebReady} " +
-            $"ContentVisible={_isContentVisible} Region={_regionVisibility.Phase} SurfaceHidden={IsEmbeddedSurfaceHidden}";
+            $"ContentVisible={_isContentVisible} Region={_regionVisibility.Phase} TaskbarAvoidanceEnabled={_settings.TaskbarAvoidanceEnabled}";
         _displayDiagnostics.Record(stage, ReadState());
         if (capture)
             TaskObserver.Observe(_displayDiagnostics.CaptureAsync(stage, () =>
@@ -251,7 +245,6 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
             core.WebMessageReceived -= OnWebMessageReceived;
         }
         LyricsWebView.Dispose();
-        _embeddedTaskbarAnchor.SurfaceHidden -= OnEmbeddedSurfaceHidden;
         _embeddedTaskbarAnchor.AttachmentLost -= OnEmbeddedAttachmentLost;
         _embeddedTaskbarAnchor.Dispose();
         _smartTopmostController.Dispose();
@@ -304,7 +297,7 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
                 _regionVisibility.Complete(generation, visible);
                 return;
             }
-            if (!_isContentVisible || IsEmbeddedSurfaceHidden || !_regionVisibility.IsInteractive || !(_settings.UseFloatingWindow || _settings.GetEnableControlPanel())) return;
+            if (!_isContentVisible || !_regionVisibility.IsInteractive || !(_settings.UseFloatingWindow || _settings.GetEnableControlPanel())) return;
             if (!LyricsWebMessageRouter.TryGetControlPanelTrigger(
                     message, out var click, out var area, out var activation) ||
                 !_settings.CanTriggerControlPanel(area, activation))

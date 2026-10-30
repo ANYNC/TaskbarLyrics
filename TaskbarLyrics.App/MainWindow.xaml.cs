@@ -118,7 +118,6 @@ public partial class MainWindow : Window, IDisposable
     {
         InitializeComponent();
         _displayDiagnostics = new LyricsDisplayDiagnostics(this);
-        _embeddedTaskbarAnchor.SurfaceHidden += OnEmbeddedSurfaceHidden;
         _embeddedTaskbarAnchor.AttachmentLost += OnEmbeddedAttachmentLost;
         _regionVisibility = new LyricsRegionVisibilityController(Dispatcher,
             (generation, phase) => TaskObserver.Observe(ExecuteWebScriptAsync(LyricsWebViewScriptFactory.SetRegionVisibility(
@@ -446,7 +445,6 @@ public partial class MainWindow : Window, IDisposable
         ControlPanelTriggerArea area = ControlPanelTriggerArea.Cover, ControlPanelActivation activation = ControlPanelActivation.Click)
     {
         if (!_regionVisibility.IsInteractive || !_currentSettings.CanTriggerControlPanel(area, activation)) return;
-        if (source is LyricsMirrorWindow mirror ? mirror.IsEmbeddedSurfaceHidden : _embeddedTaskbarAnchor.IsSurfaceHidden) return;
         if (_currentSettings.UseFloatingWindow)
         {
             _floatingControls?.ToggleLock(source ?? this);
@@ -502,8 +500,6 @@ public partial class MainWindow : Window, IDisposable
         _controlPanelWindow?.HidePanel(immediate: !animate);
         _floatingControls?.Close();
     }
-
-    private void OnEmbeddedSurfaceHidden(object? sender, EventArgs e) => CloseControlPanel();
 
     private LyricsControlPanelWindow CreateControlPanelWindow()
     {
@@ -680,7 +676,6 @@ public partial class MainWindow : Window, IDisposable
         _lyricSyncService.Dispose();
         _localMediaCoverProvider?.Dispose();
         _audioSpectrumService.Dispose();
-        _embeddedTaskbarAnchor.SurfaceHidden -= OnEmbeddedSurfaceHidden;
         _embeddedTaskbarAnchor.AttachmentLost -= OnEmbeddedAttachmentLost;
         _embeddedTaskbarAnchor.Dispose();
         _smartTopmostController.Dispose();
