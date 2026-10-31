@@ -31,6 +31,11 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
     private bool _isWebReady;
     private bool _isNavigationReady;
     private bool _isClosed;
+    private long _updateStatusSequence;
+
+
+    private static AppUpdateService? UpdateService => (System.Windows.Application.Current as App)?.Updates;
+
     private Stopwatch? _closeStopwatch;
     private bool _isTrackOffsetRefreshRunning;
     private bool _isRuntimeStateRefreshRunning;
@@ -82,6 +87,8 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         StateChanged += SettingsWindow_StateChanged;
         Closing += SettingsWindow_Closing;
         Closed += SettingsWindow_Closed;
+        UpdateChecker.Changed += OnUpdateChanged;
+        if (UpdateService is { } updates) updates.Changed += OnUpdateActionChanged;
         NativeWindowTheme.ThemeChanged += OnWindowThemeChanged;
         SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
     }
@@ -135,6 +142,10 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
     private void SettingsWindow_Closed(object? sender, EventArgs e)
     {
         _isClosed = true;
+        UpdateChecker.Changed -= OnUpdateChanged;
+        if (UpdateService is { } updates) updates.Changed -= OnUpdateActionChanged;
+
+
         _isWebReady = false;
         LogCloseStage("Closed.Begin");
         var playerDiscoveryCancellation = Interlocked.Exchange(ref _playerSessionDiscoveryCancellation, null);
@@ -295,9 +306,11 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 _isNavigationReady = true;
                 await PushSettingsToWebAsync();
                 await PushWindowStateToWebAsync();
+                if (UpdateChecker.Current is { } update) await PushCheckedUpdateAsync(update);
                 await PushPendingNavigationAsync();
                 await PushPendingSpectrumDisplayModeAsync();
                 await PushSpectrumCaptureStateAsync(force: true);
+                if (UpdateChecker.Current is { } notesResult) await LoadUpdateNotesAsync(notesResult);
                 break;
             case "update":
                 ApplyWebSettingUpdate(message.Key, message.Value);
@@ -467,6 +480,22 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 {
                     lyricsApp.ShowLyricsWindow();
                 }
+                break;
+            case "downloadUpdate":
+            case "reinstallUpdate":
+                if (SettingsWebMessageRouter.IsEmptyCommand(message) && UpdateService is { } downloader)
+                {
+                    await downloader.DownloadAsync(message.Type == "reinstallUpdate");
+                    if (downloader.Current?.State == "readyToRestart" && System.Windows.Application.Current is App autoUpdateApp)
+                        await downloader.ApplyAsync(autoUpdateApp.ExitForUpdateAsync);
+                }
+                break;
+            case "cancelUpdateDownload":
+                if (SettingsWebMessageRouter.IsEmptyCommand(message)) UpdateService?.Cancel();
+                break;
+            case "applyUpdate":
+                if (SettingsWebMessageRouter.IsEmptyCommand(message) && UpdateService is { } updater && System.Windows.Application.Current is App updateApp)
+                    await updater.ApplyAsync(updateApp.ExitForUpdateAsync);
                 break;
             case "checkForUpdates":
                 await CheckForUpdatesAsync();
@@ -1359,7 +1388,6 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             ShowLyricsOnStartup = _settings.ShowLyricsOnStartup,
             AutoHideWhenNoPlayback = _settings.AutoHideWhenNoPlayback,
             StartWithWindows = _settings.StartWithWindows,
-            AutoCheckUpdates = _settings.AutoCheckUpdates,
             ShowLyricTranslation = _settings.ShowLyricTranslation,
             ShowLyricSearchStatus = _settings.ShowLyricSearchStatus,
             LyricsFallback = _settings.GetLyricsFallback(),
@@ -1657,9 +1685,6 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             case "startWithWindows":
                 _settings.StartWithWindows = ReadBool(element, _settings.StartWithWindows);
                 StartupService.SetEnabled(_settings.StartWithWindows);
-                break;
-            case "autoCheckUpdates":
-                _settings.AutoCheckUpdates = ReadBool(element, _settings.AutoCheckUpdates);
                 break;
             case "showLyricTranslation":
                 _settings.ShowLyricTranslation = ReadBool(element, _settings.ShowLyricTranslation);
@@ -2052,8 +2077,88 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             App.IsSystemUiUsingLightTheme());
     }
 
+    private void OnUpdateChanged(UpdateCheckResult result)
+    {
+        if (_isClosed) return;
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            if (!_isClosed && ReferenceEquals(UpdateChecker.Current, result))
+            {
+                TaskObserver.Observe(PushCheckedUpdateAsync(result), "update status notification");
+                TaskObserver.Observe(LoadUpdateNotesAsync(result), "automatic update release notes");
+            }
+        }));
+    }
+
+    private void OnUpdateActionChanged()
+    {
+        if (UpdateChecker.Current is { } result)
+        {
+            OnUpdateChanged(result);
+            return;
+        }
+
+        if (_isClosed || UpdateService?.Current is not { } action) return;
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            if (_isClosed) return;
+            TaskObserver.Observe(PushUpdateStatusToWebAsync(new UpdateStatusPayload
+            {
+                State = action.State,
+                CurrentVersion = UpdateChecker.GetCurrentVersion(),
+                ProgressPercent = action.Progress,
+                CanCancel = action.State is "downloading" or "verifying",
+                OperationKind = action.OperationKind,
+                ReasonCode = action.ErrorCode,
+                Message = action.ErrorCode is { } errorCode ? Text.T($"Update_Reason_{errorCode}") : ""
+            }), "standalone update action status");
+        }));
+    }
+
+    private Task PushCheckedUpdateAsync(UpdateCheckResult result)
+    {
+        var action = UpdateService?.Current;
+        var asset = AppUpdateService.SelectAsset(result);
+        var supported = UpdateService?.Supported == true;
+        var notes = result.NotesTask?.IsCompletedSuccessfully == true ? result.NotesTask.Result : null;
+        return PushUpdateStatusToWebAsync(new UpdateStatusPayload
+        {
+            State = action?.State ?? (result.HasUpdate ? "available" : "latest"),
+            HasUpdate = result.HasUpdate,
+            Message = action is null ? (result.HasUpdate
+                ? notes?.IsCumulative == true
+                    ? Text.Format("Update_CumulativeDetected", result.CurrentVersion, result.Version)
+                    : Text.T("Update_Detected")
+                : Text.T("UI_YouAreUpToDate")) : "",
+            Version = result.Version,
+            Url = result.Url,
+            CurrentVersion = result.CurrentVersion,
+            CanApply = action?.State == "readyToRestart",
+            CanCancel = action?.State is "downloading" or "verifying",
+            CanDownload = supported && asset is not null && result.HasUpdate,
+            CanReinstall = supported && asset is not null && !result.HasUpdate,
+            DownloadSizeBytes = asset?.Size,
+            ProgressPercent = action?.Progress,
+            OperationKind = action?.OperationKind ?? "upgrade",
+            ReasonCode = !supported ? "Unsupported" : asset is null ? "AssetUnavailable" : action?.ErrorCode,
+            ReleaseNotesHtml = notes?.Html,
+            ReleaseNotes = notes?.Markdown,
+            NotesComplete = notes?.Complete,
+            IsCumulativeUpdate = notes?.IsCumulative
+        });
+    }
+    private async Task LoadUpdateNotesAsync(UpdateCheckResult result)
+    {
+        if (result.Release is not { } release) return;
+        Task<UpdateNotes> notesTask;
+        lock (result) notesTask = result.NotesTask ??= UpdateReleaseNotes.LoadAsync(release, result.CurrentVersion);
+        await notesTask;
+        if (!_isClosed && ReferenceEquals(UpdateChecker.Current, result)) await PushCheckedUpdateAsync(result);
+    }
     private async Task CheckForUpdatesAsync()
     {
+        if (UpdateService?.IsBusy == true) return;
+        UpdateService?.ResetForCheck();
         await PushUpdateStatusToWebAsync(new UpdateStatusPayload
         {
             State = "checking",
@@ -2062,6 +2167,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
 
         try
         {
+
             var result = await UpdateChecker.CheckLatestAsync();
             if (result.State == UpdateCheckState.Error)
             {
@@ -2073,15 +2179,8 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 return;
             }
 
-            await PushUpdateStatusToWebAsync(new UpdateStatusPayload
-            {
-                State = result.HasUpdate ? "available" : "latest",
-                Message = result.HasUpdate
-                    ? Text.Format("Update_Available", result.Version, result.CurrentVersion)
-                    : Text.Format("Update_Current", result.CurrentVersion),
-                Version = result.Version,
-                Url = result.Url
-            });
+            await PushCheckedUpdateAsync(result);
+            await LoadUpdateNotesAsync(result);
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or NotSupportedException)
         {
@@ -2095,6 +2194,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
 
     private async Task PushUpdateStatusToWebAsync(UpdateStatusPayload payload)
     {
+        payload.Sequence = Interlocked.Increment(ref _updateStatusSequence);
         if (!_isWebReady || SettingsWebView.CoreWebView2 is null)
         {
             return;
@@ -2144,9 +2244,15 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
     private async Task<bool> SaveSettingsAndNotifyWebAsync()
     {
         var success = SaveSettings();
+        await NotifySettingsSaveResultAsync(success);
+        return success;
+    }
+
+    private async Task NotifySettingsSaveResultAsync(bool success)
+    {
         if (!_isWebReady || SettingsWebView.CoreWebView2 is null)
         {
-            return success;
+            return;
         }
 
         await SettingsWebView.ExecuteScriptAsync(
@@ -2154,7 +2260,6 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 "settingsApp",
                 "settingsSaveResult",
                 new { success }));
-        return success;
     }
 
     private static bool ReadBool(JsonElement element, bool fallback)
@@ -2304,7 +2409,6 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         target.ShowLyricsOnStartup = source.ShowLyricsOnStartup;
         target.AutoHideWhenNoPlayback = source.AutoHideWhenNoPlayback;
         target.StartWithWindows = source.StartWithWindows;
-        target.AutoCheckUpdates = source.AutoCheckUpdates;
         target.LastUpdateCheckUtc = source.LastUpdateCheckUtc;
         target.LastNotifiedUpdateVersion = source.LastNotifiedUpdateVersion;
         target.ShowLyricTranslation = source.ShowLyricTranslation;
@@ -2473,7 +2577,6 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         public bool ShowLyricsOnStartup { get; set; }
         public bool AutoHideWhenNoPlayback { get; set; }
         public bool StartWithWindows { get; set; }
-        public bool AutoCheckUpdates { get; set; }
         public bool ShowLyricTranslation { get; set; }
         public bool ShowLyricSearchStatus { get; set; }
         public LyricsFallbackSettings LyricsFallback { get; set; } = new();
@@ -2578,6 +2681,21 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
 
     private sealed class UpdateStatusPayload
     {
+        public long Sequence { get; set; }
+        public string CurrentVersion { get; set; } = "";
+        public bool CanApply { get; set; }
+        public bool CanCancel { get; set; }
+        public bool CanDownload { get; set; }
+        public bool CanReinstall { get; set; }
+        public long? DownloadSizeBytes { get; set; }
+        public double? ProgressPercent { get; set; }
+        public string OperationKind { get; set; } = "upgrade";
+        public string? ReasonCode { get; set; }
+        public string? ReleaseNotesHtml { get; set; }
+        public string? ReleaseNotes { get; set; }
+        public bool? NotesComplete { get; set; }
+        public bool? IsCumulativeUpdate { get; set; }
+        public bool? HasUpdate { get; set; }
         public string State { get; set; } = "";
 
         public string Message { get; set; } = "";

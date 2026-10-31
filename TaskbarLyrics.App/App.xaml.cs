@@ -12,8 +12,8 @@ namespace TaskbarLyrics.App;
 
 public partial class App : System.Windows.Application, IDisposable
 {
-    private static readonly TimeSpan AutoUpdateCheckDelay = TimeSpan.FromSeconds(8);
-    private static readonly TimeSpan AutoUpdateCheckInterval = TimeSpan.FromDays(1);
+    private AutomaticUpdateScheduler? _updateScheduler;
+
 
     private SettingsStore? _settingsStore;
     private TrayService? _trayService;
@@ -31,6 +31,8 @@ public partial class App : System.Windows.Application, IDisposable
 
     public AppSettings Settings { get; private set; } = new();
 
+    internal AppUpdateService? Updates => _compositionRoot?.Updates;
+    internal Task ExitForUpdateAsync() => ExitApplicationAsync();
     public bool IsExiting { get; private set; }
     public bool UserWantsLyricsVisible { get; private set; }
 
@@ -124,7 +126,9 @@ public partial class App : System.Windows.Application, IDisposable
         StartActivationServer();
         SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
         SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
-        TaskObserver.Observe(RunAutomaticUpdateCheckAsync(), "automatic update check");
+        TaskObserver.Observe(UpdateStartup.ConfirmAsync(Environment.GetCommandLineArgs().Skip(1).ToArray()), "update startup confirmation");
+        _updateScheduler = new AutomaticUpdateScheduler(RunAutomaticUpdateCheckAsync);
+        _updateScheduler.SetEnabled(true);
         if (!Settings.HasSeenGettingStarted)
         {
             OpenSettingsWindow("gettingStarted", focusCurrentTrack: false);
@@ -148,6 +152,7 @@ public partial class App : System.Windows.Application, IDisposable
         }
 
         LogShutdownStage("Dispose.Begin");
+        _updateScheduler?.Dispose();
         _activationServerCancellation?.Cancel();
         _activationServerCancellation?.Dispose();
         SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
@@ -260,49 +265,28 @@ public partial class App : System.Windows.Application, IDisposable
             };
     }
 
-    private async Task RunAutomaticUpdateCheckAsync()
+    private async Task RunAutomaticUpdateCheckAsync(CancellationToken cancellationToken)
     {
-        if (!Settings.AutoCheckUpdates)
-        {
-            return;
-        }
-
-        var now = DateTimeOffset.UtcNow;
-        if (Settings.LastUpdateCheckUtc is { } lastCheck &&
-            now - lastCheck < AutoUpdateCheckInterval)
-        {
-            return;
-        }
-
         try
         {
-            await Task.Delay(AutoUpdateCheckDelay);
-            if (IsExiting || !Settings.AutoCheckUpdates)
-            {
-                return;
-            }
-
-            var result = await UpdateChecker.CheckLatestAsync();
-            Settings.LastUpdateCheckUtc = DateTimeOffset.UtcNow;
-
-            if (result.HasUpdate &&
-                !string.Equals(Settings.LastNotifiedUpdateVersion, result.Version, StringComparison.OrdinalIgnoreCase))
+            while (Updates?.IsBusy == true) await Task.Delay(TimeSpan.FromMinutes(1), cancellationToken);
+            var result = await UpdateChecker.CheckLatestAsync(cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (result.HasUpdate && !string.Equals(Settings.LastNotifiedUpdateVersion, result.Version, StringComparison.OrdinalIgnoreCase))
             {
                 Settings.LastNotifiedUpdateVersion = result.Version;
-                _trayService?.ShowNotification(
-                    Text.T("UI_TaskbarLyricsUpdateAvailable"),
+                _trayService?.ShowNotification(Text.T("UI_TaskbarLyricsUpdateAvailable"),
                     Text.Format("Update_AvailableNotification", result.Version, result.CurrentVersion));
             }
-
-            _settingsStore?.Save(Settings);
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { return; }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or NotSupportedException)
         {
-            Settings.LastUpdateCheckUtc = DateTimeOffset.UtcNow;
-            _settingsStore?.Save(Settings);
+            Log.Debug($"Automatic update check failed: {ex.GetType().Name}");
         }
+        Settings.LastUpdateCheckUtc = DateTimeOffset.UtcNow;
+        _settingsStore?.Save(Settings);
     }
-
     internal static void ApplyStartupForegroundColor(AppSettings settings)
     {
         ForegroundColorPolicy.ApplyStartup(settings, IsSystemUiUsingLightTheme());

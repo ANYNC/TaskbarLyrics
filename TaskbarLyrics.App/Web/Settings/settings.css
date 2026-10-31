@@ -753,10 +753,24 @@
     .about-copy .easter-egg::before { transform: translate(-50%, -50%) rotate(28deg); }
     .about-copy .easter-egg::after { transform: translate(-50%, -50%) rotate(-28deg); }
     .update-summary { min-height: 62px; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 18px; padding: 12px 18px; border-top: 1px solid var(--border); }
-    .update-status { display: grid; gap: 3px; }
-    .update-status strong { font-size: 11px; font-weight: 600; }
-    .update-status small { color: var(--muted-foreground); font-size: 11px; }
-    .update-actions { display: flex; align-items: center; gap: 8px; }
+    .update-summary strong { font-size: 12px; font-weight: 600; }
+    .update-external-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
+    .update-external-actions [hidden] { display: none !important; }
+    .update-inline-operation { display: grid; grid-template-columns: minmax(115px, auto) minmax(80px, 1fr) auto auto; align-items: center; gap: 10px; padding: 0 18px 12px; color: var(--muted-foreground); font-size: 11px; }
+    .update-inline-operation[hidden], .update-inline-operation [hidden] { display: none !important; }
+    .update-inline-operation progress { width: 100%; accent-color: var(--primary); }
+    .update-inline-operation small { white-space: nowrap; }
+    .update-dialog { width: min(820px, calc(100vw - 32px)); height: min(740px, calc(100vh - 32px)); }
+    .update-dialog[open] { grid-template-rows: minmax(0, 1fr) auto; }
+    .update-dialog-body { padding: 24px; }
+    .update-dialog-body h2 { margin-bottom: 8px; }
+    .update-dialog-status { margin: 0 0 12px !important; color: var(--foreground) !important; font-size: 12px !important; }
+    .update-dialog-detail { display: block; margin: 0 0 12px; color: var(--muted-foreground); overflow-wrap: anywhere; }
+    .update-extra { display: grid; gap: 8px; margin: 12px 0; }
+    .update-extra progress { width: 100%; accent-color: var(--primary); }
+    .update-extra small { color: var(--muted-foreground); overflow-wrap: anywhere; }
+    .update-dialog-actions { align-items: center; }
+    .update-dialog-actions [hidden] { display: none !important; }
     .spinner { width: 13px; height: 13px; display: inline-block; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin .7s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
     .resource-list { display: grid; }
@@ -1015,4 +1029,45 @@
       .display-settings-column .layout-scale-row > label { padding-top: 0; }
       .display-settings-column .slider-number-control { max-width: none; }
       .display-settings-column .monitor-mode, .panel-trigger-areas { justify-self: start; }
+    }
+
+    .nav-item[data-nav="about"] { position: relative; }
+    .nav-item[data-nav="about"].has-update::before {
+      content: ""; position: absolute; width: 6px; height: 6px;
+      left: 24px; top: 8px; border-radius: 50%; background: #dc2626;
+      outline: 2px solid var(--sidebar-background, var(--background)); pointer-events: none;
+    }
+    @media (forced-colors: active) {
+      .nav-item[data-nav="about"].has-update::before { background: Highlight; forced-color-adjust: none; }
+    }
+    .release-notes { border-top: 1px solid var(--border); padding: 18px; overflow-wrap: anywhere; }
+
+    @media (max-width: 560px) { .update-dialog { width: calc(100vw - 20px); height: calc(100vh - 20px); } .update-summary { grid-template-columns: minmax(0, 1fr); } .update-external-actions { justify-content: flex-start; } .update-inline-operation { grid-template-columns: minmax(0, 1fr) auto; } .update-inline-operation progress { grid-column: 1 / -1; grid-row: 2; } }
+    .update-extra[hidden], .update-extra [hidden],
+    .release-notes[hidden], .release-notes [hidden] { display: none !important; }
+
+    .release-notes .markdown-body {
+      --fgColor-default: var(--foreground);
+      --fgColor-muted: var(--muted-foreground);
+      --fgColor-accent: var(--primary);
+      --bgColor-default: transparent;
+      --bgColor-muted: var(--secondary);
+      --bgColor-neutral-muted: var(--secondary);
+      --borderColor-default: var(--border);
+      --borderColor-muted: var(--border);
+      min-width: 0;
+      color: var(--foreground);
+      font-family: inherit;
+      font-size: 14px;
+      line-height: 1.65;
+    }
+    .release-notes .markdown-body img { height: auto; }
+    .release-notes .markdown-body p,
+    .release-notes .markdown-body li,
+    .release-notes .markdown-body blockquote,
+    .release-notes .markdown-body td,
+    .release-notes .markdown-body th {
+      color: inherit;
+      font-size: inherit;
+      line-height: inherit;
     }

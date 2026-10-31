@@ -140,7 +140,6 @@ public sealed class AppSettings
 
     public bool StartWithWindows { get; set; }
 
-    public bool AutoCheckUpdates { get; set; } = true;
 
     public DateTimeOffset? LastUpdateCheckUtc { get; set; }
 
