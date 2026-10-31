@@ -10,8 +10,9 @@ internal static class Program
     private static extern bool SetProcessDpiAwarenessContext(IntPtr value);
 
     [STAThread]
-    public static void Main()
+    public static void Main(string[] args)
     {
+        if (!UpdateStartup.CanStart(args)) return;
         SetProcessDpiAwarenessContext(PerMonitorV2AwarenessContext);
 
         if (!SingleInstanceService.TryClaimCurrentProcess())

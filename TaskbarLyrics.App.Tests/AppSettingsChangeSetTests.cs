@@ -184,19 +184,6 @@ public sealed class AppSettingsChangeSetTests
     }
 
     [Fact]
-    public void CreateWhenOnlyUpdatePreferenceChangesDoesNotApplyRuntimeServices()
-    {
-        var current = new AppSettings();
-        var next = current.Clone();
-        next.AutoCheckUpdates = !next.AutoCheckUpdates;
-
-        var changes = AppSettingsChangeSet.Create(current, next);
-
-        Assert.False(changes.RequiresLyricsWindowApply);
-        Assert.False(changes.GlobalMediaHotkeysChanged);
-    }
-
-    [Fact]
     public void CreateForInitialApplicationRequiresEveryRuntimeArea()
     {
         var settings = new AppSettings();

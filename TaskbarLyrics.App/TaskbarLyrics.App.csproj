@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\TaskbarLyrics.Core\TaskbarLyrics.Core.csproj" />
+    <ProjectReference Include="..\TaskbarLyrics.Updater\TaskbarLyrics.Updater.csproj" />
   </ItemGroup>
 
   <PropertyGroup>
@@ -24,6 +25,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="text.yaml" />
+    <EmbeddedResource Include="$(UpdaterPayload)" LogicalName="TaskbarLyrics.Updater.Payload" Condition="Exists('$(UpdaterPayload)')" />
     <EmbeddedResource Include="text.js" />
     <None Update="Web\**\*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

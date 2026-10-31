@@ -69,9 +69,11 @@
     let colorDraft = { h: 0, s: 0, v: 1, hex: "#FFFFFF" };
     let colorPointerActive = false;
     let updateState = "idle";
+    let updateSequence = -1;
+    let lastAvailableUpdateMessage = "";
     const reducedMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
     let repositoryUrl = "";
-    let updateReleaseUrl = "";
+    let updateReleaseUrl = "https://github.com/ANYNC/TaskbarLyrics/releases/latest";
     let activePlayerSourceId = null;
     const TRACK_OFFSET_PAGE_SIZE = 50;
     const TRACK_OFFSET_SEARCH_DEBOUNCE_MS = 200;
@@ -2032,24 +2034,211 @@
       $("[data-mode-value]").textContent = state.foregroundColor.toUpperCase();
     }
 
+    function renderReleaseNotes(html, fallback) {
+      const output = $("#releaseNotesContent");
+      const originalAttachments = new Map();
+      const attachmentPattern = new RegExp("https://github[.]com/user-attachments/assets/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})", "gi");
+      for (const match of (fallback || "").matchAll(attachmentPattern)) originalAttachments.set(match[1].toLowerCase(), match[0]);
+      function stableImageUrl(value) {
+        if (value == null) return null;
+        try {
+          const url = new URL(value);
+          if (url.protocol !== "https:" || url.username || url.password) return null;
+          if (url.hostname === "private-user-images.githubusercontent.com") {
+            const id = url.pathname.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)?.[0];
+            if (id && originalAttachments.has(id.toLowerCase())) return originalAttachments.get(id.toLowerCase());
+          }
+          return url.href;
+        } catch { return null; }
+      }
+      const template = document.createElement("template");
+      template.innerHTML = typeof html === "string" ? html.slice(0, 1024 * 1024) : "";
+      const allowed = new Set(["H1", "H2", "H3", "H4", "H5", "H6", "P", "BR", "HR", "UL", "OL", "LI", "STRONG", "B", "EM", "I", "DEL", "BLOCKQUOTE", "PRE", "CODE", "TABLE", "THEAD", "TBODY", "TR", "TH", "TD", "A", "IMG", "DIV", "SPAN", "KBD", "SAMP", "SUP", "SUB"]);
+      const dropped = new Set(["SCRIPT", "STYLE", "IFRAME", "OBJECT", "EMBED", "FORM", "INPUT", "BUTTON", "SVG", "MATH", "LINK", "META"]);
+      let count = 0;
+      function copy(source, target, depth) {
+        if (depth > 40) return;
+        for (const node of source.childNodes) {
+          if (++count > 10000) return;
+          if (node.nodeType === 3) { target.append(document.createTextNode(node.textContent)); continue; }
+          if (node.nodeType !== 1 || dropped.has(node.tagName)) continue;
+          if (!allowed.has(node.tagName)) { copy(node, target, depth + 1); continue; }
+          const safe = document.createElement(node.tagName.toLowerCase());
+          // Keep only the formatting classes used by the locally bundled GitHub stylesheet.
+          const classes = [...node.classList].filter(name => /^(?:highlight|heading-element|markdown-alert(?:-(?:note|tip|important|warning|caution|title))?|pl-[a-z0-9-]+|language-[a-z0-9-]+)$/.test(name));
+          if (classes.length) safe.className = classes.join(" ");
+          if (node.tagName === "IMG") {
+            const sourceUrl = stableImageUrl(node.getAttribute("data-canonical-src")) || stableImageUrl(node.getAttribute("src"));
+            if (!sourceUrl) continue;
+            safe.alt = node.getAttribute("alt") || "";
+            safe.setAttribute("loading", "lazy");
+            safe.setAttribute("decoding", "async");
+            safe.setAttribute("referrerpolicy", "no-referrer");
+            for (const dimension of ["width", "height"]) {
+              const value = Number(node.getAttribute(dimension));
+              if (Number.isInteger(value) && value > 0 && value <= 8192) safe.setAttribute(dimension, String(value));
+            }
+            safe.src = sourceUrl;
+          }
+          if (node.tagName === "A") {
+            try {
+              const url = new URL(node.getAttribute("href"));
+              if (url.protocol === "https:" && !url.username && !url.password) {
+                const destination = stableImageUrl(url.href);
+                safe.href = destination; safe.dataset.releaseUrl = destination;
+              }
+            } catch { /* Invalid or relative links remain plain content. */ }
+          }
+          copy(node, safe, depth + 1); target.append(safe);
+        }
+      }
+      const fragment = document.createDocumentFragment();
+      copy(template.content, fragment, 0);
+      if (!fragment.childNodes.length) fragment.append(document.createTextNode(fallback || ""));
+      output.replaceChildren(fragment);
+      $("#releaseNotesPanel").hidden = !output.textContent.trim() && !output.querySelector("img");
+    }
     function setUpdateStatus(payload = {}) {
+      if (Number.isSafeInteger(payload.sequence)) {
+        if (payload.sequence <= updateSequence) return;
+        updateSequence = payload.sequence;
+      }
+      const previousActionFocus = document.activeElement;
       const status = payload.state ?? "idle";
       updateState = status;
-      const title = $("#updateStatusTitle");
-      const detail = $("#updateStatusDetail");
+      if (typeof payload.hasUpdate === "boolean") {
+        const about = $('[data-nav="about"]');
+        about.classList.toggle("has-update", payload.hasUpdate);
+        const label = window.taskbarLyricsI18n.t(payload.hasUpdate ? "UI_AboutUpdateAvailable" : "UI_About");
+        about.setAttribute("aria-label", label);
+        about.dataset.tooltip = label;
+      }
+      const title = $("#updateDialogStatusTitle");
+      const externalTitle = $("#updateStatusTitle");
+      const detail = $("#updateDialogStatusDetail");
       const checkButton = $("#checkUpdateButton");
-      const releaseButton = $("#openReleaseButton");
-      const version = state?.appVersion ?? "--";
-      title.textContent = status === "checking" ? window.taskbarLyricsI18n.t("UI_CheckingForUpdates")
+      const actionButton = $("#updateActionButton");
+      const releaseButton = $("#updateReleaseButton");
+      const directButton = $("#updateDirectButton");
+      const reinstallButton = $("#updateReinstallButton");
+      const notesButton = $("#updateNotesButton");
+      const inlineOperation = $("#updateInlineOperation");
+      const inlineStatus = $("#updateInlineStatus");
+      const inlineProgress = $("#updateInlineProgress");
+      const inlineSize = $("#updateInlineSize");
+      const inlineCancel = $("#updateInlineCancel");
+
+      let nextUpdateTitle = status === "checking" ? window.taskbarLyricsI18n.t("UI_CheckingForUpdates")
         : status === "available" ? window.taskbarLyricsI18n.format("UI_NewVersionAvailable", payload.version ?? "")
         : status === "latest" ? window.taskbarLyricsI18n.t("UI_YouAreUpToDate")
         : status === "error" ? window.taskbarLyricsI18n.t("UI_UpdateCheckFailed")
         : window.taskbarLyricsI18n.t("UI_UpdatesNotCheckedYet");
-      detail.textContent = payload.message || window.taskbarLyricsI18n.format("UI_CurrentVersion_14", version);
-      checkButton.disabled = status === "checking";
-      checkButton.innerHTML = status === "checking" ? `<span class="spinner" aria-hidden="true"></span>${window.taskbarLyricsI18n.t("UI_Checking")}` : status === "available" ? window.taskbarLyricsI18n.t("UI_CheckAgain") : window.taskbarLyricsI18n.t("UI_CheckForUpdates");
-      releaseButton.hidden = status !== "available";
-      updateReleaseUrl = payload.url ?? "";
+      const transferring = ["downloading", "verifying"].includes(status);
+      const operationInProgress = ["downloading", "verifying", "readyToRestart", "preparing", "applying"].includes(status);
+      const failed = status === "error";
+      const actionableError = ["DownloadFailed", "ApplyFailed"].includes(payload.reasonCode);
+      const reinstall = payload.operationKind === "reinstall";
+      const canDownload = !!payload.canDownload;
+      if (typeof payload.url === "string" && payload.url) updateReleaseUrl = payload.url;
+
+      const externalMessage = status === "checking" ? (lastAvailableUpdateMessage || window.taskbarLyricsI18n.t("UI_CheckingForUpdates"))
+        : status === "available" ? (payload.message || window.taskbarLyricsI18n.t("Update_Detected"))
+        : status === "latest" ? window.taskbarLyricsI18n.t("UI_YouAreUpToDate")
+        : status === "error" ? (payload.message || window.taskbarLyricsI18n.t("UI_UpdateCheckFailed"))
+        : ["downloading", "verifying", "readyToRestart", "preparing", "applying", "canceled"].includes(status)
+          ? window.taskbarLyricsI18n.t(`Update_State_${status}`)
+          : window.taskbarLyricsI18n.t("UI_UpdatesNotCheckedYet");
+      if (status === "available") lastAvailableUpdateMessage = externalMessage;
+      else if (status === "latest" || status === "error") lastAvailableUpdateMessage = "";
+      externalTitle.textContent = externalMessage;
+      inlineOperation.hidden = !operationInProgress;
+      inlineStatus.textContent = operationInProgress ? window.taskbarLyricsI18n.t(`Update_State_${status}`) : "";
+      inlineProgress.hidden = !operationInProgress;
+      if (status === "downloading" && Number.isFinite(payload.progressPercent) && payload.progressPercent >= 0 && payload.progressPercent <= 100)
+        inlineProgress.value = payload.progressPercent;
+      else inlineProgress.removeAttribute("value");
+      inlineSize.hidden = !transferring || !Number.isFinite(payload.downloadSizeBytes) || payload.downloadSizeBytes <= 0;
+      inlineSize.textContent = inlineSize.hidden ? "" : window.taskbarLyricsI18n.format("Update_PackageSize", (payload.downloadSizeBytes / 1048576).toLocaleString(undefined, { maximumFractionDigits: 1 }));
+      inlineCancel.hidden = !transferring || payload.canCancel === false;
+      inlineCancel.disabled = payload.canCancel === false;
+
+      let action = "";
+      let actionText = "";
+      let actionEnabled = false;
+      let actionTitle = "";
+      if (status === "available") {
+        if (canDownload) { action = "downloadUpdate"; actionText = "Update_Download"; actionEnabled = true; }
+      } else if (status === "latest") {
+        if (payload.canReinstall) {
+          action = "reinstallUpdate";
+          actionText = "Update_Reinstall";
+          actionEnabled = true;
+          actionTitle = window.taskbarLyricsI18n.t("Update_ReinstallDetail");
+        }
+      } else if (status === "downloading" || status === "verifying") {
+        action = "cancelUpdateDownload";
+        actionText = "UI_Cancel";
+        actionEnabled = payload.canCancel !== false;
+      } else if (status === "readyToRestart") {
+        action = "";
+        actionText = "Update_State_readyToRestart";
+        actionEnabled = false;
+      } else if (failed) {
+        if (canDownload || payload.canReinstall) {
+          action = canDownload ? "downloadUpdate" : "reinstallUpdate";
+          actionText = "UI_Retry";
+          actionEnabled = true;
+        } else if (payload.reasonCode) actionTitle = window.taskbarLyricsI18n.t(`Update_Reason_${payload.reasonCode}`);
+      } else if (status === "canceled") {
+        if (canDownload) { action = "downloadUpdate"; actionText = "UI_Retry"; actionEnabled = true; }
+        else if (payload.canReinstall) { action = "reinstallUpdate"; actionText = "UI_Retry"; actionEnabled = true; }
+      } else if (status === "preparing" || status === "applying") {
+        actionText = `Update_State_${status}`;
+      }
+
+      actionButton.dataset.action = action;
+      actionButton.textContent = actionText ? window.taskbarLyricsI18n.t(actionText) : "";
+      actionButton.disabled = !actionEnabled;
+      actionButton.title = actionTitle;
+      actionButton.hidden = !actionText;
+      releaseButton.hidden = !updateReleaseUrl;
+      checkButton.disabled = ["checking", "downloading", "verifying", "readyToRestart", "preparing", "applying"].includes(status);
+
+      if (["downloading", "verifying", "readyToRestart", "preparing", "applying", "canceled"].includes(status)) {
+        nextUpdateTitle = window.taskbarLyricsI18n.t(`Update_State_${status}`);
+      } else if (failed && ["DownloadFailed", "ApplyFailed"].includes(payload.reasonCode)) nextUpdateTitle = window.taskbarLyricsI18n.t("Update_Failed");
+      if (title.textContent !== nextUpdateTitle) title.textContent = nextUpdateTitle;
+      // The current version is already shown in the product header. Don't repeat the status.
+      detail.textContent = failed && !actionableError ? (payload.message || "") : "";
+      detail.hidden = !detail.textContent;
+
+      const progress = $("#updateProgress");
+      progress.hidden = !transferring;
+      if (Number.isFinite(payload.progressPercent) && payload.progressPercent >= 0 && payload.progressPercent <= 100) progress.value = payload.progressPercent;
+      else progress.removeAttribute("value");
+      const size = $("#updateSize");
+      size.hidden = !transferring || !Number.isFinite(payload.downloadSizeBytes) || payload.downloadSizeBytes <= 0;
+      size.textContent = size.hidden ? "" : window.taskbarLyricsI18n.format("Update_PackageSize", (payload.downloadSizeBytes / 1048576).toLocaleString(undefined, { maximumFractionDigits: 1 }));
+      const reason = $("#updateReason");
+      reason.hidden = !(failed && actionableError) && !(status === "available" && !canDownload && !!payload.reasonCode);
+      reason.textContent = reason.hidden ? "" : window.taskbarLyricsI18n.t(`Update_Reason_${payload.reasonCode}`);
+      $(".update-extra").hidden = progress.hidden && size.hidden && reason.hidden;
+      if (payload.releaseNotesHtml != null || payload.releaseNotes != null) renderReleaseNotes(payload.releaseNotesHtml, payload.releaseNotes);
+      if (typeof payload.notesComplete === "boolean") {
+        $("#releaseNotesIncomplete").hidden = payload.notesComplete;
+        if (!payload.notesComplete) $("#releaseNotesPanel").hidden = false;
+      }
+      directButton.hidden = status !== "available";
+      directButton.disabled = !canDownload;
+      reinstallButton.hidden = false;
+      reinstallButton.disabled = ["downloading", "verifying", "readyToRestart", "preparing", "applying"].includes(status);
+      notesButton.hidden = false;
+      notesButton.disabled = $("#releaseNotesPanel").hidden || ["checking", "downloading", "verifying", "readyToRestart", "preparing", "applying"].includes(status);
+      if (previousActionFocus?.closest(".update-dialog-actions") && previousActionFocus.disabled) {
+        const next = [actionButton, releaseButton, checkButton].find(button => !button.disabled && !button.hidden);
+        if (next) next.focus();
+        else { title.tabIndex = -1; title.focus(); }
+      }
     }
 
     function setWindowState(nextState) {
@@ -2205,6 +2394,9 @@
     }
 
     function refresh() {
+      // Apply persisted values before rendering secondary panels. If one of those
+      // renderers exits early, settings controls must still reflect host state.
+      syncControls();
       renderSources();
       renderGettingStarted();
       renderTrackOffsets();
@@ -2867,12 +3059,33 @@
     const openRepository = () => { if (repositoryUrl) bridge.post({ type: "openExternalLink", value: repositoryUrl }); };
     $("#repositoryButton").addEventListener("click", openRepository);
     $$('[data-repository-link]').forEach(button => button.addEventListener("click", openRepository));
+    $("#updateActionButton").addEventListener("click", event => {
+      const action = event.currentTarget.dataset.action;
+      if (action) bridge.post({ type: action });
+    });
+    $("#updateReleaseButton").addEventListener("click", () => {
+      if (updateReleaseUrl) bridge.post({ type: "openExternalLink", value: updateReleaseUrl });
+    });
+    const triggerUpdateFromSettings = type => {
+      bridge.post({ type });
+    };
+    $("#updateDirectButton").addEventListener("click", () => triggerUpdateFromSettings("downloadUpdate"));
+    $("#updateReinstallButton").addEventListener("click", () => triggerUpdateFromSettings("reinstallUpdate"));
+    $("#updateNotesButton").addEventListener("click", () => {
+      const dialog = $("#updateDialog");
+      if (!dialog.open) dialog.showModal();
+    });
+    $("#updateInlineCancel").addEventListener("click", () => bridge.post({ type: "cancelUpdateDownload" }));
+    $("#releaseNotesContent").addEventListener("click", event => {
+      const link = event.target.closest("a[data-release-url]");
+      if (!link) return;
+      event.preventDefault(); bridge.post({ type: "openExternalLink", value: link.dataset.releaseUrl });
+    });
     $("#checkUpdateButton").addEventListener("click", () => {
+      if (["checking", "downloading", "verifying", "preparing", "applying", "readyToRestart"].includes(updateState)) return;
       setUpdateStatus({ state: "checking", message: window.taskbarLyricsI18n.t("UI_ConnectingToGitHubReleases") });
       bridge.post({ type: "checkForUpdates" });
     });
-    $("#openReleaseButton").addEventListener("click", () => { if (updateReleaseUrl) bridge.post({ type: "openExternalLink", value: updateReleaseUrl }); });
-
     document.addEventListener("pointerdown", event => {
       if (event.button !== 0) return;
       const resizeHandle = event.target.closest?.("[data-window-resize]");

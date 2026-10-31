@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{UI_TaskbarLyricsSettings}}</title>
   <link rel="stylesheet" href="settings.css">
+  <link rel="stylesheet" href="github-markdown.css">
   <link rel="stylesheet" href="player-compatibility.css">
 </head>
 <body>
@@ -370,9 +371,33 @@
             </section>
             <section class="panel">
               <div class="panel-head"><div><h2>{{UI_Updates}}</h2><p>{{UI_KeepTheAppOnTheLatestStableVersion}}</p></div></div>
-              <div class="settings"><div class="setting-row compact"><div class="setting-label"><strong>{{UI_CheckForUpdatesAutomatically}}</strong><small>{{UI_ChecksAtMostOnceADayAndUsesSystem}}</small></div><label class="switch"><input type="checkbox" data-setting="autoCheckUpdates" aria-label="{{UI_CheckForUpdatesAutomatically}}"><span class="switch-track"></span></label></div></div>
-              <div class="update-summary"><div class="update-status"><strong id="updateStatusTitle">{{UI_UpdatesNotCheckedYet}}</strong><small id="updateStatusDetail">{{UI_CurrentVersion}}</small></div><div class="update-actions"><button id="checkUpdateButton" class="btn" type="button">{{UI_CheckForUpdates}}</button><button id="openReleaseButton" class="btn secondary" type="button" hidden>{{UI_OpenReleasePage}}</button></div></div>
+              <div class="update-summary"><strong id="updateStatusTitle" role="status" aria-live="polite">{{UI_UpdatesNotCheckedYet}}</strong><div class="update-external-actions">
+                <button id="updateNotesButton" class="btn ghost" type="button" disabled>{{Update_ViewNotes}}</button>
+                <button id="updateDirectButton" class="btn" type="button" hidden disabled>{{Update_DirectUpdate}}</button>
+                <button id="updateReinstallButton" class="btn secondary" type="button">{{Update_Reinstall}}</button>
+                <button id="checkUpdateButton" class="btn" type="button">{{UI_CheckForUpdates}}</button>
+              </div></div>
+              <div id="updateInlineOperation" class="update-inline-operation" role="status" aria-live="polite" hidden>
+                <span id="updateInlineStatus"></span>
+                <progress id="updateInlineProgress" max="100" aria-label="{{Update_Download}}"></progress>
+                <small id="updateInlineSize" hidden></small>
+                <button id="updateInlineCancel" class="btn ghost small" type="button" hidden>{{UI_Cancel}}</button>
+              </div>
             </section>
+            <dialog id="updateDialog" class="update-dialog" aria-labelledby="updateDialogHeading">
+              <div class="dialog-body update-dialog-body">
+                <h2 id="updateDialogHeading">{{UI_Updates}}</h2>
+                <p id="updateDialogStatusTitle" class="update-dialog-status" role="status" aria-live="polite">{{UI_UpdatesNotCheckedYet}}</p>
+                <small id="updateDialogStatusDetail" class="update-dialog-detail" hidden></small>
+                <div class="update-extra" hidden><progress id="updateProgress" max="100" hidden aria-label="{{Update_Download}}"></progress><small id="updateSize" hidden></small><small id="updateReason" hidden></small></div>
+                <section id="releaseNotesPanel" class="release-notes" hidden aria-labelledby="releaseNotesHeading"><p id="releaseNotesIncomplete" hidden>{{Update_NotesIncomplete}}</p><div id="releaseNotesContent" class="markdown-body"></div></section>
+              </div>
+              <div class="dialog-actions update-dialog-actions">
+                <button id="updateReleaseButton" class="btn ghost" type="button" hidden>{{Update_ManualDownload}}</button>
+                <button id="updateActionButton" class="btn" type="button" hidden></button>
+                <button class="btn ghost" type="button" data-dialog-cancel="updateDialog">{{UI_Close}}</button>
+              </div>
+            </dialog>
             <section class="panel">
               <div class="panel-head"><div><h2>{{UI_OpenSourceTechnology}}</h2><p>{{UI_SourceCodeLicenseAndKeyTechnologies}}</p></div></div>
               <div class="resource-list">

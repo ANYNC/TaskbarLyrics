@@ -35,6 +35,7 @@ internal interface IAppCompositionRoot : IDisposable
 
 internal sealed class AppCompositionRoot : IAppCompositionRoot
 {
+    public AppUpdateService Updates { get; } = new();
     private readonly Lazy<FloatingWindowPositionStore> _floatingWindowPositions = new(() => new FloatingWindowPositionStore(
         System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "TaskbarLyrics", "floating-window-positions.json")));
@@ -143,6 +144,7 @@ internal sealed class AppCompositionRoot : IAppCompositionRoot
 
     public void Dispose()
     {
+        Updates.Dispose();
         if (_resolvedLyricCache is IDisposable disposable)
         {
             disposable.Dispose();
