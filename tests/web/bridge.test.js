@@ -10,7 +10,7 @@ const persistedSettings = [
   "showLyricTranslation", "enableWordScanning", "lyricsLayoutScalePercent", "fontSize", "showCover", "singleLineLyrics",
   "enableControlPanel", "controlPanelTriggerMethod", "controlPanelTriggerCover", "controlPanelTriggerLyrics", "enableFloatingControlPanel", "floatingPanelBrightness", "floatingPanelTintOpacity", "floatingPanelBlurAmount", "embeddedPanelBrightness", "embeddedPanelTintOpacity", "embeddedPanelBlurAmount", "coverPosition", "coverSize", "coverGap", "coverCornerRadius", "fontFamily", "fontWeight", "lyricsTextAlignment", "foregroundColorMode",
   "showTextShadow", "toolWindowTheme", "showBackground", "showFloatingBackground", "backgroundOpacity", "showBorder", "windowWidth",
-  "taskbarAvoidanceEnabled", "xOffset", "yOffset", "floatingWindowLayer", "startWithWindows", "autoCheckUpdates"
+  "taskbarAvoidanceEnabled", "xOffset", "yOffset", "floatingWindowLayer", "startWithWindows"
 ];
 
 async function createSettingsDom({ deferAnimationFrames = false, reducedMotion = false } = {}) {
@@ -130,6 +130,39 @@ describe("settings WebView bridge", () => {
         expect(card.querySelector(".fallback-bars")).toBeNull();
       }
     } finally { dom.window.close(); }
+  });
+
+  it("binds the initial fallback display mode for legacy and persisted settings", async () => {
+    const cases = [
+      {
+        settings: { spectrumDisplayMode: "PureMusicOnly" },
+        expected: { instrumental: "spectrum", notFound: "text" }
+      },
+      {
+        settings: {
+          lyricsFallback: {
+            version: 1,
+            searching: { useSpectrum: false, firstLine: { kind: "Metadata", showTitle: true, showArtist: true, customText: null }, secondLine: { kind: "Text", showTitle: true, showArtist: false, customText: null } },
+            instrumental: { useSpectrum: false, firstLine: { kind: "Text", showTitle: true, showArtist: false, customText: null }, secondLine: { kind: "None", showTitle: true, showArtist: false, customText: null } },
+            notFound: { useSpectrum: true, firstLine: { kind: "Text", showTitle: true, showArtist: false, customText: null }, secondLine: { kind: "None", showTitle: true, showArtist: false, customText: null } },
+            spectrumWithLyrics: false
+          }
+        },
+        expected: { instrumental: "text", notFound: "spectrum" }
+      }
+    ];
+    for (const testCase of cases) {
+      const { dom, script } = await createSettingsDom();
+      try {
+        dom.window.eval(script);
+        dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings: testCase.settings } });
+        for (const [key, mode] of Object.entries(testCase.expected)) {
+          const card = dom.window.document.querySelector(`[data-fallback-state="${key}"]`);
+          expect(card.querySelector(`[data-fallback-mode="${mode}"]`).getAttribute("aria-pressed")).toBe("true");
+          expect(card.querySelector(`[data-fallback-mode="${mode === "spectrum" ? "text" : "spectrum"}"]`).getAttribute("aria-pressed")).toBe("false");
+        }
+      } finally { dom.window.close(); }
+    }
   });
 
   it("keeps no-lyrics spectrum independent from spectrum with regular lyrics", async () => {
@@ -2796,6 +2829,23 @@ describe("settings WebView bridge", () => {
     numeric.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
     expect(sent.at(-1).payload).toEqual({ key: "lyricsLayoutScalePercent", value: 72 });
     expect(controls.every(control => Number(control.value) <= 72)).toBe(true);
+  });
+
+  it("applies the first settings state before any update status arrives", async () => {
+    for (const useFloatingWindow of [false, true]) {
+      const { dom, script } = await createSettingsDom();
+      try {
+        dom.window.eval(script);
+        expect(() => dom.window.settingsApp.receive({
+          version: 1,
+          type: "settingsState",
+          payload: { settings: { useFloatingWindow }, fonts: [] }
+        })).not.toThrow();
+        const checked = [...dom.window.document.querySelectorAll("[data-window-mode]:checked")];
+        expect(checked).toHaveLength(1);
+        expect(checked[0].value).toBe(useFloatingWindow ? "floating" : "embedded");
+      } finally { dom.window.close(); }
+    }
   });
 
   it("selects a window presentation card and mirrors embedded taskbar bounds", async () => {

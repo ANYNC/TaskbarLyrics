@@ -71,7 +71,8 @@ internal sealed class AppUpdateService : IDisposable
                 ? await CreateReinstallCandidateAsync(_lifetime.Token)
                 : UpdateChecker.Current ?? throw new InvalidOperationException("CandidateUnavailable");
             var asset = SelectAsset(candidate) ?? throw new InvalidOperationException("AssetUnavailable");
-            if (reinstall == candidate.HasUpdate) throw new InvalidOperationException("CandidateChanged");
+            if (reinstall ? candidate.HasUpdate : !candidate.HasUpdate)
+                throw new InvalidOperationException("CandidateChanged");
             Cleanup();
             _download = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
             _download.CancelAfter(TimeSpan.FromMinutes(30));
@@ -164,27 +165,17 @@ internal sealed class AppUpdateService : IDisposable
             var asset = SelectAsset(latest);
             if (latest.Release?.Id != release.Id || asset is null || asset != SelectAsset(_candidate)) throw new InvalidOperationException("CandidateChanged");
             var session = Path.GetFileName(_directory);
-            var pipeName = "TaskbarLyrics.Update." + session;
             var updater = Path.Combine(_directory, "updater.exe");
             await using (var payload = Assembly.GetExecutingAssembly().GetManifestResourceStream("TaskbarLyrics.Updater.Payload")!)
             await using (var output = File.Create(updater)) await payload.CopyToAsync(output, _lifetime.Token);
             using var process = Process.GetCurrentProcess();
             var request = new UpdateRequest(1, AppContext.BaseDirectory, Path.Combine(_directory, "package.zip"),
-                latest.Version.TrimStart('v', 'V'), asset.Digest!, Environment.ProcessId, process.StartTime.ToUniversalTime().Ticks, session, pipeName, kind, Text.T("Update_UpdaterFailed"), Text.T("Update_RecoveryInstructions"));
+                latest.Version.TrimStart('v', 'V'), asset.Digest!, Environment.ProcessId, process.StartTime.ToUniversalTime().Ticks, session, kind, Text.T("Update_UpdaterFailed"), Text.T("Update_RecoveryInstructions"));
             var descriptor = Path.Combine(_directory, "request.json");
             await File.WriteAllTextAsync(descriptor, JsonSerializer.Serialize(request, UpdatePackage.JsonOptions), _lifetime.Token);
-            using var pipe = new NamedPipeServerStream(pipeName, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
             var start = new ProcessStartInfo(updater) { UseShellExecute = false, CreateNoWindow = true, WorkingDirectory = _directory };
             start.ArgumentList.Add(descriptor);
             using var child = Process.Start(start) ?? throw new IOException("Updater did not start.");
-            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
-            timeout.CancelAfter(TimeSpan.FromSeconds(30));
-            await pipe.WaitForConnectionAsync(timeout.Token);
-            UpdatePipeIdentity.RequireClient(pipe, child.Id);
-            using var reader = new StreamReader(pipe, leaveOpen: true);
-            using var writer = new StreamWriter(pipe, leaveOpen: true) { AutoFlush = true };
-            if (await reader.ReadLineAsync(timeout.Token) != "READY " + session) throw new IOException("Invalid updater handshake.");
-            await writer.WriteLineAsync("APPLY " + session);
             Publish(new("applying", OperationKind: kind));
             await exit();
         }
