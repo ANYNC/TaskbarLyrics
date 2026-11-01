@@ -126,7 +126,6 @@ public partial class App : System.Windows.Application, IDisposable
         StartActivationServer();
         SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
         SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
-        TaskObserver.Observe(UpdateStartup.ConfirmAsync(Environment.GetCommandLineArgs().Skip(1).ToArray()), "update startup confirmation");
         _updateScheduler = new AutomaticUpdateScheduler(RunAutomaticUpdateCheckAsync);
         _updateScheduler.SetEnabled(true);
         if (!Settings.HasSeenGettingStarted)

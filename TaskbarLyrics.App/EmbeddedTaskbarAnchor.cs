@@ -336,11 +336,19 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
         {
             _spaceRefreshTimer = new DispatcherTimer(DispatcherPriority.Background, window.Dispatcher)
             {
-                Interval = TimeSpan.FromMilliseconds(500)
+                Interval = TimeSpan.FromSeconds(1)
             };
             _spaceRefreshTimer.Tick += OnSpaceRefreshTick;
         }
-        _spaceRefreshTimer.Start();
+        if (settings.TaskbarAvoidanceEnabled)
+        {
+            _spaceRefreshTimer.Start();
+        }
+        else
+        {
+            _spaceRefreshTimer.Stop();
+            _eventRefreshTimer.Stop();
+        }
     }
 
     private void OnSpaceRefreshTick(object? sender, EventArgs e) => RefreshAvailableSpace();

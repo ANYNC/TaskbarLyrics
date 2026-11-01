@@ -1189,17 +1189,59 @@
       return window.taskbarLyricsI18n.t(key === "searching" ? "UI_SearchingForLyrics" : key === "instrumental" ? "UI_Instrumental" : "Lyrics_NotFound");
     }
 
+    function normalizeFallbackLine(line, fallback) {
+      return {
+        ...fallback,
+        ...(line && typeof line === "object" ? line : {}),
+        showTitle: line?.showTitle !== false,
+        showArtist: line?.showArtist === true
+      };
+    }
+
+    function normalizeFallbackRules(rules, legacy) {
+      if (!rules || typeof rules !== "object") return legacy;
+      const defaults = {
+        ...legacy
+      };
+      return {
+        ...defaults,
+        ...(rules && typeof rules === "object" ? rules : {}),
+        searching: {
+          ...defaults.searching,
+          ...(rules?.searching && typeof rules.searching === "object" ? rules.searching : {}),
+          useSpectrum: false,
+          firstLine: normalizeFallbackLine(rules?.searching?.firstLine, defaults.searching.firstLine),
+          secondLine: normalizeFallbackLine(rules?.searching?.secondLine, defaults.searching.secondLine)
+        },
+        instrumental: {
+          ...defaults.instrumental,
+          ...(rules?.instrumental && typeof rules.instrumental === "object" ? rules.instrumental : {}),
+          useSpectrum: rules?.instrumental?.useSpectrum === true || (!rules?.instrumental && defaults.instrumental.useSpectrum),
+          firstLine: normalizeFallbackLine(rules?.instrumental?.firstLine, defaults.instrumental.firstLine),
+          secondLine: normalizeFallbackLine(rules?.instrumental?.secondLine, defaults.instrumental.secondLine)
+        },
+        notFound: {
+          ...defaults.notFound,
+          ...(rules?.notFound && typeof rules.notFound === "object" ? rules.notFound : {}),
+          useSpectrum: rules?.notFound?.useSpectrum === true || (!rules?.notFound && defaults.notFound.useSpectrum),
+          firstLine: normalizeFallbackLine(rules?.notFound?.firstLine, defaults.notFound.firstLine),
+          secondLine: normalizeFallbackLine(rules?.notFound?.secondLine, defaults.notFound.secondLine)
+        },
+        spectrumWithLyrics: rules?.spectrumWithLyrics === true || (!rules && defaults.spectrumWithLyrics)
+      };
+    }
+
     function getFallbackRules() {
-      if (state?.lyricsFallback) return state.lyricsFallback;
       const line = (kind, artist = false) => ({ kind, showTitle: true, showArtist: artist, customText: null });
       const mode = state?.spectrumDisplayMode ?? "Disabled";
-      return {
+      const legacy = {
         version: 1,
         searching: { useSpectrum: false, firstLine: line("Metadata", true), secondLine: line(state?.showLyricSearchStatus === false ? "None" : "Text") },
         instrumental: { useSpectrum: mode !== "Disabled", firstLine: line("Text"), secondLine: line("None") },
         notFound: { useSpectrum: ["Always", "PureMusicOrNoLyrics"].includes(mode), firstLine: line("Text"), secondLine: line("None") },
         spectrumWithLyrics: mode === "Always"
       };
+      return normalizeFallbackRules(state?.lyricsFallback, legacy);
     }
 
     function fallbackSpectrumMode(rules) {
@@ -1774,7 +1816,6 @@
       setAvailableFonts(fonts);
       const version = nextState.appVersion || "--";
       $(".version-badge").textContent = `Version ${version}`;
-      if (updateState === "idle") $("#updateStatusDetail").textContent = window.taskbarLyricsI18n.format("UI_CurrentVersion_14", version);
       refresh();
     }
 
@@ -2231,7 +2272,7 @@
       directButton.hidden = status !== "available";
       directButton.disabled = !canDownload;
       reinstallButton.hidden = false;
-      reinstallButton.disabled = ["downloading", "verifying", "readyToRestart", "preparing", "applying"].includes(status);
+      reinstallButton.disabled = ["checking", "downloading", "verifying", "readyToRestart", "preparing", "applying"].includes(status);
       notesButton.hidden = false;
       notesButton.disabled = $("#releaseNotesPanel").hidden || ["checking", "downloading", "verifying", "readyToRestart", "preparing", "applying"].includes(status);
       if (previousActionFocus?.closest(".update-dialog-actions") && previousActionFocus.disabled) {

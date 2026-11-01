@@ -82,7 +82,7 @@ internal sealed class FloatingLyricsPanelController : IDisposable
             if (value)
             {
                 foreach (var target in _targets) ApplyInputPolicy(target);
-                _timer.Start();
+                ScheduleEvaluation(TimeSpan.Zero);
             }
             else
             {
@@ -209,6 +209,8 @@ internal sealed class FloatingLyricsPanelController : IDisposable
         window.LocationChanged += TargetMoved;
         window.SizeChanged += TargetResized;
         window.SourceInitialized += TargetSourceInitialized;
+        window.MouseMove += OnPointerChanged;
+        window.MouseLeave += OnPointerChanged;
         ApplyInputPolicy(_targets[^1]);
     }
     private void RegionSurfaceChanged(object? sender, EventArgs e)
@@ -271,6 +273,8 @@ internal sealed class FloatingLyricsPanelController : IDisposable
         window.LocationChanged -= TargetMoved;
         window.SizeChanged -= TargetResized;
         window.SourceInitialized -= TargetSourceInitialized;
+        window.MouseMove -= OnPointerChanged;
+        window.MouseLeave -= OnPointerChanged;
         var target = _targets.Find(item => item.Window == window);
         if (target is null) return;
         if (target.RegionVisibility is { } visibility) visibility.SurfaceChanged -= RegionSurfaceChanged;
@@ -354,6 +358,7 @@ internal sealed class FloatingLyricsPanelController : IDisposable
                 target.LyricsBounds = Rect.Empty;
                 ApplyInputPolicy(target);
             }
+            if (_enabled) ScheduleEvaluation(TimeSpan.Zero);
         }
     }
 
@@ -406,6 +411,8 @@ internal sealed class FloatingLyricsPanelController : IDisposable
             {
                 target.Panel = _create();
                 target.Panel.DragRequested += PanelDragRequested;
+                target.Panel.MouseMove += OnPointerChanged;
+                target.Panel.MouseLeave += OnPointerChanged;
             }
             if (target.CanExpand)
             {
@@ -466,6 +473,7 @@ internal sealed class FloatingLyricsPanelController : IDisposable
 
     private void Tick(object? sender, EventArgs e)
     {
+        _timer.Stop();
         if (_dragging is not null) return;
         var pointer = _readPointer();
         Target? hovered = null;
@@ -500,10 +508,22 @@ internal sealed class FloatingLyricsPanelController : IDisposable
                 target.ResizeGrip is { } grip && hoveredRoot == new WindowInteropHelper(grip).Handle))
                 hovered = target;
         }
-        if (pointer is null) return;
+        if (pointer is null)
+        {
+            if (ShowBackground) ScheduleEvaluation(TimeSpan.FromMilliseconds(50));
+            return;
+        }
         if (_active is not null && (hovered == _active || _active.Panel is { IsActive: true, KeepOpenForKeyboard: true }))
-        { _leftAt = 0; return; }
-        if (_active is not null && (GetAsyncKeyState(1) & 0x8000) != 0) return;
+        {
+            _leftAt = 0;
+            ScheduleEvaluation(TimeSpan.FromMilliseconds(50));
+            return;
+        }
+        if (_active is not null && (GetAsyncKeyState(1) & 0x8000) != 0)
+        {
+            ScheduleEvaluation(TimeSpan.FromMilliseconds(50));
+            return;
+        }
         if (_active is not null)
         {
             if (_leftAt == 0) _leftAt = Stopwatch.GetTimestamp();
@@ -517,6 +537,51 @@ internal sealed class FloatingLyricsPanelController : IDisposable
         if (hovered != _candidate)
         { _candidate = hovered; _enteredAt = Stopwatch.GetTimestamp(); _suppressed = false; }
         if (hovered is not null && !_suppressed && Stopwatch.GetElapsedTime(_enteredAt).TotalMilliseconds >= 200) Show(hovered);
+        ScheduleNextEvaluation();
+    }
+
+    private void OnPointerChanged(object? sender, System.Windows.Input.MouseEventArgs e)
+    {
+        if (_enabled) ScheduleEvaluation(TimeSpan.Zero);
+    }
+
+    private void ScheduleNextEvaluation()
+    {
+        if (ShowBackground)
+        {
+            // Persistent backgrounds have no mouse event when content visibility changes
+            // through an external owner state, so retain a low-frequency maintenance pass.
+            ScheduleEvaluation(TimeSpan.FromMilliseconds(50));
+            return;
+        }
+
+        if (_active is not null && _leftAt != 0)
+        {
+            ScheduleEvaluation(TimeSpan.FromMilliseconds(Math.Max(
+                1,
+                300 - Stopwatch.GetElapsedTime(_leftAt).TotalMilliseconds)));
+        }
+        else if (_candidate is not null)
+        {
+            ScheduleEvaluation(TimeSpan.FromMilliseconds(Math.Max(
+                1,
+                200 - Stopwatch.GetElapsedTime(_enteredAt).TotalMilliseconds)));
+        }
+        else if (_fadingTarget is { Closing: true })
+        {
+            ScheduleEvaluation(TimeSpan.FromMilliseconds(Math.Max(
+                1,
+                FloatingPanelAnimation.Duration.TotalMilliseconds -
+                Stopwatch.GetElapsedTime(_fadeStartedAt).TotalMilliseconds)));
+        }
+    }
+
+    private void ScheduleEvaluation(TimeSpan delay)
+    {
+        if (!_enabled) return;
+        _timer.Stop();
+        _timer.Interval = delay <= TimeSpan.Zero ? TimeSpan.FromMilliseconds(1) : delay;
+        _timer.Start();
     }
 
     private static bool EnsureWindowOrder(Target target)
@@ -614,6 +679,11 @@ internal sealed class FloatingLyricsPanelController : IDisposable
         target.Panel?.SetPanelVisible(false, immediate: true);
         target.Material?.Dispose(); target.Material = null;
         if (target.Panel is not null) target.Panel.DragRequested -= PanelDragRequested;
+        if (target.Panel is not null)
+        {
+            target.Panel.MouseMove -= OnPointerChanged;
+            target.Panel.MouseLeave -= OnPointerChanged;
+        }
         target.Panel?.Close(); target.Panel = null;
         target.ResizeGrip?.Close(); target.ResizeGrip = null;
         target.LyricsBounds = Rect.Empty; target.CardBounds = Rect.Empty; target.MaterialBounds = Rect.Empty;
@@ -635,6 +705,8 @@ internal sealed class FloatingLyricsPanelController : IDisposable
             target.Window.LocationChanged -= TargetMoved;
             target.Window.SizeChanged -= TargetResized;
             target.Window.SourceInitialized -= TargetSourceInitialized;
+            target.Window.MouseMove -= OnPointerChanged;
+            target.Window.MouseLeave -= OnPointerChanged;
             if (target.RegionVisibility is { } visibility) visibility.SurfaceChanged -= RegionSurfaceChanged;
             Release(target);
         }
