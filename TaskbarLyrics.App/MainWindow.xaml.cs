@@ -20,6 +20,9 @@ namespace TaskbarLyrics.App;
 
 public partial class MainWindow : Window, IDisposable
 {
+    private static readonly TimeSpan ActivePlaybackPollingInterval = TimeSpan.FromMilliseconds(60);
+    private static readonly TimeSpan IdlePlaybackPollingInterval = TimeSpan.FromSeconds(1);
+
     private readonly IMusicSessionProvider _musicSessionProvider;
     private readonly IMediaPlaybackController _mediaPlaybackController;
     private readonly IPlayerRecognitionController _playerRecognitionController;
@@ -145,7 +148,7 @@ public partial class MainWindow : Window, IDisposable
 
         _timer = new DispatcherTimer(DispatcherPriority.Background)
         {
-            Interval = TimeSpan.FromMilliseconds(60)
+            Interval = ActivePlaybackPollingInterval
         };
 
         _timer.Tick += OnTimerTick;
@@ -778,6 +781,9 @@ public partial class MainWindow : Window, IDisposable
 
             snapshot = gateDecision.Snapshot;
             inputKind = PlaybackInputPolicy.Classify(snapshot);
+            _timer.Interval = inputKind == PlaybackInputKind.ValidTrack
+                ? ActivePlaybackPollingInterval
+                : IdlePlaybackPollingInterval;
             _currentTrack = inputKind == PlaybackInputKind.ValidTrack
                 ? snapshot.Track
                 : null;

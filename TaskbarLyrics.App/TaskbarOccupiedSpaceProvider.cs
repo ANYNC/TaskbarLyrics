@@ -11,7 +11,7 @@ internal sealed class TaskbarOccupiedSpaceProvider : IDisposable
 {
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromMilliseconds(500);
     private static readonly TimeSpan SnapshotLifetime = TimeSpan.FromSeconds(2);
-    private static readonly TimeSpan IdleRefreshInterval = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan IdleRefreshInterval = TimeSpan.FromSeconds(15);
     private static readonly TimeSpan IdleSnapshotLifetime = IdleRefreshInterval + SnapshotLifetime;
     private static readonly TimeSpan EventCoalesceInterval = TimeSpan.FromMilliseconds(100);
     private readonly object _gate = new();

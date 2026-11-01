@@ -13,8 +13,6 @@ public sealed class LyricsContentVisibilityPolicyTests
     }
 
     [Theory]
-    [InlineData("Netease|ProcessFallback", "Unknown Title")]
-    [InlineData("QQMusic|ProcessFallback", "Song")]
     [InlineData("Netease|song", "Unknown Title")]
     public void ClassifyTreatsPlaceholderTracksAsNoPlayback(string id, string title)
     {

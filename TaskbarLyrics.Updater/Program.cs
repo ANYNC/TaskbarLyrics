@@ -1,11 +1,10 @@
 using System.Diagnostics;
-using System.IO.Pipes;
 using System.Text.Json;
 
 namespace TaskbarLyrics.Updates;
 
 public sealed record UpdateRequest(int ProtocolVersion, string Root, string Package, string Version, string Digest,
-    int MainPid, long MainStartedTicks, string SessionId, string PipeName, string OperationKind,
+    int MainPid, long MainStartedTicks, string SessionId, string OperationKind,
     string FailureMessage, string RecoveryInstructions);
 
 internal static class Program
@@ -44,7 +43,7 @@ internal static class Program
                 RecoverPending(root);
                 instanceLock.Dispose();
                 recoveryLock.Dispose();
-                Start(root, null);
+                Start(root);
                 return 0;
             }
             if (args.Length != 1 || new FileInfo(args[0]).Length > 16384) return 1;
@@ -53,7 +52,7 @@ internal static class Program
                 ?? throw new InvalidDataException("Invalid request.");
             failureMessage = request.FailureMessage;
             if (request.ProtocolVersion != 1 || !Guid.TryParseExact(request.SessionId, "N", out _) ||
-                request.OperationKind is not ("upgrade" or "reinstall") || request.PipeName != "TaskbarLyrics.Update." + request.SessionId)
+                request.OperationKind is not ("upgrade" or "reinstall"))
                 throw new InvalidDataException("Invalid update session.");
             root = Path.GetFullPath(request.Root);
             stage = "acquire update lock";
@@ -88,13 +87,6 @@ internal static class Program
             await File.WriteAllTextAsync(Path.Combine(transaction, "failure-message.txt"), request.FailureMessage);
             await File.WriteAllTextAsync(Path.Combine(transaction, "RECOVERY.txt"),
                 request.RecoveryInstructions);
-            using var pipe = new NamedPipeClientStream(".", request.PipeName, PipeDirection.InOut, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
-            await pipe.ConnectAsync(30000, timeout.Token);
-            UpdatePipeIdentity.RequireServer(pipe, request.MainPid);
-            using var reader = new StreamReader(pipe, leaveOpen: true);
-            using var writer = new StreamWriter(pipe, leaveOpen: true) { AutoFlush = true };
-            await writer.WriteLineAsync("READY " + request.SessionId);
-            if (await reader.ReadLineAsync(timeout.Token) != "APPLY " + request.SessionId) throw new IOException("Update handoff canceled.");
             stage = "wait for previous process exit";
             using (var exitTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(30)))
                 await main.WaitForExitAsync(exitTimeout.Token);
@@ -104,32 +96,9 @@ internal static class Program
             stage = "replace package files";
             using (var instanceLock = new FileStream(local, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
                 UpdateTransaction.Apply(root, transaction, staging, files, current, request.Version, request.OperationKind);
-            using var confirmation = new NamedPipeServerStream(request.PipeName + ".confirm", PipeDirection.In, 1,
-                PipeTransmissionMode.Byte, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
             stage = "start updated process";
-            using var updated = Start(root, request.SessionId);
+            using var updated = Start(root);
             newProcessStarted = updated is not null;
-            try
-            {
-                stage = "confirm updated process startup";
-                using var confirmTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(UpdatePackage.StartupConfirmationTimeoutSeconds));
-                await confirmation.WaitForConnectionAsync(confirmTimeout.Token);
-                if (updated is null) throw new IOException("New process did not start.");
-                UpdatePipeIdentity.RequireClient(confirmation, updated.Id);
-                using var confirmReader = new StreamReader(confirmation);
-                if (await confirmReader.ReadLineAsync(confirmTimeout.Token) != request.SessionId + " " + request.Version)
-                    throw new IOException("Invalid startup confirmation.");
-            }
-            catch (Exception confirmationError) when (confirmationError is IOException or OperationCanceledException or UnauthorizedAccessException)
-            {
-                // Never replace files underneath a running, unconfirmed process.
-                if (updated is { HasExited: false })
-                    throw new IOException("The updated process is running, but startup confirmation failed. Keep it open and inspect the update log.", confirmationError);
-                UpdateTransaction.Recover(root, transaction);
-                directoryLock.Dispose();
-                Start(root, null)?.Dispose();
-                throw;
-            }
             stage = "commit update journal";
             UpdateTransaction.Commit(transaction);
             // Only the exact validated session is eligible for cleanup.
@@ -158,7 +127,7 @@ internal static class Program
         {
             if (mainExited && !newProcessStarted && root is not null && transaction is not null && File.Exists(Path.Combine(transaction, "journal.json")))
             {
-                try { UpdateTransaction.Recover(root, transaction); Start(root, null)?.Dispose(); }
+                try { UpdateTransaction.Recover(root, transaction); Start(root)?.Dispose(); }
                 catch (Exception recoveryError) { ex = new AggregateException(ex, recoveryError); }
             }
             var logs = Path.Combine(Path.GetTempPath(), "TaskbarLyrics", "Updates");
@@ -191,10 +160,9 @@ internal static class Program
             if (File.Exists(Path.Combine(session, "journal.json"))) UpdateTransaction.Recover(root, session);
         }
     }
-    private static Process? Start(string root, string? session)
+    private static Process? Start(string root)
     {
         var start = new ProcessStartInfo(Path.Combine(root, UpdatePackage.EntryPoint)) { WorkingDirectory = root, UseShellExecute = false };
-        if (session is not null) { start.ArgumentList.Add("--updated"); start.ArgumentList.Add(session); }
         return Process.Start(start);
     }
     private static void ShowFailure(string message, string log) => _ = MessageBox(IntPtr.Zero,

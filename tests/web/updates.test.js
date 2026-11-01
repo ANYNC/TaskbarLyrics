@@ -47,50 +47,82 @@ describe("update availability indicator", () => {
 });
 
 describe("update actions and release notes", () => {
-  it("offers same-version reinstall and an explicit restart after verification", async () => {
+  it("reinstalls the current version from the settings action row", async () => {
     const dom = await createDom();
     try {
       const receive = payload => dom.window.settingsApp.receive({ version: 1, type: "updateStatus", payload });
       const document = dom.window.document;
       receive({ state: "latest", hasUpdate: false, canReinstall: true });
-      const action = document.querySelector("#updateActionButton");
-      expect(action.disabled).toBe(false);
-      expect(action.textContent).toBe("强制重装");
-      action.click();
+      const reinstall = document.querySelector("#updateReinstallButton");
+      expect(document.querySelector("#updateStatusTitle").textContent).toBe("当前已是最新版本");
+      expect(reinstall.hidden).toBe(false);
+      expect(reinstall.disabled).toBe(false);
+      expect(reinstall.textContent).toBe("强制重装");
+      expect(document.querySelector("#updateDirectButton").hidden).toBe(true);
+      expect(document.querySelector("#checkUpdateButton").disabled).toBe(false);
+      reinstall.click();
       expect(dom.window.sent.at(-1)).toEqual({ version: 1, type: "reinstallUpdate", payload: {} });
-      receive({ state: "downloading", operationKind: "reinstall", progressPercent: 50 });
-      expect(document.querySelector("#updateProgress").value).toBe(50);
-      expect(action.textContent).toBe("取消");
-      expect(action.disabled).toBe(false);
-      expect(document.querySelector("#checkUpdateButton").disabled).toBe(true);
-      receive({ state: "verifying", operationKind: "reinstall", progressPercent: NaN });
-      expect(document.querySelector("#updateProgress").hasAttribute("value")).toBe(false);
-      receive({ state: "readyToRestart", operationKind: "reinstall", canApply: true });
-      expect(action.disabled).toBe(false);
-      expect(action.textContent).toBe("重启并重装");
-      action.click();
-      expect(dom.window.sent.at(-1)).toEqual({ version: 1, type: "applyUpdate", payload: {} });
-      expect(document.querySelector('[data-nav="about"]').classList.contains("has-update")).toBe(false);
     } finally { dom.window.close(); }
   });
-  it("keeps the reinstall retry available after cancel or failure", async () => {
+
+  it("reports download, verification and restart states in the inline operation row", async () => {
     const dom = await createDom();
     try {
       const receive = payload => dom.window.settingsApp.receive({ version: 1, type: "updateStatus", payload });
-      const action = dom.window.document.querySelector("#updateActionButton");
-      receive({ state: "latest", hasUpdate: false, canReinstall: true });
+      const document = dom.window.document;
+      receive({ state: "downloading", operationKind: "reinstall", progressPercent: 50, downloadSizeBytes: 112197632, canCancel: true });
+      const operation = document.querySelector("#updateInlineOperation");
+      expect(operation.hidden).toBe(false);
+      expect(document.querySelector("#updateStatusTitle").textContent).toBe("正在下载更新");
+      expect(document.querySelector("#updateInlineStatus").textContent).toBe("正在下载更新");
+      expect(document.querySelector("#updateInlineProgress").value).toBe(50);
+      expect(document.querySelector("#updateInlineSize").hidden).toBe(false);
+      expect(document.querySelector("#updateInlineSize").textContent).toContain("MB");
+      const cancel = document.querySelector("#updateInlineCancel");
+      expect(cancel.hidden).toBe(false);
+      expect(document.querySelector("#updateReinstallButton").disabled).toBe(true);
+      expect(document.querySelector("#checkUpdateButton").disabled).toBe(true);
+      cancel.click();
+      expect(dom.window.sent.at(-1)).toEqual({ version: 1, type: "cancelUpdateDownload", payload: {} });
+
+      receive({ state: "verifying", operationKind: "reinstall" });
+      expect(document.querySelector("#updateInlineStatus").textContent).toBe("正在验证更新包");
+      expect(document.querySelector("#updateInlineProgress").hasAttribute("value")).toBe(false);
+
+      receive({ state: "readyToRestart", operationKind: "reinstall", canApply: true });
+      expect(document.querySelector("#updateInlineStatus").textContent).toBe("验证完成，正在自动重启并应用更新");
+      expect(document.querySelector("#updateInlineSize").hidden).toBe(true);
+      expect(document.querySelector("#updateInlineCancel").hidden).toBe(true);
+      expect(document.querySelector("#updateReinstallButton").disabled).toBe(true);
+      expect(document.querySelector("#checkUpdateButton").disabled).toBe(true);
+      // Verification completes into an automatic restart; the page never posts applyUpdate itself.
+      expect(dom.window.sent.some(message => message.type === "applyUpdate")).toBe(false);
+    } finally { dom.window.close(); }
+  });
+
+  it("keeps the reinstall action available after a canceled or failed download", async () => {
+    const dom = await createDom();
+    try {
+      const receive = payload => dom.window.settingsApp.receive({ version: 1, type: "updateStatus", payload });
+      const document = dom.window.document;
+      const reinstall = document.querySelector("#updateReinstallButton");
+      const check = document.querySelector("#checkUpdateButton");
       receive({ state: "canceled", hasUpdate: false, canReinstall: true });
-      expect(action.disabled).toBe(false);
-      expect(action.textContent).toBe("重试");
-      receive({ state: "error", hasUpdate: false, canReinstall: true, reasonCode: "DownloadFailed", url: "https://github.com/ANYNC/TaskbarLyrics/releases/latest" });
-      expect(action.disabled).toBe(false);
-      expect(action.textContent).toBe("手动下载");
-      const check = dom.window.document.querySelector("#checkUpdateButton");
-      expect(check.textContent).toBe("重试");
-      check.click();
+      expect(document.querySelector("#updateStatusTitle").textContent).toBe("已取消下载");
+      expect(reinstall.disabled).toBe(false);
+      expect(check.disabled).toBe(false);
+      expect(check.textContent).toBe("检查更新");
+      receive({ state: "error", hasUpdate: false, canReinstall: true, reasonCode: "DownloadFailed" });
+      expect(document.querySelector("#updateStatusTitle").textContent).toBe("检查更新失败");
+      expect(reinstall.disabled).toBe(false);
+      expect(reinstall.hidden).toBe(false);
+      expect(document.querySelector("#updateReason").hidden).toBe(false);
+      expect(document.querySelector("#updateReason").textContent).toContain("下载或校验失败");
+      reinstall.click();
       expect(dom.window.sent.at(-1)).toEqual({ version: 1, type: "reinstallUpdate", payload: {} });
     } finally { dom.window.close(); }
   });
+
   it("preserves formatting while removing executable content and unsafe links", async () => {
     const dom = await createDom();
     try {
@@ -113,7 +145,7 @@ describe("update actions and release notes", () => {
   });
 });
 describe("release update presentation", () => {
-  it("keeps two action slots when current, without duplicate status, size or developer messaging", async () => {
+  it("shows the current-version row without duplicate detail, size or technical messaging", async () => {
     const dom = await createDom();
     try {
       const document = dom.window.document;
@@ -122,36 +154,64 @@ describe("release update presentation", () => {
         message: "当前已是最新版本：1.7.6。", downloadSizeBytes: 112197632,
         url: "https://github.com/ANYNC/TaskbarLyrics/releases/latest"
       } });
-      const shown = [...document.querySelectorAll(".update-actions button")].filter(button => dom.window.getComputedStyle(button).display !== "none");
-      expect(shown.map(button => button.id)).toEqual(["checkUpdateButton", "updateActionButton"]);
-      expect(document.querySelector("#updateStatusDetail").textContent).toBe("");
-      expect(dom.window.getComputedStyle(document.querySelector(".update-extra")).display).toBe("none");
-      expect(document.querySelector("#updateActionButton").disabled).toBe(false);
+      expect(document.querySelector("#updateStatusTitle").textContent).toBe("当前已是最新版本");
+      expect(document.querySelector("#updateStatusDetail")).toBeNull();
+      expect(document.querySelector("#updateInlineOperation").hidden).toBe(true);
+      expect(document.querySelector("#updateDialogStatusDetail").textContent).toBe("");
+      expect(document.querySelector("#updateDialogStatusDetail").hidden).toBe(true);
+      expect(document.querySelector("#updateSize").hidden).toBe(true);
+      expect(document.querySelector("#updateInlineSize").hidden).toBe(true);
+      expect(document.querySelector(".update-extra").hidden).toBe(true);
+      expect(document.querySelector("#updateDirectButton").hidden).toBe(true);
+      expect(document.querySelector("#updateReinstallButton").hidden).toBe(false);
+      expect(document.querySelector("#updateReinstallButton").disabled).toBe(false);
+      expect(document.querySelector("#checkUpdateButton").disabled).toBe(false);
     } finally { dom.window.close(); }
   });
-  it("keeps two action slots across checking, available, failed and latest states", async () => {
+  it("keeps the external action set stable across checking, available, failed and latest states", async () => {
     const dom = await createDom();
     try {
       const document = dom.window.document;
       const receive = payload => dom.window.settingsApp.receive({ version: 1, type: "updateStatus", payload });
-      const visibleActions = () => [...document.querySelectorAll(".update-actions button")].filter(button => dom.window.getComputedStyle(button).display !== "none");
-      expect(visibleActions()).toHaveLength(2);
+      const notes = document.querySelector("#updateNotesButton");
+      const direct = document.querySelector("#updateDirectButton");
+      const reinstall = document.querySelector("#updateReinstallButton");
+      const check = document.querySelector("#checkUpdateButton");
+      expect([notes.hidden, direct.hidden, reinstall.hidden, check.hidden]).toEqual([false, true, false, false]);
+      expect([notes.disabled, direct.disabled, reinstall.disabled, check.disabled]).toEqual([true, true, false, false]);
+      expect(document.querySelector("#updateStatusTitle").textContent).toBe("尚未检查更新");
+
       receive({ state: "checking" });
-      expect(visibleActions()).toHaveLength(2);
-      receive({ state: "available", hasUpdate: true, canDownload: true, url: "https://github.com/ANYNC/TaskbarLyrics/releases/latest" });
-      expect(visibleActions()).toHaveLength(2);
-      expect(document.querySelector("#updateActionButton").textContent).toBe("更新");
-      receive({ state: "error", hasUpdate: true, canDownload: true, reasonCode: "DownloadFailed", url: "https://github.com/ANYNC/TaskbarLyrics/releases/latest" });
-      expect(visibleActions()).toHaveLength(2);
-      expect(document.querySelector("#checkUpdateButton").textContent).toBe("重试");
-      expect(document.querySelector("#updateActionButton").textContent).toBe("手动下载");
+      expect(document.querySelector("#updateStatusTitle").textContent).toBe("正在检查更新…");
+      // 检查中的动作槽只置灰、不隐藏，避免状态切换时按钮闪烁。
+      expect([notes.hidden, reinstall.hidden, check.hidden]).toEqual([false, false, false]);
+      expect([notes.disabled, reinstall.disabled, check.disabled]).toEqual([true, true, true]);
+      expect(document.querySelector("#updateInlineOperation").hidden).toBe(true);
+
+      receive({ state: "available", hasUpdate: true, canDownload: true, version: "1.8.0" });
+      expect(document.querySelector("#updateStatusTitle").textContent).toBe("已检测到更新");
+      expect([notes.hidden, direct.hidden, reinstall.hidden, check.hidden]).toEqual([false, false, false, false]);
+      expect([notes.disabled, direct.disabled, reinstall.disabled, check.disabled]).toEqual([true, false, false, false]);
+
+      receive({ state: "error", hasUpdate: true, canDownload: true, reasonCode: "DownloadFailed" });
+      expect(document.querySelector("#updateStatusTitle").textContent).toBe("检查更新失败");
+      expect([notes.hidden, direct.hidden, reinstall.hidden, check.hidden]).toEqual([false, true, false, false]);
+      // 直接更新 is hidden outside the available state, so only the visible actions are asserted.
+      expect([notes.disabled, reinstall.disabled, check.disabled]).toEqual([true, false, false]);
       expect(document.querySelector("#updateReason").hidden).toBe(false);
-      receive({ state: "latest", hasUpdate: false, reasonCode: "Unsupported", downloadSizeBytes: 112197632, url: "https://github.com/ANYNC/TaskbarLyrics/releases/latest" });
-      expect(visibleActions().map(button => button.id)).toEqual(["checkUpdateButton", "updateActionButton"]);
-      expect(document.querySelector("#updateActionButton").disabled).toBe(false);
-      expect(document.querySelector("#updateActionButton").textContent).toBe("打开发布页");
+      expect(document.querySelector("#updateReason").textContent).toBe("下载或校验失败，请重试或从发布页手动更新。");
+
+      receive({
+        state: "latest", hasUpdate: false, reasonCode: "Unsupported", downloadSizeBytes: 112197632,
+        url: "https://github.com/ANYNC/TaskbarLyrics/releases/latest"
+      });
+      expect(document.querySelector("#updateStatusTitle").textContent).toBe("当前已是最新版本");
+      expect([notes.hidden, direct.hidden, reinstall.hidden, check.hidden]).toEqual([false, true, false, false]);
+      expect([notes.disabled, direct.disabled, reinstall.disabled, check.disabled]).toEqual([true, true, false, false]);
+      expect(document.querySelector("#updateReason").hidden).toBe(true);
       expect(document.querySelector("#updateReason").textContent).toBe("");
       expect(document.querySelector(".update-extra").hidden).toBe(true);
+      expect(document.querySelector("#updateReleaseButton").hidden).toBe(false);
     } finally { dom.window.close(); }
   });
 });
@@ -198,25 +258,25 @@ it("uses the original attachment address for expired GitHub HTML image and link 
   } finally { dom.window.close(); }
 });
 
-it("defaults notes to collapsed when current and expanded for a new version, preserving manual toggles for that version", async () => {
+it("keeps cumulative notes expanded in the update dialog and hides an empty panel", async () => {
   const dom = await createDom();
   try {
     const receive = payload => dom.window.settingsApp.receive({ version: 1, type: "updateStatus", payload });
-    const panel = dom.window.document.querySelector("#releaseNotesPanel");
-    receive({ state: "latest", version: "1.7.6", hasUpdate: false, releaseNotesHtml: "<p>notes</p>" });
-    expect(panel.tagName).toBe("DETAILS");
-    expect(panel.open).toBe(false);
-    panel.open = true;
-    receive({ state: "latest", version: "1.7.6", hasUpdate: false });
-    expect(panel.open).toBe(true);
-    receive({ state: "available", version: "1.8.0", hasUpdate: true });
-    expect(panel.open).toBe(true);
-    panel.open = false;
-    receive({ state: "downloading", version: "1.8.0", hasUpdate: true, progressPercent: 20 });
-    expect(panel.open).toBe(false);
-    receive({ state: "available", version: "1.9.0", hasUpdate: true });
-    expect(panel.open).toBe(true);
-    receive({ state: "latest", version: "1.9.0", hasUpdate: false });
-    expect(panel.open).toBe(false);
+    const document = dom.window.document;
+    const panel = document.querySelector("#releaseNotesPanel");
+    const notesButton = document.querySelector("#updateNotesButton");
+    expect(panel.tagName).toBe("SECTION");
+    expect(panel.querySelector("details, summary")).toBeNull();
+    expect(notesButton.disabled).toBe(true);
+    receive({ state: "latest", version: "1.7.6", hasUpdate: false, releaseNotesHtml: "<p>notes</p>", notesComplete: false });
+    expect(panel.hidden).toBe(false);
+    expect(panel.hasAttribute("open")).toBe(false);
+    expect(document.querySelector("#releaseNotesIncomplete").hidden).toBe(false);
+    expect(document.querySelector("#releaseNotesContent").textContent).toBe("notes");
+    expect(notesButton.disabled).toBe(false);
+    receive({ state: "latest", version: "1.7.6", hasUpdate: false, releaseNotesHtml: "", notesComplete: true });
+    expect(panel.hidden).toBe(true);
+    expect(document.querySelector("#releaseNotesIncomplete").hidden).toBe(true);
+    expect(notesButton.disabled).toBe(true);
   } finally { dom.window.close(); }
 });

@@ -36,7 +36,7 @@ internal static class PlaybackInputPolicy
             return false;
         }
 
-        return !track.Id.Trim().EndsWith("|ProcessFallback", StringComparison.OrdinalIgnoreCase);
+        return true;
     }
 }
 
@@ -178,4 +178,3 @@ internal sealed class LyricsContentVisibilityStateMachine
             enteredNoPlayback);
     }
 }
-

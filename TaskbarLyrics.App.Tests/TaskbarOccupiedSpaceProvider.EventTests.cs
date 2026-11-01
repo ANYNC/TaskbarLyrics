@@ -5,14 +5,14 @@ namespace TaskbarLyrics.App.Tests;
 public sealed partial class TaskbarOccupiedSpaceProviderTests
 {
     [Fact]
-    public async Task HealthyEventMonitoringKeepsCacheBetweenFiveSecondChecks()
+    public async Task HealthyEventMonitoringKeepsCacheBetweenFifteenSecondChecks()
     {
         var clock = new ManualTimeProvider();
         var reads = 0;
         using var provider = new TaskbarOccupiedSpaceProvider((_, _, _) => { reads++; return [new(200, 400)]; }, clock);
         await WarmEventCache(provider, clock);
         var warmReads = reads;
-        clock.Advance(TimeSpan.FromMilliseconds(4999));
+        clock.Advance(TimeSpan.FromMilliseconds(14999));
         Assert.NotNull(provider.GetOccupiedBounds(TaskbarHandle, TaskbarBounds));
         Assert.Equal(warmReads, reads);
         clock.Advance(TimeSpan.FromMilliseconds(1));
@@ -53,7 +53,7 @@ public sealed partial class TaskbarOccupiedSpaceProviderTests
         using var provider = new TaskbarOccupiedSpaceProvider((_, _, _) => fail ? null : [new(200, 400)], clock);
         await WarmEventCache(provider, clock);
         fail = true;
-        clock.Advance(TimeSpan.FromSeconds(5));
+        clock.Advance(TimeSpan.FromSeconds(15));
         Assert.NotNull(provider.GetOccupiedBounds(TaskbarHandle, TaskbarBounds));
         await provider.PendingRead.WaitAsync(WaitTimeout);
         clock.Advance(TimeSpan.FromMilliseconds(1999));
@@ -103,7 +103,7 @@ public sealed partial class TaskbarOccupiedSpaceProviderTests
         using var provider = new TaskbarOccupiedSpaceProvider((_, _, _) => { reads++; return raw; }, clock);
         await WarmEventCache(provider, clock);
         raw = [new(300, 1000)];
-        clock.Advance(TimeSpan.FromSeconds(5));
+        clock.Advance(TimeSpan.FromSeconds(15));
         provider.GetOccupiedBounds(TaskbarHandle, TaskbarBounds);
         await provider.PendingRead.WaitAsync(WaitTimeout);
         var firstCheck = reads;
