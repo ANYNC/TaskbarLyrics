@@ -488,7 +488,8 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
                 return BuildProcessFallbackSnapshot();
             },
             LogSessionReadUnavailable,
-            cancellationToken);
+            cancellationToken,
+            snapshot => PlaybackInputPolicy.Classify(snapshot) == PlaybackInputKind.ValidTrack);
 
     private void LogSessionReadUnavailable(Exception? exception)
     {

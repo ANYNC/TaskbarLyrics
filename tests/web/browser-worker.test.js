@@ -12,7 +12,8 @@ async function worker(mediaDetailsVersion) {
     runtime:{connectNative:()=>port,onMessage:event("runtime"),onStartup:event("startup"),onInstalled:event("installed")},
     permissions:{contains:async()=>true,onRemoved:event("removed"),onAdded:event("added")},
     scripting:{getRegisteredContentScripts:async()=>[],registerContentScripts:async()=>{},executeScript:async()=>{}},
-    tabs:{query:async()=>[],sendMessage:async(tabId,message,options)=>{commands.push({tabId,...options,payload:message.payload});return {ok:true,status:"observed",observed:"paused"};},
+    tabs:{query:async()=>[],get:(id,callback)=>callback({id,audible:false}),
+      sendMessage:async(tabId,message,options)=>{commands.push({tabId,...options,payload:message.payload});return {ok:true,status:"observed",observed:"paused"};},
       onRemoved:event("tabRemoved"),onUpdated:event("updated")},alarms:{create:async()=>{},onAlarm:event("alarm")}};
   new Function("chrome",...Object.keys(rules),source)(chrome,...Object.values(rules));
   await flush();
@@ -21,9 +22,10 @@ async function worker(mediaDetailsVersion) {
   const media={mediaId:"media-session",title:"Song",artist:"Artist",album:"",isPlaying:true,positionSeconds:10,durationSeconds:100,canSeek:false,
     details:{version:1,trackVersion:3,source:"media-session",titleSource:"media-session",playbackState:"playing",positionSeconds:10,durationSeconds:100,
       playbackRate:1,sampleAgeSeconds:0,seekable:[],actions:["pause"],artwork:[]}};
-  const send=(id=1,sentAt=Date.now())=>handlers.runtime({type:"media",payload:media,sentAt},
-    {tab:{id},documentId:"doc-"+id,frameId:0,url:"https://music.test/"},()=>{});
-  return {handlers,packets,commands,send};
+  const sendRaw=(payload,tab={id:1},documentId="doc-1",sentAt=Date.now())=>handlers.runtime({type:"media",payload,sentAt},
+    {tab,documentId,frameId:0,url:"https://music.test/"},()=>{});
+  const send=(id=1,sentAt=Date.now())=>sendRaw(media,{id},"doc-"+id,sentAt);
+  return {handlers,packets,commands,send,sendRaw,media};
 }
 describe("browser worker media contract",()=>{
   it.each([undefined,1])("negotiates optional details with desktop capability %s",async version=>{
@@ -33,6 +35,30 @@ describe("browser worker media contract",()=>{
       expect(packet.type).toBe("session");expect(packet.payload.title).toBe("Song");
       if(version===1)expect(packet.payload.details.trackVersion).toBe(3);else expect(packet.payload.details).toBeUndefined();
       const count=w.packets.length;w.send(1,Date.now()-7000);expect(w.packets).toHaveLength(count);
+    }finally{vi.clearAllTimers();vi.useRealTimers();}
+  });
+  it("uses tab audible as playing evidence only for an unknown media session",async()=>{
+    const w=await worker(1);
+    const unknown={...w.media,isPlaying:false,details:{...w.media.details,playbackState:"unknown"}};
+    w.sendRaw(unknown,{id:1,audible:true});
+    expect(w.packets.at(-1).payload).toMatchObject({isPlaying:true,details:{playbackState:"playing"}});
+    w.sendRaw(unknown,{id:1,audible:false});
+    expect(w.packets.at(-1).payload).toMatchObject({isPlaying:false,details:{playbackState:"unknown"}});
+    const paused={...unknown,details:{...unknown.details,playbackState:"paused"}};
+    w.sendRaw(paused,{id:1,audible:true});
+    expect(w.packets.at(-1).payload).toMatchObject({isPlaying:false,details:{playbackState:"paused"}});
+  });
+  it("reapplies an enabled configuration after the native port reconnects",async()=>{
+    vi.useFakeTimers();try{
+      const w=await worker(1);
+      w.handlers.disconnect();
+      vi.advanceTimersByTime(5000);
+      await flush();
+      w.handlers.native({version:1,type:"configuration",payload:{revision:1,enabled:true,mediaDetailsVersion:1,
+        sites:[{id:"music",origin:"https://music.test",enabled:true}]}});
+      await flush();
+      w.send();
+      expect(w.packets.at(-1).type).toBe("session");
     }finally{vi.clearAllTimers();vi.useRealTimers();}
   });
   it("routes a control to its document and fails after removal without redirecting",async()=>{

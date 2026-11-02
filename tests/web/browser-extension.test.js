@@ -27,7 +27,7 @@ describe("browser companion", () => {
       } } };
       w.eval(read("relay.js"));
       w.eval(read("media-probe.js"));
-      await Promise.resolve();
+      for (let i = 0; i < 5; i++) await Promise.resolve();
       expect(w.location.origin).toBe("null");
       expect(targets.length).toBeGreaterThan(0);
       expect(targets.every(target => target === "https://music.test")).toBe(true);

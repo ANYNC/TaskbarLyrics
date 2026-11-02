@@ -18,8 +18,26 @@ public sealed class BrowserArtworkReaderTests
     [InlineData("::1")]
     [InlineData("::ffff:127.0.0.1")]
     [InlineData("fd00::1")]
+    [InlineData("198.18.0.32")]
     public void PageArtworkCannotTurnPublicSiteAccessIntoPrivateNetworkAccess(string address) =>
         Assert.False(BrowserArtworkReader.IsPublicAddress(IPAddress.Parse(address)));
+
+    [Theory]
+    [InlineData("198.18.0.32", true)]
+    [InlineData("198.19.255.255", true)]
+    [InlineData("::ffff:198.18.0.32", true)]
+    [InlineData("198.17.255.255", false)]
+    [InlineData("198.20.0.1", false)]
+    public void ProxyFakeIpAliasesAreRecognizedInBenchmarkRange(string address, bool expected) =>
+        Assert.Equal(expected, BrowserArtworkReader.IsProxyAliasAddress(IPAddress.Parse(address)));
+
+    [Theory]
+    [InlineData("198.18.0.32", false, false)]
+    [InlineData("198.18.0.32", true, true)]
+    [InlineData("127.0.0.1", true, false)]
+    [InlineData("8.8.8.8", false, true)]
+    public void ProxyAliasesAreAcceptedOnlyWhenResolvedFromAHostName(string address, bool resolvedFromHostName, bool expected) =>
+        Assert.Equal(expected, BrowserArtworkReader.IsAllowedResolvedAddress(IPAddress.Parse(address), resolvedFromHostName));
 
     [Fact]
     public void ExplicitlyAuthorizedPrivateSiteCanReadItsOwnArtworkWithoutGrantingOtherOrigins()

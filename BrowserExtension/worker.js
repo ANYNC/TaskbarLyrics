@@ -119,8 +119,22 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
   }
   if (!documents.has(sender.documentId) && documents.size >= 128) return false;
   documents.set(sender.documentId, { tabId: sender.tab.id, frameId: sender.frameId });
-  post("session", { ...media, documentId: sender.documentId, url: origin,
-    sequence: ++sequence, revision: configuration.revision });
+  const serial = ++sequence;
+  const revision = configuration.revision;
+  const publish = audible => {
+    // A muted/Web-Audio player can look paused to the page while its tab is
+    // still audible. Use the browser's tab flag only as playing evidence for an
+    // unknown page state; it never supplies a position or duration.
+    if (audible && media.details?.playbackState === "unknown") {
+      media.details.playbackState = "playing";
+      media.isPlaying = true;
+    }
+    post("session", { ...media, documentId: sender.documentId, url: origin, sequence: serial, revision });
+  };
+  if (sender.tab.audible === true) publish(true);
+  else try {
+    chrome.tabs.get(sender.tab.id, tab => publish(!chrome.runtime.lastError && tab?.audible === true));
+  } catch { publish(false); }
   return false;
 });
 

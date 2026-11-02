@@ -90,11 +90,25 @@ internal static class BrowserArtworkReader
             !(bytes[0] == 198 && bytes[1] is 18 or 19);
     }
 
+    // Local proxy clients commonly answer DNS queries in the RFC 2544 benchmark
+    // range and route the original host name through their tunnel. Accept that
+    // alias only for DNS names, never for an IP literal supplied by a page.
+    internal static bool IsProxyAliasAddress(IPAddress address)
+    {
+        if (address.IsIPv4MappedToIPv6) address = address.MapToIPv4();
+        var bytes = address.GetAddressBytes();
+        return address.AddressFamily == AddressFamily.InterNetwork && bytes[0] == 198 && bytes[1] is 18 or 19;
+    }
+
+    internal static bool IsAllowedResolvedAddress(IPAddress address, bool resolvedFromHostName) =>
+        IsPublicAddress(address) || resolvedFromHostName && IsProxyAliasAddress(address);
+
     private static async ValueTask<Stream> ConnectPublicAsync(SocketsHttpConnectionContext context, CancellationToken token)
     {
         var addresses = await Dns.GetHostAddressesAsync(context.DnsEndPoint.Host, token).ConfigureAwait(false);
         var allowPrivate = context.InitialRequestMessage.Options.TryGetValue(AllowPrivateOrigin, out var allowed) && allowed;
-        foreach (var address in addresses.Where(address => allowPrivate || IsPublicAddress(address)))
+        var resolvedFromHostName = !IPAddress.TryParse(context.DnsEndPoint.Host.Trim('[', ']'), out _);
+        foreach (var address in addresses.Where(address => allowPrivate || IsAllowedResolvedAddress(address, resolvedFromHostName)))
         {
             var socket = new Socket(address.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
             try

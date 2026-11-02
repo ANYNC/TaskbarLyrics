@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "TaskbarLyrics Browser Companion",
   "description": "__MSG_EXT_Description__",
-  "version": "0.2.1",
+  "version": "0.2.7",
   "minimum_chrome_version": "120",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA778+Rld5PGfiEPabD6Kjo5j0gWhmPCScBrOtGEDrZVUsj5i9KD0uDAjMMzU0r/XBzZSSAHD0ipMIEadLSeGRymS9pHQMhTG1rxNLsXI9trqbtwXgKW8ZM/g6lIAy1V0QJGWtP9jlOM/qiFBDb9fMgyScv5SIvkNt09O8zlDyQww3T4jmEgZaEzd7xXSRDDgBVVpsLres+iEn1HadtSKeddAvhUfuJ1NQkrE7kHUllj2o+Zh4YNNR743HW5lX3zzUrsMtWA4XqeQ8j6eg3FRLK5wCdKH5FuL/IOeORD3Mv2K9jxgI7P146HG9w35+4pGnffi/1eZfG/rSQ3wT4NJEGQIDAQAB",
   "permissions": [

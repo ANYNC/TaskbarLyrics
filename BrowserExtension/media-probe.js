@@ -9,6 +9,8 @@
   const ids = new WeakMap();
   const observedMedia = new WeakSet();
   const detachedMedia = new Set();
+  const audioContexts = new Set();
+  const audioContextTimes = new WeakMap();
   const actions = new Map();
   let serial = 0;
   let active = null;
@@ -26,9 +28,21 @@
   let commandPending = false;
   const session = navigator.mediaSession;
   const sessionMediaId = "media-session";
+  function documentMetadata() {
+    const content = selector => Array.from(document.querySelectorAll(selector))
+      .map(node => node.getAttribute("content")?.trim()).find(Boolean) || "";
+    const raw = content('meta[property="og:title"]') || content('meta[name="title"]') || document.title;
+    // Only explicit author separators are interpreted. A site name or a dash in
+    // a title is not evidence of an artist, and must not pollute lyric matching.
+    const clean = raw.replace(/[\u25A0\u25B6\u25BA\u25B7\u25FC\u2758-\u275A\u25AE]/g, " ").replace(/\s+/g, " ").trim();
+    const match = clean.match(/^(.+?)(?:,\s+by\s+|\s+by:\s*)(.+)$/i);
+    return { title: match ? match[1].trim() : clean, artist: match ? match[2].trim() : "",
+      artwork: content('meta[property="og:image"]') };
+  }
   function metadataKey() {
     const metadata = session?.metadata;
-    return JSON.stringify([metadata?.title || document.title, metadata?.artist || "", metadata?.album || ""]);
+    const fallback = metadata?.title?.trim() ? null : documentMetadata();
+    return JSON.stringify([metadata?.title?.trim() || fallback.title, metadata?.title?.trim() ? metadata.artist || "" : fallback.artist, metadata?.album || ""]);
   }
   function refreshTrack() {
     const key = metadataKey();
@@ -112,15 +126,70 @@
   }
   function rememberMedia(media) {
     if (observedMedia.has(media)) return;
-    observedMedia.add(media);
     // A player can keep new Audio() off-DOM. Weak references avoid owning the
     // lifetime of discarded players while still observing their native timeline.
     for (const reference of detachedMedia) if (!reference.deref()) detachedMedia.delete(reference);
     if (detachedMedia.size >= 128) return;
+    observedMedia.add(media);
     detachedMedia.add(new WeakRef(media));
     for (const name of ["play", "pause", "ended", "seeking", "seeked", "ratechange", "loadedmetadata", "durationchange", "emptied"])
       media.addEventListener(name, event => { if (event.type === "play") active = event.currentTarget; report(); });
   }
+  function observeCreated(media) {
+    if (media instanceof HTMLMediaElement) rememberMedia(media);
+    return media;
+  }
+  function rememberAudioContext(context) {
+    if (context && typeof context === "object") audioContexts.add(context);
+    return context;
+  }
+  // A muted video can still be the page's only media element while the real
+  // audio runs through Web Audio. A running context is playback evidence only;
+  // it never supplies a song position or duration.
+  const audioConstructors = new Set();
+  for (const name of ["AudioContext", "webkitAudioContext"]) {
+    const constructor = window[name];
+    if (typeof constructor !== "function" || audioConstructors.has(constructor)) continue;
+    audioConstructors.add(constructor);
+    try {
+      window[name] = new Proxy(constructor, {
+        apply(target, receiver, args) { return rememberAudioContext(Reflect.apply(target, receiver, args)); },
+        construct(target, args, newTarget) { return rememberAudioContext(Reflect.construct(target, args, newTarget)); }
+      });
+    } catch { /* A non-configurable constructor remains unobserved. */ }
+  }
+  function audioContextPlaying() {
+    let playing = false;
+    for (const context of audioContexts) {
+      if (context.state === "closed") {
+        audioContexts.delete(context);
+        audioContextTimes.delete(context);
+        continue;
+      }
+      const current = Number(context.currentTime);
+      if (context.state === "running" && Number.isFinite(current) && current > (audioContextTimes.get(context) ?? 0)) playing = true;
+      audioContextTimes.set(context, current);
+    }
+    return playing;
+  }
+  // Observing play alone misses off-DOM players that invoke a previously saved
+  // native play method. Register media at creation/load too, keeping the native
+  // objects, prototypes, return values and exceptions intact.
+  if (typeof window.Audio === "function") window.Audio = new Proxy(window.Audio, {
+    apply(target, receiver, args) { return observeCreated(Reflect.apply(target, receiver, args)); },
+    construct(target, args, newTarget) { return observeCreated(Reflect.construct(target, args, newTarget)); }
+  });
+  for (const name of ["createElement", "createElementNS"]) {
+    const original = Document.prototype[name];
+    Document.prototype[name] = function() { return observeCreated(Reflect.apply(original, this, arguments)); };
+  }
+  const originalLoad = HTMLMediaElement.prototype.load;
+  HTMLMediaElement.prototype.load = function() {
+    const result = Reflect.apply(originalLoad, this, arguments);
+    rememberMedia(this);
+    report();
+    return result;
+  };
   const originalPlay = HTMLMediaElement.prototype.play;
   HTMLMediaElement.prototype.play = function() {
     const result = Reflect.apply(originalPlay, this, arguments);
@@ -138,7 +207,9 @@
     return [...result];
   }
   function pick() {
-    const all = elements();
+    // Empty/preloaded players do not establish a current media candidate. Live
+    // media can have infinite duration; its timeline remains explicitly open.
+    const all = elements().filter(media => media.duration > 0);
     // Prefer audible media, but do not declare every muted video ineligible: a
     // real player can be muted. Ambiguous equal candidates remain unselected.
     const audible = all.filter(media => !media.muted && media.volume > 0);
@@ -152,11 +223,39 @@
     if (!ids.has(media)) ids.set(media, `media-${++serial}`);
     return ids.get(media);
   }
-  function diagnose(source, playing, hasTitle, hasDuration) {
-    const state = `${source}:${playing}:${hasTitle}:${hasDuration}`;
+  function mediaFallback() {
+    // VIDEO can carry audio too. Use native playback/audibility evidence rather
+    // than treating a tag name as proof of which object is the song player.
+    const players = elements().filter(media => media.duration > 0);
+    const playing = players.filter(media => !media.paused && !media.ended && !media.muted && media.volume > 0);
+    let media = playing.length === 1 ? playing[0] : null;
+    // Paused preloads are not competing playback. Preserve an established
+    // player's identity through pause/mute, but not simultaneous audible media.
+    if (!playing.length) {
+      if (associationKind === "media-state" && players.includes(associated) && !associated.ended) media = associated;
+      else if (players.length === 1 && !players[0].muted && players[0].volume > 0) media = players[0];
+    }
+    // Playback evidence and timeline identity are separate: overlapping media
+    // can prove that this document is playing without identifying its timeline.
+    const state = playing.length ? "playing" : players.length && players.every(item => item.paused || item.ended) ? "paused" : "unknown";
+    return {media, state};
+  }
+  function diagnose(source, playing, hasTitle, hasDuration, titleSource = "none", hasArtwork = false, selectedTag = "none") {
+    const association = source === "associated-element" ? associationKind : "none";
+    const observed = elements(), eligible = observed.filter(media => media.duration > 0).length;
+    const audio = observed.filter(media => media.tagName === "AUDIO" && Number.isFinite(media.duration) && media.duration > 0);
+    const audioPlaying = audio.filter(media => !media.paused && !media.ended);
+    const audiblePlaying = audioPlaying.filter(media => !media.muted && media.volume > 0).length;
+    const videoCount = observed.filter(media => media.tagName === "VIDEO").length;
+    const audioTagCount = observed.filter(media => media.tagName === "AUDIO").length;
+    const openDurationCount = observed.filter(media => media.duration === Infinity).length;
+    const mediaPlaying = observed.filter(media => media.duration > 0 && !media.paused && !media.ended);
+    const mediaAudiblePlaying = mediaPlaying.filter(media => !media.muted && media.volume > 0).length;
+    const declaredState = session?.playbackState ?? "unavailable";
+    const state = `${source}:${playing}:${hasTitle}:${hasDuration}:${titleSource}:${hasArtwork}:${association}:${observed.length}:${eligible}:${declaredState}:${actions.size}:${audio.length}:${audioPlaying.length}:${audiblePlaying}:${videoCount}:${audioTagCount}:${openDurationCount}:${mediaPlaying.length}:${mediaAudiblePlaying}:${selectedTag}`;
     if (state === diagnosticState) return;
     diagnosticState = state;
-    console.debug(`[TaskbarLyrics] MediaProbe Source=${source} Playing=${playing} HasTitle=${hasTitle} HasDuration=${hasDuration}`);
+    console.debug(`[TaskbarLyrics] MediaProbe Source=${source} Playing=${playing} HasTitle=${hasTitle} HasDuration=${hasDuration} TitleSource=${titleSource} HasArtwork=${hasArtwork} Association=${association} MediaCount=${observed.length} EligibleCount=${eligible} DeclaredState=${declaredState} ActionCount=${actions.size} AudioCount=${audio.length} AudioPlaying=${audioPlaying.length} AudioAudiblePlaying=${audiblePlaying} AudioTagCount=${audioTagCount} VideoCount=${videoCount} OpenDurationCount=${openDurationCount} MediaPlaying=${mediaPlaying.length} MediaAudiblePlaying=${mediaAudiblePlaying} SelectedTag=${selectedTag}`);
   }
   function seekRanges(media) {
     const ranges = [];
@@ -175,19 +274,27 @@
       } catch { return []; }
     });
   }
+  function coverCandidates(metadata, media) {
+    const standard = artwork(metadata);
+    if (standard.length) return standard;
+    // A poster belongs to this specific video. Page-wide Open Graph imagery is
+    // a weaker fallback and is used only with one eligible media in this document.
+    const poster = media?.tagName === "VIDEO" ? media.getAttribute("poster") : null;
+    const eligible = elements().filter(item => item.duration > 0);
+    const pageCover = media && eligible.length === 1 && eligible[0] === media ? documentMetadata().artwork : "";
+    return artwork({ artwork: [poster, pageCover].filter(Boolean).map(src => ({src})) }).slice(0, 1);
+  }
   function capture() {
     refreshTrack(); updateSessionPosition();
     const metadata = session?.metadata;
     const candidate = pick();
-    const audio = elements().filter(media => media.tagName === "AUDIO" && Number.isFinite(media.duration) && media.duration > 0);
-    // Metadata-only Media Sessions are common. A single audible audio player in
-    // this document is a bounded fallback; videos and multiple audios do not
-    // establish this association, nor does media in another document.
-    const uniqueAudio = audio.length === 1 && !audio[0].muted && audio[0].volume > 0 ? audio[0] : null;
-    const usesSession = Boolean(metadata?.title?.trim() && (sessionPosition ||
-      ["playing", "paused"].includes(session?.playbackState) || !candidate || uniqueAudio));
-    if (usesSession && !sessionPosition && session.playbackState === "none" && uniqueAudio) {
-      associated = uniqueAudio; associationKind = "single-audio";
+    const fallback = mediaFallback();
+    const audioPlaying = audioContextPlaying();
+    // Metadata is still useful when its timeline cannot be identified. Retain
+    // it with unknown time rather than attaching it to an arbitrary player.
+    const usesSession = Boolean(metadata?.title?.trim());
+    if (usesSession && !sessionPosition && session.playbackState === "none" && fallback.media) {
+      associated = fallback.media; associationKind = "media-state";
     }
     // Associate only after matching both duration and position in two spaced
     // observations. Never bind across documents or just by matching a title.
@@ -197,15 +304,16 @@
       if (associationCandidate === candidate && performance.now() - associationAt >= 750) { associated = candidate; associationKind = "timeline-match"; }
       else if (associationCandidate !== candidate) { associationCandidate = candidate; associationAt = performance.now(); }
     } else if (!associated) associationCandidate = null;
-    if (associated && (!elements().includes(associated) || (associationKind === "single-audio"
-        ? uniqueAudio !== associated || Boolean(sessionPosition)
+    if (associated && (!elements().includes(associated) || (associationKind === "media-state"
+        ? fallback.media !== associated || Boolean(sessionPosition)
         : !sessionPosition || Math.abs(associated.duration - sessionPosition.duration) >= 1))) {
       associated = null; associationKind = null;
     }
     const media = usesSession ? associated : candidate;
     if (!usesSession && !media) return null;
     const state = media ? media.seeking ? "seeking" : media.ended ? "ended" : media.paused ? "paused" : "playing"
-      : ["playing", "paused"].includes(session?.playbackState) ? session.playbackState : "unknown";
+      : ["playing", "paused"].includes(session?.playbackState) ? session.playbackState
+        : usesSession ? (audioPlaying ? "playing" : fallback.state) : "unknown";
     const position = media ? Number.isFinite(media.currentTime) ? Math.max(0, media.currentTime) : null : sessionPosition?.position ?? null;
     const duration = media ? Number.isFinite(media.duration) && media.duration > 0 ? media.duration : null : sessionPosition?.duration || null;
     const ranges = media ? seekRanges(media) : [];
@@ -219,9 +327,10 @@
       titleSource: usesSession ? "media-session" : "document", playbackState: state,
       positionSeconds: position, durationSeconds: duration, playbackRate: media ? media.playbackRate : sessionPosition?.rate ?? 1,
       sampleAgeSeconds: 0, anchorAgeSeconds: media ? 0 : sessionPosition ? Math.min(31536000, Math.max(0, (performance.now() - sessionPosition.capturedAt) / 1000)) : null,
-      seekable: ranges, actions: [...new Set(supported)], artwork: usesSession ? artwork(metadata) : [] };
-    return { media, snapshot: { mediaId: usesSession ? sessionMediaId : idOf(media), title: usesSession ? metadata.title : document.title,
-      artist: usesSession ? metadata.artist || "" : "", album: usesSession ? metadata.album || "" : "",
+      seekable: ranges, actions: [...new Set(supported)], artwork: coverCandidates(usesSession ? metadata : null, media) };
+    const pageMetadata = usesSession ? null : documentMetadata();
+    return { media, snapshot: { mediaId: usesSession ? sessionMediaId : idOf(media), title: usesSession ? metadata.title : pageMetadata.title,
+      artist: usesSession ? metadata.artist || "" : pageMetadata.artist, album: usesSession ? metadata.album || "" : "",
       isPlaying: state === "playing", positionSeconds: position ?? 0, durationSeconds: duration ?? 0, canSeek: seekable, details } };
   }
   function report() {
@@ -230,7 +339,8 @@
     reportedMediaId = latest?.snapshot.mediaId ?? null;
     if (!latest) { diagnose("none", false, false, false); return; }
     const snapshot = latest.snapshot;
-    diagnose(snapshot.details.source, snapshot.isPlaying, Boolean(snapshot.title?.trim()), snapshot.durationSeconds > 0);
+    diagnose(snapshot.details.source, snapshot.isPlaying, Boolean(snapshot.title?.trim()), snapshot.durationSeconds > 0,
+      snapshot.details.titleSource, snapshot.details.artwork.length > 0, latest.media?.tagName ?? "none");
     window.postMessage({ channel: "taskbarlyrics-media-v1", sampledAt: performance.now(), payload: snapshot }, pageOrigin);
   }
   async function execute(payload) {

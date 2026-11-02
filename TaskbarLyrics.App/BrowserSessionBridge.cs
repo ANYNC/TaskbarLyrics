@@ -349,7 +349,12 @@ internal sealed class BrowserSessionBridge : IDisposable
                 duration = details.DurationSeconds ?? 0;
             }
             foreach (var expired in client.Sessions.Where(item => _clock.GetUtcNow() - item.Value.Received > TimeSpan.FromSeconds(6))
-                .Select(item => item.Key).ToArray()) client.Sessions.Remove(expired);
+                .Select(item => item.Key).ToArray())
+            {
+                var mediaId = client.Sessions[expired].Session.MediaId;
+                client.Sessions.Remove(expired);
+                Log.Diagnostic("BROWSER", $"SessionExpired Media={mediaId}");
+            }
             if (client.Sessions.TryGetValue(key, out var prior) && prior.Session.Sequence >= serial) return true;
             if (prior?.Session.Details is { } previousDetails && details is not null && details.TrackVersion < previousDetails.TrackVersion) return true;
             if (!client.Sessions.ContainsKey(key) && client.Sessions.Count >= 128) return true;
@@ -368,6 +373,11 @@ internal sealed class BrowserSessionBridge : IDisposable
                     $"TimeKnown={details.PositionSeconds.HasValue} Position={position:F3} Duration={duration:F3} " +
                     $"Rate={details.PlaybackRate:F3} SampleAge={details.SampleAgeSeconds:F3} AnchorAge={details.AnchorAgeSeconds:F3}");
             client.Sessions[key] = new ReceivedSession(session, _clock.GetUtcNow());
+            if (prior is null || _clock.GetUtcNow() - client.LastSessionLog >= TimeSpan.FromSeconds(5))
+            {
+                client.LastSessionLog = _clock.GetUtcNow();
+                Log.Diagnostic("BROWSER", $"SessionAccepted Media={media} Sequence={serial} Details={details is not null} Playing={session.IsPlaying}");
+            }
             return true;
         }
     }
@@ -411,7 +421,7 @@ internal sealed class BrowserSessionBridge : IDisposable
         internal string Id = string.Empty, Browser = string.Empty;
         internal bool Connected;
         internal long Revision = -1;
-        internal DateTimeOffset Seen, Disconnected;
+        internal DateTimeOffset Seen, Disconnected, LastSessionLog;
         internal string[] Origins = [];
         internal NamedPipeServerStream? Stream;
         internal Channel<JsonElement> Outgoing { get; } = Channel.CreateBounded<JsonElement>(64);

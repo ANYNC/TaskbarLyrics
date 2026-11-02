@@ -37,6 +37,44 @@ public sealed class SmtcSessionReadBoundaryTests
     }
 
     [Fact]
+    public async Task UnusableOtherSourceFallsBackToTheCurrentBrowserCandidate()
+    {
+        var fallback = new PlaybackSnapshot(false, TimeSpan.Zero,
+            new TrackInfo("Browser|Song|Artist", "Song", "Artist", "Album", "Browser", TimeSpan.FromMinutes(3)));
+        var unusable = new PlaybackSnapshot(false, TimeSpan.Zero,
+            new TrackInfo("Netease|ProcessFallback", "Unknown Title", "Unknown Artist", string.Empty, "Netease", TimeSpan.Zero));
+        var reports = 0;
+
+        var result = await SmtcSessionReadBoundary.ReadAsync(
+            _ => Task.FromResult<PlaybackSnapshot?>(unusable),
+            () => fallback,
+            _ => reports++,
+            default,
+            snapshot => PlaybackInputPolicy.Classify(snapshot) == PlaybackInputKind.ValidTrack);
+
+        Assert.Same(fallback, result);
+        Assert.Equal(0, reports);
+    }
+
+    [Fact]
+    public async Task UsablePausedOtherSourceStillWinsOverTheBrowserFallback()
+    {
+        var fallback = new PlaybackSnapshot(false, TimeSpan.Zero,
+            new TrackInfo("Browser|Song|Artist", "Song", "Artist", "Album", "Browser", TimeSpan.FromMinutes(3)));
+        var pausedOtherSource = new PlaybackSnapshot(false, TimeSpan.Zero,
+            new TrackInfo("Netease|Other|Singer", "Other", "Singer", "Album", "Netease", TimeSpan.FromMinutes(4)));
+
+        var result = await SmtcSessionReadBoundary.ReadAsync(
+            _ => Task.FromResult<PlaybackSnapshot?>(pausedOtherSource),
+            () => fallback,
+            _ => Assert.Fail("A usable snapshot must not be reported as unavailable."),
+            default,
+            snapshot => PlaybackInputPolicy.Classify(snapshot) == PlaybackInputKind.ValidTrack);
+
+        Assert.Same(pausedOtherSource, result);
+    }
+
+    [Fact]
     public async Task CallerCancellationIsNotConvertedToAnEmptyPlaybackSnapshot()
     {
         using var cancellation = new CancellationTokenSource();
