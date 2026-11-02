@@ -8,6 +8,19 @@ namespace TaskbarLyrics.Core.Tests;
 public sealed class LyricSyncServiceTests
 {
     [Fact]
+    public async Task UnknownPlaybackPositionShowsMetadataUntilAnActualTimelineArrives()
+    {
+        var coordinator = new SequenceCoordinator(LyricResolutionResult.FromLyrics(CreateResolved("known", "Actual lyric")));
+        using var service = new LyricSyncService(coordinator, metadataStabilizationDelay: TimeSpan.Zero);
+        var snapshot = new PlaybackSnapshot(true, TimeSpan.FromSeconds(30), CreateTrack()) { HasKnownPosition = false };
+        var unknown = await service.GetDisplayFrameAsync(snapshot);
+        Assert.Equal(snapshot.Track!.Title, unknown.CurrentLine);
+        Assert.Equal(-1, unknown.CurrentLineIndex);
+        Assert.Equal(0, unknown.LineProgress);
+        Assert.Equal("Actual lyric", (await service.GetDisplayFrameAsync(snapshot with { HasKnownPosition = true })).CurrentLine);
+    }
+
+    [Fact]
     public async Task RetriesTransientFailureAfterTwoSecondsAndPublishesRecoveredLyrics()
     {
         var clock = new RetryTimeProvider();

@@ -977,3 +977,16 @@
       .display-settings-column .slider-number-control { max-width: none; }
       .display-settings-column .monitor-mode, .panel-trigger-areas { justify-self: start; }
     }
+
+/* Website sources use the existing player drawer controls and focus styles. */
+.browser-connections, .browser-site-list { display: grid; gap: 8px; margin-top: 12px; }
+.browser-connection { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.browser-connection > span { font-size: 12px; color: var(--muted-foreground); }
+.browser-site-form { display: grid; gap: 8px; margin-top: 16px; }
+.browser-site-form > label { font-size: 12px; color: var(--muted-foreground); }
+.browser-site-form > .btn { justify-self: start; }
+.browser-site-row { display: grid; grid-template-columns: auto minmax(0,1fr) auto auto; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.browser-site-label { display: grid; min-width: 0; gap: 4px; }
+.browser-site-label strong, .browser-site-label small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.browser-site-label small, .source-info .browser-card-hint { color: var(--muted-foreground); font-size: 11px; }
+.source-info .browser-card-hint { white-space: normal; }

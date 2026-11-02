@@ -291,6 +291,15 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
 
         switch (message.Type)
         {
+            case "browserSiteAdd":
+            case "browserSiteToggle":
+            case "browserSiteRemove":
+            case "browserSitesReorder":
+                await HandleBrowserSiteActionAsync(message.Type, message.Value);
+                break;
+            case "installBrowserExtension":
+                await InstallBrowserExtensionAsync(message.Value);
+                break;
             case "ready":
                 _isNavigationReady = true;
                 await PushSettingsToWebAsync();
@@ -871,6 +880,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         try
         {
             await PushSpectrumCaptureStateAsync();
+            await PushBrowserStateAsync();
             await RefreshCurrentTrackOffsetAsync();
         }
         finally
@@ -1303,6 +1313,9 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             EnableSodaMusic = _settings.EnableSodaMusic,
             EnableFoobar2000 = _settings.EnableFoobar2000,
             EnableBrowser = _settings.EnableBrowser,
+            BrowserWebsiteRecognitionEnabled = _settings.BrowserWebsiteRecognitionEnabled,
+            BrowserSites = BrowserSiteRule.Normalize(_settings.BrowserSites),
+            BrowserConnections = BrowserConnections,
             PlayerLyricOffsets = _settings.PlayerSources.ToDictionary(
                 pair => pair.Key,
                 pair => pair.Value.LyricOffsetMilliseconds,
@@ -1613,6 +1626,9 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             case "enableBrowser":
                 _settings.EnableBrowser = ReadBool(element, _settings.EnableBrowser);
                 break;
+            case "browserWebsiteRecognitionEnabled":
+                _settings.BrowserWebsiteRecognitionEnabled = ReadBool(element, _settings.BrowserWebsiteRecognitionEnabled);
+                break;
             case "enableAppleMusic":
                 _settings.EnableAppleMusic = ReadBool(element, _settings.EnableAppleMusic);
                 break;
@@ -1914,7 +1930,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
 
     private static bool RequiresSettingsStateRefresh(string? key)
     {
-        return key is "foregroundColorMode" or "spectrumDisplayMode" or "useFloatingWindow" or "showCover" or
+        return key is "browserWebsiteRecognitionEnabled" or "enableBrowser" or "foregroundColorMode" or "spectrumDisplayMode" or "useFloatingWindow" or "showCover" or
             "controlPanelTriggerMethod" or "controlPanelTriggerCover" or "controlPanelTriggerLyrics" || IsMediaHotkeySetting(key);
     }
 
@@ -2268,6 +2284,8 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         target.EnableSodaMusic = source.EnableSodaMusic;
         target.EnableFoobar2000 = source.EnableFoobar2000;
         target.EnableBrowser = source.EnableBrowser;
+        target.BrowserWebsiteRecognitionEnabled = source.BrowserWebsiteRecognitionEnabled;
+        target.BrowserSites = BrowserSiteRule.Normalize(source.BrowserSites);
         source.NormalizePlayerSources();
         target.PlayerSources = source.PlayerSources.ToDictionary(
             pair => pair.Key,
@@ -2427,6 +2445,9 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         public bool EnableSodaMusic { get; set; }
         public bool EnableFoobar2000 { get; set; }
         public bool EnableBrowser { get; set; }
+        public bool BrowserWebsiteRecognitionEnabled { get; set; }
+        public List<BrowserSiteRule> BrowserSites { get; set; } = [];
+        public IReadOnlyList<BrowserConnectionStatus> BrowserConnections { get; set; } = [];
         public Dictionary<string, int> PlayerLyricOffsets { get; set; } = new(StringComparer.OrdinalIgnoreCase);
         public Dictionary<string, List<LyricProviderPreference>> PlayerLyricProviders { get; set; } = new(StringComparer.OrdinalIgnoreCase);
         public Dictionary<string, int> DefaultPlayerLyricOffsets { get; set; } = new(StringComparer.OrdinalIgnoreCase);

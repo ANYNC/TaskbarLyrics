@@ -480,8 +480,8 @@ public partial class MainWindow : Window, IDisposable
         panel.Topmost = !_currentSettings.UseFloatingWindow || Topmost;
         panel.UpdateTrack(_currentTrack, _isCurrentPlaybackPlaying, _currentCoverDataUri,
             _currentCoverFallbackIconDataUri, _currentSettings.ShowLyricTranslation,
-            _currentTrack is null ? default : PlayerSourceBadgeResolver.Resolve(_currentTrack.SourceApp, _currentSettings));
-        panel.UpdateTimeline(_currentPlaybackPosition, _currentTrack?.Duration ?? TimeSpan.Zero, _isCurrentPlaybackPlaying, _canSeek);
+            _currentTrack is null ? default : PlayerSourceBadgeResolver.Resolve(_currentTrack.SourceApp, _currentSettings), _controlCapabilities);
+        panel.UpdateTimeline(_currentPlaybackPosition, _currentTrack?.Duration ?? TimeSpan.Zero, _isCurrentPlaybackPlaying, _canSeek, _hasKnownPosition);
         var anchorBoundsPx = GetControlPanelAnchor(source ?? this, triggerBoundsPx);
         TaskObserver.Observe(panel.ShowNearAsync(anchorBoundsPx, targetDisplay, _currentSettings.CoverPosition, activate: !hover), "lyrics control panel show");
         setExpanded(true);
@@ -785,6 +785,8 @@ public partial class MainWindow : Window, IDisposable
                 : null;
             _currentPlaybackPosition = snapshot.Position;
             _canSeek = snapshot.CanSeek;
+            _hasKnownPosition = snapshot.HasKnownPosition;
+            _controlCapabilities = snapshot.ControlCapabilities;
             var visibilityTransition = _lyricsContentVisibilityState.ObservePlaybackInput(
                 inputKind,
                 DateTimeOffset.UtcNow);
@@ -896,10 +898,10 @@ public partial class MainWindow : Window, IDisposable
                 _currentCoverDataUri,
                 _currentCoverFallbackIconDataUri,
                 _currentSettings.ShowLyricTranslation,
-                _currentTrack is null ? default : PlayerSourceBadgeResolver.Resolve(_currentTrack.SourceApp, _currentSettings));
+                _currentTrack is null ? default : PlayerSourceBadgeResolver.Resolve(_currentTrack.SourceApp, _currentSettings), _controlCapabilities);
             _controlPanelWindow?.UpdateTimeline(
                 _currentPlaybackPosition, _currentTrack?.Duration ?? TimeSpan.Zero,
-                _isCurrentPlaybackPlaying, _canSeek);
+                _isCurrentPlaybackPlaying, _canSeek, _hasKnownPosition);
             if (_floatingControls is not null)
                 foreach (var panel in _floatingControls.Panels) UpdateFloatingControls(panel);
             _isTimerTickRunning = false;

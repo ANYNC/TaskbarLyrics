@@ -10,7 +10,7 @@ const modeDefinition = {
 };
 
 async function createHotkeysDom(settings = {}) {
-  const names = ["settings.html", "bridge.js", "hotkeys.js", "state.js", "display-presentation.js", "player-compatibility.js", "settings.js"];
+  const names = ["settings.html", "bridge.js", "hotkeys.js", "state.js", "display-presentation.js", "player-compatibility.js", "browser-settings.js", "settings.js"];
   const [html, ...scripts] = await Promise.all(names.map(name => readFile(new URL(name, root), "utf8")));
   const dom = new JSDOM(html, { runScripts: "outside-only" });
   const sent = [];

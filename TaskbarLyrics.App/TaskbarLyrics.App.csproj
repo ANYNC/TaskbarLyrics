@@ -24,6 +24,11 @@
 
   <ItemGroup>
     <EmbeddedResource Include="text.yaml" />
+    <Content Include="..\BrowserExtension\**\*" Exclude="..\BrowserExtension\*.md">
+      <Link>BrowserExtension\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
     <EmbeddedResource Include="text.js" />
     <None Update="Web\**\*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

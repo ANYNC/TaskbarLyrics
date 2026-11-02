@@ -1,0 +1,29 @@
+{
+  "EXT_Description": {
+    "message": "將已授權網站的播放資訊傳送至 TaskbarLyrics 桌面程式。"
+  },
+  "EXT_Help": {
+    "message": "請在桌面程式中管理網站和順序。權限由瀏覽器確認；播放資訊僅傳送至本機，歌詞搜尋依桌面程式設定執行。"
+  },
+  "EXT_Connected": {
+    "message": "已連線桌面程式"
+  },
+  "EXT_Disconnected": {
+    "message": "未連線，請啟動桌面程式並設定瀏覽器擴充功能。"
+  },
+  "EXT_Add": {
+    "message": "新增並授權目前網站"
+  },
+  "EXT_Sent": {
+    "message": "已傳送至桌面程式，請確認瀏覽器卡片的辨識開關已開啟。"
+  },
+  "EXT_Retry": {
+    "message": "連線無法使用，請重試。"
+  },
+  "EXT_Granted": {
+    "message": "已授權"
+  },
+  "EXT_Grant": {
+    "message": "授權網站"
+  }
+}

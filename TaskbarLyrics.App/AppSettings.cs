@@ -124,6 +124,9 @@ public sealed class AppSettings
     public bool EnableFoobar2000 { get; set; } = true;
     public bool EnableBrowser { get; set; }
 
+    public bool BrowserWebsiteRecognitionEnabled { get; set; }
+    public List<BrowserSiteRule> BrowserSites { get; set; } = [];
+
     public Dictionary<string, PlayerSourceSettings> PlayerSources { get; set; } = CreateDefaultPlayerSources();
     public List<CustomPlayerSource> CustomPlayerSources { get; set; } = [];
 
@@ -342,6 +345,7 @@ public sealed class AppSettings
         NormalizeLyricsTextAlignment();
         NormalizeCoverPosition();
         var cloned = (AppSettings)MemberwiseClone();
+        cloned.BrowserSites = BrowserSiteRule.Normalize(BrowserSites);
         cloned.SourceRecognitionOrder = SourceRecognitionOrder.ToList();
         cloned.CustomPlayerSources = CustomPlayerSources.ToList();
         cloned.PlayerSources = PlayerSources.ToDictionary(

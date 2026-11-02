@@ -30,6 +30,9 @@
     create(nextState, previousState, foregroundColor) {
       return normalizeControlPanelTriggers({
         ...nextState,
+        browserWebsiteRecognitionEnabled: nextState?.browserWebsiteRecognitionEnabled === true,
+        browserSites: Array.isArray(nextState?.browserSites) ? nextState.browserSites : [],
+        browserConnections: Array.isArray(nextState?.browserConnections) ? nextState.browserConnections : [],
         floatingWindowLayer: ["Desktop", "Window", "Fullscreen"].includes(nextState?.floatingWindowLayer)
           ? nextState.floatingWindowLayer : nextState?.forceAlwaysOnTop === false ? "Window" : "Fullscreen",
         floatingWindowWidth: nextState?.floatingWindowWidth ?? nextState?.windowWidth ?? 420,

@@ -42,6 +42,8 @@ internal sealed class AppCompositionRoot : IAppCompositionRoot
     public FloatingWindowPlacement CreateFloatingWindowPlacement(System.Windows.Window window) => new(window, _floatingWindowPositions.Value);
     private readonly IResolvedLyricCache _resolvedLyricCache;
     private readonly Action _clearPipelineCache;
+    private readonly Lazy<BrowserSessionBridge> _browserSessions = new(() => new BrowserSessionBridge());
+    internal BrowserSessionBridge BrowserSessions => _browserSessions.Value;
 
     public AppCompositionRoot()
         : this(JsonResolvedLyricCache.CreateDefault(), LyricPipelineCache.ClearDefault)
@@ -59,7 +61,7 @@ internal sealed class AppCompositionRoot : IAppCompositionRoot
 
     public MusicSessionServices CreateMusicSessionServices()
     {
-        var provider = new SmtcMusicSessionProvider();
+        var provider = new SmtcMusicSessionProvider(BrowserSessions);
         return new MusicSessionServices(provider, provider, provider);
     }
 
@@ -143,6 +145,7 @@ internal sealed class AppCompositionRoot : IAppCompositionRoot
 
     public void Dispose()
     {
+        if (_browserSessions.IsValueCreated) _browserSessions.Value.Dispose();
         if (_resolvedLyricCache is IDisposable disposable)
         {
             disposable.Dispose();

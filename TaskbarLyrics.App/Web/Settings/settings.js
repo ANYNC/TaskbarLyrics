@@ -272,7 +272,7 @@
         <article class="source-card ${source.enabled ? "enabled" : ""}" data-player-card="${escapeHtml(source.id)}">
           <button class="source-drag-handle" type="button" draggable="true" data-player-drag-id="${escapeHtml(source.id)}" aria-label="${window.taskbarLyricsI18n.t("UI_Drag")} ${escapeHtml(source.name)} ${window.taskbarLyricsI18n.t("UI_ToChangePriorityDuringSimultaneousPlayback")}" aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown Alt+ArrowLeft Alt+ArrowRight" title="${window.taskbarLyricsI18n.t("UI_DragToChangePlayerPriorityOrPressAltArrow")}">
             <span class="source-logo ${source.custom ? "custom-player-icon" : ""}" aria-hidden="true">${playerIcon(source)}</span>
-            <span class="source-info"><strong>${escapeHtml(source.name)}</strong><small>${source.enabled ? window.taskbarLyricsI18n.t("UI_Enabled") : window.taskbarLyricsI18n.t("UI_Disabled")} · ${formatPlayerOffset(getPlayerOffset(source))}</small></span>
+            <span class="source-info"><strong>${escapeHtml(source.name)}</strong><small>${source.enabled ? window.taskbarLyricsI18n.t("UI_Enabled") : window.taskbarLyricsI18n.t("UI_Disabled")} · ${formatPlayerOffset(getPlayerOffset(source))}</small>${source.id === "browser" ? `<small class="browser-card-hint">${window.taskbarLyricsI18n.t("UI_BrowserCardHint")}</small>` : ""}</span>
           </button>
           <button class="source-settings-button" type="button" data-player-settings="${escapeHtml(source.id)}" aria-label="${window.taskbarLyricsI18n.t("UI_Open")} ${escapeHtml(source.name)} ${window.taskbarLyricsI18n.t("UI_Settings")}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.25A3.25 3.25 0 1 0 12 8.75a3.25 3.25 0 0 0 0 6.5Z" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M19.1 13.3a7.5 7.5 0 0 0 0-2.6l2-1.55-2-3.46-2.5 1a7.6 7.6 0 0 0-2.25-1.3L14 2.75h-4l-.35 2.64A7.6 7.6 0 0 0 7.4 6.7l-2.5-1-2 3.46 2 1.55a7.5 7.5 0 0 0 0 2.6l-2 1.55 2 3.46 2.5-1a7.6 7.6 0 0 0 2.25 1.3l.35 2.64h4l.35-2.64a7.6 7.6 0 0 0 2.25-1.3l2.5 1 2-3.46-2-1.55Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></button>
         </article>`).join("");
@@ -893,11 +893,14 @@
       });
     }
 
+    const browserSettings = window.taskbarLyricsBrowserSettings.create({ post: message => bridge.post(message),
+      updateMode: enabled => { state.browserWebsiteRecognitionEnabled = enabled; bridge.post({ type: "update", key: "browserWebsiteRecognitionEnabled", value: enabled }); } });
+
     function renderPlayerSettings() {
       const adding = playerDrawerMode === "add";
       const source = sourceCatalog.find(item => item.id === activePlayerSourceId);
-      $("#playerCompatibilitySection").hidden = adding || !source;
-      if (adding || !source) $("#playerCompatibilitySection").replaceChildren();
+      $("#browserWebsiteSection").hidden = adding || source?.id !== "browser";
+      browserSettings.render(state ?? {});
       $("#playerDiscoverySection").hidden = !adding;
       $("#playerRecognitionSection").hidden = false;
       $("#playerCardInfoSection").hidden = !adding && !sourceCatalog.find(item => item.id === activePlayerSourceId)?.custom;
@@ -915,9 +918,6 @@
         return;
       }
       if (!source) return;
-      const compatibilityProfile = source.custom
-        ? window.taskbarLyricsPlayerCompatibility.resolveSourceProfile(source.adapter) : source.id;
-      renderPlayerCompatibility($("#playerCompatibilitySection"), compatibilityProfile);
       $("#playerSettingsTitle").textContent = source.name;
       $("#playerSettingsAdapter").textContent = source.adapter;
       $("#playerSettingsLogo").innerHTML = playerIcon(source);
@@ -2691,6 +2691,12 @@
       switch (message.type) {
         case "settingsState":
           setState(message.payload?.settings ?? {}, message.payload?.fonts ?? [], message.payload?.uiLanguages ?? []);
+          break;
+        case "browserState":
+          if (state) { state.browserConnections = message.payload?.connections ?? []; browserSettings.renderConnections(state); }
+          break;
+        case "browserActionResult":
+          $("#browserActionStatus").textContent = message.payload?.message ?? "";
           break;
         case "playerSessions":
           renderAvailablePlayerSessions(message.payload);

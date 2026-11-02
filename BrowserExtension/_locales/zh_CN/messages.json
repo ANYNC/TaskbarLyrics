@@ -1,0 +1,29 @@
+{
+  "EXT_Description": {
+    "message": "将已授权网站的播放信息发送到 TaskbarLyrics 桌面程序。"
+  },
+  "EXT_Help": {
+    "message": "在桌面程序中管理网站和顺序。权限由浏览器确认；播放信息仅发送至本机，歌词检索遵循桌面程序设置。"
+  },
+  "EXT_Connected": {
+    "message": "已连接桌面程序"
+  },
+  "EXT_Disconnected": {
+    "message": "未连接，请启动桌面程序并配置浏览器扩展。"
+  },
+  "EXT_Add": {
+    "message": "添加并授权当前网站"
+  },
+  "EXT_Sent": {
+    "message": "已发送到桌面程序，请确认浏览器卡片的识别开关已开启。"
+  },
+  "EXT_Retry": {
+    "message": "连接不可用，请重试。"
+  },
+  "EXT_Granted": {
+    "message": "已授权"
+  },
+  "EXT_Grant": {
+    "message": "授权网站"
+  }
+}

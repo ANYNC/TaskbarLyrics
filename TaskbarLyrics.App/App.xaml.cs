@@ -33,6 +33,7 @@ public partial class App : System.Windows.Application, IDisposable
 
     public bool IsExiting { get; private set; }
     public bool UserWantsLyricsVisible { get; private set; }
+    internal BrowserSessionBridge? BrowserSessions => _compositionRoot?.BrowserSessions;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -83,6 +84,9 @@ public partial class App : System.Windows.Application, IDisposable
         }
 
         _compositionRoot = new AppCompositionRoot();
+        _compositionRoot.BrowserSessions.Configure(Settings);
+        _compositionRoot.BrowserSessions.SiteRequested += OnBrowserSiteRequested;
+        _compositionRoot.BrowserSessions.Start();
         _trackLyricOffsetStore = new TrackLyricOffsetStore();
         _lyricsWindowHost = new LyricsWindowHost(
             Settings, _trackLyricOffsetStore, _compositionRoot,
@@ -161,6 +165,7 @@ public partial class App : System.Windows.Application, IDisposable
         LogShutdownStage("Dispose.Hotkeys.End");
         _lyricsWindowHost?.Dispose();
         LogShutdownStage("Dispose.LyricsHost.End");
+        if (_compositionRoot is not null) _compositionRoot.BrowserSessions.SiteRequested -= OnBrowserSiteRequested;
         _compositionRoot?.Dispose();
         LogShutdownStage("Dispose.CompositionRoot.End");
         _trayService?.Dispose();
@@ -190,6 +195,7 @@ public partial class App : System.Windows.Application, IDisposable
         var changes = AppSettingsChangeSet.Create(currentSettings, nextSettings);
         NativeWindowTheme.SetMode(nextSettings.ToolWindowTheme);
         Settings = nextSettings;
+        _compositionRoot?.BrowserSessions.Configure(Settings);
         _taskbarScaleConstraints = GetTaskbarScaleConstraints(nextSettings);
         var saved = _settingsStore?.Save(Settings) ?? false;
         if (uiLanguageChanged)

@@ -14,13 +14,14 @@ const persistedSettings = [
 ];
 
 async function createSettingsDom({ deferAnimationFrames = false, reducedMotion = false } = {}) {
-  const [html, bridge, hotkeys, state, presentation, compatibility, script] = await Promise.all([
+  const [html, bridge, hotkeys, state, presentation, compatibility, browser, script] = await Promise.all([
     read("TaskbarLyrics.App/Web/Settings/settings.html"),
     read("TaskbarLyrics.App/Web/Settings/bridge.js"),
     read("TaskbarLyrics.App/Web/Settings/hotkeys.js"),
     read("TaskbarLyrics.App/Web/Settings/state.js"),
     read("TaskbarLyrics.App/Web/Settings/display-presentation.js"),
     read("TaskbarLyrics.App/Web/Settings/player-compatibility.js"),
+    read("TaskbarLyrics.App/Web/Settings/browser-settings.js"),
     read("TaskbarLyrics.App/Web/Settings/settings.js")
   ]);
   const dom = new JSDOM(html, { runScripts: "outside-only" });
@@ -44,6 +45,7 @@ async function createSettingsDom({ deferAnimationFrames = false, reducedMotion =
   dom.window.eval(state);
   dom.window.eval(presentation);
   dom.window.eval(compatibility);
+  dom.window.eval(browser);
   return {
     dom,
     sent,
@@ -66,6 +68,47 @@ function enableDialogDomSupport(dom) {
 }
 
 describe("settings WebView bridge", () => {
+  it("configures browser sites without enabling the browser and keeps live status updates from moving focus", async () => {
+    const { dom, sent, script } = await createSettingsDom();
+    enableDialogDomSupport(dom);
+    try {
+      dom.window.eval(script);
+      const w = dom.window;
+      const document = w.document;
+      const hydrate = settings => w.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings } });
+      hydrate({ enableBrowser: false });
+      document.querySelector('[data-player-settings="browser"]').click();
+      expect(document.querySelector("#playerRecognitionToggle").checked).toBe(false);
+      expect(document.querySelector("#browserWebsiteToggle").checked).toBe(false);
+      expect(document.querySelector("#browserSiteEmpty").hidden).toBe(false);
+      document.querySelector("#browserSiteAddress").value = "http://localhost:8096/music";
+      document.querySelector("#browserSiteName").value = "Music";
+      document.querySelector("#browserSiteAdd").click();
+      expect(sent.at(-1)).toEqual({ version: 1, type: "browserSiteAdd", payload: { address: "http://localhost:8096/music", name: "Music" } });
+      const sites = [{ id: "music", name: "Music", origin: "http://localhost:8096", enabled: true },
+        { id: "video", name: "Video", origin: "https://video.test", enabled: false }];
+      hydrate({ enableBrowser: false, browserWebsiteRecognitionEnabled: true, browserSites: sites });
+      expect(document.querySelector("#playerRecognitionToggle").checked).toBe(false);
+      const handle = document.querySelector('[data-browser-site="video"] [data-site-action="move"]');
+      handle.focus();
+      handle.dispatchEvent(new w.KeyboardEvent("keydown", { key: "ArrowUp", altKey: true, bubbles: true }));
+      expect(sent.at(-1)).toEqual({ version: 1, type: "browserSitesReorder", payload: { ids: ["video", "music"] } });
+      const count = sent.length;
+      w.settingsApp.receive({ version: 1, type: "browserState", payload: { connections: [{ browser: "Edge", connected: true, state: "website" }] } });
+      expect(document.activeElement).toBe(handle);
+      expect(sent).toHaveLength(count);
+      const toggle = document.querySelector('[data-browser-site="music"] input');
+      toggle.checked = false; toggle.dispatchEvent(new w.Event("change", { bubbles: true }));
+      expect(sent.at(-1)).toEqual({ version: 1, type: "browserSiteToggle", payload: { id: "music", enabled: false } });
+      document.querySelector('[data-browser-site="video"] [data-site-action="remove"]').click();
+      expect(sent.at(-1)).toEqual({ version: 1, type: "browserSiteRemove", payload: { id: "video" } });
+      document.querySelector('[data-browser-install="Edge"]').click();
+      expect(sent.at(-1)).toEqual({ version: 1, type: "installBrowserExtension", payload: "Edge" });
+      hydrate({ enableBrowser: true, browserWebsiteRecognitionEnabled: true, browserSites: [] });
+      expect(document.querySelector("#browserWebsiteToggle").checked).toBe(true);
+      expect(document.querySelector("#browserSiteEmpty").hidden).toBe(false);
+    } finally { dom.window.close(); }
+  });
   it("keeps collapsed navigation tooltips in viewport coordinates while the navigation scrolls", async () => {
     const { dom, script } = await createSettingsDom();
     try {
@@ -396,7 +439,7 @@ describe("settings WebView bridge", () => {
     expect(card.classList.contains("enabled")).toBe(false);
     document.querySelector('[data-player-settings="custom-foobar2000"]').click();
     expect(document.querySelector("#playerOffsetInput").value).toBe("456");
-    expect(document.querySelector("#playerCompatibilitySection").textContent).toContain("foo_mediacontrol");
+    expect(document.querySelector("#playerCompatibilitySection")).toBeNull();
     const toggle = document.querySelector("#playerRecognitionToggle");
     toggle.checked = true;
     toggle.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
@@ -404,48 +447,23 @@ describe("settings WebView bridge", () => {
     dom.window.close();
   });
 
-  it("reuses the same compatibility indicators in onboarding and every player drawer without changing settings", async () => {
+  it("keeps compatibility guidance in onboarding and removes it from player drawers", async () => {
     const { dom, sent, script } = await createSettingsDom();
     enableDialogDomSupport(dom);
     dom.window.eval(script);
     const document = dom.window.document;
-    dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings: {
-      enableQQMusic: true, enableNetease: true, enableKugou: true, enableSpotify: true, enableBrowser: true,
-      customPlayerSources: [
-        { sourceAppUserModelId: "Example.Player", displayName: "Apple Music", enabled: true },
-        { sourceAppUserModelId: "AppleInc.AppleMusicWin_nzyj5cx40ttqa!App", displayName: "自定义名称", enabled: true },
-        { sourceAppUserModelId: "汽水音乐", displayName: "汽水音乐", enabled: true },
-        { sourceAppUserModelId: "foobar2000.exe", displayName: "foobar2000", enabled: true }
-      ]
-    } } });
+    dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings: { enableBrowser: false } } });
     const initialCount = sent.length;
-    const guide = document.querySelector("#gettingStartedGuidance");
-    const section = document.querySelector("#playerCompatibilitySection");
-    const dialog = document.querySelector("#playerSettingsDialog");
-    const customIds = { applemusic: "AppleInc.AppleMusicWin_nzyj5cx40ttqa!App", sodamusic: "汽水音乐", foobar2000: "foobar2000.exe", other: "Example.Player" };
-    for (const player of ["qqmusic", "netease", "kugou", "spotify", "applemusic", "sodamusic", "foobar2000", "browser", "other"]) {
-      document.querySelector(`input[name="gettingStartedPlayer"][value="${player}"]`).click();
-      const sourceId = customIds[player] ? `custom-${encodeURIComponent(customIds[player])}` : player;
-      document.querySelector(`[data-player-settings="${sourceId}"]`).click();
-      expect(section.hidden).toBe(false);
-      const drawerValues = [...section.querySelectorAll("dd")].map(item => item.textContent);
-      const guidanceValues = [...guide.querySelectorAll("dd")].map(item => item.textContent);
-      expect(guidanceValues).toEqual(["netease", "foobar2000"].includes(player)
-        ? [drawerValues[0], `${drawerValues[1]}，需配置插件`, `安装 ${drawerValues[2]}`]
-        : drawerValues);
-      expect(section.querySelector(".compatibility-summary").textContent).toBe(guide.querySelector(".compatibility-summary").textContent);
-      expect([...section.querySelectorAll("li")].map(item => item.textContent)).toEqual([...guide.querySelectorAll("li")].map(item => item.textContent));
-      expect(section.querySelectorAll("dl > div")).toHaveLength(3);
-      dialog.close();
+    document.querySelector('input[name="gettingStartedPlayer"][value="netease"]').click();
+    expect(document.querySelector("#gettingStartedGuidance").textContent).toContain("插件");
+    for (const player of ["netease", "browser"]) {
+      document.querySelector(`[data-player-settings="${player}"]`).click();
+      expect(document.querySelector("#playerCompatibilitySection")).toBeNull();
+      expect(document.querySelector("#browserWebsiteSection").hidden).toBe(player !== "browser");
+      document.querySelector("#playerSettingsDialog").close();
     }
+    expect(document.querySelectorAll(".browser-card-hint")).toHaveLength(1);
     expect(sent).toHaveLength(initialCount);
-    document.querySelector('[data-player-settings="netease"]').click();
-    section.querySelector("[data-compatibility-link]").click();
-    expect(sent.at(-1)).toEqual({ version: 1, type: "openExternalLink", payload: "https://github.com/apoint123/inflink-rs" });
-    dialog.close();
-    document.querySelector("#addPlayerSourceButton").click();
-    expect(section.hidden).toBe(true);
-    expect(section.children).toHaveLength(0);
     dom.window.close();
   });
 
@@ -762,7 +780,7 @@ describe("settings WebView bridge", () => {
     document.querySelector('[data-player-settings="browser"]').click();
     const drawerBody = document.querySelector("#playerDrawerBody");
     expect([...drawerBody.children].filter(element => element.classList.contains("player-setting-section")).map(element => element.id))
-      .toEqual(["playerCompatibilitySection", "playerDiscoverySection", "playerRecognitionSection", "playerCardInfoSection", "playerAdvancedSettings", "playerTrustSection"]);
+      .toEqual(["playerDiscoverySection", "playerRecognitionSection", "browserWebsiteSection", "playerCardInfoSection", "playerAdvancedSettings", "playerTrustSection"]);
     expect(document.querySelector("#playerAdvancedSettings").parentElement).toBe(drawerBody);
     expect(document.querySelector("#playerRemoveActions").parentElement).toBe(drawerBody);
     expect(document.querySelector("#playerAdvancedSettings").hidden).toBe(false);

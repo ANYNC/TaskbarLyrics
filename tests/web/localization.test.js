@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 
 const languages = ["Zh-CN", "EN", "Zh-Hant"];
 const settingsRoot = new URL('../../TaskbarLyrics.App/Web/Settings/', import.meta.url);
-const settingsScripts = ['bridge.js', 'hotkeys.js', 'state.js', 'track-offsets-page.js', 'display-presentation.js', 'player-compatibility.js', 'settings.js'];
+const settingsScripts = ['bridge.js', 'hotkeys.js', 'state.js', 'track-offsets-page.js', 'display-presentation.js', 'player-compatibility.js', 'browser-settings.js', 'settings.js'];
 
 function renderSettings(locale) {
   const dom = new JSDOM(readFileSync(new URL('settings.html', settingsRoot), 'utf8'), { locale });

@@ -9,4 +9,10 @@ public sealed record PlaybackSnapshot(
     TimeSpan? ExtrapolatedPosition = null,
     bool IsCoverLoading = false,
     string SourceAppUserModelId = "",
-    bool CanSeek = false);
+    bool CanSeek = false)
+{
+    public bool HasKnownPosition { get; init; } = true;
+    public MediaControlCapabilities? ControlCapabilities { get; init; }
+}
+
+public sealed record MediaControlCapabilities(bool PlayPause, bool Previous, bool Next);

@@ -111,6 +111,9 @@ public sealed class LyricSyncService : IDisposable
             }
         }
 
+        if (!snapshot.HasKnownPosition)
+            return Task.FromResult(new LyricDisplayFrame(snapshot.Track.Title, snapshot.Track.Artist, snapshot.Track.Title, 0, -1));
+
         if (_currentDocument == null || _currentDocument.Lines.Count == 0)
         {
             return Task.FromResult(new LyricDisplayFrame(

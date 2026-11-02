@@ -95,7 +95,7 @@ internal partial class FloatingLyricsControlWindow : Window
     }
 
     internal void Update(TrackInfo? track, bool playing, TimeSpan position, bool canSeek,
-        PlayerSourceBadge source, bool light)
+        PlayerSourceBadge source, bool light, bool hasKnownPosition = true, MediaControlCapabilities? capabilities = null)
     {
         if (IsClosed) return;
         var identity = track is null ? string.Empty : LyricSyncService.BuildStableTrackIdentity(track);
@@ -106,10 +106,13 @@ internal partial class FloatingLyricsControlWindow : Window
             _pendingSeek = null;
         }
         _duration = track?.Duration ?? TimeSpan.Zero;
+        _hasKnownPosition = hasKnownPosition;
         TitleText.Text = track?.Title ?? Text.T("UI_NothingPlaying");
         ArtistText.Text = track is null ? Text.T("UI_NoMediaIsCurrentlyPlaying") : $"{track.Artist} · {source.DisplayName}";
-        PreviousButton.IsEnabled = PlayButton.IsEnabled = NextButton.IsEnabled = track is not null;
-        SeekSlider.IsEnabled = track is not null && canSeek && _duration > TimeSpan.Zero;
+        PreviousButton.IsEnabled = track is not null && (capabilities?.Previous ?? true);
+        PlayButton.IsEnabled = track is not null && (capabilities?.PlayPause ?? true);
+        NextButton.IsEnabled = track is not null && (capabilities?.Next ?? true);
+        SeekSlider.IsEnabled = track is not null && hasKnownPosition && canSeek && _duration > TimeSpan.Zero;
         if (!SeekSlider.IsEnabled)
         {
             _seeking = false;
@@ -262,12 +265,13 @@ internal partial class FloatingLyricsControlWindow : Window
     }
     private void OnSeekValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e) => PaintTime();
     private TimeSpan SliderPosition => TimeSpan.FromMilliseconds(Math.Round(SeekSlider.Value / 1000 * _duration.TotalMilliseconds));
+    private bool _hasKnownPosition = true;
     private void PaintTime()
     {
         if (ElapsedText is null) return;
         var position = SliderPosition;
-        ElapsedText.Text = FormatTime(position);
-        DurationText.Text = FormatTime(_duration);
+        ElapsedText.Text = _hasKnownPosition ? FormatTime(position) : "--:--";
+        DurationText.Text = _hasKnownPosition || _duration > TimeSpan.Zero ? FormatTime(_duration) : "--:--";
         AutomationProperties.SetHelpText(SeekSlider, $"{ElapsedText.Text} / {DurationText.Text}");
     }
     private static string FormatTime(TimeSpan value) => value.ToString(value.TotalHours >= 1 ? @"h\:mm\:ss" : @"m\:ss", System.Globalization.CultureInfo.InvariantCulture);

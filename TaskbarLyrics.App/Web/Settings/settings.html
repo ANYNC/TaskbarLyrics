@@ -402,7 +402,6 @@
       <button class="icon-button" type="button" data-dialog-cancel="playerSettingsDialog" aria-label="{{UI_ClosePlayerSettings}}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
     </div>
     <div id="playerDrawerBody" class="player-drawer-body">
-      <section id="playerCompatibilitySection" class="player-setting-section player-compatibility-section" hidden></section>
       <section id="playerDiscoverySection" class="player-setting-section player-drawer-discovery" aria-labelledby="playerDiscoveryTitle" hidden>
         <div class="player-discovery-head"><strong id="playerDiscoveryTitle">{{UI_DetectedMediaSessions}}</strong><button id="refreshPlayerSessionsButton" class="btn ghost small" type="button">{{UI_Refresh}}</button></div>
         <div id="availablePlayerSessions" class="available-player-sessions" role="group" aria-label="{{UI_DetectedMediaSessions}}"></div>
@@ -410,6 +409,17 @@
       </section>
       <section id="playerRecognitionSection" class="player-setting-section" hidden>
         <div class="setting-row compact"><div class="setting-label"><strong>{{UI_PlayerRecognition}}</strong><small>{{UI_StopMonitoringThisPlayerWhenOffExistingOffsetSettings}}</small></div><label class="switch"><input id="playerRecognitionToggle" type="checkbox" aria-label="{{UI_EnablePlayerRecognition}}"><span class="switch-track"></span></label></div>
+      </section>
+      <section id="browserWebsiteSection" class="player-setting-section" hidden aria-labelledby="browserWebsiteTitle">
+        <div class="setting-row compact"><div class="setting-label"><strong id="browserWebsiteTitle">{{UI_BrowserWebsiteMode}}</strong><small>{{UI_BrowserWebsiteHint}}</small></div><label class="switch"><input id="browserWebsiteToggle" type="checkbox" aria-label="{{UI_BrowserWebsiteMode}}"><span class="switch-track"></span></label></div>
+        <p class="player-settings-note">{{UI_BrowserFallbackHint}}</p>
+        <div id="browserConnections" class="browser-connections"></div>
+        <p class="player-settings-note">{{UI_BrowserPermissionHint}}</p>
+        <div class="browser-site-form"><label for="browserSiteAddress">{{UI_BrowserSiteAddress}}</label><input id="browserSiteAddress" class="control" type="text" maxlength="2048" placeholder="https://music.example.com" autocomplete="off"><label for="browserSiteName">{{UI_BrowserSiteName}}</label><input id="browserSiteName" class="control" type="text" maxlength="80" autocomplete="off"><button id="browserSiteAdd" class="btn secondary small" type="button">{{UI_BrowserAddSite}}</button></div>
+        <p class="player-settings-note">{{UI_BrowserSitePriorityHint}}</p>
+        <div id="browserSiteList" class="browser-site-list" aria-label="{{UI_BrowserWebsiteMode}}"></div>
+        <p id="browserSiteEmpty" class="player-settings-note">{{UI_BrowserEmptySites}}</p>
+        <p id="browserActionStatus" class="player-settings-note" role="status" aria-live="polite"></p>
       </section>
       <section id="playerCardInfoSection" class="player-setting-section player-card-info-section" aria-label="{{UI_PlayerCardInformation}}" hidden>
         <div id="selectedPlayerSession" class="selected-player-session">
@@ -473,6 +483,7 @@
   <script src="track-offsets-page.js"></script>
   <script src="display-presentation.js"></script>
   <script src="player-compatibility.js"></script>
+  <script src="browser-settings.js"></script>
   <script src="settings.js"></script>
   <script>document.documentElement.removeAttribute("data-settings-boot");</script>
 </body>

@@ -10,6 +10,8 @@ namespace TaskbarLyrics.App;
 public partial class MainWindow
 {
     private FloatingLyricsPanelController? _floatingControls;
+    private bool _hasKnownPosition = true;
+    private MediaControlCapabilities? _controlCapabilities;
     internal event Action<FloatingWindowSize, Window, Rect>? FloatingSizePreviewRequested;
     internal event Action<FloatingWindowSize>? FloatingSizeCommitted;
 
@@ -80,7 +82,7 @@ public partial class MainWindow
     {
         panel?.Update(_currentTrack, _isCurrentPlaybackPlaying, _currentPlaybackPosition, _canSeek,
             _currentTrack is null ? default : PlayerSourceBadgeResolver.Resolve(_currentTrack.SourceApp, _currentSettings),
-            FloatingControlsLight);
+            FloatingControlsLight, _hasKnownPosition, _controlCapabilities);
     }
 
     private void SetFloatingControlSurface(bool open, bool above)

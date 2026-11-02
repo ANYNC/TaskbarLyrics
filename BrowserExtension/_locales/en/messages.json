@@ -1,0 +1,29 @@
+{
+  "EXT_Description": {
+    "message": "Send playback information from authorized websites to the TaskbarLyrics desktop app."
+  },
+  "EXT_Help": {
+    "message": "Manage websites and priority in the desktop app. The browser confirms access. Playback data goes only to this computer; lyric searches follow desktop settings."
+  },
+  "EXT_Connected": {
+    "message": "Connected to desktop app"
+  },
+  "EXT_Disconnected": {
+    "message": "Disconnected. Start the desktop app and set up the extension."
+  },
+  "EXT_Add": {
+    "message": "Add and authorize current website"
+  },
+  "EXT_Sent": {
+    "message": "Sent to desktop app. Make sure browser recognition is enabled."
+  },
+  "EXT_Retry": {
+    "message": "Connection unavailable. Please retry."
+  },
+  "EXT_Granted": {
+    "message": "Authorized"
+  },
+  "EXT_Grant": {
+    "message": "Authorize website"
+  }
+}

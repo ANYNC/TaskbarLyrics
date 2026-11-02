@@ -42,6 +42,7 @@ public sealed class SettingsStore
                 settings.EnableFloatingControlPanel = settings.EnableControlPanel;
             settings.UiLanguage = Text.NormalizeLanguagePreference(settings.UiLanguage);
             settings.NormalizePlayerSources();
+            settings.BrowserSites = TaskbarLyrics.Core.Models.BrowserSiteRule.Normalize(settings.BrowserSites);
             settings.NormalizeLyricsLayout();
             settings.NormalizeDisplaySelection();
             settings.NormalizeWindowLayout();
@@ -60,6 +61,7 @@ public sealed class SettingsStore
         try
         {
             settings.NormalizePlayerSources();
+            settings.BrowserSites = TaskbarLyrics.Core.Models.BrowserSiteRule.Normalize(settings.BrowserSites);
             settings.NormalizeLyricsLayout();
             settings.NormalizeDisplaySelection();
             settings.NormalizeWindowLayout();

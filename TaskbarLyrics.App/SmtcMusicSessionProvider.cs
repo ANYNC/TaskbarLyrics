@@ -233,6 +233,13 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
     private DateTimeOffset _nextSessionReadErrorLogUtc;
     private int _isDisposed;
 
+    private readonly BrowserSessionBridge? _browserSessions;
+    private BrowserMediaSession? _selectedBrowserSession;
+    private readonly CoverRefreshCache _browserCoverCache = new();
+
+    public SmtcMusicSessionProvider() { }
+    internal SmtcMusicSessionProvider(BrowserSessionBridge browserSessions) => _browserSessions = browserSessions;
+
     public void SetRecognitionOrder(
         IReadOnlyList<string>? order,
         IReadOnlyCollection<string>? enabledSources = null,
@@ -258,6 +265,8 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
 
     internal PlaybackSnapshot RefreshPlaybackState(PlaybackSnapshot snapshot)
     {
+        if (_selectedBrowserSession is { } selected)
+            return ApplyLatestPlaybackState(snapshot, _browserSessions?.Find(selected.Key)?.IsPlaying == true);
         var session = _activeSessionCache.Current;
         if (session is null)
         {
@@ -327,6 +336,12 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
 
     public async Task TryControlAsync(MediaHotkeyAction action, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (_selectedBrowserSession is { } browser)
+        {
+            _browserSessions?.SendCommand(browser, action.ToString());
+            return;
+        }
         try
         {
             var manager = await GetManagerAsync(cancellationToken);
@@ -382,6 +397,12 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
 
     public async Task SeekToAsync(TimeSpan position, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (_selectedBrowserSession is { } browser)
+        {
+            _browserSessions?.SendCommand(browser, "SeekTo", Math.Max(0, position.TotalSeconds));
+            return;
+        }
         try
         {
             var manager = await GetManagerAsync(cancellationToken);
@@ -423,6 +444,7 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
         _activeSessionCache.Clear();
         _manager = null;
         _coverCache.Dispose();
+        _browserCoverCache.Dispose();
         _managerLock.Dispose();
         GC.SuppressFinalize(this);
     }
@@ -462,6 +484,7 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
             {
                 _activeSessionCache.Clear();
                 _manager = null;
+                if (_browserSessions?.Select() is { } browser) return BuildBrowserSnapshot(browser);
                 return BuildProcessFallbackSnapshot();
             },
             LogSessionReadUnavailable,
@@ -483,10 +506,17 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
         if (manager is null)
         {
             _activeSessionCache.Clear();
+            if (_browserSessions?.Select() is { } onlyBrowser) return BuildBrowserSnapshot(onlyBrowser);
             return BuildProcessFallbackSnapshot();
         }
 
         var session = SelectSession(manager);
+        if (_browserSessions?.Select() is { } browser && BrowserSessionSelection.PreferBrowser(
+                browser.IsPlaying, session is null ? null : IsSessionPlaying(session), GetRecognitionPriority("Browser"),
+                session is null ? int.MaxValue : GetRecognitionPriority(ResolveSource(session.SourceAppUserModelId))))
+            return BuildBrowserSnapshot(browser);
+        _selectedBrowserSession = null;
+        _browserCoverCache.Reset();
         _activeSessionCache.Remember(session);
         if (session is null)
         {
@@ -632,8 +662,35 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
             CanSeek: playbackInfo?.Controls?.IsPlaybackPositionEnabled == true);
     }
 
+    private PlaybackSnapshot BuildBrowserSnapshot(BrowserMediaSession browser)
+    {
+        _selectedBrowserSession = browser;
+        _activeSessionCache.Clear();
+        var now = DateTimeOffset.UtcNow;
+        var position = TimeSpan.FromSeconds(browser.PositionSeconds);
+        var artwork = browser.Details?.Artwork;
+        var coverIdentity = $"{browser.Key}|{browser.Details?.TrackVersion}";
+        var coverMetadata = $"{browser.Title}|{browser.Artist}|{browser.Album}|{System.Text.Json.JsonSerializer.Serialize(artwork)}";
+        var cover = _browserCoverCache.GetCover(coverIdentity, coverMetadata, artwork is { Count: > 0 }
+            ? token => BrowserArtworkReader.ReadAsync(artwork, token, origin: browser.Url) : null);
+        PublishDiagnostics(new SmtcTimelineDiagnostics(now, browser.Browser, "Browser", "Browser", browser.IsPlaying,
+            position, now, TimeSpan.Zero, position, position, "BrowserExtension", browser.Title, browser.Artist, false));
+        return new PlaybackSnapshot(browser.IsPlaying, position,
+            new TrackInfo($"Browser|{browser.Title}|{browser.Artist}", browser.Title, browser.Artist, browser.Album,
+                "Browser", TimeSpan.FromSeconds(browser.DurationSeconds)), CoverImageBytes: cover.Bytes,
+            IsCoverLoading: cover.IsLoading, SourceAppUserModelId: browser.Browser, CanSeek: browser.CanSeek)
+        {
+            HasKnownPosition = browser.Details is null || browser.Details.PositionSeconds is not null,
+            ControlCapabilities = browser.Details is not { } details ? null : new(
+                details.PlaybackState is "playing" or "paused" or "ended" && details.Actions.Contains(browser.IsPlaying ? "pause" : "play"),
+                details.Actions.Contains("previoustrack"), details.Actions.Contains("nexttrack"))
+        };
+    }
+
     private PlaybackSnapshot BuildProcessFallbackSnapshot()
     {
+        _browserCoverCache.Reset();
+        _selectedBrowserSession = null;
         _coverCache.Reset();
         var preferredSource = DetectRunningSource();
         if (string.Equals(preferredSource, "Netease", StringComparison.OrdinalIgnoreCase))
@@ -780,7 +837,7 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
     {
         var sessions = manager.GetSessions();
         var activeSession = _activeSessionCache.FindIn(sessions);
-        if (activeSession is not null)
+        if (activeSession is not null && CanUseSource(activeSession.SourceAppUserModelId))
         {
             return activeSession;
         }
@@ -984,6 +1041,7 @@ public sealed class SmtcMusicSessionProvider : IMusicSessionProvider, IMediaPlay
     {
         if (string.IsNullOrWhiteSpace(sourceAppUserModelId)) return false;
         if (IsBlockedSystemSource(sourceAppUserModelId)) return false;
+        if (_browserSessions?.SuppressesSmtc(sourceAppUserModelId) == true) return false;
         if (_configuredCustomSources.Contains(sourceAppUserModelId)) return _enabledSources.Contains(sourceAppUserModelId);
         if (PlayerSourceIdentity.NormalizeAdditional(sourceAppUserModelId) is { } additional) return _enabledSources.Contains(additional);
         if (!IsBrowserSource(sourceAppUserModelId)) return true;

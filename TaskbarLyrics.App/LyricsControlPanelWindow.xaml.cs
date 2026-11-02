@@ -82,7 +82,7 @@ public partial class LyricsControlPanelWindow : Window, IDisposable
     }
 
     internal void UpdateTrack(TrackInfo? track, bool isPlaying, string? coverDataUri,
-        string? fallbackIconDataUri, bool translationEnabled, PlayerSourceBadge sourceBadge)
+        string? fallbackIconDataUri, bool translationEnabled, PlayerSourceBadge sourceBadge, MediaControlCapabilities? capabilities = null)
     {
         if (_disposed) return;
         var identity = track is null ? string.Empty : LyricSyncService.BuildStableTrackIdentity(track);
@@ -93,7 +93,10 @@ public partial class LyricsControlPanelWindow : Window, IDisposable
         if (ArtistText.Text != artist) { ArtistText.Text = artist; ArtistText.ToolTip = artist; }
         SourceText.Text = sourceBadge.DisplayName ?? string.Empty;
         SourceRow.Visibility = SourceText.Text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
-        PreviousButton.IsEnabled = PlayButton.IsEnabled = NextButton.IsEnabled = track is not null;
+        _hasTrack = track is not null;
+        PreviousButton.IsEnabled = _hasTrack && (capabilities?.Previous ?? true);
+        PlayButton.IsEnabled = _hasTrack && (capabilities?.PlayPause ?? true);
+        NextButton.IsEnabled = _hasTrack && (capabilities?.Next ?? true);
         UpdateArtwork(coverDataUri, fallbackIconDataUri, sourceBadge);
         PaintPlayback(isPlaying);
     }
@@ -136,10 +139,13 @@ public partial class LyricsControlPanelWindow : Window, IDisposable
         }
     }
 
-    internal void UpdateTimeline(TimeSpan position, TimeSpan duration, bool isPlaying, bool canSeek)
+    private bool _hasKnownPosition = true;
+    private bool _hasTrack;
+    internal void UpdateTimeline(TimeSpan position, TimeSpan duration, bool isPlaying, bool canSeek, bool hasKnownPosition = true)
     {
         if (_disposed) return;
         _position = position;
+        _hasKnownPosition = hasKnownPosition;
         _duration = duration;
         _canSeek = canSeek;
         _playing = isPlaying;
@@ -151,7 +157,7 @@ public partial class LyricsControlPanelWindow : Window, IDisposable
     {
         _lastTimelinePaintUtc = DateTimeOffset.UtcNow;
         PaintPlayback(_playing);
-        SeekSlider.IsEnabled = PreviousButton.IsEnabled && _canSeek && _duration > TimeSpan.Zero;
+        SeekSlider.IsEnabled = _hasTrack && _hasKnownPosition && _canSeek && _duration > TimeSpan.Zero;
         if (!SeekSlider.IsEnabled) { _seeking = false; _pendingSeek = null; }
         if (!_seeking && CanApplyTimeline(_position)) SeekSlider.Value = _duration > TimeSpan.Zero
             ? Math.Clamp(_position.TotalMilliseconds / _duration.TotalMilliseconds * 1000, 0, 1000) : 0;
@@ -425,8 +431,8 @@ public partial class LyricsControlPanelWindow : Window, IDisposable
     {
         if (ElapsedText is null) return;
         var position = SliderPosition;
-        ElapsedText.Text = FormatTime(position);
-        DurationText.Text = FormatTime(_duration);
+        ElapsedText.Text = _hasKnownPosition ? FormatTime(position) : "--:--";
+        DurationText.Text = _hasKnownPosition || _duration > TimeSpan.Zero ? FormatTime(_duration) : "--:--";
         AutomationProperties.SetHelpText(SeekSlider, $"{ElapsedText.Text} / {DurationText.Text}");
     }
     private static string FormatTime(TimeSpan value) => value.ToString(value.TotalHours >= 1 ? @"h\:mm\:ss" : @"m\:ss", System.Globalization.CultureInfo.InvariantCulture);
