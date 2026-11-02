@@ -284,6 +284,7 @@ describe("lyrics responsive layout", () => {
       });
     };
     const completeTransition = () => {
+      pendingAnimationFrames.splice(0).forEach(callback => callback(0));
       const event = new dom.window.Event("transitionend", { bubbles: true });
       Object.defineProperty(event, "propertyName", { value: "transform" });
       track.dispatchEvent(event);
@@ -928,6 +929,7 @@ describe("lyrics responsive layout", () => {
     receive({ current: "next line", next: "following", currentLineIndex: 1, progress: 0.1 });
     expect(currentLineText.textContent).toBe("corrected line");
     expect(nextLineText.textContent).toBe("next line");
+    pendingAnimationFrames.splice(0).forEach(callback => callback(0));
     const transitionEnd = new dom.window.Event("transitionend", { bubbles: true });
     Object.defineProperty(transitionEnd, "propertyName", { value: "transform" });
     track.dispatchEvent(transitionEnd);
@@ -941,6 +943,7 @@ describe("lyrics responsive layout", () => {
     });
     expect(currentLineText.textContent).toBe("next line");
     expect(nextLineText.textContent).toBe("No lyrics available");
+    pendingAnimationFrames.splice(0).forEach(callback => callback(0));
     track.dispatchEvent(transitionEnd);
     expect(currentLineText.textContent).toBe("No lyrics available");
     pendingAnimationFrames.splice(0);
@@ -1032,6 +1035,7 @@ describe("lyrics responsive layout", () => {
     await new Promise(resolve => dom.window.setTimeout(resolve, 0));
     expect(currentLineText.textContent).toBe(searchingLine);
     expect(nextLineText.textContent).toBe("found line");
+    pendingAnimationFrames.splice(0).forEach(callback => callback(1000));
     const transitionEnd = new dom.window.Event("transitionend", { bubbles: true });
     Object.defineProperty(transitionEnd, "propertyName", { value: "transform" });
     track.dispatchEvent(transitionEnd);
@@ -1114,6 +1118,7 @@ describe("lyrics responsive layout", () => {
       expect(nextLineText.textContent).toBe("found line");
       expect(scheduledTimers.size).toBe(1);
 
+      pendingAnimationFrames.splice(0).forEach(callback => callback(now));
       const transitionEnd = new dom.window.Event("transitionend", { bubbles: true });
       Object.defineProperty(transitionEnd, "propertyName", { value: "transform" });
       dom.window.document.querySelector("#track").dispatchEvent(transitionEnd);
@@ -1300,7 +1305,11 @@ describe("lyrics responsive layout", () => {
     const dom = createLyricsDom(html
       .replace("TaskbarLyrics started", searchingPrompt)
       .replace("Waiting for lyrics...", " "));
-    dom.window.requestAnimationFrame = () => 1;
+    const pendingAnimationFrames = [];
+    dom.window.requestAnimationFrame = callback => {
+      pendingAnimationFrames.push(callback);
+      return pendingAnimationFrames.length;
+    };
     dom.window.cancelAnimationFrame = () => {};
     runLyricsScripts(dom, { bridge, state, presentation, script });
 
@@ -1336,6 +1345,7 @@ describe("lyrics responsive layout", () => {
     });
     expect(currentLineText.textContent).toBe("Song - Artist");
     expect(nextLineText.textContent).toBe("Found lyric");
+    pendingAnimationFrames.splice(0).forEach(callback => callback(0));
     const transitionEnd = new dom.window.Event("transitionend", { bubbles: true });
     Object.defineProperty(transitionEnd, "propertyName", { value: "transform" });
     dom.window.document.querySelector("#track").dispatchEvent(transitionEnd);
@@ -1517,6 +1527,7 @@ describe("lyrics responsive layout", () => {
     expect(currentLineText.textContent).toBe("Song A - Artist A");
     expect(nextLineText.textContent).toBe("Song B - Artist B");
 
+    pendingAnimationFrames.splice(0).forEach(callback => callback(0));
     const transitionEnd = new dom.window.Event("transitionend", { bubbles: true });
     Object.defineProperty(transitionEnd, "propertyName", { value: "transform" });
     track.dispatchEvent(transitionEnd);
@@ -1699,6 +1710,7 @@ describe("lyrics responsive layout", () => {
     expect(layout.classList.contains("spectrum-mode")).toBe(false);
     expect(currentLineText.textContent).toBe("Song B - Artist B");
     expect(nextLineText.textContent).toBe("Found lyric");
+    pendingAnimationFrames.splice(0).forEach(callback => callback(0));
     const lyricTransitionEnd = new dom.window.Event("transitionend", { bubbles: true });
     Object.defineProperty(lyricTransitionEnd, "propertyName", { value: "transform" });
     track.dispatchEvent(lyricTransitionEnd);

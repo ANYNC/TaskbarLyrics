@@ -8,7 +8,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-async function startRoll() {
+async function startRoll({ searching = false } = {}) {
   const assets = await loadLyricsAssets();
   dom = createLyricsDom(assets.html);
   const { window } = dom;
@@ -26,9 +26,10 @@ async function startRoll() {
   const currentText = document.querySelector("#currentLineText");
   const receive = (index, trackId = "timing", animateTransition = true) => window.taskbarLyrics.receive({
     version: 1, type: "lyrics", payload: {
-      current: index === 0 ? "First line" : "Second line",
-      next: index === 0 ? "Second line" : "Third line",
-      currentLineIndex: index, trackId, progress: 0.2, isPlaying: true, animateTransition
+      current: index === 0 && searching ? "Track title" : ["First line", "Second line", "Third line"][index],
+      next: index === 0 && searching ? "正在检索歌词..." : ["Second line", "Third line", "Fourth line"][index],
+      scene: index === 0 && searching ? "searching" : "lyrics",
+      currentLineIndex: searching ? index - 1 : index, trackId, progress: 0.2, isPlaying: true, animateTransition
     }
   });
   const advance = timestamp => {
@@ -48,6 +49,43 @@ async function startRoll() {
 }
 
 describe("lyric roll timing", () => {
+  it.each(["track", "next"])("ignores a previous %s end event before the startup frame", async target => {
+    const { track, next, currentText, advance, end } = await startRoll();
+    end(target === "track" ? track : next);
+    expect(currentText.textContent).toBe("First line");
+    advance(0);
+    expect(track.classList.contains("animating")).toBe(true);
+    expect(track.style.transform).not.toBe("");
+    end(track);
+    expect(currentText.textContent).toBe("Second line");
+  });
+
+  it.each([
+    { searching: false, firstEnd: "track" },
+    { searching: false, firstEnd: "next" },
+    { searching: true, firstEnd: "track" },
+    { searching: true, firstEnd: "next" }
+  ])("preserves a queued roll after $firstEnd ends first (searching=$searching)", async options => {
+    const { track, current, next, currentText, receive, advance, end } = await startRoll(options);
+    advance(0);
+    receive(2);
+    // All preceding transforms have finished; their DOM events are still being delivered.
+    track.getAnimations = next.getAnimations = () => [];
+    end(options.firstEnd === "track" ? track : next);
+    expect(currentText.textContent).toBe("Second line");
+    expect(next.querySelector(".line-text-base").textContent).toBe("Third line");
+    end(current);
+    end(options.firstEnd === "track" ? next : track);
+    expect(currentText.textContent).toBe("Second line");
+    expect(next.style.getPropertyValue("--promotion-scale")).not.toBe("1");
+    advance(576);
+    expect(track.classList.contains("animating")).toBe(true);
+    expect(track.style.transform).not.toBe("");
+    end(track);
+    expect(currentText.textContent).toBe("Third line");
+    expect(track.classList.contains("animating")).toBe(false);
+  });
+
   it("starts scaling and track travel in the same frame", async () => {
     const { track, next, advance } = await startRoll();
     expect(track.style.transform).toBe("");
@@ -101,6 +139,14 @@ describe("lyric roll timing", () => {
     advance(0);
     vi.advanceTimersByTime(681);
     expect(currentText.textContent).toBe("Second line");
+  });
+
+  it("retains the fallback if the startup frame never runs", async () => {
+    vi.useFakeTimers();
+    const { track, currentText } = await startRoll();
+    vi.advanceTimersByTime(681);
+    expect(currentText.textContent).toBe("Second line");
+    expect(track.style.transform).toBe("");
   });
 
   it("does not let a cancelled startup move replacement content", async () => {

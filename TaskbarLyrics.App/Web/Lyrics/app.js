@@ -2227,8 +2227,11 @@ function startStandardTransition(
   void trackEl.offsetHeight;
   trackEl.classList.remove("no-anim");
 
+  let rollStarted = false;
   const onTransitionEnd = (event) => {
-    if (!event || event.propertyName !== "transform" ||
+    // A queued successor can be prepared before all of the preceding roll's
+    // end events have dispatched. Ignore those events until this roll starts.
+    if (!rollStarted || !event || event.propertyName !== "transform" ||
         (event.target !== trackEl && event.target !== nextLineEl)) {
       return;
     }
@@ -2252,6 +2255,7 @@ function startStandardTransition(
       return;
     }
 
+    rollStarted = true;
     transitionStartTime = window.performance.now();
     context.requestFrame(runTransitionOpacityAnimation);
     currentLineEl.classList.add("leaving");
