@@ -185,7 +185,9 @@ public partial class MainWindow : Window, IDisposable
         _hasAppliedSettings = true;
         var animateLyricsTransition = true;
 
-        if (!keepControlPanelOpen && (snapshot.UseFloatingWindow || !snapshot.GetEnableControlPanel() || panelTriggersChanged || changes.WindowLayoutChanged || changes.LyricsLayoutChanged || changes.TaskbarEmbeddingChanged))
+        // Display recovery replays identical settings. Preserve an existing hover
+        // session unless an actual setting requires closing/rebuilding the panel.
+        if (!keepControlPanelOpen && (!snapshot.GetEnableControlPanel() || panelTriggersChanged || changes.WindowLayoutChanged || changes.LyricsLayoutChanged || changes.TaskbarEmbeddingChanged))
         {
             CloseControlPanel();
         }
@@ -1990,12 +1992,13 @@ public partial class MainWindow : Window, IDisposable
         if (_windowRecreationRequested || Volatile.Read(ref _isDisposed) != 0) return;
         _windowRecreationRequested = true;
         RecordDisplayDiagnostics("RecreationRequested");
+        Hide();
         // Leaving an established cross-process embedding permanently invalidates
         // this HWND's layered composition surface: the window keeps its content
         // but DWM never composites it as a top-level window again (verified with
         // native probes; no style, visibility, or reparent sequence revives it).
         // Delegate to the host to replace this window with a fresh one.
-        _embeddedTaskbarAnchor.Detach();
+        _embeddedTaskbarAnchor.Detach(keepHidden: true);
         Log.Diagnostic("EMBED", "Established embedding left; requesting lyrics window recreation.");
         RecreateWindowRequested?.Invoke(this, EventArgs.Empty);
     }
@@ -2104,6 +2107,7 @@ public partial class MainWindow : Window, IDisposable
 
     private void EnsureVisibleIfExpected()
     {
+        if (_windowRecreationRequested || Volatile.Read(ref _isDisposed) != 0) return;
         if (System.Windows.Application.Current is not App app)
         {
             return;

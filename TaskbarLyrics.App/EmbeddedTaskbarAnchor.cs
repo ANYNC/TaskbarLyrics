@@ -267,7 +267,7 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
         return attachResult;
     }
 
-    public void Detach()
+    public void Detach(bool keepHidden = false)
     {
         _spaceRefreshTimer?.Stop();
         _eventRefreshTimer?.Stop();
@@ -282,8 +282,11 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
 
         if (_windowHandle != IntPtr.Zero && IsWindow(_windowHandle))
         {
+            // A retiring child must never expose its taskbar-client coordinates
+            // as desktop coordinates, including while restoring its saved style.
+            if (keepHidden) TaskbarNativeMethods.ShowWindow(_windowHandle, 0);
             _ = SetParent(_windowHandle, IntPtr.Zero);
-            RestoreTopLevelStyles(_windowHandle);
+            RestoreTopLevelStyles(_windowHandle, keepHidden);
         }
 
         _windowHandle = IntPtr.Zero;
@@ -305,7 +308,7 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
         }
 
         _occupiedSpace.SnapshotAvailable -= OnSnapshotAvailable;
-        Detach();
+        Detach(keepHidden: true);
         if (_spaceRefreshTimer is not null) _spaceRefreshTimer.Tick -= OnSpaceRefreshTick;
         if (_eventRefreshTimer is not null) _eventRefreshTimer.Tick -= OnEventRefreshTick;
         _occupiedSpace.Dispose();
@@ -336,7 +339,7 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
         {
             _spaceRefreshTimer = new DispatcherTimer(DispatcherPriority.Background, window.Dispatcher)
             {
-                Interval = TimeSpan.FromSeconds(1)
+                Interval = TimeSpan.FromMilliseconds(500)
             };
             _spaceRefreshTimer.Tick += OnSpaceRefreshTick;
         }
@@ -735,17 +738,19 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
             new IntPtr((extendedStyle & ~WsExToolWindow) | WsExNoActivate));
     }
 
-    private void RestoreTopLevelStyles(IntPtr hwnd)
+    private void RestoreTopLevelStyles(IntPtr hwnd, bool keepHidden)
     {
         if (_hasOriginalStyles)
         {
-            _ = TaskbarNativeMethods.SetWindowLongPtr(hwnd, GwlStyle, new IntPtr(_originalStyle));
+            _ = TaskbarNativeMethods.SetWindowLongPtr(hwnd, GwlStyle, new IntPtr(keepHidden ? _originalStyle & ~WsVisible : _originalStyle));
             _ = TaskbarNativeMethods.SetWindowLongPtr(hwnd, GwlExStyle, new IntPtr(_originalExtendedStyle));
             return;
         }
 
         var style = TaskbarNativeMethods.GetWindowLongPtr(hwnd, GwlStyle).ToInt64();
-        _ = TaskbarNativeMethods.SetWindowLongPtr(hwnd, GwlStyle, new IntPtr((style & ~WsChild) | WsPopup));
+        var restoredStyle = (style & ~WsChild) | WsPopup;
+        if (keepHidden) restoredStyle &= ~WsVisible;
+        _ = TaskbarNativeMethods.SetWindowLongPtr(hwnd, GwlStyle, new IntPtr(restoredStyle));
         var extendedStyle = TaskbarNativeMethods.GetWindowLongPtr(hwnd, GwlExStyle).ToInt64();
         _ = TaskbarNativeMethods.SetWindowLongPtr(hwnd, GwlExStyle, new IntPtr(extendedStyle & ~WsExNoActivate));
     }

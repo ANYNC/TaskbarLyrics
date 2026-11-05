@@ -84,6 +84,8 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
         if (_isDisposed || NeedsWindowReplacement) return;
         NeedsWindowReplacement = true;
         RecordDisplayDiagnostics("RecreationRequested");
+        Hide();
+        _embeddedTaskbarAnchor.Detach(keepHidden: true);
         RecreateWindowRequested?.Invoke(this, EventArgs.Empty);
     }
 
