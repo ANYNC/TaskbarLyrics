@@ -7,7 +7,7 @@ namespace TaskbarLyrics.App;
 
 internal readonly record struct LyricBackgroundText(Rect Bounds, double Opacity);
 internal sealed record LyricBackgroundRequest(
-    Rect Region, IReadOnlyList<LyricBackgroundText> Text, IReadOnlyList<Rect> InkBounds);
+    Rect Region, IReadOnlyList<LyricBackgroundText> Text, IReadOnlyList<Rect> InkBounds, bool IsSpectrum);
 
 internal sealed class LyricBackgroundSampler
 {
@@ -16,7 +16,7 @@ internal sealed class LyricBackgroundSampler
     private const long MinimumSampleInterval = 150;
     private const int MaxCapturePixels = 2_000_000;
     private AdaptiveLyricForeground _policy = new();
-    private bool? _publishedDarkText;
+    private (bool DarkText, bool Confirming)? _published;
     private long _lastSampleTime;
     private int _generation;
     private bool _enabled;
@@ -33,7 +33,7 @@ internal sealed class LyricBackgroundSampler
     {
         _generation++;
         _policy = new();
-        _publishedDarkText = null;
+        _published = null;
         _lastSampleTime = 0;
     }
 
@@ -63,7 +63,7 @@ internal sealed class LyricBackgroundSampler
             var text = request.Text.Select(line => line with { Bounds = ToScreen(line.Bounds, host) }).ToArray();
             var ink = request.InkBounds.Select(bounds => ToScreen(bounds, host)).ToArray();
             var scale = System.Windows.Media.VisualTreeHelper.GetDpi(webView).PixelsPerDip;
-            var background = await Task.Run(() => ReadContrast(capture, text, ink, scale));
+            var background = await Task.Run(() => ReadContrast(capture, text, ink, scale, request.IsSpectrum));
             if (!_enabled || _generation != generation || !canSample() ||
                 !TryGetScreenBounds(webView, out var currentHost) || currentHost != host)
             {
@@ -71,11 +71,12 @@ internal sealed class LyricBackgroundSampler
             }
 
             var useDarkText = _policy.Observe(background, Environment.TickCount64, App.IsSystemUiUsingLightTheme());
-            if (useDarkText != _publishedDarkText &&
-                publish(LyricsStyleScriptFactory.SetAdaptiveForeground(useDarkText)) is { } sent)
+            var result = (DarkText: useDarkText, Confirming: _policy.IsConfirmingChange);
+            if (result != _published &&
+                publish(LyricsStyleScriptFactory.SetAdaptiveForeground(result.DarkText, result.Confirming)) is { } sent)
             {
                 await sent;
-                if (_generation == generation) _publishedDarkText = useDarkText;
+                if (_generation == generation) _published = result;
             }
         }
         finally
@@ -102,7 +103,8 @@ internal sealed class LyricBackgroundSampler
         new(host.X + normalized.X * host.Width, host.Y + normalized.Y * host.Height,
             normalized.Width * host.Width, normalized.Height * host.Height);
 
-    private static LyricBackgroundContrast? ReadContrast(Drawing.Rectangle area, LyricBackgroundText[] text, Rect[] ink, double scale)
+    private static LyricBackgroundContrast? ReadContrast(Drawing.Rectangle area, LyricBackgroundText[] text,
+        Rect[] ink, double scale, bool isSpectrum)
     {
         if (area.Width <= 0 || area.Height <= 0 || (long)area.Width * area.Height > MaxCapturePixels)
         {
@@ -117,7 +119,7 @@ internal sealed class LyricBackgroundSampler
                 if (!TryCopyScreen(graphics, area)) return null;
             }
 
-            return ReadBands(area, bitmap, text, ink, scale);
+            return ReadBands(area, bitmap, text, ink, scale, isSpectrum);
         }
         catch (Exception ex) when (ex is ExternalException or ArgumentException)
         {
@@ -127,14 +129,16 @@ internal sealed class LyricBackgroundSampler
     }
 
     internal static LyricBackgroundContrast? ReadBands(Drawing.Rectangle area, Drawing.Bitmap bitmap,
-        LyricBackgroundText[] text, Rect[] ink, double scale)
+        LyricBackgroundText[] text, Rect[] ink, double scale, bool isSpectrum = false)
     {
         var vertical = area.Height > area.Width;
         var inlineSize = vertical ? area.Height : area.Width;
         var crossSize = vertical ? area.Width : area.Height;
         var bandCount = Math.Clamp(inlineSize / 8, 1, InlineBands);
-        var crossCount = Math.Min(crossSize, CrossSamples);
-        var halo = 2 * scale;
+        var horizontalSpectrum = isSpectrum && !vertical;
+        var crossCount = Math.Min(crossSize, horizontalSpectrum ? 8 : CrossSamples);
+        // Keep narrow spectrum gaps sampleable while excluding the antialiased bar edges.
+        var halo = (isSpectrum ? 0.25 : 2) * scale;
         var exclusions = ink.Select(bounds => Rect.Inflate(bounds, halo, halo)).ToArray();
         var nearby = text.Select(line => line with { Bounds = Rect.Inflate(line.Bounds, 8 * scale, 8 * scale) }).ToArray();
         var dark = new List<double>();
@@ -154,15 +158,21 @@ internal sealed class LyricBackgroundSampler
             var hasText = text.Any(line => line.Bounds.IntersectsWith(slice));
             var countBefore = dark.Count;
             if (hasText) textBands++;
-            for (var inline = start; inline < end; inline += Math.Max(1, (end - start) / 3))
+            var inlineStep = horizontalSpectrum ? 1 : Math.Max(1, (end - start) / 3);
+            for (var inline = start; inline < end; inline += inlineStep)
             {
+                // Spectrum masks span the viewport vertically. Visit each column so a
+                // regular sampling stride cannot skip every gap in closely spaced bars.
+                var screenX = area.Left + inline + 0.5;
+                if (horizontalSpectrum && exclusions.Any(mask => screenX >= mask.Left && screenX < mask.Right))
+                    continue;
                 for (var cross = 0; cross < crossCount; cross++)
                 {
                     var offset = crossSize * cross / crossCount;
                     var x = vertical ? offset : inline;
                     var y = vertical ? inline : offset;
-                    var point = new Point(area.Left + x, area.Top + y);
-                    if (exclusions.Any(mask => mask.Contains(point))) continue;
+                    var point = new Point(area.Left + x + 0.5, area.Top + y + 0.5);
+                    if (!horizontalSpectrum && exclusions.Any(mask => mask.Contains(point))) continue;
 
                     var pixel = bitmap.GetPixel(x, y);
                     var backgroundContrast = AdaptiveLyricForeground.Measure(pixel);

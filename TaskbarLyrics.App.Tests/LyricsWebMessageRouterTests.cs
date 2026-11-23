@@ -5,6 +5,19 @@ namespace TaskbarLyrics.App.Tests;
 
 public sealed class LyricsWebMessageRouterTests
 {
+    [Fact]
+    public void SpectrumSamplingAcceptsAColumnMaskForEachBar()
+    {
+        var ink = string.Join(",", Enumerable.Repeat("""{"x":0.3,"y":0.1,"width":0.01,"height":0.8}""",
+            SpectrumTuningSettings.MaxBarCount));
+        var message = LyricsWebMessageRouter.Parse(
+            $$$"""{"version":1,"type":"lyricBackground","payload":{"region":{"x":0.2,"y":0,"width":0.8,"height":1},"text":[],"ink":[{{{ink}}}],"spectrum":true}}""");
+
+        Assert.True(LyricsWebMessageRouter.TryGetLyricBackground(message, out var request));
+        Assert.True(request.IsSpectrum);
+        Assert.Equal(SpectrumTuningSettings.MaxBarCount, request.InkBounds.Count);
+    }
+
     [Theory]
     [InlineData(1, 0.8, 0.9, true)]
     [InlineData(1, 0.9, 0.9, false)]

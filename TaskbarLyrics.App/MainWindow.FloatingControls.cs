@@ -64,6 +64,12 @@ public partial class MainWindow
     {
         _floatingPlacement.Drag();
         ApplyDisplayLayoutRefresh();
+        if (_currentSettings.ForegroundColorMode == ForegroundColorMode.Background &&
+            _isWebDocumentReady && Volatile.Read(ref _isDisposed) == 0)
+        {
+            TaskObserver.Observe(ExecuteWebScriptAsync(LyricsStyleScriptFactory.RequestLyricBackgroundSample()),
+                "refresh background sample after moving lyrics");
+        }
     }
 
     private FloatingLyricsControlWindow CreateFloatingControls()

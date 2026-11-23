@@ -8,7 +8,8 @@ internal sealed class AdaptiveLyricForeground
 {
     private const double RequiredAdvantage = 0.25;
     private const long StabilityMilliseconds = 300;
-    private const long BackgroundExpiryMilliseconds = 900;
+    private const long BackgroundExpiryMilliseconds = 1800;
+    private const long MaximumConfirmationGapMilliseconds = 600;
     private const double MainTextOpacity = 0.90 * 0.98;
     private static readonly double[] Linear = Enumerable.Range(0, 256).Select(value =>
     {
@@ -25,6 +26,8 @@ internal sealed class AdaptiveLyricForeground
     private long _pendingSince;
     private long? _lastReading;
 
+    public bool IsConfirmingChange => _pendingDarkText.HasValue;
+
     public bool Observe(LyricBackgroundContrast? background, long now, bool fallbackDarkText)
     {
         if (background is not { } contrast)
@@ -35,6 +38,8 @@ internal sealed class AdaptiveLyricForeground
             return _currentDarkText ?? fallbackDarkText;
         }
 
+        if (_lastReading is { } previous && now - previous > MaximumConfirmationGapMilliseconds)
+            _pendingDarkText = null;
         _lastReading = now;
         var useDarkText = _currentDarkText ?? fallbackDarkText;
         var advantage = contrast.Dark - contrast.Light;

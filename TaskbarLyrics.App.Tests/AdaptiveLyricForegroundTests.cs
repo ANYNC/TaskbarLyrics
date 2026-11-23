@@ -27,11 +27,43 @@ public sealed class AdaptiveLyricForegroundTests
         var bright = AdaptiveLyricForeground.Measure(Drawing.Color.White);
         var dark = AdaptiveLyricForeground.Measure(Drawing.Color.Black);
         Assert.True(policy.Observe(bright, 0, false));
+        Assert.False(policy.IsConfirmingChange);
         Assert.True(policy.Observe(dark, 180, false));
+        Assert.True(policy.IsConfirmingChange);
         Assert.True(policy.Observe(dark, 360, false));
         Assert.False(policy.Observe(dark, 540, false));
+        Assert.False(policy.IsConfirmingChange);
         Assert.False(policy.Observe(null, 700, true));
-        Assert.True(policy.Observe(null, 1500, true));
+        Assert.True(policy.Observe(null, 2340, true));
+    }
+
+    [Fact]
+    public void ALongGapRestartsTheColorConfirmation()
+    {
+        var policy = new AdaptiveLyricForeground();
+        var bright = AdaptiveLyricForeground.Measure(Drawing.Color.White);
+        var dark = AdaptiveLyricForeground.Measure(Drawing.Color.Black);
+        Assert.True(policy.Observe(bright, 0, false));
+        Assert.True(policy.Observe(dark, 900, false));
+        Assert.True(policy.IsConfirmingChange);
+        Assert.True(policy.Observe(dark, 1800, false));
+        Assert.True(policy.IsConfirmingChange);
+        Assert.False(policy.Observe(dark, 2100, false));
+        Assert.False(policy.IsConfirmingChange);
+    }
+
+    [Fact]
+    public async Task DisabledSamplerDoesNotRequestScreenGeometryOrPublishColors()
+    {
+        var sampler = new LyricBackgroundSampler();
+        var request = new LyricBackgroundRequest(Rect.Empty, [], [], false);
+        await sampler.SampleAsync(null!, request, () => throw new InvalidOperationException(),
+            _ => throw new InvalidOperationException());
+
+        sampler.Configure(true);
+        sampler.Configure(false);
+        await sampler.SampleAsync(null!, request, () => throw new InvalidOperationException(),
+            _ => throw new InvalidOperationException());
     }
 
     [Fact]
@@ -60,6 +92,24 @@ public sealed class AdaptiveLyricForegroundTests
             graphics.FillRectangle(Drawing.Brushes.White, 24, 9, 120, 15);
         var contrast = Sample(image, new Rect(-176, 9, 120, 15));
         Assert.False(new AdaptiveLyricForeground().Observe(contrast, 0, true));
+    }
+
+    [Fact]
+    public void SpectrumChoosesDarkTextFromBrightOnePixelGapsBetweenDarkBars()
+    {
+        using var image = new Drawing.Bitmap(128, 24);
+        using var graphics = Drawing.Graphics.FromImage(image);
+        graphics.Clear(Drawing.Color.White);
+        var bars = Enumerable.Range(0, 32).Select(index => new Rect(index * 4, 0, 3, image.Height)).ToArray();
+        foreach (var bar in bars)
+            graphics.FillRectangle(Drawing.Brushes.Black, (int)bar.X, 0, (int)bar.Width, image.Height);
+
+        var contrast = LyricBackgroundSampler.ReadBands(new Drawing.Rectangle(0, 0, image.Width, image.Height),
+            image, [new LyricBackgroundText(new Rect(0, 0, image.Width, image.Height), 0.65)],
+            bars, scale: 1, isSpectrum: true);
+
+        Assert.True(contrast.HasValue);
+        Assert.True(new AdaptiveLyricForeground().Observe(contrast, 0, false));
     }
 
     private static LyricBackgroundContrast Sample(Drawing.Bitmap image, Rect text) =>

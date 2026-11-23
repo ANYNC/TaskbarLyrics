@@ -3091,7 +3091,7 @@ describe("settings WebView bridge", () => {
       type: "settingsState",
       payload: { settings: createSettings("Background", "#FF336699"), fonts: [] }
     });
-    expect(document.querySelector('[data-setting="foregroundColorMode"] .select-trigger-value').textContent).toBe("随背景");
+    expect(document.querySelector('[data-setting="foregroundColorMode"] .select-trigger-value').textContent).toBe("跟随背景自适应");
     expect(document.querySelector("[data-preset-color]").hidden).toBe(true);
     expect(document.querySelector("[data-custom-color]").hidden).toBe(true);
   });

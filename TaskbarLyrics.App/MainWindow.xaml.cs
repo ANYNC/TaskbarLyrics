@@ -1668,7 +1668,8 @@ public partial class MainWindow : Window, IDisposable
                 if (_lyricsWebViewElement is { } webView)
                     TaskObserver.Observe(_backgroundSampler.SampleAsync(webView, sample,
                         () => _isLyricsContentVisible && _regionVisibility.IsInteractive &&
-                            _isWebDocumentReady && !_isShowingWebErrorPage && !SystemParameters.HighContrast,
+                            _isWebDocumentReady && !_isShowingWebErrorPage && !_floatingPlacement.IsDragging &&
+                            !SystemParameters.HighContrast,
                         ExecuteWebScriptAsync), "adaptive lyric color");
                 return;
             }

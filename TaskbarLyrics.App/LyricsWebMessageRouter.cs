@@ -21,8 +21,15 @@ internal static class LyricsWebMessageRouter
         request = null!;
         if (message is not { Version: 1, Type: "lyricBackground", Payload: { ValueKind: JsonValueKind.Object } payload } ||
             !payload.TryGetProperty("region", out var regionElement) || !TryReadNormalizedRect(regionElement, out var region) ||
-            !TryReadRects(payload, "text", region, out var text) ||
-            !TryReadRects(payload, "ink", region, out var ink))
+            (payload.TryGetProperty("spectrum", out var spectrum) &&
+                spectrum.ValueKind is not (JsonValueKind.True or JsonValueKind.False)))
+        {
+            return false;
+        }
+
+        var isSpectrum = spectrum.ValueKind == JsonValueKind.True;
+        if (!TryReadRects(payload, "text", region, 4, out var text) ||
+            !TryReadRects(payload, "ink", region, isSpectrum ? SpectrumTuningSettings.MaxBarCount : 4, out var ink))
         {
             return false;
         }
@@ -36,15 +43,15 @@ internal static class LyricsWebMessageRouter
             index++;
         }
 
-        request = new LyricBackgroundRequest(region, textBounds, ink);
+        request = new LyricBackgroundRequest(region, textBounds, ink, isSpectrum);
         return true;
     }
 
-    private static bool TryReadRects(JsonElement payload, string property, Rect region, out Rect[] result)
+    private static bool TryReadRects(JsonElement payload, string property, Rect region, int maxEntries, out Rect[] result)
     {
         result = [];
         if (!payload.TryGetProperty(property, out var entries) || entries.ValueKind != JsonValueKind.Array ||
-            entries.GetArrayLength() > 4)
+            entries.GetArrayLength() > maxEntries)
         {
             return false;
         }

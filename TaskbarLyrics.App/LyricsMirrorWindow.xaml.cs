@@ -124,7 +124,14 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
     internal void DragFloatingWindow()
     {
         _floatingPlacement.Drag();
-        if (!_isDisposed) ApplySettings(_settings, keepControlPanelOpen: true);
+        if (_isDisposed) return;
+
+        ApplySettings(_settings, keepControlPanelOpen: true);
+        if (_settings.ForegroundColorMode == ForegroundColorMode.Background && _isWebReady)
+        {
+            TaskObserver.Observe(LyricsWebView.ExecuteScriptAsync(LyricsStyleScriptFactory.RequestLyricBackgroundSample()),
+                "refresh background sample after moving mirror lyrics");
+        }
     }
 
     public void ApplySettings(AppSettings settings, bool keepControlPanelOpen = false, bool preserveFloatingPosition = false,
@@ -300,7 +307,7 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
             if (LyricsWebMessageRouter.TryGetLyricBackground(message, out var sample))
             {
                 TaskObserver.Observe(_backgroundSampler.SampleAsync(LyricsWebView, sample,
-                    () => !_isDisposed && IsContentVisible && !SystemParameters.HighContrast,
+                    () => !_isDisposed && IsContentVisible && !_floatingPlacement.IsDragging && !SystemParameters.HighContrast,
                     script => LyricsWebView.ExecuteScriptAsync(script)), "adaptive mirror lyric color");
                 return;
             }

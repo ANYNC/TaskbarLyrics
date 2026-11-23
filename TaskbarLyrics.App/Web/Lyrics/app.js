@@ -25,6 +25,10 @@ let panelTriggerLyrics = false;
 let panelTriggerEnabled = true;
 let showLyricSearchStatus = true;
 let fallbackDisplayConfigured = false;
+const lyricBackgroundIdleInterval = 900;
+const lyricBackgroundConfirmationInterval = 180;
+let adaptiveForegroundEnabled = false;
+let confirmingLyricBackground = false;
 let adaptiveForegroundTimer = 0;
 let receivedAdaptiveForeground = false;
 let backgroundTextMetrics = null;
@@ -258,6 +262,7 @@ function applyRegionVisibility(payload) {
   regionCoordinator.cancelTransition();
   regionGeneration = payload.generation;
   regionPhase = payload.phase;
+  updateLyricBackgroundTimer(0);
   layoutEl.dataset.regionEdge = payload.edge;
   layoutEl.inert = regionPhase !== "visible";
   clearPanelHover();
@@ -301,6 +306,7 @@ function applyRegionVisibility(payload) {
     layoutEl.style.removeProperty("opacity");
     layoutEl.inert = !visible;
     window.taskbarLyricsBridge?.post("regionVisibilityCompleted", { generation, visible });
+    updateLyricBackgroundTimer(0);
   };
   if (!visible) {
     stopSpectrumRenderer();
@@ -560,16 +566,40 @@ function measureBackgroundInk(element, bounds, style) {
   };
 }
 
-function requestLyricBackground() {
-  if (document.hidden || regionPhase !== "visible" || isSpectrumMode ||
-      presentationCoordinator.isTransitioning || window.matchMedia?.("(forced-colors: active)").matches) {
-    return;
+function backgroundSampleOpacity(color, opacity) {
+  const colorOpacity = Number(/^rgba\([^,]+,[^,]+,[^,]+,\s*([\d.]+)\)$/.exec(color)?.[1] ?? 1);
+  return clamp01(colorOpacity * opacity);
+}
+
+function requestSpectrumBackground(region, normalize) {
+  const text = [];
+  const ink = [];
+  const spectrumBounds = intersectBackgroundBounds(spectrumEl.getBoundingClientRect(), region);
+  if (spectrumBounds && spectrumBarEls.length > 0) {
+    const containerOpacity = Number(window.getComputedStyle(spectrumEl).opacity);
+    const barStyle = window.getComputedStyle(spectrumBarEls[0]);
+    const opacity = backgroundSampleOpacity(barStyle.backgroundColor, Number(barStyle.opacity) * containerOpacity);
+    if (opacity > 0) text.push({ ...normalize(spectrumBounds), opacity });
+
+    // Bar heights can change between the WebView measurement and the screen capture.
+    // Mask their horizontal columns and use the gaps between them.
+    for (const bar of spectrumBarEls) {
+      const { left, right } = bar.getBoundingClientRect();
+      const column = intersectBackgroundBounds({ left, right, top: region.top, bottom: region.bottom }, region);
+      if (column) ink.push(normalize(column));
+    }
   }
+  window.taskbarLyricsBridge.post("lyricBackground", { region: normalize(region), text, ink, spectrum: true });
+}
+
+function requestLyricBackground() {
+  if (presentationCoordinator.isTransitioning) return;
 
   const width = window.innerWidth;
   const height = window.innerHeight;
   if (width <= 0 || height <= 0) return;
-  const region = intersectBackgroundBounds(viewportEl.getBoundingClientRect(),
+  const sampleArea = isSpectrumMode ? spectrumEl.parentElement : viewportEl;
+  const region = intersectBackgroundBounds(sampleArea.getBoundingClientRect(),
     { left: 0, top: 0, right: width, bottom: height });
   if (!region) return;
   const normalize = bounds => ({
@@ -578,6 +608,11 @@ function requestLyricBackground() {
     width: (bounds.right - bounds.left) / width,
     height: (bounds.bottom - bounds.top) / height
   });
+
+  if (isSpectrumMode) {
+    requestSpectrumBackground(region, normalize);
+    return;
+  }
 
   const text = [];
   const ink = [];
@@ -590,8 +625,7 @@ function requestLyricBackground() {
     const visibleText = intersectBackgroundBounds(bounds, region);
     if (!visibleText) continue;
     const style = window.getComputedStyle(line);
-    const colorOpacity = Number(/^rgba\([^,]+,[^,]+,[^,]+,\s*([\d.]+)\)$/.exec(style.color)?.[1] ?? 1);
-    const opacity = clamp01(colorOpacity * Number(window.getComputedStyle(line.closest(".line")).opacity));
+    const opacity = backgroundSampleOpacity(style.color, Number(window.getComputedStyle(line.closest(".line")).opacity));
     if (opacity === 0) continue;
     text.push({ ...normalize(visibleText), opacity });
     const visibleInk = intersectBackgroundBounds(measureBackgroundInk(line, bounds, style), region);
@@ -618,15 +652,38 @@ function applyLyricForeground(payload) {
 
 function configureLyricForeground(payload) {
   const adaptive = payload.adaptiveForeground === true;
-  if (adaptive && !adaptiveForegroundTimer) {
-    adaptiveForegroundTimer = window.setInterval(requestLyricBackground, 180);
-  } else if (!adaptive && adaptiveForegroundTimer) {
-    window.clearInterval(adaptiveForegroundTimer);
-    adaptiveForegroundTimer = 0;
+  if (adaptive !== adaptiveForegroundEnabled) {
+    adaptiveForegroundEnabled = adaptive;
+    confirmingLyricBackground = false;
     receivedAdaptiveForeground = false;
+    updateLyricBackgroundTimer(0);
   }
   if (!receivedAdaptiveForeground) applyLyricForeground(payload);
 }
+
+function canSampleLyricBackground() {
+  return adaptiveForegroundEnabled && !document.hidden && regionPhase === "visible" &&
+    !window.matchMedia?.("(forced-colors: active)").matches;
+}
+
+function updateLyricBackgroundTimer(delay = confirmingLyricBackground
+  ? lyricBackgroundConfirmationInterval : lyricBackgroundIdleInterval) {
+  if (adaptiveForegroundTimer) {
+    window.clearTimeout(adaptiveForegroundTimer);
+    adaptiveForegroundTimer = 0;
+  }
+  if (!canSampleLyricBackground()) return;
+
+  adaptiveForegroundTimer = window.setTimeout(() => {
+    adaptiveForegroundTimer = 0;
+    if (!canSampleLyricBackground()) return;
+    requestLyricBackground();
+    updateLyricBackgroundTimer();
+  }, delay);
+}
+
+document.addEventListener("visibilitychange", () => updateLyricBackgroundTimer(0));
+window.matchMedia?.("(forced-colors: active)")?.addEventListener?.("change", () => updateLyricBackgroundTimer(0));
 
 function resolveTranslationDisplay(line) {
   const text = (line ?? "").toString().trim();
@@ -2884,11 +2941,19 @@ window.taskbarLyrics = {
         lyricsApi.applyStyle(payload);
         break;
       case "adaptiveForeground":
-        if (adaptiveForegroundTimer && payload &&
+        if (adaptiveForegroundEnabled && payload &&
             lyricForegroundColors.every(([key]) => typeof payload[key] === "string" && CSS.supports("color", payload[key]))) {
           receivedAdaptiveForeground = true;
           applyLyricForeground(payload);
+          const confirming = payload.confirming === true;
+          if (confirming !== confirmingLyricBackground) {
+            confirmingLyricBackground = confirming;
+            updateLyricBackgroundTimer();
+          }
         }
+        break;
+      case "resampleLyricBackground":
+        updateLyricBackgroundTimer(lyricBackgroundConfirmationInterval);
         break;
       case "regionVisibility":
         applyRegionVisibility(payload);
