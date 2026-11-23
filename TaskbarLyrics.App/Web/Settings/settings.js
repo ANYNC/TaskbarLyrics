@@ -21,7 +21,13 @@
       spectrumDisplayMode: [{ value: "Disabled", label: window.taskbarLyricsI18n.t("UI_Close") }, { value: "PureMusicOnly", label: window.taskbarLyricsI18n.t("UI_InstrumentalOnly") }, { value: "PureMusicOrNoLyrics", label: window.taskbarLyricsI18n.t("UI_InstrumentalOrNoLyrics") }, { value: "Always", label: window.taskbarLyricsI18n.t("UI_Always") }],
       fontFamily: [],
       fontWeight: [{ value: "Light", label: window.taskbarLyricsI18n.t("UI_Light_5") }, { value: "Normal", label: window.taskbarLyricsI18n.t("UI_General") }, { value: "Medium", label: window.taskbarLyricsI18n.t("UI_Medium") }, { value: "SemiBold", label: window.taskbarLyricsI18n.t("UI_Semibold") }, { value: "Bold", label: window.taskbarLyricsI18n.t("UI_Bold") }],
-      foregroundColorMode: [{ value: "System", label: window.taskbarLyricsI18n.t("UI_FollowSystem") }, { value: "Dark", label: window.taskbarLyricsI18n.t("UI_Dark") }, { value: "Light", label: window.taskbarLyricsI18n.t("UI_Light") }, { value: "Custom", label: window.taskbarLyricsI18n.t("UI_Custom") }],
+      foregroundColorMode: [
+        { value: "System", label: window.taskbarLyricsI18n.t("UI_FollowSystem") },
+        { value: "Background", label: window.taskbarLyricsI18n.t("UI_FollowLyricBackground") },
+        { value: "Dark", label: window.taskbarLyricsI18n.t("UI_Dark") },
+        { value: "Light", label: window.taskbarLyricsI18n.t("UI_Light") },
+        { value: "Custom", label: window.taskbarLyricsI18n.t("UI_Custom") }
+      ],
       trackOffsetSourceFilter: [{ value: "All", label: window.taskbarLyricsI18n.t("UI_AllLyricSources") }],
       trackOffsetSort: [{ value: "updated", label: window.taskbarLyricsI18n.t("UI_RecentlyModified") }, { value: "title", label: window.taskbarLyricsI18n.t("UI_TrackTitle") }, { value: "offset", label: window.taskbarLyricsI18n.t("UI_Offset") }],
       uiLanguage: []
@@ -2069,7 +2075,7 @@
       else if (state.foregroundColorMode === "Light") state.foregroundColor = "#FFFFFF";
       else if (custom) state.foregroundColor = state.customForegroundColor;
       $("[data-custom-color]").hidden = !custom;
-      $("[data-preset-color]").hidden = custom;
+      $("[data-preset-color]").hidden = custom || state.foregroundColorMode === "Background";
       $("[data-custom-color]").closest(".color-mode-control").classList.toggle("is-custom", custom);
       $("[data-mode-swatch]").style.backgroundColor = state.foregroundColor;
       $("[data-mode-value]").textContent = state.foregroundColor.toUpperCase();

@@ -6,6 +6,24 @@ namespace TaskbarLyrics.App.Tests;
 public sealed class LyricsWebMessageRouterTests
 {
     [Theory]
+    [InlineData(1, 0.8, 0.9, true)]
+    [InlineData(1, 0.9, 0.9, false)]
+    [InlineData(1, 0.8, 1.1, false)]
+    [InlineData(2, 0.8, 0.9, false)]
+    public void BackgroundSamplingValidatesRegionAndEnvelope(int version, double width, double opacity, bool expected)
+    {
+        var message = LyricsWebMessageRouter.Parse(FormattableString.Invariant(
+            $$$"""{"version":{{{version}}},"type":"lyricBackground","payload":{"region":{"x":0.2,"y":0,"width":{{{width}}},"height":1},"text":[{"x":0.3,"y":0.2,"width":0.5,"height":0.2,"opacity":{{{opacity}}}}],"ink":[]}}"""));
+
+        Assert.Equal(expected, LyricsWebMessageRouter.TryGetLyricBackground(message, out var request));
+        if (expected)
+        {
+            Assert.Equal(new Rect(0.2, 0, 0.8, 1), request.Region);
+            Assert.Equal(opacity, Assert.Single(request.Text).Opacity);
+        }
+    }
+
+    [Theory]
     [InlineData("Cover", "Hover", true)]
     [InlineData("Lyrics", "Click", true)]
     [InlineData("Lyrics", "Keyboard", true)]

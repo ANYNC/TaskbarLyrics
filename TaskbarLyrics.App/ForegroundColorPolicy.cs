@@ -10,7 +10,8 @@ internal static class ForegroundColorPolicy
     {
         ArgumentNullException.ThrowIfNull(settings);
 
-        if (IsLegacyCustomForeground(settings.ForegroundColor))
+        if (settings.ForegroundColorMode != ForegroundColorMode.Background &&
+            IsLegacyCustomForeground(settings.ForegroundColor))
         {
             settings.ForegroundColorMode = ForegroundColorMode.Custom;
             return false;
@@ -54,6 +55,14 @@ internal static class ForegroundColorPolicy
         settings.ForegroundColor = nextColor;
         return true;
     }
+
+    public static string GetRenderColor(AppSettings settings) =>
+        settings.ForegroundColorMode == ForegroundColorMode.Background
+            ? GetPresetColor(App.IsSystemUiUsingLightTheme())
+            : settings.ForegroundColor;
+
+    public static string GetPresetColor(bool useDarkText) =>
+        useDarkText ? AppSettings.DarkForegroundColor : AppSettings.LightForegroundColor;
 
     public static System.Windows.Media.Color CreatePrimaryColor(System.Windows.Media.Color foregroundColor)
     {

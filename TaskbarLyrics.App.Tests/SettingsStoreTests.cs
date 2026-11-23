@@ -137,6 +137,7 @@ public sealed class SettingsStoreTests
     [InlineData(0, ForegroundColorMode.Dark)]
     [InlineData(1, ForegroundColorMode.Light)]
     [InlineData(2, ForegroundColorMode.Custom)]
+    [InlineData(4, ForegroundColorMode.Background)]
     public void LoadPreservesLegacyForegroundColorModeValues(
         int persistedValue,
         ForegroundColorMode expectedMode)

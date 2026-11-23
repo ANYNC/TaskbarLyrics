@@ -36,7 +36,8 @@ public enum ForegroundColorMode
     Dark = 0,
     Light = 1,
     Custom = 2,
-    System = 3
+    System = 3,
+    Background = 4
 }
 
 public enum SpectrumDisplayMode

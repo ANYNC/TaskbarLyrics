@@ -25,6 +25,9 @@ let panelTriggerLyrics = false;
 let panelTriggerEnabled = true;
 let showLyricSearchStatus = true;
 let fallbackDisplayConfigured = false;
+let adaptiveForegroundTimer = 0;
+let receivedAdaptiveForeground = false;
+let backgroundTextMetrics = null;
 let panelHoverTimer = 0;
 const coverImageEl = document.getElementById("coverImage");
 const coverImageNextEl = document.getElementById("coverImageNext");
@@ -528,6 +531,101 @@ function isWordScanResumeCatchUpLine(lineElement) {
 function toDisplayLine(line, fallback = " ") {
   const text = (line ?? "").toString().trim();
   return text.length > 0 ? text : fallbackDisplayConfigured && fallback === SEARCHING_TEXT ? " " : fallback;
+}
+
+function intersectBackgroundBounds(bounds, clip) {
+  const left = Math.max(bounds.left, clip.left);
+  const right = Math.min(bounds.right, clip.right);
+  const top = Math.max(bounds.top, clip.top);
+  const bottom = Math.min(bounds.bottom, clip.bottom);
+  return right > left && bottom > top ? { left, top, right, bottom } : null;
+}
+
+function measureBackgroundInk(element, bounds, style) {
+  if (root.classList.contains("vertical-taskbar")) return bounds;
+  backgroundTextMetrics ??= document.createElement("canvas").getContext("2d");
+  if (!backgroundTextMetrics) return bounds;
+  backgroundTextMetrics.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+  const metrics = backgroundTextMetrics.measureText(element.textContent);
+  const fontHeight = metrics.fontBoundingBoxAscent + metrics.fontBoundingBoxDescent;
+  if (!(fontHeight > 0) || !Number.isFinite(metrics.actualBoundingBoxAscent) ||
+      !Number.isFinite(metrics.actualBoundingBoxDescent)) return bounds;
+
+  const baseline = (bounds.top + bounds.bottom - fontHeight) / 2 + metrics.fontBoundingBoxAscent;
+  return {
+    left: bounds.left,
+    right: bounds.right,
+    top: baseline - metrics.actualBoundingBoxAscent,
+    bottom: baseline + metrics.actualBoundingBoxDescent
+  };
+}
+
+function requestLyricBackground() {
+  if (document.hidden || regionPhase !== "visible" || isSpectrumMode ||
+      presentationCoordinator.isTransitioning || window.matchMedia?.("(forced-colors: active)").matches) {
+    return;
+  }
+
+  const width = window.innerWidth;
+  const height = window.innerHeight;
+  if (width <= 0 || height <= 0) return;
+  const region = intersectBackgroundBounds(viewportEl.getBoundingClientRect(),
+    { left: 0, top: 0, right: width, bottom: height });
+  if (!region) return;
+  const normalize = bounds => ({
+    x: bounds.left / width,
+    y: bounds.top / height,
+    width: (bounds.right - bounds.left) / width,
+    height: (bounds.bottom - bounds.top) / height
+  });
+
+  const text = [];
+  const ink = [];
+  const lines = root.classList.contains("single-line") ? [currentLineTextEl] : [currentLineTextEl, nextLineTextEl];
+  const range = document.createRange();
+  for (const line of lines) {
+    if (!line.textContent.trim()) continue;
+    range.selectNodeContents(line);
+    const bounds = range.getBoundingClientRect();
+    const visibleText = intersectBackgroundBounds(bounds, region);
+    if (!visibleText) continue;
+    const style = window.getComputedStyle(line);
+    const colorOpacity = Number(/^rgba\([^,]+,[^,]+,[^,]+,\s*([\d.]+)\)$/.exec(style.color)?.[1] ?? 1);
+    const opacity = clamp01(colorOpacity * Number(window.getComputedStyle(line.closest(".line")).opacity));
+    if (opacity === 0) continue;
+    text.push({ ...normalize(visibleText), opacity });
+    const visibleInk = intersectBackgroundBounds(measureBackgroundInk(line, bounds, style), region);
+    if (visibleInk) {
+      ink.push(normalize(visibleInk));
+    }
+  }
+
+  window.taskbarLyricsBridge.post("lyricBackground", { region: normalize(region), text, ink });
+}
+
+const lyricForegroundColors = [
+  ["primaryColor", "--primary"], ["secondaryColor", "--secondary"],
+  ["translationColor", "--translation"], ["wordScanOverlayColor", "--word-scan-overlay"]
+];
+
+function applyLyricForeground(payload) {
+  for (const [key, cssVariable] of lyricForegroundColors) {
+    if (typeof payload[key] === "string" && CSS.supports("color", payload[key])) {
+      root.style.setProperty(cssVariable, payload[key]);
+    }
+  }
+}
+
+function configureLyricForeground(payload) {
+  const adaptive = payload.adaptiveForeground === true;
+  if (adaptive && !adaptiveForegroundTimer) {
+    adaptiveForegroundTimer = window.setInterval(requestLyricBackground, 180);
+  } else if (!adaptive && adaptiveForegroundTimer) {
+    window.clearInterval(adaptiveForegroundTimer);
+    adaptiveForegroundTimer = 0;
+    receivedAdaptiveForeground = false;
+  }
+  if (!receivedAdaptiveForeground) applyLyricForeground(payload);
 }
 
 function resolveTranslationDisplay(line) {
@@ -2724,21 +2822,7 @@ const lyricsApi = {
     }
     updateResponsiveLayout();
 
-    if (payload.primaryColor && CSS.supports("color", payload.primaryColor)) {
-      root.style.setProperty("--primary", payload.primaryColor);
-    }
-
-    if (payload.secondaryColor && CSS.supports("color", payload.secondaryColor)) {
-      root.style.setProperty("--secondary", payload.secondaryColor);
-    }
-
-    if (payload.translationColor && CSS.supports("color", payload.translationColor)) {
-      root.style.setProperty("--translation", payload.translationColor);
-    }
-
-    if (payload.wordScanOverlayColor && CSS.supports("color", payload.wordScanOverlayColor)) {
-      root.style.setProperty("--word-scan-overlay", payload.wordScanOverlayColor);
-    }
+    configureLyricForeground(payload);
 
     if (payload.surfaceColor && CSS.supports("background-color", payload.surfaceColor)) {
       root.style.setProperty("--surface-color", payload.surfaceColor);
@@ -2798,6 +2882,13 @@ window.taskbarLyrics = {
         break;
       case "style":
         lyricsApi.applyStyle(payload);
+        break;
+      case "adaptiveForeground":
+        if (adaptiveForegroundTimer && payload &&
+            lyricForegroundColors.every(([key]) => typeof payload[key] === "string" && CSS.supports("color", payload[key]))) {
+          receivedAdaptiveForeground = true;
+          applyLyricForeground(payload);
+        }
         break;
       case "regionVisibility":
         applyRegionVisibility(payload);

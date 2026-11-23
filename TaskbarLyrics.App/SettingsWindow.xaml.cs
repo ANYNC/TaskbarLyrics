@@ -2346,7 +2346,8 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
     private static ForegroundColorMode ReadForegroundColorMode(JsonElement element, ForegroundColorMode fallback)
     {
         if (element.ValueKind == JsonValueKind.String &&
-            Enum.TryParse<ForegroundColorMode>(element.GetString(), out var stringValue))
+            Enum.TryParse<ForegroundColorMode>(element.GetString(), out var stringValue) &&
+            Enum.IsDefined(stringValue))
         {
             return stringValue;
         }

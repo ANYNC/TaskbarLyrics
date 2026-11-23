@@ -3085,6 +3085,15 @@ describe("settings WebView bridge", () => {
     expect(document.querySelector('[data-setting="foregroundColorMode"] .select-trigger-value').textContent).toBe("跟随系统");
     expect(document.querySelector("[data-mode-value]").textContent).toBe("#111827");
     expect(document.querySelector("[data-custom-color]").hidden).toBe(true);
+
+    dom.window.settingsApp.receive({
+      version: 1,
+      type: "settingsState",
+      payload: { settings: createSettings("Background", "#FF336699"), fonts: [] }
+    });
+    expect(document.querySelector('[data-setting="foregroundColorMode"] .select-trigger-value').textContent).toBe("随背景");
+    expect(document.querySelector("[data-preset-color]").hidden).toBe(true);
+    expect(document.querySelector("[data-custom-color]").hidden).toBe(true);
   });
 
   it("shows the actual host save result and persistent color validation", async () => {

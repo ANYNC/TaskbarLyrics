@@ -16,6 +16,66 @@ internal readonly record struct LyricsCoverClickBounds(
 
 internal static class LyricsWebMessageRouter
 {
+    public static bool TryGetLyricBackground(WebViewMessage? message, out LyricBackgroundRequest request)
+    {
+        request = null!;
+        if (message is not { Version: 1, Type: "lyricBackground", Payload: { ValueKind: JsonValueKind.Object } payload } ||
+            !payload.TryGetProperty("region", out var regionElement) || !TryReadNormalizedRect(regionElement, out var region) ||
+            !TryReadRects(payload, "text", region, out var text) ||
+            !TryReadRects(payload, "ink", region, out var ink))
+        {
+            return false;
+        }
+
+        var textBounds = new LyricBackgroundText[text.Length];
+        var index = 0;
+        foreach (var entry in payload.GetProperty("text").EnumerateArray())
+        {
+            if (!TryReadNumber(entry, "opacity", out var opacity) || opacity <= 0 || opacity > 1) return false;
+            textBounds[index] = new LyricBackgroundText(text[index], opacity);
+            index++;
+        }
+
+        request = new LyricBackgroundRequest(region, textBounds, ink);
+        return true;
+    }
+
+    private static bool TryReadRects(JsonElement payload, string property, Rect region, out Rect[] result)
+    {
+        result = [];
+        if (!payload.TryGetProperty(property, out var entries) || entries.ValueKind != JsonValueKind.Array ||
+            entries.GetArrayLength() > 4)
+        {
+            return false;
+        }
+
+        result = new Rect[entries.GetArrayLength()];
+        var index = 0;
+        foreach (var entry in entries.EnumerateArray())
+        {
+            if (!TryReadNormalizedRect(entry, out var rect) || !rect.IntersectsWith(region)) return false;
+            result[index++] = Rect.Intersect(rect, region);
+        }
+
+        return true;
+    }
+
+    private static bool TryReadNormalizedRect(JsonElement element, out Rect rect)
+    {
+        rect = Rect.Empty;
+        if (element.ValueKind != JsonValueKind.Object ||
+            !TryReadNumber(element, "x", out var x) || !TryReadNumber(element, "y", out var y) ||
+            !TryReadNumber(element, "width", out var width) || !TryReadNumber(element, "height", out var height) ||
+            x < 0 || x >= 1 || y < 0 || y >= 1 || width <= 0 || height <= 0 ||
+            x + width > 1.000001 || y + height > 1.000001)
+        {
+            return false;
+        }
+
+        rect = new Rect(x, y, Math.Min(width, 1 - x), Math.Min(height, 1 - y));
+        return rect.Width > 0 && rect.Height > 0;
+    }
+
     public static bool TryGetRegionVisibilityCompleted(WebViewMessage? message, out int generation, out bool visible)
     {
         generation = 0;

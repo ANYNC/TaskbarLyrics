@@ -10,11 +10,7 @@ internal static class LyricsStyleScriptFactory
         ArgumentNullException.ThrowIfNull(settings);
         settings.NormalizeLyricsTextAlignment();
         settings.NormalizeCoverPosition();
-        var foregroundColor = ParseColor(settings.ForegroundColor);
-        var primaryColor = ForegroundColorPolicy.CreatePrimaryColor(foregroundColor);
-        var secondaryColor = ForegroundColorPolicy.CreateSecondaryColor(foregroundColor);
-        var translationColor = ForegroundColorPolicy.CreateTranslationColor(foregroundColor);
-        var wordScanOverlayColor = ForegroundColorPolicy.CreateWordScanOverlayColor(foregroundColor);
+        var colors = CreateColors(ForegroundColorPolicy.GetRenderColor(settings));
         var metrics = LyricsLayoutMetrics.Create(settings, pixelsPerDip, taskbar);
         var stylePayload = new
         {
@@ -59,10 +55,11 @@ internal static class LyricsStyleScriptFactory
             spectrumHighHeight = metrics.SpectrumHighHeight,
             spectrumMiddleHeight = metrics.SpectrumMiddleHeight,
             fontWeight = settings.FontWeight,
-            primaryColor = ToCssColor(primaryColor),
-            secondaryColor = ToCssColor(secondaryColor),
-            translationColor = ToCssColor(translationColor),
-            wordScanOverlayColor = ToCssColor(wordScanOverlayColor),
+            adaptiveForeground = settings.ForegroundColorMode == ForegroundColorMode.Background,
+            colors.primaryColor,
+            colors.secondaryColor,
+            colors.translationColor,
+            colors.wordScanOverlayColor,
             surfaceColor = !settings.UseFloatingWindow && settings.ShowBackground
                 ? $"rgba(18, 18, 24, {Math.Clamp(settings.BackgroundOpacity, 0, 1).ToString("0.####", CultureInfo.InvariantCulture)})"
                 : "transparent",
@@ -76,6 +73,28 @@ internal static class LyricsStyleScriptFactory
         };
 
         return WebViewMessageScriptFactory.Dispatch("taskbarLyrics", "style", stylePayload);
+    }
+
+    public static string SetAdaptiveForeground(bool useDarkText)
+    {
+        var colors = CreateColors(ForegroundColorPolicy.GetPresetColor(useDarkText));
+        return WebViewMessageScriptFactory.Dispatch("taskbarLyrics", "adaptiveForeground", new
+        {
+            colors.primaryColor,
+            colors.secondaryColor,
+            colors.translationColor,
+            colors.wordScanOverlayColor
+        });
+    }
+
+    private static (string primaryColor, string secondaryColor, string translationColor, string wordScanOverlayColor)
+        CreateColors(string color)
+    {
+        var foreground = ParseColor(color);
+        return (ToCssColor(ForegroundColorPolicy.CreatePrimaryColor(foreground)),
+            ToCssColor(ForegroundColorPolicy.CreateSecondaryColor(foreground)),
+            ToCssColor(ForegroundColorPolicy.CreateTranslationColor(foreground)),
+            ToCssColor(ForegroundColorPolicy.CreateWordScanOverlayColor(foreground)));
     }
 
     private static System.Windows.Media.Color ParseColor(string color)

@@ -26,6 +26,7 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
     private bool _isDisposed;
     private bool _isContentVisible = true;
     private readonly LyricsDisplayDiagnostics _displayDiagnostics;
+    private readonly LyricBackgroundSampler _backgroundSampler = new();
 
     public LyricsMirrorWindow(DisplayMonitor displayMonitor, Action<Window, Rect, DisplayMonitor, Action<bool>, ControlPanelTriggerArea, ControlPanelActivation> onCoverClicked,
         IAppCompositionRoot compositionRoot)
@@ -131,6 +132,7 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
     {
         if (_isDisposed || NeedsWindowReplacement) return;
         _settings = settings.Clone();
+        _backgroundSampler.Configure(_settings.ForegroundColorMode == ForegroundColorMode.Background);
         _floatingPlacement.Configure(_settings);
         if (_floatingPlacement.IsDragging) return;
         var display = DisplayMonitor;
@@ -236,6 +238,7 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
         _isDisposed = true;
         RecordDisplayDiagnostics("Dispose");
         _displayDiagnostics.Dispose();
+        _backgroundSampler.Configure(false);
         _regionVisibility.Dispose();
         Loaded -= OnLoaded;
         SourceInitialized -= OnSourceInitialized;
@@ -294,6 +297,13 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
         try
         {
             var message = LyricsWebMessageRouter.Parse(e.TryGetWebMessageAsString());
+            if (LyricsWebMessageRouter.TryGetLyricBackground(message, out var sample))
+            {
+                TaskObserver.Observe(_backgroundSampler.SampleAsync(LyricsWebView, sample,
+                    () => !_isDisposed && IsContentVisible && !SystemParameters.HighContrast,
+                    script => LyricsWebView.ExecuteScriptAsync(script)), "adaptive mirror lyric color");
+                return;
+            }
             if (LyricsWebMessageRouter.TryGetRegionVisibilityCompleted(message, out var generation, out var visible))
             {
                 _regionVisibility.Complete(generation, visible);
@@ -373,6 +383,7 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
         }
 
         _isWebReady = true;
+        _backgroundSampler.Reset();
         LyricsWebView.Visibility = Visibility.Visible;
         Dispatcher.BeginInvoke(new Action(() =>
         {

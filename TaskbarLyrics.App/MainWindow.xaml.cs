@@ -39,6 +39,7 @@ public partial class MainWindow : Window, IDisposable
     private readonly SmartTopmostController _smartTopmostController;
     private LocalMediaCoverProvider? _localMediaCoverProvider;
     private Media.Color _primaryTextColor = Media.Colors.White;
+    private readonly LyricBackgroundSampler _backgroundSampler = new();
     private Media.Color _secondaryTextColor = ForegroundColorPolicy.CreateSecondaryColor(Media.Colors.White);
     private Media.Color _translationTextColor = ForegroundColorPolicy.CreateTranslationColor(Media.Colors.White);
     private LyricSyncService _lyricSyncService;
@@ -181,6 +182,7 @@ public partial class MainWindow : Window, IDisposable
             _currentSettings.ControlPanelTriggerCover != snapshot.ControlPanelTriggerCover ||
             _currentSettings.ControlPanelTriggerLyrics != snapshot.ControlPanelTriggerLyrics;
         _currentSettings = snapshot;
+        _backgroundSampler.Configure(snapshot.ForegroundColorMode == ForegroundColorMode.Background);
         _floatingPlacement.Configure(snapshot);
         _hasAppliedSettings = true;
         var animateLyricsTransition = true;
@@ -356,7 +358,7 @@ public partial class MainWindow : Window, IDisposable
         LyricsControlPanelInputSurface.Apply(LyricsHitSurface, settings, CreateLayoutMetrics(settings));
         try
         {
-            var brush = (Media.Brush?)new Media.BrushConverter().ConvertFromString(settings.ForegroundColor);
+            var brush = (Media.Brush?)new Media.BrushConverter().ConvertFromString(ForegroundColorPolicy.GetRenderColor(settings));
             _primaryTextColor = brush is Media.SolidColorBrush solid
                 ? solid.Color
                 : Media.Colors.White;
@@ -638,6 +640,7 @@ public partial class MainWindow : Window, IDisposable
 
         RecordDisplayDiagnostics("Dispose");
         _displayDiagnostics.Dispose();
+        _backgroundSampler.Configure(false);
         _floatingControls?.Dispose();
         _regionVisibility.Dispose();
 
@@ -1513,6 +1516,7 @@ public partial class MainWindow : Window, IDisposable
     private void OnLyricsWebViewNavigationCompleted(object? sender, CoreWebView2NavigationCompletedEventArgs e)
     {
         if (Volatile.Read(ref _isDisposed) != 0) return;
+        _backgroundSampler.Reset();
         RecordDisplayDiagnostics($"NavigationCompleted-{e.IsSuccess}-{e.WebErrorStatus}");
         if (!e.IsSuccess)
         {
@@ -1659,6 +1663,15 @@ public partial class MainWindow : Window, IDisposable
         try
         {
             var message = LyricsWebMessageRouter.Parse(e.TryGetWebMessageAsString());
+            if (LyricsWebMessageRouter.TryGetLyricBackground(message, out var sample))
+            {
+                if (_lyricsWebViewElement is { } webView)
+                    TaskObserver.Observe(_backgroundSampler.SampleAsync(webView, sample,
+                        () => _isLyricsContentVisible && _regionVisibility.IsInteractive &&
+                            _isWebDocumentReady && !_isShowingWebErrorPage && !SystemParameters.HighContrast,
+                        ExecuteWebScriptAsync), "adaptive lyric color");
+                return;
+            }
             if (LyricsWebMessageRouter.TryGetRegionVisibilityCompleted(message, out var regionGeneration, out var regionVisible))
             {
                 _regionVisibility.Complete(regionGeneration, regionVisible);

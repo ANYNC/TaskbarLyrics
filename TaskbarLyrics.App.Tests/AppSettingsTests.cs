@@ -34,6 +34,7 @@ public sealed class AppSettingsTests
         Assert.Equal(1, (int)ForegroundColorMode.Light);
         Assert.Equal(2, (int)ForegroundColorMode.Custom);
         Assert.Equal(3, (int)ForegroundColorMode.System);
+        Assert.Equal(4, (int)ForegroundColorMode.Background);
     }
 
     [Fact]
