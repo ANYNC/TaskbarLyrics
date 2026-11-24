@@ -44,6 +44,10 @@ internal static class SettingsWebMessageRouter
 {
     internal static bool IsEmptyCommand(SettingsWebMessage message) => message.Payload is null or { ValueKind: JsonValueKind.Null } ||
         (message.Payload is { ValueKind: JsonValueKind.Object } payload && !payload.EnumerateObject().Any());
+
+    internal static bool IsUpdateNoticeCommandFor(SettingsWebMessage message, UpdateCheckResult result) =>
+        message.Payload is { ValueKind: JsonValueKind.String } version &&
+        result.MatchesAvailableVersion(version.GetString());
     public static bool TryParseCustomPlayerSourceAddRequest(
         JsonElement? value,
         out CustomPlayerSourceAddRequest request)

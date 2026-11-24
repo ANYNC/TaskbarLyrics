@@ -9,6 +9,7 @@ public sealed class TrayService : IDisposable
     private readonly Icon _icon;
     private readonly Forms.NotifyIcon _notifyIcon;
     private TrayMenuWindow? _menuWindow;
+    private Action? _notificationClick;
 
     public TrayService(
         Action toggleLyricsWindow,
@@ -36,6 +37,12 @@ public sealed class TrayService : IDisposable
         };
 
         _notifyIcon.DoubleClick += (_, _) => toggleLyricsWindow();
+        _notifyIcon.BalloonTipClicked += (_, _) =>
+        {
+            var onClick = _notificationClick;
+            _notificationClick = null;
+            if (onClick is not null) System.Windows.Application.Current.Dispatcher.BeginInvoke(onClick);
+        };
         _notifyIcon.MouseUp += (_, e) =>
         {
             if (e.Button == Forms.MouseButtons.Right)
@@ -71,13 +78,15 @@ public sealed class TrayService : IDisposable
         _icon.Dispose();
     }
 
-    public void ShowNotification(string title, string message, Forms.ToolTipIcon icon = Forms.ToolTipIcon.Info)
+    public void ShowNotification(string title, string message, Forms.ToolTipIcon icon = Forms.ToolTipIcon.Info,
+        Action? onClick = null)
     {
         if (!_notifyIcon.Visible)
         {
             return;
         }
 
+        _notificationClick = onClick;
         _notifyIcon.BalloonTipTitle = title;
         _notifyIcon.BalloonTipText = message;
         _notifyIcon.BalloonTipIcon = icon;

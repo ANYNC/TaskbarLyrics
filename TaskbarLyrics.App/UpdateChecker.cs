@@ -46,30 +46,6 @@ internal static class UpdateChecker
         return result;
     }
 
-    internal static async Task<GitHubRelease> ReadReleaseForVersionAsync(string version, CancellationToken cancellationToken = default)
-    {
-        if (!TryParseVersion(version, out var expected)) throw new InvalidOperationException("Invalid current version.");
-        foreach (var tag in new[] { "v" + expected, expected.ToString() })
-        {
-            GitHubRelease? release;
-            try
-            {
-                release = await ReadAsync<GitHubRelease>(
-                    $"https://api.github.com/repos/ANYNC/TaskbarLyrics/releases/tags/{Uri.EscapeDataString(tag)}", cancellationToken);
-            }
-            catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
-            {
-                continue;
-            }
-
-            if (release is not null && !release.Draft && !release.Prerelease &&
-                TryParseVersion(release.TagName, out var actual) && actual == expected)
-                return release;
-        }
-
-        throw new InvalidOperationException("Current version release is unavailable.");
-    }
-
     internal static async Task<T?> ReadAsync<T>(string url, CancellationToken token)
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
@@ -145,4 +121,8 @@ internal sealed record UpdateCheckResult(UpdateCheckState State, string Version,
 {
     public UpdateChecker.GitHubRelease? Release { get; init; }
     public Task<UpdateNotes>? NotesTask { get; set; }
+
+    public bool MatchesAvailableVersion(string? version) => HasUpdate &&
+        UpdateChecker.TryParseVersion(version, out var requested) &&
+        UpdateChecker.TryParseVersion(Version, out var available) && requested == available;
 }

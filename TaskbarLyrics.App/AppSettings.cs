@@ -146,6 +146,8 @@ public sealed class AppSettings
 
     public string LastNotifiedUpdateVersion { get; set; } = "";
 
+    public string IgnoredUpdateVersion { get; set; } = "";
+
     public bool ShowLyricTranslation { get; set; }
 
     public bool ShowLyricSearchStatus { get; set; } = true;

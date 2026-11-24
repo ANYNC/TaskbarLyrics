@@ -41,15 +41,14 @@ public static class UpdateTransaction
     }
 
     public static void Apply(string root, string transaction, string staging, IReadOnlyList<string> files,
-        string previousVersion, string targetVersion, string operationKind, Action<string>? checkpoint = null)
+        string previousVersion, string targetVersion, Action<string>? checkpoint = null)
     {
         var journal = new Journal
         {
             TransactionId = Path.GetFileName(transaction),
             Root = Path.GetFullPath(root),
             PreviousVersion = previousVersion,
-            TargetVersion = targetVersion,
-            OperationKind = operationKind
+            TargetVersion = targetVersion
         };
         Save(transaction, journal);
         try
@@ -109,6 +108,7 @@ public static class UpdateTransaction
         if (new FileInfo(path).Length > 4 * 1024 * 1024) throw new InvalidDataException("Invalid transaction journal.");
         var journal = JsonSerializer.Deserialize<Journal>(File.ReadAllText(path), UpdatePackage.JsonOptions)
             ?? throw new InvalidDataException("Invalid transaction journal.");
+        // Earlier versions could leave a same-version reinstall journal that still needs recovery.
         if (journal.SchemaVersion != 1 || journal.Product != "TaskbarLyrics" ||
             journal.TransactionId != Path.GetFileName(transaction) ||
             !string.Equals(journal.Root, Path.GetFullPath(root), StringComparison.OrdinalIgnoreCase) ||

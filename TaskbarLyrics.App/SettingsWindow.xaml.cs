@@ -482,12 +482,22 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 }
                 break;
             case "downloadUpdate":
-            case "reinstallUpdate":
-                if (SettingsWebMessageRouter.IsEmptyCommand(message) && UpdateService is { } downloader)
+                if (UpdateService is { } downloader && (SettingsWebMessageRouter.IsEmptyCommand(message) ||
+                    (UpdateChecker.Current is { } downloadResult &&
+                     SettingsWebMessageRouter.IsUpdateNoticeCommandFor(message, downloadResult))))
                 {
-                    await downloader.DownloadAsync(message.Type == "reinstallUpdate");
+                    await downloader.DownloadAsync();
                     if (downloader.Current?.State == "readyToRestart" && System.Windows.Application.Current is App autoUpdateApp)
                         await downloader.ApplyAsync(autoUpdateApp.ExitForUpdateAsync);
+                }
+                break;
+            case "dismissUpdateNotice":
+            case "ignoreUpdateVersion":
+                if (System.Windows.Application.Current is App noticeApp && UpdateChecker.Current is { } noticeResult &&
+                    SettingsWebMessageRouter.IsUpdateNoticeCommandFor(message, noticeResult))
+                {
+                    var saved = noticeApp.SetUpdateNoticePreference(noticeResult, message.Type == "ignoreUpdateVersion");
+                    await PushCheckedUpdateAsync(noticeResult, saved ? null : Text.T("Update_IgnoreSaveFailed"));
                 }
                 break;
             case "cancelUpdateDownload":
@@ -2108,23 +2118,30 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 CurrentVersion = UpdateChecker.GetCurrentVersion(),
                 ProgressPercent = action.Progress,
                 CanCancel = action.State is "downloading" or "verifying",
-                OperationKind = action.OperationKind,
                 ReasonCode = action.ErrorCode,
                 Message = action.ErrorCode is { } errorCode ? Text.T($"Update_Reason_{errorCode}") : ""
             }), "standalone update action status");
         }));
     }
 
-    private Task PushCheckedUpdateAsync(UpdateCheckResult result)
+    private Task PushCheckedUpdateAsync(UpdateCheckResult result, string? noticeError = null)
     {
         var action = UpdateService?.Current;
         var asset = AppUpdateService.SelectAsset(result);
         var supported = UpdateService?.Supported == true;
         var notes = result.NotesTask?.IsCompletedSuccessfully == true ? result.NotesTask.Result : null;
+        var app = System.Windows.Application.Current as App;
+        var reasonCode = action?.ErrorCode;
+        if (reasonCode is null && result.HasUpdate)
+            reasonCode = !supported ? "Unsupported" : asset is null ? "AssetUnavailable" : null;
+
         return PushUpdateStatusToWebAsync(new UpdateStatusPayload
         {
             State = action?.State ?? (result.HasUpdate ? "available" : "latest"),
             HasUpdate = result.HasUpdate,
+            NoticeDismissed = app?.IsUpdateNoticeDismissed(result) == true,
+            NoticeIgnored = app?.IsUpdateNoticeIgnored(result) == true,
+            NoticeError = noticeError,
             Message = action is null ? (result.HasUpdate
                 ? notes?.IsCumulative == true
                     ? Text.Format("Update_CumulativeDetected", result.CurrentVersion, result.Version)
@@ -2135,12 +2152,10 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             CurrentVersion = result.CurrentVersion,
             CanApply = action?.State == "readyToRestart",
             CanCancel = action?.State is "downloading" or "verifying",
-            CanDownload = supported && asset is not null && result.HasUpdate,
-            CanReinstall = supported && asset is not null && !result.HasUpdate,
+            CanDownload = supported && asset is not null,
             DownloadSizeBytes = asset?.Size,
             ProgressPercent = action?.Progress,
-            OperationKind = action?.OperationKind ?? "upgrade",
-            ReasonCode = !supported ? "Unsupported" : asset is null ? "AssetUnavailable" : action?.ErrorCode,
+            ReasonCode = reasonCode,
             ReleaseNotesHtml = notes?.Html,
             ReleaseNotes = notes?.Markdown,
             NotesComplete = notes?.Complete,
@@ -2687,16 +2702,17 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         public bool CanApply { get; set; }
         public bool CanCancel { get; set; }
         public bool CanDownload { get; set; }
-        public bool CanReinstall { get; set; }
         public long? DownloadSizeBytes { get; set; }
         public double? ProgressPercent { get; set; }
-        public string OperationKind { get; set; } = "upgrade";
         public string? ReasonCode { get; set; }
         public string? ReleaseNotesHtml { get; set; }
         public string? ReleaseNotes { get; set; }
         public bool? NotesComplete { get; set; }
         public bool? IsCumulativeUpdate { get; set; }
         public bool? HasUpdate { get; set; }
+        public bool NoticeDismissed { get; set; }
+        public bool NoticeIgnored { get; set; }
+        public string? NoticeError { get; set; }
         public string State { get; set; } = "";
 
         public string Message { get; set; } = "";

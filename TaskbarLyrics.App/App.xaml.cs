@@ -13,6 +13,7 @@ namespace TaskbarLyrics.App;
 public partial class App : System.Windows.Application, IDisposable
 {
     private AutomaticUpdateScheduler? _updateScheduler;
+    private string? _dismissedUpdateVersion;
 
 
     private SettingsStore? _settingsStore;
@@ -182,6 +183,10 @@ public partial class App : System.Windows.Application, IDisposable
     {
         var currentSettings = Settings;
         var nextSettings = settings.Clone();
+        // The settings window edits a snapshot that can predate an update check or notice action.
+        nextSettings.LastUpdateCheckUtc = currentSettings.LastUpdateCheckUtc;
+        nextSettings.LastNotifiedUpdateVersion = currentSettings.LastNotifiedUpdateVersion;
+        nextSettings.IgnoredUpdateVersion = currentSettings.IgnoredUpdateVersion;
         if (!nextSettings.SpectrumAudioAccessGranted)
         {
             nextSettings.SetLegacySpectrumMode(SpectrumDisplayMode.Disabled);
@@ -271,11 +276,16 @@ public partial class App : System.Windows.Application, IDisposable
             while (Updates?.IsBusy == true) await Task.Delay(TimeSpan.FromMinutes(1), cancellationToken);
             var result = await UpdateChecker.CheckLatestAsync(cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
-            if (result.HasUpdate && !string.Equals(Settings.LastNotifiedUpdateVersion, result.Version, StringComparison.OrdinalIgnoreCase))
+            if (result.HasUpdate && !IsUpdateNoticeIgnored(result) &&
+                !result.MatchesAvailableVersion(Settings.LastNotifiedUpdateVersion))
             {
                 Settings.LastNotifiedUpdateVersion = result.Version;
                 _trayService?.ShowNotification(Text.T("UI_TaskbarLyricsUpdateAvailable"),
-                    Text.Format("Update_AvailableNotification", result.Version, result.CurrentVersion));
+                    Text.Format("Update_AvailableNotification", result.Version, result.CurrentVersion),
+                    onClick: () =>
+                    {
+                        if (!IsExiting) OpenSettingsWindow("about", focusCurrentTrack: false);
+                    });
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { return; }
@@ -285,6 +295,27 @@ public partial class App : System.Windows.Application, IDisposable
         }
         Settings.LastUpdateCheckUtc = DateTimeOffset.UtcNow;
         _settingsStore?.Save(Settings);
+    }
+
+    internal bool IsUpdateNoticeIgnored(UpdateCheckResult result) =>
+        result.MatchesAvailableVersion(Settings.IgnoredUpdateVersion);
+
+    internal bool IsUpdateNoticeDismissed(UpdateCheckResult result) =>
+        result.MatchesAvailableVersion(_dismissedUpdateVersion);
+
+    internal bool SetUpdateNoticePreference(UpdateCheckResult result, bool ignore)
+    {
+        if (!ignore)
+        {
+            _dismissedUpdateVersion = result.Version;
+            return true;
+        }
+
+        var settings = Settings.Clone();
+        settings.IgnoredUpdateVersion = result.Version;
+        if (_settingsStore?.Save(settings) != true) return false;
+        Settings.IgnoredUpdateVersion = settings.IgnoredUpdateVersion;
+        return true;
     }
     internal static void ApplyStartupForegroundColor(AppSettings settings)
     {

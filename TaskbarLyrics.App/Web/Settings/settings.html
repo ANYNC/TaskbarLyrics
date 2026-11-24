@@ -57,6 +57,27 @@
         </div>
       </header>
 
+      <section id="updateNotice" class="update-notice" aria-labelledby="updateNoticeTitle" hidden>
+        <div class="update-notice-copy">
+          <strong id="updateNoticeTitle" role="status" aria-live="polite"></strong>
+          <p id="updateNoticeRestartHint">{{Update_NoticeRestartHint}}</p>
+        </div>
+        <div class="update-notice-actions">
+          <button id="updateNoticePrimary" class="btn small" type="button">{{Update_Download}}</button>
+          <div id="updateNoticeOptions" class="update-notice-options">
+            <button id="updateNoticeMore" class="icon-button" type="button" aria-label="{{Update_NoticeActions}}" aria-haspopup="menu" aria-expanded="false" aria-controls="updateNoticeMenu">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg>
+            </button>
+            <div id="updateNoticeMenu" class="update-notice-menu" role="menu" aria-labelledby="updateNoticeMore" hidden>
+              <button id="updateNoticeIgnore" class="btn ghost small" type="button" role="menuitem" tabindex="-1">{{Update_IgnoreVersion}}</button>
+            </div>
+          </div>
+          <button id="updateNoticeDismiss" class="icon-button" type="button" aria-label="{{Update_DismissNotice}}">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+      </section>
+
       <div class="page-stack">
         <section class="page getting-started-page" data-page="gettingStarted" aria-labelledby="gettingStartedHeading">
           <div class="page-inner">
@@ -363,25 +384,38 @@
         </section>
 
         <section class="page" data-page="about" aria-labelledby="aboutHeading">
-          <div class="about-layout">
-            <section class="panel about-product">
-              <div class="about-logo" aria-hidden="true">TL</div>
-              <div class="about-copy"><div class="about-title-row"><h2 id="aboutHeading" tabindex="-1">TaskbarLyrics</h2><span class="version-badge">Version --</span></div><p>{{UI_TaskbarLyricsIsAnOpenSource}}<del class="easter-egg" title="{{UI_ItUsedToBeLightweightBeforeAllThoseUpdates}}">{{UI_Lightweight}}</del>{{UI_ModernToolThatDisplaysLyricsInUnusedTaskbarSpace}}</p></div>
-              <button id="repositoryButton" class="btn ghost" type="button">{{UI_GitHubRepository}}</button>
-            </section>
-            <section class="panel">
-              <div class="panel-head"><div><h2>{{UI_Updates}}</h2><p>{{UI_KeepTheAppOnTheLatestStableVersion}}</p></div></div>
-              <div class="update-summary"><strong id="updateStatusTitle" role="status" aria-live="polite">{{UI_UpdatesNotCheckedYet}}</strong><div class="update-external-actions">
-                <button id="updateNotesButton" class="btn ghost" type="button" disabled>{{Update_ViewNotes}}</button>
-                <button id="updateDirectButton" class="btn" type="button" hidden disabled>{{Update_DirectUpdate}}</button>
-                <button id="updateReinstallButton" class="btn secondary" type="button">{{Update_Reinstall}}</button>
-                <button id="checkUpdateButton" class="btn" type="button">{{UI_CheckForUpdates}}</button>
-              </div></div>
-              <div id="updateInlineOperation" class="update-inline-operation" role="status" aria-live="polite" hidden>
-                <span id="updateInlineStatus"></span>
-                <progress id="updateInlineProgress" max="100" aria-label="{{Update_Download}}"></progress>
-                <small id="updateInlineSize" hidden></small>
-                <button id="updateInlineCancel" class="btn ghost small" type="button" hidden>{{UI_Cancel}}</button>
+          <div class="page-inner about-layout">
+            <section class="panel about-hero-panel">
+              <div class="about-product">
+                <div class="about-logo" aria-hidden="true">TL</div>
+                <div class="about-copy">
+                  <div class="about-title-row"><h2 id="aboutHeading" tabindex="-1">TaskbarLyrics</h2><span class="version-badge">Version --</span></div>
+                  <p>{{UI_TaskbarLyricsIsAnOpenSource}}<del class="easter-egg" title="{{UI_ItUsedToBeLightweightBeforeAllThoseUpdates}}">{{UI_Lightweight}}</del>{{UI_ModernToolThatDisplaysLyricsInUnusedTaskbarSpace}}</p>
+                </div>
+                <button id="repositoryButton" class="btn outline about-repo-button" type="button"><span>{{UI_GitHubRepository}}</span><svg class="about-external-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3h7v7M21 3l-10 10M10 3H4a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1v-6"/></svg></button>
+              </div>
+              <div id="aboutUpdateSection" class="about-update-section" data-update-state="idle">
+                <div class="update-summary">
+                  <div class="update-status-copy">
+                    <div class="update-status-line">
+                      <span class="update-status-dot" aria-hidden="true"></span>
+                      <strong id="updateStatusTitle" role="status" aria-live="polite">{{UI_UpdatesNotCheckedYet}}</strong>
+                    </div>
+                    <p id="updateStatusDetail" class="update-status-detail" hidden></p>
+                  </div>
+                  <div class="update-external-actions">
+                    <button id="updateNotesButton" class="btn ghost" type="button" disabled>{{Update_ViewNotes}}</button>
+                    <button id="checkUpdateButton" class="btn" type="button">{{UI_CheckForUpdates}}</button>
+                    <button id="updateManualButton" class="btn ghost" type="button" hidden>{{Update_ManualDownload}}</button>
+                    <button id="updateDirectButton" class="btn" type="button" hidden disabled>{{Update_DirectUpdate}}</button>
+                  </div>
+                </div>
+                <div id="updateInlineOperation" class="update-inline-operation" hidden>
+                  <progress id="updateInlineProgress" max="100" aria-label="{{Update_Download}}"></progress>
+                  <small id="updateInlinePercent" class="update-inline-metric" hidden></small>
+                  <small id="updateInlineSize" class="update-inline-metric" hidden></small>
+                  <button id="updateInlineCancel" class="btn ghost small" type="button" hidden>{{UI_Cancel}}</button>
+                </div>
               </div>
             </section>
             <dialog id="updateDialog" class="update-dialog" aria-labelledby="updateDialogHeading">
@@ -390,7 +424,7 @@
                 <p id="updateDialogStatusTitle" class="update-dialog-status" role="status" aria-live="polite">{{UI_UpdatesNotCheckedYet}}</p>
                 <small id="updateDialogStatusDetail" class="update-dialog-detail" hidden></small>
                 <div class="update-extra" hidden><progress id="updateProgress" max="100" hidden aria-label="{{Update_Download}}"></progress><small id="updateSize" hidden></small><small id="updateReason" hidden></small></div>
-                <section id="releaseNotesPanel" class="release-notes" hidden aria-labelledby="releaseNotesHeading"><p id="releaseNotesIncomplete" hidden>{{Update_NotesIncomplete}}</p><div id="releaseNotesContent" class="markdown-body"></div></section>
+                <section id="releaseNotesPanel" class="release-notes" hidden aria-labelledby="releaseNotesHeading"><h3 id="releaseNotesHeading" class="release-notes-heading">{{Update_Notes}}</h3><p id="releaseNotesIncomplete" hidden>{{Update_NotesIncomplete}}</p><div id="releaseNotesContent" class="markdown-body"></div></section>
               </div>
               <div class="dialog-actions update-dialog-actions">
                 <button id="updateReleaseButton" class="btn ghost" type="button" hidden>{{Update_ManualDownload}}</button>
@@ -398,16 +432,15 @@
                 <button class="btn ghost" type="button" data-dialog-cancel="updateDialog">{{UI_Close}}</button>
               </div>
             </dialog>
-            <section class="panel">
+            <section class="panel about-meta-panel">
               <div class="panel-head"><div><h2>{{UI_OpenSourceTechnology}}</h2><p>{{UI_SourceCodeLicenseAndKeyTechnologies}}</p></div></div>
-              <div class="resource-list">
-                <div class="resource-item"><span>{{UI_OpenSourceLicense}}</span><strong>MIT License</strong><span></span></div>
-                <div class="resource-item"><span>{{UI_SourceCode}}</span><strong>GitHub</strong><button class="btn ghost small" type="button" data-repository-link>{{UI_OpenRepository}}</button></div>
-                <div class="resource-item"><span>{{UI_UITechnology}}</span><strong>WPF + WebView2</strong><span></span></div>
-                <div class="resource-item"><span>{{UI_MainDependencies}}</span><strong>WPF-UI / WebView2 / Lyricify</strong><span></span></div>
-              </div>
+              <dl class="about-meta-grid">
+                <div class="about-meta-item"><dt>{{UI_OpenSourceLicense}}</dt><dd>MIT License</dd></div>
+                <div class="about-meta-item"><dt>{{UI_SourceCode}}</dt><dd>GitHub</dd></div>
+                <div class="about-meta-item"><dt>{{UI_UITechnology}}</dt><dd>WPF + WebView2</dd></div>
+                <div class="about-meta-item"><dt>{{UI_MainDependencies}}</dt><dd>WPF-UI / WebView2 / Lyricify</dd></div>
+              </dl>
             </section>
-            <div class="about-footer">{{UI_TaskbarLyricsIsFreeAndOpenSourceSoftware}}</div>
           </div>
         </section>
       </div>

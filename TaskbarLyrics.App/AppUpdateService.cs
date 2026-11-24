@@ -1,7 +1,6 @@
 using TaskbarLyrics.Core.Utilities;
 using System.Diagnostics;
 using System.IO;
-using System.IO.Pipes;
 using System.Net.Http;
 using System.Reflection;
 using System.Text.Json;
@@ -9,7 +8,7 @@ using TaskbarLyrics.Updates;
 
 namespace TaskbarLyrics.App;
 
-internal sealed record UpdateActionSnapshot(string State, double? Progress = null, string? ErrorCode = null, string OperationKind = "upgrade");
+internal sealed record UpdateActionSnapshot(string State, double? Progress = null, string? ErrorCode = null);
 internal sealed class AppUpdateService : IDisposable
 {
     private readonly CancellationTokenSource _lifetime = new();
@@ -39,8 +38,8 @@ internal sealed class AppUpdateService : IDisposable
     }
     internal static UpdateChecker.GitHubAsset? SelectAsset(UpdateCheckResult result)
     {
-        if (result.Release?.Assets is null || !UpdateChecker.TryParseVersion(result.Version, out var target) ||
-            !UpdateChecker.TryParseVersion(result.CurrentVersion, out var current) || target < current) return null;
+        if (!result.HasUpdate || result.Release?.Assets is null || !UpdateChecker.TryParseVersion(result.Version, out var target) ||
+            !UpdateChecker.TryParseVersion(result.CurrentVersion, out var current) || target <= current) return null;
         var matches = result.Release.Assets.Where(a => a.Name == $"TaskbarLyrics-{target}.zip").ToArray();
         return matches.Length == 1 && matches[0].State == "uploaded" && matches[0].Id > 0 &&
             matches[0].Size is > 0 and <= UpdatePackage.MaximumPackageSize && UpdatePackage.IsDigest(matches[0].Digest) &&
@@ -60,19 +59,14 @@ internal sealed class AppUpdateService : IDisposable
         Cleanup();
         Current = null;
     }
-    public async Task DownloadAsync(bool reinstall)
+    public async Task DownloadAsync()
     {
         if (!await _gate.WaitAsync(0, _lifetime.Token)) return;
-        var kind = reinstall ? "reinstall" : "upgrade";
         try
         {
             if (!IsSupported) throw new InvalidOperationException("Unsupported");
-            var candidate = reinstall
-                ? await CreateReinstallCandidateAsync(_lifetime.Token)
-                : UpdateChecker.Current ?? throw new InvalidOperationException("CandidateUnavailable");
+            var candidate = UpdateChecker.Current ?? throw new InvalidOperationException("CandidateUnavailable");
             var asset = SelectAsset(candidate) ?? throw new InvalidOperationException("AssetUnavailable");
-            if (reinstall ? candidate.HasUpdate : !candidate.HasUpdate)
-                throw new InvalidOperationException("CandidateChanged");
             Cleanup();
             _download = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
             _download.CancelAfter(TimeSpan.FromMinutes(30));
@@ -80,9 +74,9 @@ internal sealed class AppUpdateService : IDisposable
             _directory = Path.Combine(Path.GetTempPath(), "TaskbarLyrics", "Updates", Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(_directory);
             var part = Path.Combine(_directory, "package.part");
-            Publish(new("downloading", 0, OperationKind: kind));
-            await DownloadFileAsync(asset, part, kind, token);
-            Publish(new("verifying", OperationKind: kind));
+            Publish(new("downloading", 0));
+            await DownloadFileAsync(asset, part, token);
+            Publish(new("verifying"));
             await using (var input = File.OpenRead(part)) await UpdatePackage.VerifyDigestAsync(input, asset.Digest!, token);
             var version = candidate.Version.TrimStart('v', 'V');
             var verified = Path.Combine(_directory, "verified");
@@ -93,12 +87,12 @@ internal sealed class AppUpdateService : IDisposable
             }, token);
             File.Move(part, Path.Combine(_directory, "package.zip"));
             _candidate = candidate;
-            Publish(new("readyToRestart", OperationKind: kind));
+            Publish(new("readyToRestart"));
         }
         catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { }
-        catch (OperationCanceledException) { Publish(new("canceled", OperationKind: kind)); }
+        catch (OperationCanceledException) { Publish(new("canceled")); }
         catch (Exception ex) when (ex is IOException or InvalidDataException or HttpRequestException or InvalidOperationException or UnauthorizedAccessException or JsonException)
-        { Log.Warn($"Update download failed: {ex}"); Publish(new("error", ErrorCode: "DownloadFailed", OperationKind: kind)); }
+        { Log.Warn($"Update download failed: {ex}"); Publish(new("error", ErrorCode: "DownloadFailed")); }
         finally
         {
             _download?.Dispose(); _download = null;
@@ -106,7 +100,7 @@ internal sealed class AppUpdateService : IDisposable
             _gate.Release();
         }
     }
-    private async Task DownloadFileAsync(UpdateChecker.GitHubAsset asset, string path, string kind, CancellationToken token)
+    private async Task DownloadFileAsync(UpdateChecker.GitHubAsset asset, string path, CancellationToken token)
     {
         using var handler = new HttpClientHandler { AllowAutoRedirect = false };
         using var client = new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan };
@@ -144,7 +138,7 @@ internal sealed class AppUpdateService : IDisposable
                 total += read;
                 if (total > asset.Size) throw new InvalidDataException("Size mismatch.");
                 await output.WriteAsync(buffer.AsMemory(0, read), token);
-                if (report.ElapsedMilliseconds >= 200) { Publish(new("downloading", total * 100d / asset.Size, OperationKind: kind)); report.Restart(); }
+                if (report.ElapsedMilliseconds >= 200) { Publish(new("downloading", total * 100d / asset.Size)); report.Restart(); }
             }
             if (total != asset.Size) throw new InvalidDataException("Size mismatch.");
             await output.FlushAsync(token);
@@ -157,11 +151,8 @@ internal sealed class AppUpdateService : IDisposable
         try
         {
             if (Current?.State != "readyToRestart" || _candidate?.Release is not { } release || _directory is null || !IsSupported) return;
-            var kind = Current.OperationKind;
-            Publish(new("preparing", OperationKind: kind));
-            var latest = kind == "reinstall"
-                ? await CreateReinstallCandidateAsync(_lifetime.Token)
-                : await UpdateChecker.CheckLatestAsync(_lifetime.Token);
+            Publish(new("preparing"));
+            var latest = await UpdateChecker.CheckLatestAsync(_lifetime.Token);
             var asset = SelectAsset(latest);
             if (latest.Release?.Id != release.Id || asset is null || asset != SelectAsset(_candidate)) throw new InvalidOperationException("CandidateChanged");
             var session = Path.GetFileName(_directory);
@@ -170,17 +161,18 @@ internal sealed class AppUpdateService : IDisposable
             await using (var output = File.Create(updater)) await payload.CopyToAsync(output, _lifetime.Token);
             using var process = Process.GetCurrentProcess();
             var request = new UpdateRequest(1, AppContext.BaseDirectory, Path.Combine(_directory, "package.zip"),
-                latest.Version.TrimStart('v', 'V'), asset.Digest!, Environment.ProcessId, process.StartTime.ToUniversalTime().Ticks, session, kind, Text.T("Update_UpdaterFailed"), Text.T("Update_RecoveryInstructions"));
+                latest.Version.TrimStart('v', 'V'), asset.Digest!, Environment.ProcessId, process.StartTime.ToUniversalTime().Ticks,
+                session, "upgrade", Text.T("Update_UpdaterFailed"), Text.T("Update_RecoveryInstructions"));
             var descriptor = Path.Combine(_directory, "request.json");
             await File.WriteAllTextAsync(descriptor, JsonSerializer.Serialize(request, UpdatePackage.JsonOptions), _lifetime.Token);
             var start = new ProcessStartInfo(updater) { UseShellExecute = false, CreateNoWindow = true, WorkingDirectory = _directory };
             start.ArgumentList.Add(descriptor);
             using var child = Process.Start(start) ?? throw new IOException("Updater did not start.");
-            Publish(new("applying", OperationKind: kind));
+            Publish(new("applying"));
             await exit();
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or HttpRequestException or InvalidOperationException or UnauthorizedAccessException or JsonException or OperationCanceledException or System.ComponentModel.Win32Exception or TimeoutException)
-        { Log.Warn($"Update handoff failed: {ex}"); Publish(new("error", ErrorCode: "ApplyFailed", OperationKind: Current?.OperationKind ?? "upgrade")); }
+        { Log.Warn($"Update handoff failed: {ex}"); Publish(new("error", ErrorCode: "ApplyFailed")); }
         finally { _gate.Release(); }
     }
     private void Cleanup()
@@ -191,13 +183,6 @@ internal sealed class AppUpdateService : IDisposable
         _directory = null;
     }
 
-    private static async Task<UpdateCheckResult> CreateReinstallCandidateAsync(CancellationToken cancellationToken)
-    {
-        var currentVersion = UpdateChecker.GetCurrentVersion();
-        var release = await UpdateChecker.ReadReleaseForVersionAsync(currentVersion, cancellationToken);
-        var url = UpdateChecker.IsReleaseUrl(release.HtmlUrl) ? release.HtmlUrl! : UpdateChecker.ReleasesUrl;
-        return new(UpdateCheckState.Latest, release.TagName!, currentVersion, url, false) { Release = release };
-    }
     public void Dispose()
     {
         _lifetime.Cancel();

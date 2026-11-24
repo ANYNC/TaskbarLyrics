@@ -62,8 +62,8 @@ internal static class Program
             controller.ShouldDetectMonitorScaleChanges = false;
             foreach (var (width, height, textScale) in new[]
             {
-                (1280, 765, 1d), (1280, 765, 1.4), (720, 560, 1.4),
-                (1280, 765, 2.25), (720, 560, 2.25), (1280, 765, 1d)
+                (720, 560, 2.25), (1600, 900, 1d), (1280, 765, 1d), (1280, 765, 1.4),
+                (720, 560, 1.4), (1280, 765, 2.25), (1280, 765, 1d)
             })
             {
                 window.Width = width;

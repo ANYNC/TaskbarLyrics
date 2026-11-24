@@ -149,7 +149,7 @@ public sealed class ApplicationUpdateTests
         File.WriteAllText(Path.Combine(logs, "app_debug.log"), "log");
         var files = Fixture.WriteVersion(staging, "new", "Web/Lyrics/added.js");
         var transaction = Path.Combine(fixture.Directory, "transaction");
-        Assert.Throws<IOException>(() => UpdateTransaction.Apply(root, transaction, staging, files, "1.0.0", "1.0.1", "upgrade",
+        Assert.Throws<IOException>(() => UpdateTransaction.Apply(root, transaction, staging, files, "1.0.0", "1.0.1",
             point => { if (point == checkpoint) throw new IOException("Injected failure."); }));
         Assert.Equal("old", File.ReadAllText(Path.Combine(root, "TaskbarLyrics.exe")));
         Assert.Equal("old", File.ReadAllText(Path.Combine(root, "Web/Settings/settings.html")));
@@ -173,7 +173,7 @@ public sealed class ApplicationUpdateTests
         File.WriteAllText(Path.Combine(logs, "app_debug.log"), "log");
         var files = Fixture.WriteVersion(staging, "new", "Web/Lyrics/added.js");
         var transaction = Path.Combine(fixture.Directory, "txn");
-        UpdateTransaction.Apply(root, transaction, staging, files, "1.0.0", "1.0.1", "upgrade");
+        UpdateTransaction.Apply(root, transaction, staging, files, "1.0.0", "1.0.1");
         Assert.Equal("new", File.ReadAllText(Path.Combine(root, "TaskbarLyrics.exe")));
         Assert.True(File.Exists(Path.Combine(root, "Web/Lyrics/added.js")));
         Assert.Equal("old", File.ReadAllText(Path.Combine(root, "Web/Lyrics/removed.js")));
@@ -191,30 +191,46 @@ public sealed class ApplicationUpdateTests
         Fixture.WriteVersion(root, "old");
         var files = Fixture.WriteVersion(stage, "new");
         var transaction = Path.Combine(fixture.Directory, "txn");
-        UpdateTransaction.Apply(root, transaction, stage, files, "1.0.0", "1.0.1", "upgrade");
+        UpdateTransaction.Apply(root, transaction, stage, files, "1.0.0", "1.0.1");
         Assert.Equal("new", File.ReadAllText(Path.Combine(root, "TaskbarLyrics.exe")));
         UpdateTransaction.Recover(root, transaction);
         Assert.Equal("old", File.ReadAllText(Path.Combine(root, "TaskbarLyrics.exe")));
         var next = Path.Combine(fixture.Directory, "next");
         files = Fixture.WriteVersion(next, "new");
         transaction = Path.Combine(fixture.Directory, "txn2");
-        UpdateTransaction.Apply(root, transaction, next, files, "1.0.0", "1.0.1", "upgrade");
+        UpdateTransaction.Apply(root, transaction, next, files, "1.0.0", "1.0.1");
         UpdateTransaction.Commit(transaction);
         UpdateTransaction.Recover(root, transaction);
         Assert.Equal("new", File.ReadAllText(Path.Combine(root, "TaskbarLyrics.exe")));
     }
     [Fact]
-    public void SameVersionReinstallReallyReplacesFiles()
+    public void RecoversFilesFromLegacyReinstallJournal()
     {
         using var fixture = new Fixture();
-        var root = Path.Combine(fixture.Directory, "app"); var stage = Path.Combine(fixture.Directory, "stage");
-        Fixture.WriteVersion(root, "damaged");
-        var files = Fixture.WriteVersion(stage, "restored");
-        UpdateTransaction.Apply(root, Path.Combine(fixture.Directory, "txn"), stage, files, "1.0.0", "1.0.0", "reinstall");
-        Assert.Equal("restored", File.ReadAllText(Path.Combine(root, "TaskbarLyrics.exe")));
+        var root = Path.Combine(fixture.Directory, "app");
+        var sessionId = Guid.NewGuid().ToString("N");
+        var transaction = Path.Combine(fixture.Directory, sessionId);
+        var files = Fixture.WriteVersion(root, "interrupted reinstall");
+        Fixture.WriteVersion(Path.Combine(transaction, "backup"), "original");
+        var journal = new UpdateTransaction.Journal
+        {
+            TransactionId = sessionId,
+            Root = root,
+            PreviousVersion = "1.0.0",
+            TargetVersion = "1.0.0",
+            OperationKind = "reinstall",
+            Phase = "Installed",
+            BackedUp = files,
+            Installed = files
+        };
+        UpdateTransaction.Save(transaction, journal);
+
+        UpdateTransaction.Recover(root, transaction);
+
+        Assert.All(files, relative => Assert.Equal("original", File.ReadAllText(Path.Combine(root, relative))));
     }
     [Fact]
-    public void AssetSelectionRejectsMissingDigestAmbiguityAndDowngrade()
+    public void AssetSelectionRequiresANewerVersionAndOneVerifiableAsset()
     {
         var asset = new UpdateChecker.GitHubAsset
         {
@@ -226,8 +242,9 @@ public sealed class ApplicationUpdateTests
             Url = "https://github.com/ANYNC/TaskbarLyrics/releases/download/v1.0.0/TaskbarLyrics-1.0.0.zip"
         };
         var release = Release(1, "v1.0.0", ""); release.Assets.Add(asset);
-        var candidate = new UpdateCheckResult(UpdateCheckState.Latest, "v1.0.0", "1.0.0", "", false) { Release = release };
-        Assert.NotNull(AppUpdateService.SelectAsset(candidate));
+        var candidate = new UpdateCheckResult(UpdateCheckState.Available, "v1.0.0", "0.9.0", "", true) { Release = release };
+        Assert.Same(asset, AppUpdateService.SelectAsset(candidate));
+        Assert.Null(AppUpdateService.SelectAsset(candidate with { CurrentVersion = "1.0.0" }));
         Assert.Null(AppUpdateService.SelectAsset(candidate with { CurrentVersion = "2.0.0" }));
         release.Assets.Add(asset);
         Assert.Null(AppUpdateService.SelectAsset(candidate));
@@ -243,10 +260,44 @@ public sealed class ApplicationUpdateTests
     [InlineData("\"arbitrary\"", false)]
     public void UpdateCommandsCannotSupplyTheirOwnTargets(string payload, bool valid)
     {
-        var message = SettingsWebMessageRouter.Parse("{\"version\":1,\"type\":\"reinstallUpdate\",\"payload\":" + payload + "}");
+        var message = SettingsWebMessageRouter.Parse("{\"version\":1,\"type\":\"downloadUpdate\",\"payload\":" + payload + "}");
         Assert.NotNull(message);
         Assert.Equal(valid, SettingsWebMessageRouter.IsEmptyCommand(message));
     }
+
+    [Theory]
+    [InlineData("\"V2.0.0\"", true)]
+    [InlineData("\"2.0.0\"", true)]
+    [InlineData("\"2.0.1\"", false)]
+    [InlineData("\"2.0.0-preview\"", false)]
+    [InlineData("{\"version\":\"2.0.0\"}", false)]
+    [InlineData("null", false)]
+    public void UpdateNoticeCommandsMatchOnlyTheAvailableVersion(string payload, bool valid)
+    {
+        var message = SettingsWebMessageRouter.Parse(
+            "{\"version\":1,\"type\":\"ignoreUpdateVersion\",\"payload\":" + payload + "}");
+        Assert.NotNull(message);
+        var available = new UpdateCheckResult(UpdateCheckState.Available, "v2.0.0", "1.0.0", "", true);
+        Assert.Equal(valid, SettingsWebMessageRouter.IsUpdateNoticeCommandFor(message, available));
+        Assert.False(SettingsWebMessageRouter.IsUpdateNoticeCommandFor(message, available with { HasUpdate = false }));
+    }
+
+    [Fact]
+    public void IgnoredVersionPersistsAndDoesNotMatchNewerRelease()
+    {
+        using var fixture = new Fixture();
+        var store = new SettingsStore(Path.Combine(fixture.Directory, "settings.json"));
+        var settings = store.Load();
+        Assert.Empty(settings.IgnoredUpdateVersion);
+        settings.IgnoredUpdateVersion = "v2.0.0";
+        Assert.True(store.Save(settings.Clone()));
+
+        var ignored = store.Load().IgnoredUpdateVersion;
+        var release = new UpdateCheckResult(UpdateCheckState.Available, "2.0.0", "1.0.0", "", true);
+        Assert.True(release.MatchesAvailableVersion(ignored));
+        Assert.False((release with { Version = "2.0.1" }).MatchesAvailableVersion(ignored));
+    }
+
     [Fact]
     public async Task PipeHandoffVerifiesBothProcessIdentities()
     {

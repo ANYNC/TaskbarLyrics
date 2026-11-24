@@ -52,7 +52,7 @@ internal static class Program
                 ?? throw new InvalidDataException("Invalid request.");
             failureMessage = request.FailureMessage;
             if (request.ProtocolVersion != 1 || !Guid.TryParseExact(request.SessionId, "N", out _) ||
-                request.OperationKind is not ("upgrade" or "reinstall"))
+                request.OperationKind != "upgrade")
                 throw new InvalidDataException("Invalid update session.");
             root = Path.GetFullPath(request.Root);
             stage = "acquire update lock";
@@ -60,7 +60,7 @@ internal static class Program
             RecoverPending(root);
             var current = UpdatePackage.ReadVersion(root);
             if (!Version.TryParse(current, out var oldVersion) || !Version.TryParse(request.Version, out var newVersion) ||
-                (request.OperationKind == "reinstall" ? newVersion != oldVersion : newVersion <= oldVersion))
+                newVersion <= oldVersion)
                 throw new InvalidDataException("Invalid target version.");
             using var main = Process.GetProcessById(request.MainPid);
             if (main.StartTime.ToUniversalTime().Ticks != request.MainStartedTicks ||
@@ -95,7 +95,7 @@ internal static class Program
             var local = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "TaskbarLyrics", "TaskbarLyrics.lock");
             stage = "replace package files";
             using (var instanceLock = new FileStream(local, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
-                UpdateTransaction.Apply(root, transaction, staging, files, current, request.Version, request.OperationKind);
+                UpdateTransaction.Apply(root, transaction, staging, files, current, request.Version);
             stage = "start updated process";
             using var updated = Start(root);
             newProcessStarted = updated is not null;
