@@ -76,7 +76,7 @@ public sealed class CompositionGaussianBlurEffect : CompositionGaussianBlurEffec
         try
         {
             var id = PropertyValueId;
-            return Marshal.QueryInterface(inspectable, ref id, out value);
+            return Marshal.QueryInterface(inspectable, in id, out value);
         }
         finally { Marshal.Release(inspectable); }
     }

@@ -250,43 +250,41 @@ public sealed class AppSettings
     public const double DefaultFloatingPanelTintOpacity = 0.55;
     public const double DefaultFloatingPanelBlurAmount = 32;
 
-    private double _embeddedPanelBrightness = DefaultEmbeddedPanelBrightness;
-    private double _embeddedPanelTintOpacity = DefaultEmbeddedPanelTintOpacity;
-    private double _embeddedPanelBlurAmount = DefaultEmbeddedPanelBlurAmount;
     public double EmbeddedPanelBrightness
     {
-        get => _embeddedPanelBrightness;
-        set => _embeddedPanelBrightness = double.IsFinite(value) ? Math.Clamp(value, 0, 1) : DefaultEmbeddedPanelBrightness;
-    }
+        get;
+        set => field = double.IsFinite(value) ? Math.Clamp(value, 0, 1) : DefaultEmbeddedPanelBrightness;
+    } = DefaultEmbeddedPanelBrightness;
+
     public double EmbeddedPanelTintOpacity
     {
-        get => _embeddedPanelTintOpacity;
-        set => _embeddedPanelTintOpacity = double.IsFinite(value) ? Math.Clamp(value, 0, 1) : DefaultEmbeddedPanelTintOpacity;
-    }
+        get;
+        set => field = double.IsFinite(value) ? Math.Clamp(value, 0, 1) : DefaultEmbeddedPanelTintOpacity;
+    } = DefaultEmbeddedPanelTintOpacity;
+
     public double EmbeddedPanelBlurAmount
     {
-        get => _embeddedPanelBlurAmount;
-        set => _embeddedPanelBlurAmount = double.IsFinite(value) ? Math.Clamp(value, 0, 64) : DefaultEmbeddedPanelBlurAmount;
-    }
+        get;
+        set => field = double.IsFinite(value) ? Math.Clamp(value, 0, 64) : DefaultEmbeddedPanelBlurAmount;
+    } = DefaultEmbeddedPanelBlurAmount;
 
-    private double _floatingPanelBrightness = DefaultFloatingPanelBrightness;
-    private double _floatingPanelTintOpacity = DefaultFloatingPanelTintOpacity;
-    private double _floatingPanelBlurAmount = DefaultFloatingPanelBlurAmount;
     public double FloatingPanelBlurAmount
     {
-        get => _floatingPanelBlurAmount;
-        set => _floatingPanelBlurAmount = double.IsFinite(value) ? Math.Clamp(value, 0, 64) : DefaultFloatingPanelBlurAmount;
-    }
+        get;
+        set => field = double.IsFinite(value) ? Math.Clamp(value, 0, 64) : DefaultFloatingPanelBlurAmount;
+    } = DefaultFloatingPanelBlurAmount;
+
     public double FloatingPanelBrightness
     {
-        get => _floatingPanelBrightness;
-        set => _floatingPanelBrightness = double.IsFinite(value) ? Math.Clamp(value, 0, 1) : DefaultFloatingPanelBrightness;
-    }
+        get;
+        set => field = double.IsFinite(value) ? Math.Clamp(value, 0, 1) : DefaultFloatingPanelBrightness;
+    } = DefaultFloatingPanelBrightness;
+
     public double FloatingPanelTintOpacity
     {
-        get => _floatingPanelTintOpacity;
-        set => _floatingPanelTintOpacity = double.IsFinite(value) ? Math.Clamp(value, 0, 1) : DefaultFloatingPanelTintOpacity;
-    }
+        get;
+        set => field = double.IsFinite(value) ? Math.Clamp(value, 0, 1) : DefaultFloatingPanelTintOpacity;
+    } = DefaultFloatingPanelTintOpacity;
 
     public double LyricsLayoutScalePercent { get; set; } = DefaultLyricsLayoutScalePercent;
 

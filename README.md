@@ -66,7 +66,7 @@ Apple Music、汽水音乐和 foobar2000 已内置在“播放源”卡片中，
 
 ### 从源码启动
 
-准备好 Git、.NET 8 SDK 和 Windows 11 SDK 10.0.22621，在 Windows x64 环境中打开 PowerShell，执行：
+准备好 Git、.NET 10 SDK 和 Windows 11 SDK 10.0.22621，在 Windows x64 环境中打开 PowerShell，执行：
 
 ```powershell
 git clone https://github.com/ANYNC/TaskbarLyrics.git
@@ -79,8 +79,8 @@ dotnet run --project TaskbarLyrics.App
 
 ### 系统要求
 
-- Windows 10 / 11 x64。
-- 独立版压缩包无需额外安装 .NET 8 Runtime。
+- Windows x64，运行时支持范围见 [.NET 10 支持的 Windows 版本](https://github.com/dotnet/core/blob/main/release-notes/10.0/supported-os.md#windows)。
+- 独立版 ZIP 自带 .NET 10 运行时。
 - 主版本使用 Microsoft Edge WebView2 Runtime；如果设置页或歌词窗口为空白，请安装该运行时。
 
 ### 调整到你喜欢的样子

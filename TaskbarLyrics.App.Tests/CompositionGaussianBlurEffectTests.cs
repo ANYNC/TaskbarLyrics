@@ -20,7 +20,7 @@ public sealed class CompositionGaussianBlurEffectTests
                 typeof(CompositionGaussianBlurEffect.IGraphicsEffectSourceAbi), typeof(CompositionGaussianBlurEffect.IGraphicsEffectD2D1Interop) })
             {
                 var id = type.GUID;
-                Assert.Equal(0, Marshal.QueryInterface(pointer, ref id, out var queried));
+                Assert.Equal(0, Marshal.QueryInterface(pointer, in id, out var queried));
                 Assert.NotEqual(IntPtr.Zero, queried);
                 Marshal.Release(queried);
             }
