@@ -280,6 +280,12 @@ public sealed class ApplicationUpdateTests
             Url = "https://github.com/ANYNC/TaskbarLyrics/releases/download/v1.0.0/TaskbarLyrics-1.0.0.zip"
         };
         var release = Release(1, "v1.0.0", ""); release.Assets.Add(asset);
+        release.Assets.Add(asset with
+        {
+            Id = 2,
+            Name = "TaskbarLyrics-1.0.0-Setup.exe",
+            Url = "https://github.com/ANYNC/TaskbarLyrics/releases/download/v1.0.0/TaskbarLyrics-1.0.0-Setup.exe"
+        });
         var candidate = new UpdateCheckResult(UpdateCheckState.Available, "v1.0.0", "0.9.0", "", true) { Release = release };
         Assert.Same(asset, AppUpdateService.SelectAsset(candidate));
         Assert.Null(AppUpdateService.SelectAsset(candidate with { CurrentVersion = "1.0.0" }));

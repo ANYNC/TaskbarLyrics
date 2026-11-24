@@ -48,8 +48,8 @@
 
 **[下载最新版本 →](https://github.com/ANYNC/TaskbarLyrics/releases/latest)** · [查看所有版本](https://github.com/ANYNC/TaskbarLyrics/releases)
 
-1. **解压**：下载版本压缩包，并完整解压到一个普通文件夹。
-2. **启动**：运行 `TaskbarLyrics.exe`，程序会常驻系统托盘。
+1. **安装或解压**：如果发布页提供 `TaskbarLyrics-<版本>-Setup.exe`，首次安装可以选择目录。默认是 `D:\Program Files\TaskbarLyrics`，没有 D 盘时默认使用 `%LOCALAPPDATA%\Programs\TaskbarLyrics`。也可以下载 ZIP 并完整解压。
+2. **启动**：从开始菜单打开安装版，或运行解压目录下的 `TaskbarLyrics.exe`。程序会常驻系统托盘。
 3. **播放**：打开受支持的播放器播放音乐，歌词会自动显示在任务栏。
 
 首次使用会自动打开“开始使用”，以歌曲信息、时间轴信息、使用准备三个指标展示兼容性；可随时跳过，并从设置左侧重新查看。各播放器的齿轮设置中也提供同一组指标，配置步骤直接展示。指标仅供兼容性参考，应用不会自动检测或安装第三方插件。
@@ -80,7 +80,7 @@ dotnet run --project TaskbarLyrics.App
 ### 系统要求
 
 - Windows x64，运行时支持范围见 [.NET 10 支持的 Windows 版本](https://github.com/dotnet/core/blob/main/release-notes/10.0/supported-os.md#windows)。
-- 独立版 ZIP 自带 .NET 10 运行时。
+- 安装包和 ZIP 均自带 .NET 10 运行时。
 - 主版本使用 Microsoft Edge WebView2 Runtime；如果设置页或歌词窗口为空白，请安装该运行时。
 
 ### 调整到你喜欢的样子
@@ -144,6 +144,14 @@ dotnet build TaskbarLyrics.sln
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/publish-release.ps1
 ```
+
+安装 [Inno Setup 7](https://jrsoftware.org/inno-setup/downloads) 后，加上 `-Installer` 可在同一次构建中生成 ZIP 和安装器。脚本也接受 `-InnoSetupCompiler <ISCC.exe 的路径>`。
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/publish-release.ps1 -Installer
+```
+
+安装版继续使用 ZIP 做应用内更新。安装时可确认强制关闭正在运行的 TaskbarLyrics 后继续。卸载前请从托盘退出，卸载会保留用户设置、歌词偏移及缓存。
 
 </details>
 

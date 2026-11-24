@@ -1,7 +1,9 @@
 [CmdletBinding()]
 param(
     [string]$Version,
-    [switch]$Force
+    [switch]$Force,
+    [switch]$Installer,
+    [string]$InnoSetupCompiler
 )
 
 $ErrorActionPreference = "Stop"
@@ -24,14 +26,38 @@ if ($Version -notmatch '^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$') {
 $packageName = "TaskbarLyrics-$Version"
 $outputDirectory = Join-Path $publishRoot $packageName
 $archivePath = Join-Path $publishRoot "$packageName.zip"
+$installerName = "$packageName-Setup.exe"
+$installerPath = Join-Path $publishRoot $installerName
+$buildInstaller = $Installer.IsPresent -or -not [string]::IsNullOrWhiteSpace($InnoSetupCompiler)
+$releaseTargets = @($outputDirectory, $archivePath)
+if ($buildInstaller) {
+    $releaseTargets += $installerPath
+}
 
-if (-not $Force -and ((Test-Path $outputDirectory) -or (Test-Path $archivePath))) {
+if (-not $Force -and ($releaseTargets | Where-Object { Test-Path -LiteralPath $_ })) {
     throw "Release artifacts for version $Version already exist. Use -Force to replace them."
+}
+
+if ($buildInstaller) {
+    if ([string]::IsNullOrWhiteSpace($InnoSetupCompiler)) {
+        $InnoSetupCompiler = (Get-Command ISCC.exe -CommandType Application -ErrorAction SilentlyContinue |
+            Select-Object -First 1).Source
+        if (-not $InnoSetupCompiler) {
+            $InnoSetupCompiler = @($env:ProgramFiles, ${env:ProgramFiles(x86)}) | Where-Object { $_ } |
+                ForEach-Object { Join-Path $_ "Inno Setup 7\ISCC.exe" } |
+                Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
+        }
+    }
+    if (-not $InnoSetupCompiler -or -not (Test-Path -LiteralPath $InnoSetupCompiler -PathType Leaf)) {
+        throw "Inno Setup 7 ISCC.exe is required. Install it or specify -InnoSetupCompiler."
+    }
+    $InnoSetupCompiler = (Resolve-Path -LiteralPath $InnoSetupCompiler).ProviderPath
 }
 
 $stagingRoot = Join-Path ([IO.Path]::GetTempPath()) ("TaskbarLyrics-release-" + [Guid]::NewGuid().ToString("N"))
 $stagingPackage = Join-Path $stagingRoot $packageName
 $stagingArchive = Join-Path $stagingRoot "$packageName.zip"
+$stagingInstaller = Join-Path $stagingRoot $installerName
 
 New-Item -ItemType Directory -Path $stagingPackage -Force | Out-Null
 
@@ -76,9 +102,18 @@ try {
     & $updaterPayload --validate-package $stagingArchive $Version
     if ($LASTEXITCODE -ne 0) { throw "Release package validation failed: $LASTEXITCODE" }
 
+    if ($buildInstaller) {
+        Write-Host "Building the Windows installer..." -ForegroundColor Cyan
+        & $InnoSetupCompiler "/DAppVersion=$Version" "/DPayloadDir=$stagingPackage" "/O$stagingRoot" `
+            (Join-Path $repoRoot "installer\TaskbarLyrics.iss")
+        if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $stagingInstaller -PathType Leaf)) {
+            throw "Installer build failed: $LASTEXITCODE. Expected $stagingInstaller."
+        }
+    }
+
     if ($Force) {
         $resolvedPublish = [IO.Path]::GetFullPath($publishRoot).TrimEnd('\') + '\'
-        foreach ($target in @($outputDirectory, $archivePath)) {
+        foreach ($target in $releaseTargets) {
             $resolvedTarget = [IO.Path]::GetFullPath($target)
             if (-not $resolvedTarget.StartsWith($resolvedPublish, [StringComparison]::OrdinalIgnoreCase)) {
                 throw "Unsafe release replacement path: $resolvedTarget"
@@ -90,11 +125,17 @@ try {
         if (Test-Path $archivePath) {
             Remove-Item -LiteralPath $archivePath -Force
         }
+        if ($buildInstaller -and (Test-Path -LiteralPath $installerPath)) {
+            Remove-Item -LiteralPath $installerPath -Force
+        }
     }
 
     New-Item -ItemType Directory -Path $publishRoot -Force | Out-Null
     Move-Item -LiteralPath $stagingPackage -Destination $outputDirectory
     Move-Item -LiteralPath $stagingArchive -Destination $archivePath
+    if ($buildInstaller) {
+        Move-Item -LiteralPath $stagingInstaller -Destination $installerPath
+    }
 
     $projectText = [IO.File]::ReadAllText($projectPath)
     $versionMatches = [regex]::Matches($projectText, '<Version>[^<]+</Version>')
@@ -114,6 +155,10 @@ try {
     Write-Host "Directory: $outputDirectory"
     Write-Host "Archive: $archivePath"
     Write-Host "SHA256: $((Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash.ToLowerInvariant())"
+    if ($buildInstaller) {
+        Write-Host "Installer: $installerPath"
+        Write-Host "Installer SHA256: $((Get-FileHash -LiteralPath $installerPath -Algorithm SHA256).Hash.ToLowerInvariant())"
+    }
     Write-Host "Project version updated: $projectPath"
 }
 finally {

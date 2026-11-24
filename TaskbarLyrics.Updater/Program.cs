@@ -95,7 +95,11 @@ internal static class Program
             var local = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "TaskbarLyrics", "TaskbarLyrics.lock");
             stage = "replace package files";
             using (var instanceLock = new FileStream(local, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+            {
+                if (UpdatePackage.ReadVersion(root) != current)
+                    throw new InvalidDataException("The installed version changed while preparing the update.");
                 UpdateTransaction.Apply(root, transaction, staging, files, current, request.Version);
+            }
             stage = "start updated process";
             using var updated = Start(root);
             newProcessStarted = updated is not null;
