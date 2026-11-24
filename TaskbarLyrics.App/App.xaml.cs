@@ -75,14 +75,20 @@ public partial class App : System.Windows.Application, IDisposable
             startupDisplays,
             Settings.LyricsDisplayMode,
             Settings.SelectedDisplayIds);
-        _taskbarScaleConstraints = TaskbarEmbeddingLayoutPolicy.FromDisplays(startupTargets);
+        var startupConstraints = TaskbarEmbeddingLayoutPolicy.FromDisplays(startupTargets);
+        _taskbarScaleConstraints = startupConstraints;
+        var migratedPosition = MigrateEmbeddedPosition(Settings, startupTargets);
         if (startupTargets.Count > 0 && NormalizeStartupWindowPresentation(
                 Settings,
-                TaskbarEmbeddingLayoutPolicy.FromDisplays(startupTargets),
+                startupConstraints,
                 out var presentationMessage))
         {
             _settingsStore.Save(Settings);
             Log.Warn(presentationMessage);
+        }
+        else if (migratedPosition)
+        {
+            _settingsStore.Save(Settings);
         }
 
         _compositionRoot = new AppCompositionRoot();
@@ -194,6 +200,11 @@ public partial class App : System.Windows.Application, IDisposable
 
         nextSettings.SpectrumTuning = Settings.SpectrumTuning.Clone();
         nextSettings.GlobalMediaHotkeys ??= new GlobalMediaHotkeySettings();
+        if (!nextSettings.TaskbarXAnchorPercent.HasValue || !nextSettings.TaskbarYAnchorPercent.HasValue)
+        {
+            MigrateEmbeddedPosition(nextSettings, LyricsDisplayTargetSelector.Select(
+                DisplayMonitorService.GetDisplays(), nextSettings.LyricsDisplayMode, nextSettings.SelectedDisplayIds));
+        }
         var uiLanguageChanged = !string.Equals(
             currentSettings.UiLanguage, nextSettings.UiLanguage, StringComparison.Ordinal);
         var changes = AppSettingsChangeSet.Create(currentSettings, nextSettings);
@@ -423,6 +434,14 @@ public partial class App : System.Windows.Application, IDisposable
     private static TaskbarEmbeddingConstraints GetTaskbarScaleConstraints(AppSettings settings) =>
         TaskbarEmbeddingLayoutPolicy.FromDisplays(LyricsDisplayTargetSelector.Select(
             DisplayMonitorService.GetDisplays(), settings.LyricsDisplayMode, settings.SelectedDisplayIds));
+
+    private static bool MigrateEmbeddedPosition(AppSettings settings, IReadOnlyList<DisplayMonitor> targets)
+    {
+        if (targets.Count == 0 || (settings.TaskbarXAnchorPercent.HasValue && settings.TaskbarYAnchorPercent.HasValue)) return false;
+        var display = targets.FirstOrDefault(item => item.IsPrimary) ?? targets[0];
+        return EmbeddedTaskbarAnchor.GetEmbeddingBounds(display) is { } bounds &&
+            EmbeddedTaskbarPosition.MigrateLegacy(settings, bounds, display.PixelsPerDip);
+    }
 
     private void ToggleLyricsWindow()
     {

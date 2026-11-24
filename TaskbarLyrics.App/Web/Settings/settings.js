@@ -1559,7 +1559,7 @@
       if (control.type !== "number" && control.type !== "range") return control.value;
       const value = Number(control.value);
       const scale = Number(control.dataset.valueScale) || 1;
-      return value / scale;
+      return (control.dataset.valueType === "integer" ? Math.round(value) : value) / scale;
     }
 
     function syncSliderProgress(control) {
@@ -2359,8 +2359,8 @@
     }
 
     function syncWindowBounds() {
-      state.xOffset = Math.min(2000, Math.max(-2000, Number(state.xOffset) || 0));
-      state.yOffset = Math.min(2000, Math.max(-2000, Number(state.yOffset) || 0));
+      state.taskbarXAnchorPercent = Math.min(100, Math.max(0, Number(state.taskbarXAnchorPercent ?? 0) || 0));
+      state.taskbarYAnchorPercent = Math.min(100, Math.max(0, Number(state.taskbarYAnchorPercent ?? 50) || 0));
       state.windowWidth = Math.min(1400, Math.max(100, Number(state.windowWidth) || 420));
       const embedded = state.useFloatingWindow === false;
       const limitOr = (value, fallback) => Number.isFinite(Number(value)) ? Number(value) : fallback;
@@ -2399,14 +2399,6 @@
       $$('[data-setting="coverCornerRadius"]').forEach(control => {
         control.max = String(state.coverSize / 2);
       });
-      bound(
-        "xOffset",
-        embedded ? limitOr(state.taskbarMinXOffset, -2000) : -2000,
-        embedded ? limitOr(state.taskbarMaxXOffset, 2000) : 2000);
-      bound(
-        "yOffset",
-        embedded ? limitOr(state.taskbarMinYOffset, -2000) : -2000,
-        embedded ? limitOr(state.taskbarMaxYOffset, 2000) : 2000);
     }
 
     function applyDependencies() {
@@ -2473,7 +2465,7 @@
         }
         state[stateKey] = value;
       });
-      ["taskbarEmbeddingAvailable", "taskbarMaxWidth", "taskbarMaxHeight", "taskbarMaxScalePercent", "taskbarMaxFontSize", "taskbarMaxCoverSize", "taskbarMaxCoverGap", "taskbarMaxWindowWidth", "taskbarMinXOffset", "taskbarMaxXOffset", "taskbarMinYOffset", "taskbarMaxYOffset"].forEach(key => {
+      ["taskbarEmbeddingAvailable", "taskbarMaxWidth", "taskbarMaxHeight", "taskbarMaxScalePercent", "taskbarMaxFontSize", "taskbarMaxCoverSize", "taskbarMaxCoverGap", "taskbarMaxWindowWidth"].forEach(key => {
         if (Object.prototype.hasOwnProperty.call(payload, key)) state[key] = payload[key];
       });
       syncLayoutBounds();

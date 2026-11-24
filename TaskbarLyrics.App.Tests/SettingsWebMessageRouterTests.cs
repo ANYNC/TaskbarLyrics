@@ -44,15 +44,19 @@ public sealed class SettingsWebMessageRouterTests
         Assert.Equal(18, message.Value!.Value.GetInt32());
     }
 
-    [Fact]
-    public void ParseDeserializesTheV1PreviewUpdateEnvelope()
+    [Theory]
+    [InlineData("taskbarXAnchorPercent", "72.5", 72.5)]
+    [InlineData("taskbarXAnchorPercent", "120", 100)]
+    [InlineData("taskbarYAnchorPercent", "-20", 0)]
+    [InlineData("taskbarYAnchorPercent", "null", 50)]
+    public void ParseTaskbarAnchorPreviewThroughTheV1Envelope(string key, string value, double expected)
     {
-        var message = SettingsWebMessageRouter.Parse("{\"version\":1,\"type\":\"previewUpdate\",\"payload\":{\"key\":\"xOffset\",\"value\":120}}");
+        var message = SettingsWebMessageRouter.Parse($"{{\"version\":1,\"type\":\"previewUpdate\",\"payload\":{{\"key\":\"{key}\",\"value\":{value}}}}}");
 
         Assert.NotNull(message);
         Assert.Equal("previewUpdate", message.Type);
-        Assert.Equal("xOffset", message.Key);
-        Assert.Equal(120, message.Value!.Value.GetInt32());
+        Assert.Equal(key, message.Key);
+        Assert.Equal(expected, SettingsWindow.ReadTaskbarAnchorPercent(message.Value ?? default, 50));
     }
 
     [Fact]

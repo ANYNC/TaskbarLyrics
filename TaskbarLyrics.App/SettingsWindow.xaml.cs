@@ -1346,6 +1346,14 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             _settings,
             taskbarConstraints,
             SystemParameters.WorkArea.Width);
+        var (xAnchor, yAnchor) = (_settings.TaskbarXAnchorPercent, _settings.TaskbarYAnchorPercent);
+        if ((!xAnchor.HasValue || !yAnchor.HasValue) && previewDisplay is not null)
+        {
+            var taskbar = EmbeddedTaskbarAnchor.GetEmbeddingBounds(previewDisplay) ??
+                TaskbarPlacementService.GetTaskbarBounds(previewDisplay, previewDpi);
+            var anchor = EmbeddedTaskbarPosition.GetAnchorPercents(_settings, taskbar, previewDpi);
+            (xAnchor, yAnchor) = (anchor.X, anchor.Y);
+        }
         var payload = new WebSettingsPayload
         {
             SourceRecognitionOrder = NormalizeSourceOrder(_settings.SourceRecognitionOrder),
@@ -1445,12 +1453,11 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             ShowTextShadow = _settings.ShowTextShadow,
             WindowWidth = _settings.WindowWidth,
             FloatingWindowWidth = _settings.FloatingWindowWidth,
-            HorizontalAnchor = _settings.HorizontalAnchor,
             TaskbarAvoidanceEnabled = _settings.TaskbarAvoidanceEnabled,
             LyricsTextAlignment = _settings.LyricsTextAlignment,
             CoverPosition = _settings.CoverPosition,
-            XOffset = _settings.XOffset,
-            YOffset = _settings.YOffset,
+            TaskbarXAnchorPercent = xAnchor ?? 0,
+            TaskbarYAnchorPercent = yAnchor ?? 50,
             ForceAlwaysOnTop = _settings.ForceAlwaysOnTop,
             FloatingWindowLayer = _settings.FloatingWindowLayer,
             UseFloatingWindow = _settings.UseFloatingWindow,
@@ -1462,10 +1469,6 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             TaskbarMaxCoverSize = inputBounds.MaxCoverSize,
             TaskbarMaxCoverGap = inputBounds.MaxCoverGap,
             TaskbarMaxWindowWidth = inputBounds.MaxWindowWidth,
-            TaskbarMinXOffset = inputBounds.MinXOffset,
-            TaskbarMaxXOffset = inputBounds.MaxXOffset,
-            TaskbarMinYOffset = inputBounds.MinYOffset,
-            TaskbarMaxYOffset = inputBounds.MaxYOffset,
             TaskbarEmbeddingStatus = _taskbarEmbeddingStatus,
             LyricsDisplayMode = _settings.LyricsDisplayMode,
             SelectedDisplayIds = _settings.SelectedDisplayIds.ToList(),
@@ -1552,10 +1555,6 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         preview["taskbarMaxCoverSize"] = inputBounds.MaxCoverSize;
         preview["taskbarMaxCoverGap"] = inputBounds.MaxCoverGap;
         preview["taskbarMaxWindowWidth"] = inputBounds.MaxWindowWidth;
-        preview["taskbarMinXOffset"] = inputBounds.MinXOffset;
-        preview["taskbarMaxXOffset"] = inputBounds.MaxXOffset;
-        preview["taskbarMinYOffset"] = inputBounds.MinYOffset;
-        preview["taskbarMaxYOffset"] = inputBounds.MaxYOffset;
         return preview;
     }
 
@@ -1645,7 +1644,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         }
 
         if (_settings.UseFloatingWindow && key is "windowWidth" or "lyricsLayoutScalePercent" or
-            "taskbarAvoidanceEnabled" or "horizontalAnchor" or "xOffset" or "yOffset" or "showBackground" or "backgroundOpacity" or
+            "taskbarAvoidanceEnabled" or "taskbarXAnchorPercent" or "taskbarYAnchorPercent" or "showBackground" or "backgroundOpacity" or
             "showBorder" or "enableControlPanel" or "controlPanelTriggerMethod" or "controlPanelTriggerCover" or "controlPanelTriggerLyrics" or
             "embeddedPanelBrightness" or "embeddedPanelTintOpacity" or "embeddedPanelBlurAmount") return;
         if (!_settings.UseFloatingWindow && key is "forceAlwaysOnTop" or "floatingWindowLayer" or "enableFloatingControlPanel" or "showFloatingBackground" or
@@ -1846,12 +1845,6 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                     AppSettings.MinimumWindowWidth,
                     AppSettings.MaximumWindowWidth);
                 break;
-            case "horizontalAnchor":
-                if (Enum.TryParse<LyricsHorizontalAnchor>(ReadString(element, _settings.HorizontalAnchor.ToString()), out var anchor))
-                {
-                    _settings.HorizontalAnchor = anchor;
-                }
-                break;
             case "taskbarAvoidanceEnabled":
                 _settings.TaskbarAvoidanceEnabled = ReadBool(element, _settings.TaskbarAvoidanceEnabled);
                 break;
@@ -1873,14 +1866,11 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                     _settings.CoverPosition = parsedCoverPosition;
                 }
                 break;
-            case "xOffset":
-                _settings.XOffset = Math.Clamp(ReadDouble(element, _settings.XOffset), -2000, 2000);
+            case "taskbarXAnchorPercent":
+                _settings.TaskbarXAnchorPercent = ReadTaskbarAnchorPercent(element, _settings.TaskbarXAnchorPercent);
                 break;
-            case "yOffset":
-                _settings.YOffset = Math.Clamp(
-                    ReadDouble(element, _settings.YOffset),
-                    AppSettings.MinimumWindowOffset,
-                    AppSettings.MaximumWindowOffset);
+            case "taskbarYAnchorPercent":
+                _settings.TaskbarYAnchorPercent = ReadTaskbarAnchorPercent(element, _settings.TaskbarYAnchorPercent);
                 break;
         }
 
@@ -1941,9 +1931,6 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             "coverCornerRadius" or
             "lyricsLayoutScalePercent" or
             "windowWidth" or
-            "horizontalAnchor" or
-            "xOffset" or
-            "yOffset" or
             "lyricsDisplayMode" or
             "selectedDisplayIds";
     }
@@ -1988,9 +1975,6 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             "coverCornerRadius" or
             "lyricsLayoutScalePercent" or
             "windowWidth" or
-            "horizontalAnchor" or
-            "xOffset" or
-            "yOffset" or
             "lyricsDisplayMode" or
             "selectedDisplayIds";
     }
@@ -2008,9 +1992,12 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             "coverCornerRadius" or
             "lyricsLayoutScalePercent" or
             "windowWidth" or
-            "xOffset" or
-            "yOffset";
+            "taskbarXAnchorPercent" or
+            "taskbarYAnchorPercent";
     }
+
+    internal static double? ReadTaskbarAnchorPercent(JsonElement element, double? fallback) =>
+        AppSettings.NormalizeTaskbarAnchorPercent(ReadDouble(element, double.NaN)) ?? fallback;
 
     private static string ReadHotkeyBinding(JsonElement element, string fallback)
     {
@@ -2472,6 +2459,8 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         target.CoverPosition = source.CoverPosition;
         target.XOffset = source.XOffset;
         target.YOffset = source.YOffset;
+        target.TaskbarXAnchorPercent = source.TaskbarXAnchorPercent;
+        target.TaskbarYAnchorPercent = source.TaskbarYAnchorPercent;
         target.ForceAlwaysOnTop = source.ForceAlwaysOnTop;
         target.FloatingWindowLayer = source.FloatingWindowLayer;
         target.UseFloatingWindow = source.UseFloatingWindow;
@@ -2635,12 +2624,11 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         public bool ShowTextShadow { get; set; }
         public double WindowWidth { get; set; }
         public double FloatingWindowWidth { get; set; }
-        public LyricsHorizontalAnchor HorizontalAnchor { get; set; }
         public bool TaskbarAvoidanceEnabled { get; set; }
         public LyricsTextAlignment LyricsTextAlignment { get; set; }
         public CoverPosition CoverPosition { get; set; }
-        public double XOffset { get; set; }
-        public double YOffset { get; set; }
+        public double TaskbarXAnchorPercent { get; set; }
+        public double TaskbarYAnchorPercent { get; set; }
         public bool ForceAlwaysOnTop { get; set; }
         public FloatingWindowLayer FloatingWindowLayer { get; set; }
         public bool UseFloatingWindow { get; set; }
@@ -2652,10 +2640,6 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         public double TaskbarMaxCoverSize { get; set; }
         public double TaskbarMaxCoverGap { get; set; }
         public double TaskbarMaxWindowWidth { get; set; }
-        public double TaskbarMinXOffset { get; set; }
-        public double TaskbarMaxXOffset { get; set; }
-        public double TaskbarMinYOffset { get; set; }
-        public double TaskbarMaxYOffset { get; set; }
         public string? TaskbarEmbeddingStatus { get; set; }
 
         public LyricsDisplayMode LyricsDisplayMode { get; set; }

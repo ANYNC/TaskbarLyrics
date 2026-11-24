@@ -48,9 +48,10 @@ public sealed partial class FloatingPanelInputTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void TaskbarAvoidanceUnknownAndFullSpaceUseDisabledBoundsAndRecover(bool throwRead)
+    [InlineData(false, 50)]
+    [InlineData(true, 50)]
+    [InlineData(false, 100)]
+    public void TaskbarAvoidanceUnknownAndFullSpaceUseDisabledBoundsAndRecover(bool throwRead, double anchorPercent)
     {
         RunSta(() =>
         {
@@ -66,7 +67,7 @@ public sealed partial class FloatingPanelInputTests
             }, clock);
             using var anchor = new EmbeddedTaskbarAnchor(provider);
             var layout = new Window { Width = 420, Height = 44 };
-            var settings = new AppSettings { TaskbarAvoidanceEnabled = false, XOffset = 80 };
+            var settings = new AppSettings { TaskbarAvoidanceEnabled = false, TaskbarXAnchorPercent = anchorPercent };
             try
             {
                 Assert.True(anchor.Position(native.Lyrics, native.Parent, layout, settings, null));
@@ -82,7 +83,7 @@ public sealed partial class FloatingPanelInputTests
                 Refresh(3);
                 AssertBounds(avoided);
                 Assert.Equal(420, settings.WindowWidth);
-                Assert.Equal(80, settings.XOffset);
+                Assert.Equal(anchorPercent, settings.TaskbarXAnchorPercent);
                 Assert.True(settings.TaskbarAvoidanceEnabled);
 
                 void Refresh(int next)

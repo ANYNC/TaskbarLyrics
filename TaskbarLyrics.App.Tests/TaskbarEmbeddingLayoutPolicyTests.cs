@@ -8,14 +8,13 @@ public sealed class TaskbarEmbeddingLayoutPolicyTests
     [InlineData(25)]
     [InlineData(100)]
     [InlineData(300)]
-    public void WidthLimitsAndHorizontalOffsetsAreIndependentOfContentScale(double scale)
+    public void WidthLimitsAndAnchorPositionsAreIndependentOfContentScale(double scale)
     {
-        var settings = new AppSettings { WindowWidth = 420, LyricsLayoutScalePercent = scale, HorizontalAnchor = LyricsHorizontalAnchor.Center };
+        var settings = new AppSettings { WindowWidth = 420, LyricsLayoutScalePercent = scale, TaskbarXAnchorPercent = 50 };
         var constraints = new TaskbarEmbeddingConstraints(500, 1000);
         var bounds = TaskbarEmbeddingLayoutPolicy.GetInputBounds(settings, constraints, 420);
         Assert.Equal(500, bounds.MaxWindowWidth);
-        Assert.Equal(-40, bounds.MinXOffset);
-        Assert.Equal(40, bounds.MaxXOffset);
+        Assert.Equal(40, EmbeddedTaskbarPosition.Calculate(settings, new TaskbarBounds(0, 0, 500, 48), 1).Left);
         Assert.True(TaskbarEmbeddingLayoutPolicy.CanFit(settings, constraints));
     }
 
@@ -37,33 +36,6 @@ public sealed class TaskbarEmbeddingLayoutPolicyTests
         Assert.True(result.CanEmbed);
         Assert.Equal(180, settings.WindowWidth);
         Assert.InRange(settings.LyricsLayoutScalePercent, 100, 110);
-    }
-
-    [Theory]
-    [InlineData(LyricsHorizontalAnchor.Left, 0, 80)]
-    [InlineData(LyricsHorizontalAnchor.Center, -40, 40)]
-    [InlineData(LyricsHorizontalAnchor.Right, -80, 0)]
-    public void InputBoundsCalculateHorizontalOffsetsFromAnchor(
-        LyricsHorizontalAnchor anchor,
-        double expectedMinimum,
-        double expectedMaximum)
-    {
-        var settings = new AppSettings
-        {
-            HorizontalAnchor = anchor,
-            WindowWidth = 420
-        };
-
-        var bounds = TaskbarEmbeddingLayoutPolicy.GetInputBounds(
-            settings,
-            new TaskbarEmbeddingConstraints(500, 48),
-            fallbackWidth: 420);
-
-        Assert.True(bounds.IsSupported);
-        Assert.Equal(expectedMinimum, bounds.MinXOffset);
-        Assert.Equal(expectedMaximum, bounds.MaxXOffset);
-        Assert.Equal(-2, bounds.MinYOffset);
-        Assert.Equal(2, bounds.MaxYOffset);
     }
 
     [Fact]
@@ -92,8 +64,8 @@ public sealed class TaskbarEmbeddingLayoutPolicyTests
         Assert.Equal(AppSettings.DefaultCoverSize, settings.CoverSize);
         Assert.Equal(AppSettings.DefaultCoverGap, settings.CoverGap);
         Assert.Equal(AppSettings.DefaultCoverCornerRadius, settings.CoverCornerRadius);
-        Assert.Equal(0, settings.XOffset);
-        Assert.Equal(0, settings.YOffset);
+        Assert.Equal(AppSettings.MaximumWindowOffset, settings.XOffset);
+        Assert.Equal(AppSettings.MaximumWindowOffset, settings.YOffset);
         Assert.InRange(
             settings.LyricsLayoutScalePercent,
             AppSettings.MinimumLyricsLayoutScalePercent,
@@ -160,7 +132,7 @@ public sealed class TaskbarEmbeddingLayoutPolicyTests
     }
 
     [Fact]
-    public void CanFitRejectsOffsetsThatPlaceTheWindowOutsideTheTaskbar()
+    public void FittingLayoutPreservesLegacyOffsetsUntilNativeGeometryIsAvailable()
     {
         var settings = new AppSettings
         {
@@ -169,9 +141,11 @@ public sealed class TaskbarEmbeddingLayoutPolicyTests
             YOffset = 1000
         };
 
-        Assert.False(TaskbarEmbeddingLayoutPolicy.CanFit(
-            settings,
-            new TaskbarEmbeddingConstraints(500, 48)));
+        var constraints = new TaskbarEmbeddingConstraints(500, 48);
+        Assert.True(TaskbarEmbeddingLayoutPolicy.CanFit(settings, constraints));
+        Assert.False(TaskbarEmbeddingLayoutPolicy.NormalizeForEmbedding(settings, constraints).Changed);
+        Assert.Equal(1000, settings.XOffset);
+        Assert.Equal(1000, settings.YOffset);
     }
 
     [Fact]

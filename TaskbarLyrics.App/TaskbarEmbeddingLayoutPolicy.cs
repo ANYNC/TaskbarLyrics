@@ -66,11 +66,7 @@ internal readonly record struct TaskbarEmbeddingInputBounds(
     double MaxFontSize,
     double MaxCoverSize,
     double MaxCoverGap,
-    double MaxWindowWidth,
-    double MinXOffset,
-    double MaxXOffset,
-    double MinYOffset,
-    double MaxYOffset)
+    double MaxWindowWidth)
 {
     public static TaskbarEmbeddingInputBounds Unconstrained(double fallbackWidth)
     {
@@ -82,11 +78,7 @@ internal readonly record struct TaskbarEmbeddingInputBounds(
             AppSettings.ExtendedFontSizeMax,
             AppSettings.ExtendedCoverSizeMax,
             AppSettings.CoverGapMax,
-            AppSettings.MaximumWindowWidth,
-            AppSettings.MinimumWindowOffset,
-            AppSettings.MaximumWindowOffset,
-            AppSettings.MinimumWindowOffset,
-            AppSettings.MaximumWindowOffset);
+            AppSettings.MaximumWindowWidth);
     }
 }
 
@@ -128,7 +120,7 @@ internal static class TaskbarEmbeddingLayoutPolicy
         var candidate = settings.Clone();
         candidate.LyricsLayoutScalePercent = requested;
         candidate.WindowWidth = AppSettings.ClampEffectiveWindowWidth(candidate.WindowWidth, current.MaxWidth);
-        return CanFitIgnoringOffsets(candidate, current)
+        return CanFit(candidate, current)
             ? requested
             : FindMaximumScalePercent(candidate, current, requested);
     }
@@ -139,13 +131,12 @@ internal static class TaskbarEmbeddingLayoutPolicy
     {
         ArgumentNullException.ThrowIfNull(settings);
         if (HasOnlySidebars(constraints)) return constraints.IsSupported;
-        return CanFitCore(settings, HorizontalConstraints(constraints), includeOffsets: true);
+        return CanFitCore(settings, HorizontalConstraints(constraints));
     }
 
     private static bool CanFitCore(
         AppSettings settings,
-        TaskbarEmbeddingConstraints constraints,
-        bool includeOffsets)
+        TaskbarEmbeddingConstraints constraints)
     {
         ArgumentNullException.ThrowIfNull(settings);
         if (!constraints.IsSupported || constraints.MaxWidth < AppSettings.MinimumWindowWidth)
@@ -165,24 +156,6 @@ internal static class TaskbarEmbeddingLayoutPolicy
                 metrics.DesiredWindowHeight > display.MaxHeight + Epsilon)
             {
                 return false;
-            }
-
-            if (includeOffsets)
-            {
-                var horizontalRange = GetHorizontalOffsetRange(
-                    display.MaxWidth,
-                    effectiveWidth,
-                    settings.HorizontalAnchor);
-                var verticalRange = GetVerticalOffsetRange(
-                    display.MaxHeight,
-                    metrics.DesiredWindowHeight);
-                if (settings.XOffset < horizontalRange.Min - Epsilon ||
-                    settings.XOffset > horizontalRange.Max + Epsilon ||
-                    settings.YOffset < verticalRange.Min - Epsilon ||
-                    settings.YOffset > verticalRange.Max + Epsilon)
-                {
-                    return false;
-                }
             }
         }
 
@@ -268,16 +241,6 @@ internal static class TaskbarEmbeddingLayoutPolicy
         settings.CoverCornerRadius = AppSettings.ClampCoverCornerRadius(
             settings.CoverCornerRadius,
             settings.CoverSize);
-
-        var effectiveWidth = AppSettings.CalculateEffectiveWindowWidth(
-            settings.WindowWidth);
-        var horizontalRange = GetHorizontalOffsetRange(
-            constraints.MaxWidth,
-            effectiveWidth,
-            settings.HorizontalAnchor);
-        var verticalRange = GetStrictestVerticalOffsetRange(constraints, settings);
-        settings.XOffset = Math.Clamp(settings.XOffset, horizontalRange.Min, horizontalRange.Max);
-        settings.YOffset = Math.Clamp(settings.YOffset, verticalRange.Min, verticalRange.Max);
     }
 
     public static TaskbarEmbeddingInputBounds GetInputBounds(
@@ -288,21 +251,12 @@ internal static class TaskbarEmbeddingLayoutPolicy
         ArgumentNullException.ThrowIfNull(settings);
         if (HasOnlySidebars(constraints) && constraints.IsSupported)
         {
-            var embedded = settings.Clone();
-            embedded.UseFloatingWindow = false;
-            var remainingHeight = constraints.Displays.Min(display => display.MaxHeight -
-                LyricsLayoutMetrics.Create(embedded, display.PixelsPerDip,
-                    new TaskbarBounds(0, 0, display.MaxWidth, display.MaxHeight)).DesiredWindowHeight);
             return TaskbarEmbeddingInputBounds.Unconstrained(fallbackWidth) with
             {
                 IsSupported = true,
                 MaxTaskbarWidth = constraints.MaxWidth,
                 MaxTaskbarHeight = constraints.MaxHeight,
-                MaxWindowWidth = Math.Clamp(constraints.MaxHeight, AppSettings.MinimumWindowWidth, AppSettings.MaximumWindowWidth),
-                MinXOffset = 0,
-                MaxXOffset = 0,
-                MinYOffset = 0,
-                MaxYOffset = Math.Min(AppSettings.MaximumWindowOffset, remainingHeight)
+                MaxWindowWidth = Math.Clamp(constraints.MaxHeight, AppSettings.MinimumWindowWidth, AppSettings.MaximumWindowWidth)
             };
         }
         constraints = HorizontalConstraints(constraints);
@@ -317,11 +271,7 @@ internal static class TaskbarEmbeddingLayoutPolicy
                     AppSettings.ExtendedFontSizeMax,
                     AppSettings.ExtendedCoverSizeMax,
                     AppSettings.CoverGapMax,
-                    AppSettings.MaximumWindowWidth,
-                    AppSettings.MinimumWindowOffset,
-                    AppSettings.MaximumWindowOffset,
-                    AppSettings.MinimumWindowOffset,
-                    AppSettings.MaximumWindowOffset)
+                    AppSettings.MaximumWindowWidth)
                 : TaskbarEmbeddingInputBounds.Unconstrained(fallbackWidth);
         }
 
@@ -341,14 +291,6 @@ internal static class TaskbarEmbeddingLayoutPolicy
             constraints.MaxWidth,
             AppSettings.MinimumWindowWidth,
             AppSettings.MaximumWindowWidth);
-        var effectiveWidth = Math.Min(
-            AppSettings.CalculateEffectiveWindowWidth(normalized.WindowWidth),
-            constraints.MaxWidth);
-        var horizontalRange = GetHorizontalOffsetRange(
-            constraints.MaxWidth,
-            effectiveWidth,
-            normalized.HorizontalAnchor);
-        var verticalRange = GetStrictestVerticalOffsetRange(constraints, normalized);
         return new TaskbarEmbeddingInputBounds(
             constraints.MaxWidth >= AppSettings.MinimumWindowWidth,
             constraints.MaxWidth,
@@ -357,19 +299,14 @@ internal static class TaskbarEmbeddingLayoutPolicy
             maxFontSize,
             maxCoverSize,
             maxCoverGap,
-            maxWindowWidth,
-            horizontalRange.Min,
-            horizontalRange.Max,
-            verticalRange.Min,
-            verticalRange.Max);
+            maxWindowWidth);
     }
 
-    private static LyricsLayoutMetrics CreateEmbeddedMetrics(AppSettings settings, double pixelsPerDip, double? taskbarHeight = null)
+    private static LyricsLayoutMetrics CreateEmbeddedMetrics(AppSettings settings, double pixelsPerDip)
     {
         var embedded = settings.Clone();
         embedded.UseFloatingWindow = false;
-        return LyricsLayoutMetrics.Create(embedded, pixelsPerDip,
-            taskbarHeight.HasValue ? new TaskbarBounds(0, 0, 100000, taskbarHeight.Value) : null);
+        return LyricsLayoutMetrics.Create(embedded, pixelsPerDip);
     }
 
     private static void ResetLayoutValues(AppSettings settings)
@@ -380,8 +317,6 @@ internal static class TaskbarEmbeddingLayoutPolicy
         settings.CoverCornerRadius = AppSettings.DefaultCoverCornerRadius;
         settings.LyricsLayoutScalePercent = AppSettings.DefaultLyricsLayoutScalePercent;
         settings.WindowWidth = AppSettings.DefaultWindowWidth;
-        settings.XOffset = 0;
-        settings.YOffset = 0;
     }
 
     private static void CopyLayoutValues(AppSettings source, AppSettings target)
@@ -392,8 +327,6 @@ internal static class TaskbarEmbeddingLayoutPolicy
         target.CoverCornerRadius = source.CoverCornerRadius;
         target.LyricsLayoutScalePercent = source.LyricsLayoutScalePercent;
         target.WindowWidth = source.WindowWidth;
-        target.XOffset = source.XOffset;
-        target.YOffset = source.YOffset;
     }
 
     private static double FindMaximumScalePercent(
@@ -414,7 +347,7 @@ internal static class TaskbarEmbeddingLayoutPolicy
 
             var candidateSettings = settings.Clone();
             candidateSettings.LyricsLayoutScalePercent = candidate;
-            if (CanFitIgnoringOffsets(candidateSettings, constraints))
+            if (CanFitCore(candidateSettings, constraints))
             {
                 best = candidate;
             }
@@ -433,7 +366,7 @@ internal static class TaskbarEmbeddingLayoutPolicy
             var candidate = AppSettings.ExtendedFontSizeMin + (step / 10.0);
             var candidateSettings = settings.Clone();
             candidateSettings.FontSize = candidate;
-            if (CanFitIgnoringOffsets(candidateSettings, constraints))
+            if (CanFitCore(candidateSettings, constraints))
             {
                 best = candidate;
             }
@@ -456,7 +389,7 @@ internal static class TaskbarEmbeddingLayoutPolicy
             candidateSettings.CoverCornerRadius = AppSettings.ClampCoverCornerRadius(
                 candidateSettings.CoverCornerRadius,
                 candidate);
-            if (CanFitIgnoringOffsets(candidateSettings, constraints))
+            if (CanFitCore(candidateSettings, constraints))
             {
                 best = candidate;
             }
@@ -486,56 +419,8 @@ internal static class TaskbarEmbeddingLayoutPolicy
             AppSettings.CoverGapMax);
     }
 
-    private static bool CanFitIgnoringOffsets(
-        AppSettings settings,
-        TaskbarEmbeddingConstraints constraints)
-    {
-        return CanFitCore(settings, constraints, includeOffsets: false);
-    }
-
     private static double FindSafeWindowWidth(double maxWidth) =>
         AppSettings.ClampEffectiveWindowWidth(AppSettings.DefaultWindowWidth, maxWidth);
-
-    private static OffsetRange GetHorizontalOffsetRange(
-        double taskbarWidth,
-        double windowWidth,
-        LyricsHorizontalAnchor anchor)
-    {
-        var remaining = Math.Max(0, taskbarWidth - windowWidth);
-        return anchor switch
-        {
-            LyricsHorizontalAnchor.Left => new OffsetRange(0, remaining),
-            LyricsHorizontalAnchor.Center => new OffsetRange(-remaining / 2, remaining / 2),
-            _ => new OffsetRange(-remaining, 0)
-        };
-    }
-
-    private static OffsetRange GetVerticalOffsetRange(double taskbarHeight, double windowHeight)
-    {
-        var remaining = Math.Max(0, taskbarHeight - windowHeight);
-        return new OffsetRange(-remaining / 2, remaining / 2);
-    }
-
-    private static OffsetRange GetStrictestVerticalOffsetRange(
-        TaskbarEmbeddingConstraints constraints,
-        AppSettings settings)
-    {
-        var minimum = double.NegativeInfinity;
-        var maximum = double.PositiveInfinity;
-        foreach (var display in GetDisplayConstraints(constraints))
-        {
-            var metrics = CreateEmbeddedMetrics(settings, display.PixelsPerDip, display.MaxHeight);
-            var range = GetVerticalOffsetRange(display.MaxHeight, metrics.DesiredWindowHeight);
-            minimum = Math.Max(minimum, range.Min);
-            maximum = Math.Min(maximum, range.Max);
-        }
-
-        return minimum <= maximum
-            ? new OffsetRange(minimum, maximum)
-            : new OffsetRange(0, 0);
-    }
-
-    private readonly record struct OffsetRange(double Min, double Max);
 
     private static bool HasOnlySidebars(TaskbarEmbeddingConstraints constraints) =>
         constraints.Displays.Count > 0 && constraints.Displays.All(display => display.IsVertical);

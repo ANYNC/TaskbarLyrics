@@ -329,6 +329,11 @@ public sealed class AppSettings
 
     public double YOffset { get; set; }
 
+    // Null keeps the legacy coordinates until taskbar geometry is available.
+    public double? TaskbarXAnchorPercent { get; set; }
+
+    public double? TaskbarYAnchorPercent { get; set; }
+
     public bool ForceAlwaysOnTop { get; set; } = true;
 
     private FloatingWindowLayer? _floatingWindowLayer;
@@ -545,6 +550,8 @@ public sealed class AppSettings
             TaskbarAvoidanceEnabled = defaults.TaskbarAvoidanceEnabled;
             XOffset = defaults.XOffset;
             YOffset = defaults.YOffset;
+            TaskbarXAnchorPercent = defaults.TaskbarXAnchorPercent;
+            TaskbarYAnchorPercent = defaults.TaskbarYAnchorPercent;
             ShowBackground = defaults.ShowBackground;
             BackgroundOpacity = defaults.BackgroundOpacity;
             ShowBorder = defaults.ShowBorder;
@@ -614,7 +621,12 @@ public sealed class AppSettings
         YOffset = double.IsFinite(YOffset)
             ? Math.Clamp(YOffset, MinimumWindowOffset, MaximumWindowOffset)
             : 0;
+        TaskbarXAnchorPercent = NormalizeTaskbarAnchorPercent(TaskbarXAnchorPercent);
+        TaskbarYAnchorPercent = NormalizeTaskbarAnchorPercent(TaskbarYAnchorPercent);
     }
+
+    internal static double? NormalizeTaskbarAnchorPercent(double? percent) =>
+        percent is { } value && double.IsFinite(value) ? Math.Clamp(value, 0, 100) : null;
 
     public int GetPlayerLyricOffsetMilliseconds(string? sourceApp)
     {

@@ -10,7 +10,7 @@ const persistedSettings = [
   "showLyricTranslation", "enableWordScanning", "lyricsLayoutScalePercent", "fontSize", "showCover", "singleLineLyrics",
   "enableControlPanel", "controlPanelTriggerMethod", "controlPanelTriggerCover", "controlPanelTriggerLyrics", "enableFloatingControlPanel", "floatingPanelBrightness", "floatingPanelTintOpacity", "floatingPanelBlurAmount", "embeddedPanelBrightness", "embeddedPanelTintOpacity", "embeddedPanelBlurAmount", "coverPosition", "coverSize", "coverGap", "coverCornerRadius", "fontFamily", "fontWeight", "lyricsTextAlignment", "foregroundColorMode",
   "showTextShadow", "toolWindowTheme", "showBackground", "showFloatingBackground", "backgroundOpacity", "showBorder", "windowWidth",
-  "taskbarAvoidanceEnabled", "xOffset", "yOffset", "floatingWindowLayer", "startWithWindows"
+  "taskbarAvoidanceEnabled", "taskbarXAnchorPercent", "taskbarYAnchorPercent", "floatingWindowLayer", "startWithWindows"
 ];
 
 async function createSettingsDom({ deferAnimationFrames = false, reducedMotion = false } = {}) {
@@ -585,34 +585,34 @@ describe("settings WebView bridge", () => {
     dom.window.close();
   });
 
-  it("refreshes floating readouts, direct offsets and collapsed appearance without posting edits", async () => {
+  it("refreshes floating readouts, anchor positions and collapsed appearance without posting edits", async () => {
     const { dom, sent, script } = await createSettingsDom();
     dom.window.eval(script);
     const document = dom.window.document;
     const receive = settings => dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings } });
     receive({ useFloatingWindow: true, windowWidth: 420, floatingWindowWidth: 680,
-      floatingLyricsLayoutScalePercent: 125, showBackground: false, showBorder: true, xOffset: 30, yOffset: -20 });
+      floatingLyricsLayoutScalePercent: 125, showBackground: false, showBorder: true, taskbarXAnchorPercent: 30, taskbarYAnchorPercent: 20 });
     const initialCount = sent.length;
     expect(document.querySelector("[data-floating-width]").textContent).toBe("680 px");
     expect(document.querySelector("[data-floating-scale]").textContent).toBe("125%");
     const summary = document.querySelector("[data-embedded-appearance-summary]");
     expect(summary.closest("details").open).toBe(false);
     expect(summary.textContent).toBe("背景关闭 · 边框开启");
-    const xOffset = document.querySelector('[data-setting="xOffset"][type="number"]');
-    const yOffset = document.querySelector('[data-setting="yOffset"][type="number"]');
-    expect(xOffset.closest("details")).toBeNull();
-    expect(yOffset.closest("details")).toBeNull();
-    expect(xOffset.value).toBe("30");
-    expect(yOffset.value).toBe("-20");
+    const taskbarXAnchorPercent = document.querySelector('[data-setting="taskbarXAnchorPercent"][type="number"]');
+    const taskbarYAnchorPercent = document.querySelector('[data-setting="taskbarYAnchorPercent"][type="number"]');
+    expect(taskbarXAnchorPercent.closest("details")).toBeNull();
+    expect(taskbarYAnchorPercent.closest("details")).toBeNull();
+    expect(taskbarXAnchorPercent.value).toBe("30");
+    expect(taskbarYAnchorPercent.value).toBe("20");
     dom.window.settingsApp.receive({ version: 1, type: "lyricsLayoutPreview", payload: {
       floatingWindowWidth: 720, floatingLyricsLayoutScalePercent: 150
     } });
     expect(document.querySelector("[data-floating-width]").textContent).toBe("720 px");
     expect(document.querySelector('[data-setting="windowWidth"][type="number"]').value).toBe("420");
-    receive({ useFloatingWindow: false, showBackground: true, showBorder: false, xOffset: -100, yOffset: 0 });
+    receive({ useFloatingWindow: false, showBackground: true, showBorder: false, taskbarXAnchorPercent: 100, taskbarYAnchorPercent: 0 });
     expect(summary.textContent).toBe("背景开启 · 边框关闭");
-    expect(xOffset.value).toBe("-100");
-    expect(yOffset.value).toBe("0");
+    expect(taskbarXAnchorPercent.value).toBe("100");
+    expect(taskbarYAnchorPercent.value).toBe("0");
     expect(sent).toHaveLength(initialCount);
     dom.window.close();
   });
@@ -685,7 +685,7 @@ describe("settings WebView bridge", () => {
       enableControlPanel: true, enableFloatingControlPanel: false
     } } });
     const document = dom.window.document;
-    for (const key of ["windowWidth", "lyricsLayoutScalePercent", "xOffset", "yOffset", "showBackground", "backgroundOpacity", "showBorder"]) {
+    for (const key of ["windowWidth", "lyricsLayoutScalePercent", "taskbarXAnchorPercent", "taskbarYAnchorPercent", "showBackground", "backgroundOpacity", "showBorder"]) {
       const control = document.querySelector(`[data-setting="${key}"]`);
       expect(control.closest(".embedded-window-mode-settings")).not.toBeNull();
       expect(control.disabled).toBe(floating);
@@ -2557,7 +2557,7 @@ describe("settings WebView bridge", () => {
     expect(sent.filter(message => message.type === "update" && message.payload.key === "enableControlPanel").map(message => message.payload.value)).toEqual([false, true]);
   });
 
-  it("keeps each offset slider synchronized with its editable value above", async () => {
+  it("keeps anchor controls synchronized in integer steps while preserving a migrated value on load", async () => {
     const { dom, sent, script } = await createSettingsDom();
     const document = dom.window.document;
     dom.window.eval(script);
@@ -2574,31 +2574,33 @@ describe("settings WebView bridge", () => {
           foregroundColorMode: "Light",
           foregroundColor: "#FFFFFFFF",
           backgroundOpacity: 0.55,
-          xOffset: 30,
-          yOffset: -20
+          taskbarXAnchorPercent: 30.42,
+          taskbarYAnchorPercent: 20
         },
         fonts: []
       }
     });
 
-    const xNumber = document.querySelector('input[type="number"][data-setting="xOffset"]');
-    const yNumber = document.querySelector('input[type="number"][data-setting="yOffset"]');
-    const xSlider = document.querySelector('input[type="range"][data-setting="xOffset"]');
-    const ySlider = document.querySelector('input[type="range"][data-setting="yOffset"]');
+    const xNumber = document.querySelector('input[type="number"][data-setting="taskbarXAnchorPercent"]');
+    const yNumber = document.querySelector('input[type="number"][data-setting="taskbarYAnchorPercent"]');
+    const xSlider = document.querySelector('input[type="range"][data-setting="taskbarXAnchorPercent"]');
+    const ySlider = document.querySelector('input[type="range"][data-setting="taskbarYAnchorPercent"]');
 
-    expect(xNumber.value).toBe("30");
-    expect(yNumber.value).toBe("-20");
+    expect(xNumber.value).toBe("30.42");
+    expect(yNumber.value).toBe("20");
+    for (const control of [xNumber, xSlider, yNumber, ySlider]) expect(control.step).toBe("1");
+    expect(sent.filter(message => ["update", "previewUpdate"].includes(message.type))).toHaveLength(0);
 
-    xSlider.value = "120";
+    xSlider.value = "72";
+    xSlider.stepUp();
     xSlider.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
 
-    expect(xNumber.value).toBe("120");
-    expect(document.querySelector('[data-setting="xOffset"][type="number"]').value).toBe("120");
-    expect(document.querySelector('[data-setting="yOffset"][type="number"]').value).toBe("-20");
+    expect(xNumber.value).toBe("73");
+    expect(yNumber.value).toBe("20");
     expect(sent.at(-1)).toEqual({
       version: 1,
       type: "previewUpdate",
-      payload: { key: "xOffset", value: 120 }
+      payload: { key: "taskbarXAnchorPercent", value: 73 }
     });
 
     xSlider.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
@@ -2606,47 +2608,45 @@ describe("settings WebView bridge", () => {
     expect(sent.at(-1)).toEqual({
       version: 1,
       type: "update",
-      payload: { key: "xOffset", value: 120 }
+      payload: { key: "taskbarXAnchorPercent", value: 73 }
     });
 
-    yNumber.value = "-75";
+    yNumber.value = "12";
+    yNumber.stepUp();
     yNumber.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
-    expect(ySlider.value).toBe("-75");
-    expect(xNumber.value).toBe("120");
-    expect(document.querySelector('[data-setting="xOffset"][type="number"]').value).toBe("120");
-    expect(document.querySelector('[data-setting="yOffset"][type="number"]').value).toBe("-75");
+    expect(ySlider.value).toBe("13");
+    expect(xNumber.value).toBe("73");
 
     expect(sent.at(-1)).toEqual({
       version: 1,
       type: "previewUpdate",
-      payload: { key: "yOffset", value: -75 }
+      payload: { key: "taskbarYAnchorPercent", value: 13 }
     });
 
+    yNumber.value = "13.5";
     yNumber.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
 
+    expect(yNumber.value).toBe("14");
+    expect(ySlider.value).toBe("14");
     expect(sent.at(-1)).toEqual({
       version: 1,
       type: "update",
-      payload: { key: "yOffset", value: -75 }
+      payload: { key: "taskbarYAnchorPercent", value: 14 }
     });
 
-    yNumber.value = "3000";
+    yNumber.value = "120";
     yNumber.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
 
-    expect(yNumber.value).toBe("2000");
-    expect(ySlider.value).toBe("2000");
+    expect(yNumber.value).toBe("100");
+    expect(ySlider.value).toBe("100");
     expect(sent.at(-1)).toEqual({
       version: 1,
       type: "update",
-      payload: { key: "yOffset", value: 2000 }
+      payload: { key: "taskbarYAnchorPercent", value: 100 }
     });
   });
 
-  it.each([
-    { name: "embedded center anchor", floating: false, anchor: "Center", minX: -500, maxX: 500, minY: -2, maxY: 2 },
-    { name: "embedded right anchor", floating: false, anchor: "Right", minX: -1000, maxX: 0, minY: -2, maxY: 2 },
-    { name: "floating window", floating: true, anchor: "Left", minX: -2000, maxX: 2000, minY: -2000, maxY: 2000 }
-  ])("preserves zero offsets when loading and editing $name", async ({ floating, anchor, minX, maxX, minY, maxY }) => {
+  it.each([false, true])("preserves zero anchors and percentage bounds (floating=%s)", async floating => {
     const { dom, sent, script } = await createSettingsDom();
     const document = dom.window.document;
     dom.window.eval(script);
@@ -2655,22 +2655,20 @@ describe("settings WebView bridge", () => {
       version: 1,
       type: "settingsState",
       payload: { settings: {
-        useFloatingWindow: floating, horizontalAnchor: anchor, xOffset: 0, yOffset: 0,
-        taskbarMinXOffset: minX, taskbarMaxXOffset: maxX,
-        taskbarMinYOffset: minY, taskbarMaxYOffset: maxY
+        useFloatingWindow: floating, taskbarXAnchorPercent: 0, taskbarYAnchorPercent: 0
       }, fonts: [] }
     });
     expect(sent).toHaveLength(initialCount);
 
-    for (const key of ["xOffset", "yOffset"]) {
+    for (const key of ["taskbarXAnchorPercent", "taskbarYAnchorPercent"]) {
       const number = document.querySelector(`input[type="number"][data-setting="${key}"]`);
       const slider = document.querySelector(`input[type="range"][data-setting="${key}"]`);
       expect(slider.value).toBe("0");
       expect(slider.min).toBe(number.min);
       expect(slider.max).toBe(number.max);
       expect(number.value).toBe("0");
-      expect(Number(number.min)).toBe(key === "xOffset" ? minX : minY);
-      expect(Number(number.max)).toBe(key === "xOffset" ? maxX : maxY);
+      expect(Number(number.min)).toBe(0);
+      expect(Number(number.max)).toBe(100);
       if (floating) {
         expect(number.disabled).toBe(true);
         expect(slider.disabled).toBe(true);
@@ -2679,7 +2677,7 @@ describe("settings WebView bridge", () => {
         expect(sent).toHaveLength(initialCount);
         continue;
       }
-      number.value = "-1";
+      number.value = "1";
       number.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
       number.value = "0";
       number.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
@@ -2691,7 +2689,7 @@ describe("settings WebView bridge", () => {
     }
   });
 
-  it("coalesces repeated offset numeric input into one preview per animation frame", async () => {
+  it("coalesces repeated anchor numeric input into one preview per animation frame", async () => {
     const { dom, sent, script, runAnimationFrames } = await createSettingsDom({ deferAnimationFrames: true });
     const document = dom.window.document;
     dom.window.eval(script);
@@ -2708,13 +2706,13 @@ describe("settings WebView bridge", () => {
           foregroundColorMode: "Light",
           foregroundColor: "#FFFFFFFF",
           backgroundOpacity: 0.55,
-          xOffset: 0,
-          yOffset: 0
+          taskbarXAnchorPercent: 0,
+          taskbarYAnchorPercent: 0
         },
         fonts: []
       }
     });
-    const slider = document.querySelector('input[type="number"][data-setting="xOffset"]');
+    const slider = document.querySelector('input[type="number"][data-setting="taskbarXAnchorPercent"]');
     const beforeInputCount = sent.length;
 
     slider.value = "10";
@@ -2727,7 +2725,7 @@ describe("settings WebView bridge", () => {
     expect(sent.slice(beforeInputCount)).toEqual([{
       version: 1,
       type: "previewUpdate",
-      payload: { key: "xOffset", value: 20 }
+      payload: { key: "taskbarXAnchorPercent", value: 20 }
     }]);
   });
 

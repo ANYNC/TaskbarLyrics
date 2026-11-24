@@ -169,22 +169,21 @@ public sealed class CompactTaskbarLayoutTests
     }
 
     [Fact]
-    public void SidebarWindowLengthSetsItsHeightAndAvailableVerticalOffset()
+    public void SidebarWindowLengthSetsItsHeightAndAvailableVerticalTravel()
     {
-        var settings = new AppSettings { WindowWidth = 300 };
+        var settings = new AppSettings { WindowWidth = 300, TaskbarYAnchorPercent = 100 };
         var display = new DisplayMonitor("side", "Side", true,
             new NativeRect(0, 0, 1920, 900), new NativeRect(48, 0, 1920, 900), 1);
         var constraints = TaskbarEmbeddingLayoutPolicy.FromDisplay(display);
         var bounds = TaskbarEmbeddingLayoutPolicy.GetInputBounds(settings, constraints, 1920);
-        var metrics = LyricsLayoutMetrics.Create(settings, 1, new TaskbarBounds(0, 0, 48, 900));
-        Assert.Equal(300, metrics.DesiredWindowHeight);
+        var taskbar = new TaskbarBounds(0, 0, 48, 900);
+        var position = EmbeddedTaskbarPosition.Calculate(settings, taskbar, 1);
+        Assert.Equal(300, position.Height);
         Assert.Equal(900, bounds.MaxWindowWidth);
-        Assert.Equal(0, bounds.MinYOffset);
-        Assert.Equal(600, bounds.MaxYOffset);
+        Assert.Equal(600, position.Top);
         settings.WindowWidth = 600;
-        bounds = TaskbarEmbeddingLayoutPolicy.GetInputBounds(settings, constraints, 1920);
-        Assert.Equal(0, bounds.MinYOffset);
-        Assert.Equal(300, bounds.MaxYOffset);
+        position = EmbeddedTaskbarPosition.Calculate(settings, taskbar, 1);
+        Assert.Equal(300, position.Top);
     }
 
     [Fact]

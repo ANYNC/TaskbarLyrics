@@ -5,6 +5,26 @@ namespace TaskbarLyrics.App.Tests;
 
 public sealed class SettingsStoreTests
 {
+    [Fact]
+    public void TaskbarAnchorPercentsRoundTripAlongsideLegacySettings()
+    {
+        using var files = new TestDirectory();
+        var path = Path.Combine(files.Path, "settings.json");
+        File.WriteAllText(path, "{\"HorizontalAnchor\":2,\"XOffset\":-23,\"YOffset\":4}");
+        var store = new SettingsStore(path);
+        var settings = store.Load();
+        Assert.Null(settings.TaskbarXAnchorPercent);
+        Assert.Null(settings.TaskbarYAnchorPercent);
+        Assert.True(EmbeddedTaskbarPosition.MigrateLegacy(settings, new TaskbarBounds(0, 0, 1400, 48), 1));
+
+        Assert.True(store.Save(settings));
+        var restored = store.Load();
+        Assert.Equal(settings.TaskbarXAnchorPercent, restored.TaskbarXAnchorPercent);
+        Assert.Equal(settings.TaskbarYAnchorPercent, restored.TaskbarYAnchorPercent);
+        Assert.Equal(-23, restored.XOffset);
+        Assert.Equal(4, restored.YOffset);
+    }
+
     [Theory]
     [InlineData("{}", true)]
     [InlineData("{\"TaskbarAvoidanceEnabled\":false}", false)]

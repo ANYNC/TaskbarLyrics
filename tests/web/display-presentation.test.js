@@ -123,7 +123,7 @@ describe("display presentation", () => {
     expect([...document.querySelectorAll('[data-presentation-mode="embedded"]')].every(element => element.hidden)).toBe(true);
     expect(cover.checked).toBe(true);
     expect(document.querySelector('[data-setting="floatingLyricsLayoutScalePercent"]')).toBeNull();
-    for (const key of ["xOffset", "yOffset"]) {
+    for (const key of ["taskbarXAnchorPercent", "taskbarYAnchorPercent"]) {
       expect(document.querySelector(`[data-setting="${key}"]`).closest("details")).toBeNull();
     }
     dom.window.close();

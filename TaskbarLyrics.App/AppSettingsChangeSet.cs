@@ -122,7 +122,9 @@ internal readonly record struct AppSettingsChangeSet(
             current.GetWindowWidth() != next.GetWindowWidth() ||
             (!next.UseFloatingWindow && (current.HorizontalAnchor != next.HorizontalAnchor ||
                 current.TaskbarAvoidanceEnabled != next.TaskbarAvoidanceEnabled ||
-                current.XOffset != next.XOffset || current.YOffset != next.YOffset)) ||
+                current.XOffset != next.XOffset || current.YOffset != next.YOffset ||
+                current.TaskbarXAnchorPercent != next.TaskbarXAnchorPercent ||
+                current.TaskbarYAnchorPercent != next.TaskbarYAnchorPercent)) ||
             (next.UseFloatingWindow && current.FloatingWindowLayer != next.FloatingWindowLayer) ||
             current.UseFloatingWindow != next.UseFloatingWindow ||
             current.LyricsDisplayMode != next.LyricsDisplayMode ||

@@ -136,14 +136,10 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
     private IntPtr _windowHandle;
     private IntPtr _taskbarHandle;
     private IntPtr _parentHandle;
-    private IntPtr _taskListHandle;
-    private EmbeddedTaskbarNativeBounds _originalTaskListBounds;
-    private EmbeddedTaskbarNativeBounds? _lastTaskListBounds;
     private EmbeddedTaskbarDisplayTarget? _attachedDisplayTarget;
     private long _originalStyle;
     private long _originalExtendedStyle;
     private bool _hasOriginalStyles;
-    private bool _taskListSqueezed;
     private bool _disposed;
     private string? _lastAttachDiagnostic;
     private readonly TaskbarOccupiedSpaceProvider _occupiedSpace;
@@ -236,10 +232,6 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
 
         if (_parentHandle != parent || GetAncestor(hwnd, GetAncestorParent) != parent)
         {
-            RestoreTaskList();
-            _taskListHandle = IntPtr.Zero;
-            _originalTaskListBounds = default;
-
             _ = SetParent(hwnd, parent);
             ApplyChildWindowStyle(hwnd);
             if (GetAncestor(hwnd, GetAncestorParent) != parent)
@@ -253,13 +245,7 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
 
         _attachedDisplayTarget = EmbeddedTaskbarDisplayTarget.Create(targetDisplay);
 
-        if (isWindows11) MonitorAvailableSpace(window, settings, targetDisplay);
-
-        if (!isWindows11)
-        {
-            if (settings.TaskbarAvoidanceEnabled) SqueezeTaskList(parent, settings);
-            else RestoreTaskList();
-        }
+        MonitorAvailableSpace(window, settings, targetDisplay);
 
         var attachResult = EmbeddedTaskbarEmbeddingPolicy.FromPositionResult(
             Position(hwnd, parent, window, settings, targetDisplay));
@@ -278,8 +264,6 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
         _positionSettings = null;
         _positionDisplay = null;
         _positionPixelsPerDip = 0;
-        RestoreTaskList();
-
         if (_windowHandle != IntPtr.Zero && IsWindow(_windowHandle))
         {
             // A retiring child must never expose its taskbar-client coordinates
@@ -292,12 +276,8 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
         _windowHandle = IntPtr.Zero;
         _taskbarHandle = IntPtr.Zero;
         _parentHandle = IntPtr.Zero;
-        _taskListHandle = IntPtr.Zero;
-        _originalTaskListBounds = default;
-        _lastTaskListBounds = null;
         _attachedDisplayTarget = null;
         _hasOriginalStyles = false;
-        _taskListSqueezed = false;
     }
 
     public void Dispose()
@@ -421,32 +401,23 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
         var pixelsPerDip = targetDisplay?.PixelsPerDip ?? TaskbarPlacementService.GetPixelsPerDip(window);
         var taskbarWidth = (parentRect.Right - parentRect.Left) / pixelsPerDip;
         var taskbarHeight = (parentRect.Bottom - parentRect.Top) / pixelsPerDip;
-        var width = AppSettings.ClampEffectiveWindowWidth(
-            settings.WindowWidth,
-            taskbarWidth);
-        var metrics = LyricsLayoutMetrics.Create(settings, pixelsPerDip, new TaskbarBounds(0, 0, taskbarWidth, taskbarHeight));
-        if (metrics.IsVertical) width = taskbarWidth;
-        var height = metrics.DesiredWindowHeight;
-        height = Math.Min(height, taskbarHeight);
-
-        var clientLeft = EmbeddedTaskbarLayoutCalculator.CalculateHorizontalLeft(
-            taskbarWidth, width, settings.HorizontalAnchor, settings.XOffset);
-        var clientTop = EmbeddedTaskbarLayoutCalculator.CalculateVerticalTop(
-            taskbarHeight, height, settings.YOffset, alignTop: metrics.IsVertical);
-        if (IsWindows11() && settings.TaskbarAvoidanceEnabled)
+        var taskbar = new TaskbarBounds(0, 0, taskbarWidth, taskbarHeight);
+        var (width, height, clientLeft, clientTop) = EmbeddedTaskbarPosition.Calculate(settings, taskbar, pixelsPerDip);
+        if (settings.TaskbarAvoidanceEnabled)
         {
-            var occupied = _occupiedSpace.GetOccupiedBounds(parent, new Rect(
+            // Query Explorer's taskbar tree, but fit the lyrics inside its actual embedding host.
+            var occupied = _occupiedSpace.GetOccupiedBounds(_taskbarHandle == IntPtr.Zero ? parent : _taskbarHandle, new Rect(
                 parentRect.Left, parentRect.Top,
                 parentRect.Right - parentRect.Left, parentRect.Bottom - parentRect.Top));
             var logical = occupied is null ? null : TaskbarOccupiedSpaceProvider.ToLogicalBounds(
-                occupied, metrics.IsVertical ? parentRect.Top : parentRect.Left, pixelsPerDip);
+                occupied, taskbar.IsVertical ? parentRect.Top : parentRect.Left, pixelsPerDip);
             if (logical is not null && TaskbarFreeSpaceLayout.TryPlace(
-                    metrics.IsVertical ? taskbarHeight : taskbarWidth,
-                    metrics.IsVertical ? height : width,
-                    metrics.IsVertical ? clientTop : clientLeft,
+                    taskbar.IsVertical ? taskbarHeight : taskbarWidth,
+                    taskbar.IsVertical ? height : width,
+                    taskbar.IsVertical ? clientTop : clientLeft,
                     logical, out var available))
             {
-                if (metrics.IsVertical)
+                if (taskbar.IsVertical)
                 {
                     clientTop = available.Start;
                     height = available.Length;
@@ -465,7 +436,7 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
                 ReportSpaceDiagnostic(logical is null ? "BoundsUnavailableFallback" : "NoFreeSpaceFallback");
             }
         }
-        else if (IsWindows11()) ReportSpaceDiagnostic("AvoidanceDisabled");
+        else ReportSpaceDiagnostic("AvoidanceDisabled");
 
         if (window.Width != width)
         {
@@ -576,90 +547,6 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
             windowRect.Bottom - windowRect.Top);
     }
 
-    private void SqueezeTaskList(IntPtr parent, AppSettings settings)
-    {
-        if (_taskListHandle == IntPtr.Zero || !IsWindow(_taskListHandle))
-        {
-            var previousTaskListHandle = _taskListHandle;
-            _taskListHandle = FindTaskList(parent);
-            if (_taskListHandle != previousTaskListHandle)
-            {
-                _originalTaskListBounds = default;
-                _lastTaskListBounds = null;
-                _taskListSqueezed = false;
-            }
-        }
-
-        if (_taskListHandle == IntPtr.Zero ||
-            !GetWindowRect(_taskListHandle, out var taskListRect) ||
-            !GetWindowRect(parent, out var parentRect))
-        {
-            return;
-        }
-
-        if (!_taskListSqueezed)
-        {
-            _originalTaskListBounds = new EmbeddedTaskbarNativeBounds(
-                taskListRect.Left - parentRect.Left,
-                taskListRect.Top - parentRect.Top,
-                taskListRect.Right - taskListRect.Left,
-                taskListRect.Bottom - taskListRect.Top);
-        }
-
-        var pixelsPerDip = GetPixelsPerDipForHandle(parent);
-        var reservedWidth = (int)Math.Round(
-            (AppSettings.ClampEffectiveWindowWidth(
-                settings.WindowWidth,
-                (parentRect.Right - parentRect.Left) / pixelsPerDip) +
-                Math.Max(0, settings.XOffset)) * pixelsPerDip,
-            MidpointRounding.AwayFromZero);
-        var targetWidth = Math.Clamp(
-            _originalTaskListBounds.Width - reservedWidth,
-            0,
-            _originalTaskListBounds.Width);
-
-        var targetBounds = new EmbeddedTaskbarNativeBounds(
-            _originalTaskListBounds.Left,
-            _originalTaskListBounds.Top,
-            targetWidth,
-            _originalTaskListBounds.Height);
-        if (!EmbeddedTaskbarLayoutCalculator.NeedsNativeBoundsUpdate(_lastTaskListBounds, targetBounds))
-        {
-            _taskListSqueezed = true;
-            return;
-        }
-
-        var squeezed = MoveWindow(
-            _taskListHandle,
-            targetBounds.Left,
-            targetBounds.Top,
-            targetBounds.Width,
-            targetBounds.Height,
-            true);
-        if (squeezed)
-        {
-            _lastTaskListBounds = targetBounds;
-            _taskListSqueezed = true;
-        }
-    }
-
-    private void RestoreTaskList()
-    {
-        if (_taskListSqueezed && _taskListHandle != IntPtr.Zero && IsWindow(_taskListHandle))
-        {
-            _ = MoveWindow(
-                _taskListHandle,
-                _originalTaskListBounds.Left,
-                _originalTaskListBounds.Top,
-                _originalTaskListBounds.Width,
-                _originalTaskListBounds.Height,
-                true);
-        }
-
-        _taskListSqueezed = false;
-        _lastTaskListBounds = null;
-    }
-
     private void CaptureOriginalStyles(IntPtr hwnd)
     {
         _originalStyle = TaskbarNativeMethods.GetWindowLongPtr(hwnd, GwlStyle).ToInt64();
@@ -686,11 +573,7 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
             return EmbeddedTaskbarAttachResult.Unavailable;
         }
 
-        if (!IsWindows11())
-        {
-            if (settings.TaskbarAvoidanceEnabled) SqueezeTaskList(_parentHandle, settings);
-            else RestoreTaskList();
-        }
+        MonitorAvailableSpace(window, settings, targetDisplay);
 
         return EmbeddedTaskbarEmbeddingPolicy.FromPositionResult(
             Position(hwnd, _parentHandle, window, settings, targetDisplay));
@@ -830,18 +713,16 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
         return reBar != IntPtr.Zero ? reBar : FindWindowEx(taskbar, IntPtr.Zero, "WorkerW", null);
     }
 
-    private static IntPtr FindTaskList(IntPtr container)
+    internal static TaskbarBounds? GetEmbeddingBounds(DisplayMonitor display)
     {
-        var taskList = FindWindowEx(container, IntPtr.Zero, "MSTaskSwWClass", null);
-        return taskList != IntPtr.Zero
-            ? taskList
-            : FindWindowEx(container, IntPtr.Zero, "MSTaskListWClass", null);
-    }
-
-    private static double GetPixelsPerDipForHandle(IntPtr hwnd)
-    {
-        var dpi = TaskbarNativeMethods.GetDpiForWindow(hwnd);
-        return dpi > 0 ? dpi / 96.0 : 1;
+        var taskbar = FindTaskbar(display, out _);
+        if (taskbar == IntPtr.Zero) return null;
+        var parent = IsWindows11() ? taskbar : FindTaskbarContainer(taskbar);
+        if (parent == IntPtr.Zero || !GetWindowRect(parent, out var bounds) ||
+            bounds.Right <= bounds.Left || bounds.Bottom <= bounds.Top)
+            return null;
+        return new TaskbarBounds(0, 0, (bounds.Right - bounds.Left) / display.PixelsPerDip,
+            (bounds.Bottom - bounds.Top) / display.PixelsPerDip);
     }
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
@@ -863,10 +744,6 @@ internal sealed class EmbeddedTaskbarAnchor : IDisposable
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetWindowRect(IntPtr hwnd, out TaskbarNativeMethods.NativeRect rect);
-
-    [DllImport("user32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool MoveWindow(IntPtr hwnd, int x, int y, int width, int height, bool repaint);
 
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]

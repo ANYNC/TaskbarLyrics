@@ -25,6 +25,16 @@ internal sealed class TaskbarPlacementService
             ? GetPrimaryDisplayMetrics(pixelsPerDip)
             : ConvertPhysicalDisplayMetrics(targetDisplay.Bounds, targetDisplay.WorkArea, pixelsPerDip);
         var taskbar = ResolveTaskbarBounds(display);
+        if (!settings.UseFloatingWindow && (settings.TaskbarXAnchorPercent.HasValue || settings.TaskbarYAnchorPercent.HasValue))
+        {
+            var position = EmbeddedTaskbarPosition.Calculate(settings, taskbar, pixelsPerDip);
+            window.Width = position.Width;
+            window.Height = position.Height;
+            window.Left = taskbar.Left + position.Left;
+            window.Top = taskbar.Top + position.Top;
+            CommitNativeBounds(window, pixelsPerDip);
+            return;
+        }
         var metrics = LyricsLayoutMetrics.Create(settings, pixelsPerDip, taskbar);
         window.Height = Math.Min(metrics.DesiredWindowHeight, display.Height);
 
