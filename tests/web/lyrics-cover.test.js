@@ -64,7 +64,8 @@ async function createHarness({ deferAnimationFrames = false } = {}) {
     flushTimers();
   };
 
-  return { dom, preloaders, receive, flushTimers, flushFrames, showCover, style };
+  const pendingTimerDelays = () => [...timers.values()].map(timer => timer.delay);
+  return { dom, preloaders, receive, flushTimers, flushFrames, showCover, style, pendingTimerDelays };
 }
 
 describe("taskbar line layout", () => {
@@ -357,14 +358,16 @@ describe("embedded control panel triggers", () => {
     dom.window.close();
   });
 
-  it("waits before hover opening and cancels on exit, mode changes and disabling", async () => {
-    const { dom, sent, lyrics, cover, flushTimers, applyStyle } = await triggerHarness({ controlPanelTriggerMethod: "Hover" });
+  it("waits 200 ms before hover opening and cancels on exit, mode changes and disabling", async () => {
+    const { dom, sent, lyrics, cover, flushTimers, applyStyle, pendingTimerDelays } =
+      await triggerHarness({ controlPanelTriggerMethod: "Hover" });
     lyrics.dispatchEvent(new dom.window.MouseEvent("mouseenter"));
     expect(sent).toHaveLength(0);
     lyrics.dispatchEvent(new dom.window.MouseEvent("mouseleave"));
     flushTimers();
     expect(sent).toHaveLength(0);
     lyrics.dispatchEvent(new dom.window.MouseEvent("mouseenter"));
+    expect(pendingTimerDelays()).toEqual([200]);
     flushTimers();
     expect(sent.at(-1)).toMatchObject({ type: "controlPanelTrigger", payload: { area: "Lyrics", activation: "Hover" } });
     lyrics.dispatchEvent(new dom.window.MouseEvent("click", { detail: 1 }));

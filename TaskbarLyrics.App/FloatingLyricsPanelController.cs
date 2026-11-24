@@ -9,6 +9,8 @@ namespace TaskbarLyrics.App;
 
 internal sealed class FloatingLyricsPanelController : IDisposable
 {
+    private static readonly TimeSpan HoverDelay = TimeSpan.FromMilliseconds(200);
+
     private sealed class Target(Window window, Func<DisplayMonitor?> display, Func<bool> contentVisible, Action<bool, bool> surface, Action drag)
     {
         internal Window Window { get; } = window;
@@ -522,7 +524,7 @@ internal sealed class FloatingLyricsPanelController : IDisposable
         if (_active is not null)
         {
             if (_leftAt == 0) _leftAt = Stopwatch.GetTimestamp();
-            if (Stopwatch.GetElapsedTime(_leftAt).TotalMilliseconds >= 300) Close(suppressUntilLeave: false);
+            if (Stopwatch.GetElapsedTime(_leftAt) >= HoverDelay) Close(suppressUntilLeave: false);
             return;
         }
         if (!ShowPlaybackControls) return;
@@ -531,7 +533,7 @@ internal sealed class FloatingLyricsPanelController : IDisposable
         { Show(hovered); return; }
         if (hovered != _candidate)
         { _candidate = hovered; _enteredAt = Stopwatch.GetTimestamp(); _suppressed = false; }
-        if (hovered is not null && !_suppressed && Stopwatch.GetElapsedTime(_enteredAt).TotalMilliseconds >= 200) Show(hovered);
+        if (hovered is not null && !_suppressed && Stopwatch.GetElapsedTime(_enteredAt) >= HoverDelay) Show(hovered);
     }
 
     private static bool EnsureWindowOrder(Target target)

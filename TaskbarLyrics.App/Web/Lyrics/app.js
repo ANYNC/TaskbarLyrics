@@ -164,7 +164,7 @@ for (const [element, area] of [[coverEl, "Cover"], [panelLyricsEl, "Lyrics"]]) {
     panelHoverTimer = setTimeout(() => {
       panelHoverTimer = 0;
       if (panelTriggerMethod === "Hover" && panelAreaEnabled(area)) postPanelTrigger(element, area, "Hover");
-    }, 250);
+    }, 200);
   });
   element?.addEventListener("mouseleave", clearPanelHover);
 }

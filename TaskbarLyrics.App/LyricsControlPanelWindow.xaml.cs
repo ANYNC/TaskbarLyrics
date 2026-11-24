@@ -197,7 +197,7 @@ public partial class LyricsControlPanelWindow : Window, IDisposable
             IsActive && Mouse.LeftButton == MouseButtonState.Pressed)
         { _hoverLeftAt = null; return; }
         _hoverLeftAt ??= Environment.TickCount64;
-        if (Environment.TickCount64 - _hoverLeftAt >= 350) HidePanel();
+        if (Environment.TickCount64 - _hoverLeftAt >= 200) HidePanel();
     }
 
     internal async Task ShowNearAsync(Rect anchor, DisplayMonitor display, CoverPosition coverPosition, bool activate = true)

@@ -242,7 +242,7 @@ html, body {
   background: rgba(0, 0, 0, 0.66);
   opacity: 0;
   pointer-events: none;
-  transition: opacity 180ms linear;
+  transition: opacity var(--cover-mask-duration, 180ms) linear;
 }
 
 .cover-action-icon {
@@ -257,6 +257,7 @@ html, body {
 .cover.panel-trigger-hovered .cover-interaction,
 .cover.panel-open .cover-interaction {
   opacity: 1;
+  --cover-mask-duration: var(--cover-mask-fade-in, 200ms);
 }
 
 .cover:not(:disabled):is(:hover, :focus-visible, .panel-open) .cover-action-icon,
@@ -290,6 +291,7 @@ html, body {
 }
 
 .cover-floating-icon, .cover-locked-icon { display: none; width: min(17px, 54%); height: min(17px, 54%); opacity: 0.8; }
+.floating-controls-enabled { --cover-mask-fade-in: 180ms; }
 .floating-controls-enabled .cover-action-icon { display: none; }
 /* Show the available action: lock while unlocked, unlock while locked. */
 .floating-controls-enabled .cover-locked-icon { display: block; }
