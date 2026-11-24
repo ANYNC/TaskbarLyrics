@@ -26,12 +26,14 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
     private bool _isDisposed;
     private bool _isContentVisible = true;
     private readonly LyricsDisplayDiagnostics _displayDiagnostics;
-    private readonly LyricBackgroundSampler _backgroundSampler = new();
+    internal LyricBackgroundSampler BackgroundSampler { get; }
 
     public LyricsMirrorWindow(DisplayMonitor displayMonitor, Action<Window, Rect, DisplayMonitor, Action<bool>, ControlPanelTriggerArea, ControlPanelActivation> onCoverClicked,
         IAppCompositionRoot compositionRoot)
     {
         InitializeComponent();
+        BackgroundSampler = new(script => !_isDisposed && _isWebReady && LyricsWebView.CoreWebView2 is not null
+            ? LyricsWebView.ExecuteScriptAsync(script) : null);
         _displayDiagnostics = new LyricsDisplayDiagnostics(this);
         _embeddedTaskbarAnchor.AttachmentLost += OnEmbeddedAttachmentLost;
         _regionVisibility = new LyricsRegionVisibilityController(Dispatcher,
@@ -104,7 +106,7 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
             TaskObserver.Observe(LyricsWebView.ExecuteScriptAsync(LyricsWebViewScriptFactory.SetFloatingLockState(locked, hovered)), "floating mirror lock state");
     }
 
-    internal void SetFloatingControlSurface(bool open, bool above, bool light)
+    internal void SetFloatingControlSurface(bool open, bool light)
     {
         if (_isDisposed) return;
         RootBorder.Background = _settings.UseFloatingWindow
@@ -139,11 +141,11 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
     {
         if (_isDisposed || NeedsWindowReplacement) return;
         _settings = settings.Clone();
-        _backgroundSampler.Configure(_settings.ForegroundColorMode == ForegroundColorMode.Background);
+        BackgroundSampler.Configure(_settings.ForegroundColorMode == ForegroundColorMode.Background);
         _floatingPlacement.Configure(_settings);
         if (_floatingPlacement.IsDragging) return;
         var display = DisplayMonitor;
-        if (!keepControlPanelOpen) SetFloatingControlSurface(false, false, false);
+        if (!keepControlPanelOpen) SetFloatingControlSurface(false, false);
         _smartTopmostController.ApplySettings(
             _settings.UseFloatingWindow,
             _settings.FloatingWindowLayer,
@@ -245,7 +247,7 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
         _isDisposed = true;
         RecordDisplayDiagnostics("Dispose");
         _displayDiagnostics.Dispose();
-        _backgroundSampler.Configure(false);
+        BackgroundSampler.Configure(false);
         _regionVisibility.Dispose();
         Loaded -= OnLoaded;
         SourceInitialized -= OnSourceInitialized;
@@ -306,9 +308,9 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
             var message = LyricsWebMessageRouter.Parse(e.TryGetWebMessageAsString());
             if (LyricsWebMessageRouter.TryGetLyricBackground(message, out var sample))
             {
-                TaskObserver.Observe(_backgroundSampler.SampleAsync(LyricsWebView, sample,
-                    () => !_isDisposed && IsContentVisible && !_floatingPlacement.IsDragging && !SystemParameters.HighContrast,
-                    script => LyricsWebView.ExecuteScriptAsync(script)), "adaptive mirror lyric color");
+                TaskObserver.Observe(BackgroundSampler.SampleAsync(LyricsWebView, sample,
+                    () => !_isDisposed && IsContentVisible && !_floatingPlacement.IsDragging && !SystemParameters.HighContrast),
+                    "adaptive mirror lyric color");
                 return;
             }
             if (LyricsWebMessageRouter.TryGetRegionVisibilityCompleted(message, out var generation, out var visible))
@@ -390,7 +392,7 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
         }
 
         _isWebReady = true;
-        _backgroundSampler.Reset();
+        BackgroundSampler.Reset();
         LyricsWebView.Visibility = Visibility.Visible;
         Dispatcher.BeginInvoke(new Action(() =>
         {
@@ -406,6 +408,7 @@ internal partial class LyricsMirrorWindow : Window, IDisposable
             {
                 ExecutePendingScript(slot);
             }
+            BackgroundSampler.ReplayPanelHold();
             RecordDisplayDiagnostics("DocumentReady", capture: true);
         }), DispatcherPriority.Loaded);
     }

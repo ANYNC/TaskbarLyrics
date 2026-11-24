@@ -11,6 +11,72 @@ public sealed partial class FloatingPanelInputTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    public void AdaptiveForegroundHoldsThroughThePanelFadeOnlyForHoverBackground(bool persistentBackground)
+    {
+        RunSta(() =>
+        {
+            var owner = CreateOwner(layered: true);
+            var messages = new List<string>();
+            var sampler = new LyricBackgroundSampler(script =>
+            {
+                messages.Add(script);
+                return Task.CompletedTask;
+            });
+            sampler.Configure(true);
+            using var controller = new FloatingLyricsPanelController(owner.Dispatcher,
+                () => new FloatingLyricsControlWindow(_ => { }, _ => { }), () => null);
+            try
+            {
+                var display = DisplayMonitorService.GetDisplays().First(item => item.IsPrimary);
+                var systemLight = App.IsSystemUiUsingLightTheme();
+                var holdsPalette = !persistentBackground && !SystemParameters.HighContrast;
+                controller.Register(owner, () => display, () => true, (_, _) => { }, backgroundSampler: sampler);
+                controller.Configure(!systemLight, 0.5, 0.7, 24);
+                controller.ShowBackground = persistentBackground;
+                controller.Enabled = true;
+                controller.Open(display.Id, owner);
+
+                var panel = Assert.IsType<FloatingLyricsControlWindow>(controller.Panel);
+                var title = Assert.IsType<System.Windows.Controls.TextBlock>(panel.FindName("TitleText"));
+                var brush = Assert.IsType<System.Windows.Media.SolidColorBrush>(title.Foreground);
+                if (!SystemParameters.HighContrast)
+                {
+                    var lightPanel = holdsPalette ? systemLight : !systemLight;
+                    Assert.Equal(lightPanel ? System.Windows.Media.Color.FromRgb(28, 29, 32)
+                        : System.Windows.Media.Color.FromRgb(246, 247, 248), brush.Color);
+                }
+
+                Assert.Equal(holdsPalette ? systemLight : (bool?)null, sampler.HeldDarkText);
+                if (holdsPalette) Assert.Contains("\"samplingPaused\":true", Assert.Single(messages));
+                else Assert.Empty(messages);
+
+                PumpMessages(TimeSpan.FromMilliseconds(240));
+                controller.Close(suppressUntilLeave: false);
+                if (holdsPalette && FloatingPanelAnimation.IsEnabled)
+                {
+                    Assert.Equal(systemLight, sampler.HeldDarkText);
+                    controller.Open(display.Id, owner);
+                    PumpMessages(TimeSpan.FromMilliseconds(250));
+                    Assert.Equal(systemLight, sampler.HeldDarkText);
+                    Assert.Single(messages);
+                    controller.Close();
+                }
+                PumpMessages(TimeSpan.FromMilliseconds(260));
+                Assert.Null(sampler.HeldDarkText);
+                if (holdsPalette)
+                {
+                    Assert.Equal(2, messages.Count);
+                    Assert.Contains("\"resumeSampling\":true", messages[1]);
+                }
+                else Assert.Empty(messages);
+            }
+            finally { controller.Enabled = false; owner.Close(); }
+        });
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public void PersistentBackgroundRejectsMouseActivationWhileLockedOrPlaybackDisabled(bool locked)
     {
         RunSta(() =>

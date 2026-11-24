@@ -15,6 +15,7 @@ internal sealed class FloatingLyricsPanelController : IDisposable
         internal Func<DisplayMonitor?> Display { get; } = display;
         internal Func<bool> ContentVisible { get; } = contentVisible;
         internal LyricsRegionVisibilityController? RegionVisibility;
+        internal LyricBackgroundSampler? BackgroundSampler;
         internal bool SurfaceVisible => RegionVisibility?.IsSurfaceVisible ?? ContentVisible();
         internal Action<bool, bool> Surface { get; } = surface;
         internal Action Drag { get; } = drag;
@@ -110,6 +111,7 @@ internal sealed class FloatingLyricsPanelController : IDisposable
             _showBackground = value;
             foreach (var target in _targets)
             {
+                if (value) target.BackgroundSampler?.ResumeAfterPanel();
                 target.LyricsBounds = Rect.Empty;
                 if (_enabled) Prepare(target, keepOpen: true);
             }
@@ -196,14 +198,27 @@ internal sealed class FloatingLyricsPanelController : IDisposable
         _brightness = brightness;
         _tintOpacity = opacity;
         _blurAmount = blurAmount;
-        foreach (var target in _targets) target.Material?.Configure(light, brightness, opacity, blurAmount);
+        foreach (var target in _targets) ApplyPalette(target);
     }
+
+    private bool GetLightPalette(Target target) => target.BackgroundSampler?.HeldDarkText ?? _light;
+
+    private void ApplyPalette(Target target)
+    {
+        var light = GetLightPalette(target);
+        target.Panel?.SetPalette(light);
+        target.Material?.Configure(light, _brightness, _tintOpacity, _blurAmount);
+    }
+
     internal void Register(Window window, Func<DisplayMonitor?> display, Func<bool> contentVisible, Action<bool, bool> surface,
         Action? drag = null, Func<Rect>? coverBounds = null, Action<bool, bool>? lockChanged = null,
-        LyricsRegionVisibilityController? regionVisibility = null)
+        LyricsRegionVisibilityController? regionVisibility = null, LyricBackgroundSampler? backgroundSampler = null)
     {
         _targets.Add(new(window, display, contentVisible, surface, drag ?? (() => NativeWindowInteraction.BeginDrag(window)))
-        { CoverBounds = coverBounds, LockChanged = lockChanged, RegionVisibility = regionVisibility });
+        {
+            CoverBounds = coverBounds, LockChanged = lockChanged, RegionVisibility = regionVisibility,
+            BackgroundSampler = backgroundSampler
+        });
         if (regionVisibility is not null) regionVisibility.SurfaceChanged += RegionSurfaceChanged;
         window.Closed += TargetClosed;
         window.LocationChanged += TargetMoved;
@@ -381,7 +396,7 @@ internal sealed class FloatingLyricsPanelController : IDisposable
                     if (target.Panel is { IsClosed: false }) target.Panel.Topmost = target.Window.Topmost;
                     target.MaterialBounds = Rect.Empty;
                     UpdateMaterial(target);
-                    target.ResizeGrip?.Position(target.CardBounds, scale, _active == target, _light);
+                    target.ResizeGrip?.Position(target.CardBounds, scale, _active == target, GetLightPalette(target));
                     target.Topmost = target.Window.Topmost;
                 }
                 return EnsureWindowOrder(target) && target.CanExpand && target.ContentVisible();
@@ -420,7 +435,7 @@ internal sealed class FloatingLyricsPanelController : IDisposable
             target.Scale = scale;
             target.HighContrast = SystemParameters.HighContrast;
             target.Topmost = target.Window.Topmost;
-            target.Material.Configure(_light, _brightness, _tintOpacity, _blurAmount);
+            ApplyPalette(target);
             target.MaterialBounds = Rect.Empty;
             UpdateMaterial(target);
             if (!target.Material.EnsureBelow(new WindowInteropHelper(target.Window).Handle))
@@ -432,7 +447,7 @@ internal sealed class FloatingLyricsPanelController : IDisposable
                 target.ResizeGrip.AdjustmentMoved += position => MoveSizeAdjustment(target, position);
                 target.ResizeGrip.AdjustmentCompleted += canceled => FinishSizeAdjustment(target, canceled);
             }
-            target.ResizeGrip?.Position(target.CardBounds, scale, remainVisible, _light);
+            target.ResizeGrip?.Position(target.CardBounds, scale, remainVisible, GetLightPalette(target));
             if (!EnsureWindowOrder(target)) { Release(target); return false; }
             if (remainVisible && directionChanged) target.Surface(true, target.Above);
             return target.CanExpand && target.ContentVisible();
@@ -544,9 +559,11 @@ internal sealed class FloatingLyricsPanelController : IDisposable
         _active = target;
         target.Closing = false;
         _suppressed = false;
+        if (!ShowBackground) target.BackgroundSampler?.HoldForPanel();
+        ApplyPalette(target);
         UpdateMaterial(target, immediate: false);
         target.Panel!.SetPanelVisible(true);
-        target.ResizeGrip?.Position(target.CardBounds, target.Scale, true, _light);
+        target.ResizeGrip?.Position(target.CardBounds, target.Scale, true, GetLightPalette(target));
         target.Surface(true, target.Above);
         if (focus) target.Panel.FocusControls();
     }
@@ -582,6 +599,7 @@ internal sealed class FloatingLyricsPanelController : IDisposable
             target.Closing = !immediate;
             UpdateMaterial(target, immediate);
             target.Panel?.SetPanelVisible(false, immediate, () => FinishClosing(target));
+            if (immediate) target.BackgroundSampler?.ResumeAfterPanel();
         }
         if (immediate)
         {
@@ -605,6 +623,7 @@ internal sealed class FloatingLyricsPanelController : IDisposable
         target.Closing = false;
         target.Panel?.SetPanelVisible(false, immediate: true);
         UpdateMaterial(target, immediate: true);
+        target.BackgroundSampler?.ResumeAfterPanel();
     }
     private void Release(Target target)
     {
@@ -613,6 +632,7 @@ internal sealed class FloatingLyricsPanelController : IDisposable
         target.Closing = false;
         target.Panel?.SetPanelVisible(false, immediate: true);
         target.Material?.Dispose(); target.Material = null;
+        target.BackgroundSampler?.ResumeAfterPanel();
         if (target.Panel is not null) target.Panel.DragRequested -= PanelDragRequested;
         target.Panel?.Close(); target.Panel = null;
         target.ResizeGrip?.Close(); target.ResizeGrip = null;

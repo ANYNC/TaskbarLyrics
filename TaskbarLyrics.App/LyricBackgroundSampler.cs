@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Windows;
+using TaskbarLyrics.Core.Utilities;
 using Drawing = System.Drawing;
 using Point = System.Windows.Point;
 
@@ -9,7 +10,7 @@ internal readonly record struct LyricBackgroundText(Rect Bounds, double Opacity)
 internal sealed record LyricBackgroundRequest(
     Rect Region, IReadOnlyList<LyricBackgroundText> Text, IReadOnlyList<Rect> InkBounds, bool IsSpectrum);
 
-internal sealed class LyricBackgroundSampler
+internal sealed class LyricBackgroundSampler(Func<string, Task?> publish)
 {
     private const int InlineBands = 24;
     private const int CrossSamples = 20;
@@ -22,10 +23,13 @@ internal sealed class LyricBackgroundSampler
     private bool _enabled;
     private bool _sampling;
 
+    internal bool? HeldDarkText { get; private set; }
+
     public void Configure(bool enabled)
     {
         if (_enabled == enabled) return;
         _enabled = enabled;
+        if (!enabled) ResumeAfterPanel();
         Reset();
     }
 
@@ -37,14 +41,40 @@ internal sealed class LyricBackgroundSampler
         _lastSampleTime = 0;
     }
 
+    internal void HoldForPanel()
+    {
+        if (!_enabled || HeldDarkText.HasValue || SystemParameters.HighContrast) return;
+        HeldDarkText = _policy.CurrentDarkText ?? App.IsSystemUiUsingLightTheme();
+        // A capture started before the panel appeared may complete after it has closed.
+        _generation++;
+        _policy.CancelConfirmation();
+        _published = null;
+        ReplayPanelHold();
+    }
+
+    internal void ReplayPanelHold()
+    {
+        if (HeldDarkText is { } darkText)
+            TaskObserver.Observe(publish(LyricsStyleScriptFactory.SetAdaptiveForeground(
+                darkText, confirming: false, samplingPaused: true)), "hold adaptive lyric color");
+    }
+
+    internal void ResumeAfterPanel()
+    {
+        if (!HeldDarkText.HasValue) return;
+        HeldDarkText = null;
+        _lastSampleTime = 0;
+        TaskObserver.Observe(publish(LyricsStyleScriptFactory.RequestLyricBackgroundSample(resumeSampling: true)),
+            "resume adaptive lyric color");
+    }
+
     public async Task SampleAsync(
         FrameworkElement webView,
         LyricBackgroundRequest request,
-        Func<bool> canSample,
-        Func<string, Task?> publish)
+        Func<bool> canSample)
     {
         var now = Environment.TickCount64;
-        if (!_enabled || _sampling || now - _lastSampleTime < MinimumSampleInterval ||
+        if (!_enabled || HeldDarkText.HasValue || _sampling || now - _lastSampleTime < MinimumSampleInterval ||
             !canSample() || !TryGetScreenBounds(webView, out var host))
         {
             return;

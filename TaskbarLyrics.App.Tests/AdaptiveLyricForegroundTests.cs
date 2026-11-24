@@ -55,15 +55,13 @@ public sealed class AdaptiveLyricForegroundTests
     [Fact]
     public async Task DisabledSamplerDoesNotRequestScreenGeometryOrPublishColors()
     {
-        var sampler = new LyricBackgroundSampler();
+        var sampler = new LyricBackgroundSampler(_ => throw new InvalidOperationException());
         var request = new LyricBackgroundRequest(Rect.Empty, [], [], false);
-        await sampler.SampleAsync(null!, request, () => throw new InvalidOperationException(),
-            _ => throw new InvalidOperationException());
+        await sampler.SampleAsync(null!, request, () => throw new InvalidOperationException());
 
         sampler.Configure(true);
         sampler.Configure(false);
-        await sampler.SampleAsync(null!, request, () => throw new InvalidOperationException(),
-            _ => throw new InvalidOperationException());
+        await sampler.SampleAsync(null!, request, () => throw new InvalidOperationException());
     }
 
     [Fact]

@@ -20,7 +20,7 @@ public partial class MainWindow
         _floatingControls = new FloatingLyricsPanelController(Dispatcher, CreateFloatingControls);
         _floatingControls.Register(this, () => PlacementDisplay, () => _isLyricsContentVisible && _isWebDocumentReady && _regionVisibility.IsInteractive,
             SetFloatingControlSurface, DragFloatingWindow,
-            () => NativeWindowInteraction.GetScreenBounds(CoverHitSurface), SetFloatingLockState, _regionVisibility);
+            () => NativeWindowInteraction.GetScreenBounds(CoverHitSurface), SetFloatingLockState, _regionVisibility, _backgroundSampler);
         _floatingControls.RegisterSizeAdjustment(this, () => FloatingWindowSize.FromSettings(_currentSettings),
             (size, anchor) => FloatingSizePreviewRequested?.Invoke(size, this, anchor), size =>
             {
@@ -32,8 +32,8 @@ public partial class MainWindow
     internal void RegisterFloatingLyricsHost(LyricsMirrorWindow mirror)
     {
         _floatingControls?.Register(mirror, () => mirror.DisplayMonitor, () => mirror.IsContentVisible,
-            (open, above) => mirror.SetFloatingControlSurface(open, above, FloatingControlsLight), mirror.DragFloatingWindow,
-            mirror.GetCoverBounds, mirror.SetFloatingLockState, mirror.RegionVisibility);
+            (open, above) => mirror.SetFloatingControlSurface(open, mirror.BackgroundSampler.HeldDarkText ?? FloatingControlsLight),
+            mirror.DragFloatingWindow, mirror.GetCoverBounds, mirror.SetFloatingLockState, mirror.RegionVisibility, mirror.BackgroundSampler);
         _floatingControls?.RegisterSizeAdjustment(mirror, mirror.GetFloatingSize,
             (size, anchor) => FloatingSizePreviewRequested?.Invoke(size, mirror, anchor), size =>
             {
@@ -85,8 +85,7 @@ public partial class MainWindow
     private void UpdateFloatingControls(FloatingLyricsControlWindow? panel)
     {
         panel?.Update(_currentTrack, _isCurrentPlaybackPlaying, _currentPlaybackPosition, _canSeek,
-            _currentTrack is null ? default : PlayerSourceBadgeResolver.Resolve(_currentTrack.SourceApp, _currentSettings),
-            FloatingControlsLight);
+            _currentTrack is null ? default : PlayerSourceBadgeResolver.Resolve(_currentTrack.SourceApp, _currentSettings));
     }
 
     private void SetFloatingControlSurface(bool open, bool above)
@@ -96,7 +95,8 @@ public partial class MainWindow
             ? new SolidColorBrush(Color.FromArgb(1, 0, 0, 0)) : Brushes.Transparent;
         RootBorder.CornerRadius = new CornerRadius(8);
         if (_isWebDocumentReady) TaskObserver.Observe(ExecuteWebScriptAsync(
-            LyricsWebViewScriptFactory.SetFloatingControlSurface(open, FloatingControlsLight)), "floating lyric surface");
+            LyricsWebViewScriptFactory.SetFloatingControlSurface(open, _backgroundSampler.HeldDarkText ?? FloatingControlsLight)),
+            "floating lyric surface");
         SetPrimaryControlPanelOpen(open);
     }
 }

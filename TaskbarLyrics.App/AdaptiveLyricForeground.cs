@@ -27,6 +27,9 @@ internal sealed class AdaptiveLyricForeground
     private long? _lastReading;
 
     public bool IsConfirmingChange => _pendingDarkText.HasValue;
+    public bool? CurrentDarkText => _currentDarkText;
+
+    public void CancelConfirmation() => _pendingDarkText = null;
 
     public bool Observe(LyricBackgroundContrast? background, long now, bool fallbackDarkText)
     {

@@ -821,7 +821,7 @@ public sealed partial class FloatingPanelInputTests
     private static void UpdateSeekPanel(FloatingLyricsControlWindow panel, double seconds,
         bool canSeek = true, string trackId = "seek-test") => panel.Update(
         new TaskbarLyrics.Core.Models.TrackInfo(trackId, trackId, "Artist", "", "test", TimeSpan.FromSeconds(200)),
-        true, TimeSpan.FromSeconds(seconds), canSeek, new PlayerSourceBadge("test", "", false), false);
+        true, TimeSpan.FromSeconds(seconds), canSeek, new PlayerSourceBadge("test", "", false));
 
     private static void RaiseSeekKey(FloatingLyricsControlWindow panel, UIElement slider, Key key, RoutedEvent routedEvent) =>
         slider.RaiseEvent(new KeyEventArgs(Keyboard.PrimaryDevice, PresentationSource.FromVisual(panel)!, 0, key)
@@ -849,7 +849,7 @@ public sealed partial class FloatingPanelInputTests
                 panel.Prepare(owner, new FloatingLyricsPanelPlacement(
                     new Rect(lyrics.Left, lyrics.Bottom, lyrics.Width, 96 * scale), false), scale);
                 panel.Update(new TaskbarLyrics.Core.Models.TrackInfo("test", "Title", "Artist", "", "test", TimeSpan.FromMinutes(3)),
-                    true, TimeSpan.Zero, true, new PlayerSourceBadge("test", "", false), false);
+                    true, TimeSpan.Zero, true, new PlayerSourceBadge("test", "", false));
                 Assert.Null(((System.Windows.Controls.TextBlock)panel.FindName("TitleText")).ToolTip);
                 Assert.Null(((System.Windows.Controls.TextBlock)panel.FindName("ArtistText")).ToolTip);
                 panel.SetPanelVisible(true, immediate: true);

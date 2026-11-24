@@ -39,7 +39,7 @@ public partial class MainWindow : Window, IDisposable
     private readonly SmartTopmostController _smartTopmostController;
     private LocalMediaCoverProvider? _localMediaCoverProvider;
     private Media.Color _primaryTextColor = Media.Colors.White;
-    private readonly LyricBackgroundSampler _backgroundSampler = new();
+    private readonly LyricBackgroundSampler _backgroundSampler;
     private Media.Color _secondaryTextColor = ForegroundColorPolicy.CreateSecondaryColor(Media.Colors.White);
     private Media.Color _translationTextColor = ForegroundColorPolicy.CreateTranslationColor(Media.Colors.White);
     private LyricSyncService _lyricSyncService;
@@ -120,6 +120,7 @@ public partial class MainWindow : Window, IDisposable
         Action openSettings, Action toggleTranslation)
     {
         InitializeComponent();
+        _backgroundSampler = new(ExecuteWebScriptAsync);
         _displayDiagnostics = new LyricsDisplayDiagnostics(this);
         _embeddedTaskbarAnchor.AttachmentLost += OnEmbeddedAttachmentLost;
         _regionVisibility = new LyricsRegionVisibilityController(Dispatcher,
@@ -1551,6 +1552,7 @@ public partial class MainWindow : Window, IDisposable
             RefreshLyricsWebViewLayout();
             _regionVisibility.OnDocumentReady();
             ReplayPresentationState();
+            _backgroundSampler.ReplayPanelHold();
             RecordDisplayDiagnostics("DocumentReady", capture: true);
         }), DispatcherPriority.Loaded);
     }
@@ -1669,8 +1671,7 @@ public partial class MainWindow : Window, IDisposable
                     TaskObserver.Observe(_backgroundSampler.SampleAsync(webView, sample,
                         () => _isLyricsContentVisible && _regionVisibility.IsInteractive &&
                             _isWebDocumentReady && !_isShowingWebErrorPage && !_floatingPlacement.IsDragging &&
-                            !SystemParameters.HighContrast,
-                        ExecuteWebScriptAsync), "adaptive lyric color");
+                            !SystemParameters.HighContrast), "adaptive lyric color");
                 return;
             }
             if (LyricsWebMessageRouter.TryGetRegionVisibilityCompleted(message, out var regionGeneration, out var regionVisible))

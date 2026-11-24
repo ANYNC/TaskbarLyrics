@@ -95,7 +95,7 @@ internal partial class FloatingLyricsControlWindow : Window
     }
 
     internal void Update(TrackInfo? track, bool playing, TimeSpan position, bool canSeek,
-        PlayerSourceBadge source, bool light)
+        PlayerSourceBadge source)
     {
         if (IsClosed) return;
         var identity = track is null ? string.Empty : LyricSyncService.BuildStableTrackIdentity(track);
@@ -122,7 +122,6 @@ internal partial class FloatingLyricsControlWindow : Window
             PauseGlyph.Visibility = playing ? Visibility.Visible : Visibility.Collapsed;
             AutomationProperties.SetName(PlayButton, playing ? Text.T("UI_Pause") : Text.T("UI_Play"));
         }
-        SetPalette(light);
         if (!_seeking && CanApplyTimeline(position)) SeekSlider.Value = _duration > TimeSpan.Zero
             ? Math.Clamp(position.TotalMilliseconds / _duration.TotalMilliseconds * 1000, 0, 1000) : 0;
         PaintTime();
@@ -130,9 +129,9 @@ internal partial class FloatingLyricsControlWindow : Window
 
     private bool? _light;
     private bool _highContrast;
-    private void SetPalette(bool light)
+    internal void SetPalette(bool light)
     {
-        if (_light == light && _highContrast == SystemParameters.HighContrast) return;
+        if (IsClosed || _light == light && _highContrast == SystemParameters.HighContrast) return;
         _light = light;
         _highContrast = SystemParameters.HighContrast;
         Resources["PanelForeground"] = _highContrast ? SystemColors.WindowTextBrush : new SolidColorBrush(light ? Color.FromRgb(28, 29, 32) : Color.FromRgb(246, 247, 248));

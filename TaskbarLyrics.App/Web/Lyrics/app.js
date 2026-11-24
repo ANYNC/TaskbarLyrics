@@ -29,6 +29,7 @@ const lyricBackgroundIdleInterval = 900;
 const lyricBackgroundConfirmationInterval = 180;
 let adaptiveForegroundEnabled = false;
 let confirmingLyricBackground = false;
+let lyricBackgroundPaused = false;
 let adaptiveForegroundTimer = 0;
 let receivedAdaptiveForeground = false;
 let backgroundTextMetrics = null;
@@ -655,6 +656,7 @@ function configureLyricForeground(payload) {
   if (adaptive !== adaptiveForegroundEnabled) {
     adaptiveForegroundEnabled = adaptive;
     confirmingLyricBackground = false;
+    lyricBackgroundPaused = false;
     receivedAdaptiveForeground = false;
     updateLyricBackgroundTimer(0);
   }
@@ -662,7 +664,7 @@ function configureLyricForeground(payload) {
 }
 
 function canSampleLyricBackground() {
-  return adaptiveForegroundEnabled && !document.hidden && regionPhase === "visible" &&
+  return adaptiveForegroundEnabled && !lyricBackgroundPaused && !document.hidden && regionPhase === "visible" &&
     !window.matchMedia?.("(forced-colors: active)").matches;
 }
 
@@ -2942,17 +2944,21 @@ window.taskbarLyrics = {
         break;
       case "adaptiveForeground":
         if (adaptiveForegroundEnabled && payload &&
+            (!lyricBackgroundPaused || payload.samplingPaused === true) &&
             lyricForegroundColors.every(([key]) => typeof payload[key] === "string" && CSS.supports("color", payload[key]))) {
           receivedAdaptiveForeground = true;
           applyLyricForeground(payload);
           const confirming = payload.confirming === true;
-          if (confirming !== confirmingLyricBackground) {
+          const paused = payload.samplingPaused === true;
+          if (confirming !== confirmingLyricBackground || paused !== lyricBackgroundPaused) {
             confirmingLyricBackground = confirming;
+            lyricBackgroundPaused = paused;
             updateLyricBackgroundTimer();
           }
         }
         break;
       case "resampleLyricBackground":
+        if (payload?.resumeSampling === true) lyricBackgroundPaused = false;
         updateLyricBackgroundTimer(lyricBackgroundConfirmationInterval);
         break;
       case "regionVisibility":

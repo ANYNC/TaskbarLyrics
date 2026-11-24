@@ -88,11 +88,23 @@ describe("lyrics WebView bridge", () => {
       expect(document.documentElement.style.getPropertyValue("--primary")).toBe("#111827");
       expect(document.documentElement.style.getPropertyValue("--font-family")).toBe("Segoe UI");
       expect(document.documentElement.style.getPropertyValue("--adaptive-lyric-outline")).toBe("");
+      receive("adaptiveForeground", { ...palette, primaryColor: "#ffffff", samplingPaused: true });
+      receive("adaptiveForeground", palette);
+      receive("resampleLyricBackground", {});
+      receive("floatingControlSurface", { open: false });
+      vi.advanceTimersByTime(2000);
+      expect(countSamples()).toBe(5);
+      expect(document.documentElement.style.getPropertyValue("--primary")).toBe("#ffffff");
+      receive("resampleLyricBackground", { resumeSampling: true });
+      vi.advanceTimersByTime(180);
+      expect(countSamples()).toBe(6);
+      receive("adaptiveForeground", palette);
+      expect(document.documentElement.style.getPropertyValue("--primary")).toBe("#111827");
       receive("style", { adaptiveForeground: false, primaryColor: "#345678" });
       receive("adaptiveForeground", { ...palette, confirming: true });
       receive("resampleLyricBackground", {});
       vi.advanceTimersByTime(2000);
-      expect(countSamples()).toBe(5);
+      expect(countSamples()).toBe(6);
       expect(document.documentElement.style.getPropertyValue("--primary")).toBe("#345678");
       expect(document.documentElement.style.getPropertyValue("--adaptive-lyric-outline")).toBe("");
     } finally {

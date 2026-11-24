@@ -75,7 +75,7 @@ internal static class LyricsStyleScriptFactory
         return WebViewMessageScriptFactory.Dispatch("taskbarLyrics", "style", stylePayload);
     }
 
-    public static string SetAdaptiveForeground(bool useDarkText, bool confirming)
+    public static string SetAdaptiveForeground(bool useDarkText, bool confirming, bool samplingPaused = false)
     {
         var colors = CreateColors(ForegroundColorPolicy.GetPresetColor(useDarkText));
         return WebViewMessageScriptFactory.Dispatch("taskbarLyrics", "adaptiveForeground", new
@@ -84,12 +84,13 @@ internal static class LyricsStyleScriptFactory
             colors.secondaryColor,
             colors.translationColor,
             colors.wordScanOverlayColor,
-            confirming
+            confirming,
+            samplingPaused
         });
     }
 
-    public static string RequestLyricBackgroundSample() =>
-        WebViewMessageScriptFactory.Dispatch("taskbarLyrics", "resampleLyricBackground", new { });
+    public static string RequestLyricBackgroundSample(bool resumeSampling = false) =>
+        WebViewMessageScriptFactory.Dispatch("taskbarLyrics", "resampleLyricBackground", new { resumeSampling });
 
     private static (string primaryColor, string secondaryColor, string translationColor, string wordScanOverlayColor)
         CreateColors(string color)
