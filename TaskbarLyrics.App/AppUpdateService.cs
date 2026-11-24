@@ -80,11 +80,12 @@ internal sealed class AppUpdateService : IDisposable
             await using (var input = File.OpenRead(part)) await UpdatePackage.VerifyDigestAsync(input, asset.Digest!, token);
             var version = candidate.Version.TrimStart('v', 'V');
             var verified = Path.Combine(_directory, "verified");
-            await Task.Run(() =>
+            await Task.Run(async () =>
             {
-                UpdatePackage.Extract(part, version, verified, token);
+                await UpdatePackage.ExtractAsync(part, version, verified, token).ConfigureAwait(false);
                 UpdatePackage.ValidateExecutable(Path.Combine(verified, UpdatePackage.EntryPoint), version);
             }, token);
+            token.ThrowIfCancellationRequested();
             File.Move(part, Path.Combine(_directory, "package.zip"));
             _candidate = candidate;
             Publish(new("readyToRestart"));

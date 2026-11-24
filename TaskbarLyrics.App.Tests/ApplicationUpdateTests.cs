@@ -63,7 +63,7 @@ public sealed class ApplicationUpdateTests
         Assert.False(UpdatePackage.IsDigest("sha256:abc"));
     }
     [Fact]
-    public void ExtractChecksVersionRootRequiredFilesAndConflictingPaths()
+    public async Task ExtractChecksVersionRootRequiredFilesAndConflictingPaths()
     {
         using var fixture = new Fixture();
         var stage = Path.Combine(fixture.Directory, "stage");
@@ -74,22 +74,22 @@ public sealed class ApplicationUpdateTests
         var zip = Path.Combine(fixture.Directory, "package.zip");
         ZipFile.CreateFromDirectory(wrapper, zip);
         var extracted = Path.Combine(fixture.Directory, "extracted");
-        var files = UpdatePackage.Extract(zip, "1.0.1", extracted);
+        var files = await UpdatePackage.ExtractAsync(zip, "1.0.1", extracted);
         Assert.Contains("TaskbarLyrics.exe", files);
         Assert.Contains("Web/Settings/settings.html", files);
         Assert.True(File.Exists(Path.Combine(extracted, "Web/Settings/settings.html")));
-        Assert.Throws<InvalidDataException>(() => UpdatePackage.Extract(zip, "1.0.2", Path.Combine(fixture.Directory, "wrong")));
+        await Assert.ThrowsAsync<InvalidDataException>(() => UpdatePackage.ExtractAsync(zip, "1.0.2", Path.Combine(fixture.Directory, "wrong")));
         // Any file in an existing ZIP is installed as-is; no extra manifest or file list is required.
         using (var archive = ZipFile.Open(zip, ZipArchiveMode.Update))
         using (var writer = new StreamWriter(archive.CreateEntry("TaskbarLyrics-1.0.1/extra.txt").Open())) writer.Write("unmanaged");
-        Assert.Contains("extra.txt", UpdatePackage.Extract(zip, "1.0.1", Path.Combine(fixture.Directory, "extra")));
+        Assert.Contains("extra.txt", await UpdatePackage.ExtractAsync(zip, "1.0.1", Path.Combine(fixture.Directory, "extra")));
         // A path that is both a file and a directory cannot be installed.
         using (var archive = ZipFile.Open(zip, ZipArchiveMode.Update))
         using (var writer = new StreamWriter(archive.CreateEntry("TaskbarLyrics-1.0.1/TaskbarLyrics.exe/nested.txt").Open())) writer.Write("conflict");
-        Assert.Throws<InvalidDataException>(() => UpdatePackage.Extract(zip, "1.0.1", Path.Combine(fixture.Directory, "conflict")));
+        await Assert.ThrowsAsync<InvalidDataException>(() => UpdatePackage.ExtractAsync(zip, "1.0.1", Path.Combine(fixture.Directory, "conflict")));
     }
     [Fact]
-    public void ExtractRequiresEntryPointAndSettingsPage()
+    public async Task ExtractRequiresEntryPointAndSettingsPage()
     {
         using var fixture = new Fixture();
         var source = Path.Combine(fixture.Directory, "partial");
@@ -98,7 +98,24 @@ public sealed class ApplicationUpdateTests
         File.WriteAllText(Path.Combine(root, "TaskbarLyrics.exe"), "exe");
         var zip = Path.Combine(fixture.Directory, "partial.zip");
         ZipFile.CreateFromDirectory(source, zip);
-        Assert.Throws<InvalidDataException>(() => UpdatePackage.Extract(zip, "1.0.1", Path.Combine(fixture.Directory, "partial-output")));
+        await Assert.ThrowsAsync<InvalidDataException>(() => UpdatePackage.ExtractAsync(zip, "1.0.1", Path.Combine(fixture.Directory, "partial-output")));
+    }
+
+    [Fact]
+    public async Task PreCanceledExtractionLeavesNoFilesAndAllowsRetry()
+    {
+        using var fixture = new Fixture();
+        var source = Path.Combine(fixture.Directory, "source");
+        Fixture.WriteVersion(Path.Combine(source, "TaskbarLyrics-1.0.1"), "new");
+        var zip = Path.Combine(fixture.Directory, "canceled.zip");
+        ZipFile.CreateFromDirectory(source, zip);
+        var output = Path.Combine(fixture.Directory, "output");
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            UpdatePackage.ExtractAsync(zip, "1.0.1", output, new CancellationToken(canceled: true)));
+
+        Assert.False(Directory.Exists(output));
+        Assert.Contains(UpdatePackage.EntryPoint, await UpdatePackage.ExtractAsync(zip, "1.0.1", output));
     }
     [Fact]
     public void TransactionCacheIsOutsideAndScopedToTheInstallationDirectory()
@@ -113,7 +130,7 @@ public sealed class ApplicationUpdateTests
         Assert.False(firstCache.StartsWith(Path.GetFullPath(first), StringComparison.OrdinalIgnoreCase));
     }
     [Fact]
-    public void WindowsPowerShellArchiveSeparatorsAreNormalizedBeforeValidation()
+    public async Task WindowsPowerShellArchiveSeparatorsAreNormalizedBeforeValidation()
     {
         using var fixture = new Fixture();
         var source = Path.Combine(fixture.Directory, "source");
@@ -125,11 +142,11 @@ public sealed class ApplicationUpdateTests
                 archive.CreateEntryFromFile(file, "TaskbarLyrics-1.0.1\\" + Path.GetRelativePath(source, file).Replace('/', '\\'));
         }
         var output = Path.Combine(fixture.Directory, "output");
-        Assert.Contains("TaskbarLyrics.exe", UpdatePackage.Extract(zip, "1.0.1", output));
+        Assert.Contains("TaskbarLyrics.exe", await UpdatePackage.ExtractAsync(zip, "1.0.1", output));
         Assert.True(File.Exists(Path.Combine(output, "Web/Settings/settings.html")));
         using (var archive = ZipFile.Open(zip, ZipArchiveMode.Update))
             archive.CreateEntry("TaskbarLyrics-1.0.1\\..\\escape.txt");
-        Assert.Throws<InvalidDataException>(() => UpdatePackage.Extract(zip, "1.0.1", Path.Combine(fixture.Directory, "escape")));
+        await Assert.ThrowsAsync<InvalidDataException>(() => UpdatePackage.ExtractAsync(zip, "1.0.1", Path.Combine(fixture.Directory, "escape")));
     }
     [Theory]
     [InlineData("backup:TaskbarLyrics.exe")]

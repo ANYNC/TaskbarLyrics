@@ -16,7 +16,7 @@ internal static class Program
             var temporary = Path.Combine(Path.GetTempPath(), "TaskbarLyrics-package-validation-" + Guid.NewGuid().ToString("N"));
             try
             {
-                UpdatePackage.Extract(args[1], args[2], temporary);
+                await UpdatePackage.ExtractAsync(args[1], args[2], temporary);
                 UpdatePackage.ValidateExecutable(Path.Combine(temporary, UpdatePackage.EntryPoint), args[2]);
                 return 0;
             }
@@ -74,7 +74,7 @@ internal static class Program
             transaction = UpdatePackage.Contained(transactionRoot, request.SessionId);
             Directory.CreateDirectory(transaction);
             var staging = Path.Combine(transaction, "staging");
-            var files = UpdatePackage.Extract(request.Package, request.Version, staging, timeout.Token);
+            var files = await UpdatePackage.ExtractAsync(request.Package, request.Version, staging, timeout.Token);
             using (var archive = System.IO.Compression.ZipFile.OpenRead(request.Package))
             {
                 var required = checked(UpdateTransaction.InstalledSize(root, files) + archive.Entries.Sum(entry => entry.Length) + 64L * 1024 * 1024);

@@ -83,10 +83,10 @@ public static class UpdatePackage
             throw new InvalidDataException("SHA-256 mismatch.");
     }
 
-    public static IReadOnlyList<string> Extract(string package, string version, string destination, CancellationToken token = default)
+    public static async Task<IReadOnlyList<string>> ExtractAsync(string package, string version, string destination, CancellationToken token = default)
     {
         if (!IsVersion(version)) throw new InvalidDataException("Invalid target version.");
-        using var archive = ZipFile.OpenRead(package);
+        using var archive = await ZipFile.OpenReadAsync(package, token).ConfigureAwait(false);
         var prefix = "TaskbarLyrics-" + version + "/";
         var files = new Dictionary<string, ZipArchiveEntry>(StringComparer.OrdinalIgnoreCase);
         var directories = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -121,8 +121,9 @@ public static class UpdatePackage
             token.ThrowIfCancellationRequested();
             var path = Contained(destination, relative);
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            entry.ExtractToFile(path, false);
+            await entry.ExtractToFileAsync(path, overwrite: false, cancellationToken: token).ConfigureAwait(false);
         }
+        token.ThrowIfCancellationRequested();
         return files.Keys.ToList();
     }
 
