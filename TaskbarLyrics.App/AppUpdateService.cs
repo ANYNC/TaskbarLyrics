@@ -165,7 +165,7 @@ internal sealed class AppUpdateService : IDisposable
                 latest.Version.TrimStart('v', 'V'), asset.Digest!, Environment.ProcessId, process.StartTime.ToUniversalTime().Ticks,
                 session, "upgrade", Text.T("Update_UpdaterFailed"), Text.T("Update_RecoveryInstructions"));
             var descriptor = Path.Combine(_directory, "request.json");
-            await File.WriteAllTextAsync(descriptor, JsonSerializer.Serialize(request, UpdatePackage.JsonOptions), _lifetime.Token);
+            await File.WriteAllTextAsync(descriptor, JsonSerializer.Serialize(request, UpdateJsonContext.Default.UpdateRequest), _lifetime.Token);
             var start = new ProcessStartInfo(updater) { UseShellExecute = false, CreateNoWindow = true, WorkingDirectory = _directory };
             start.ArgumentList.Add(descriptor);
             using var child = Process.Start(start) ?? throw new IOException("Updater did not start.");

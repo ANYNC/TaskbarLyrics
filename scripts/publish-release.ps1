@@ -38,7 +38,7 @@ New-Item -ItemType Directory -Path $stagingPackage -Force | Out-Null
 try {
     $updaterOutput = Join-Path $stagingRoot "updater"
     & dotnet publish (Join-Path $repoRoot "TaskbarLyrics.Updater\TaskbarLyrics.Updater.csproj") `
-        -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true `
+        -c Release -r win-x64 -p:PublishAot=true -p:TreatWarningsAsErrors=true `
         -p:DebugType=None -p:DebugSymbols=false "-p:Version=$Version" -o $updaterOutput
     if ($LASTEXITCODE -ne 0) { throw "Updater publish failed: $LASTEXITCODE" }
     $updaterPayload = Join-Path $updaterOutput "TaskbarLyrics.Updater.exe"

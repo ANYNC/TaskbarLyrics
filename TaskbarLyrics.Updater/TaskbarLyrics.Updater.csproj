@@ -4,5 +4,11 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
+    <!-- Use a serviced Native AOT toolchain when the SDK bundles an older .NET 10 patch. -->
+    <RuntimeFrameworkVersion Condition="'$(PublishAot)' == 'true'
+        And '$(RuntimeFrameworkVersion)' == ''
+        And '$(BundledNETCoreAppPackageVersion)' != ''
+        And $([MSBuild]::VersionLessThan('$(BundledNETCoreAppPackageVersion)', '10.0.15'))">10.0.15</RuntimeFrameworkVersion>
   </PropertyGroup>
 </Project>

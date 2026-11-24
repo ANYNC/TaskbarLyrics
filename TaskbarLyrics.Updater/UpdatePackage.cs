@@ -2,7 +2,6 @@ using System.Diagnostics;
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.Json;
 using System.Text.RegularExpressions;
 
 namespace TaskbarLyrics.Updates;
@@ -18,7 +17,6 @@ public static class UpdatePackage
     public const long MaximumExpandedSize = 2L * 1024 * 1024 * 1024;
     public const int MaximumFiles = 10000;
     public const int StartupConfirmationTimeoutSeconds = 120;
-    public static JsonSerializerOptions JsonOptions { get; } = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
     public static bool IsVersion(string? version) => version is { Length: <= 32 } && Regex.IsMatch(version, VersionPattern, RegexOptions.CultureInvariant);
     public static string GetTransactionRoot(string installationRoot)
     {

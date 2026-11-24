@@ -1,5 +1,6 @@
 using System.IO;
 using System.IO.Compression;
+using System.Text.Json;
 using TaskbarLyrics.Updates;
 using Xunit;
 
@@ -7,6 +8,21 @@ namespace TaskbarLyrics.App.Tests;
 
 public sealed class ApplicationUpdateTests
 {
+    private static readonly JsonSerializerOptions LegacyJsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+
+    [Fact]
+    public void UpdateRequestJsonInteroperatesWithLegacyUpdater()
+    {
+        var request = new UpdateRequest(1, @"C:\旧版本", @"C:\缓存\package.zip", "1.7.7", "sha256:" + new string('a', 64),
+            1234, 638000000000000000, "11111111111111111111111111111111", "upgrade", "更新失败", "恢复说明");
+
+        var legacyJson = JsonSerializer.Serialize(request, LegacyJsonOptions);
+        Assert.Equal(request, JsonSerializer.Deserialize(legacyJson, UpdateJsonContext.Default.UpdateRequest));
+
+        var currentJson = JsonSerializer.Serialize(request, UpdateJsonContext.Default.UpdateRequest);
+        Assert.Equal(request, JsonSerializer.Deserialize<UpdateRequest>(currentJson, LegacyJsonOptions));
+    }
+
     [Fact]
     public void MarkdownFallbackPreservesImagesAndEscapesTheirAttributes()
     {
@@ -240,11 +256,16 @@ public sealed class ApplicationUpdateTests
             BackedUp = files,
             Installed = files
         };
-        UpdateTransaction.Save(transaction, journal);
+        var journalPath = Path.Combine(transaction, "journal.json");
+        File.WriteAllText(journalPath, JsonSerializer.Serialize(journal, LegacyJsonOptions));
 
         UpdateTransaction.Recover(root, transaction);
 
         Assert.All(files, relative => Assert.Equal("original", File.ReadAllText(Path.Combine(root, relative))));
+        var recoveredJournal = JsonSerializer.Deserialize<UpdateTransaction.Journal>(File.ReadAllText(journalPath), LegacyJsonOptions);
+        Assert.NotNull(recoveredJournal);
+        Assert.Equal("Recovered", recoveredJournal.Phase);
+        Assert.Equal(sessionId, recoveredJournal.TransactionId);
     }
     [Fact]
     public void AssetSelectionRequiresANewerVersionAndOneVerifiableAsset()

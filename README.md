@@ -139,7 +139,7 @@ dotnet run --project TaskbarLyrics.App
 dotnet build TaskbarLyrics.sln
 ```
 
-生成独立发布包：
+生成独立发布包前，安装包含「使用 C++ 的桌面开发」工作负载的 Visual Studio 2022 或更新版，也可以使用对应版本的 Build Tools。发布脚本用该工具链构建 Native AOT 更新器。
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/publish-release.ps1

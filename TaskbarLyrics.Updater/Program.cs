@@ -48,7 +48,7 @@ internal static class Program
             }
             if (args.Length != 1 || new FileInfo(args[0]).Length > 16384) return 1;
             stage = "read request";
-            var request = JsonSerializer.Deserialize<UpdateRequest>(File.ReadAllText(args[0]), UpdatePackage.JsonOptions)
+            var request = JsonSerializer.Deserialize(File.ReadAllText(args[0]), UpdateJsonContext.Default.UpdateRequest)
                 ?? throw new InvalidDataException("Invalid request.");
             failureMessage = request.FailureMessage;
             if (request.ProtocolVersion != 1 || !Guid.TryParseExact(request.SessionId, "N", out _) ||

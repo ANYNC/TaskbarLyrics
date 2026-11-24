@@ -23,7 +23,7 @@ public static class UpdateTransaction
         var path = UpdatePackage.Contained(directory, "journal.json");
         using (var stream = new FileStream(path + ".tmp", FileMode.Create, FileAccess.Write, FileShare.None))
         {
-            JsonSerializer.Serialize(stream, journal, UpdatePackage.JsonOptions);
+            JsonSerializer.Serialize(stream, journal, UpdateJsonContext.Default.Journal);
             stream.Flush(true);
         }
         File.Move(path + ".tmp", path, true);
@@ -106,7 +106,7 @@ public static class UpdateTransaction
     {
         var path = UpdatePackage.Contained(transaction, "journal.json");
         if (new FileInfo(path).Length > 4 * 1024 * 1024) throw new InvalidDataException("Invalid transaction journal.");
-        var journal = JsonSerializer.Deserialize<Journal>(File.ReadAllText(path), UpdatePackage.JsonOptions)
+        var journal = JsonSerializer.Deserialize(File.ReadAllText(path), UpdateJsonContext.Default.Journal)
             ?? throw new InvalidDataException("Invalid transaction journal.");
         // Earlier versions could leave a same-version reinstall journal that still needs recovery.
         if (journal.SchemaVersion != 1 || journal.Product != "TaskbarLyrics" ||
@@ -144,7 +144,7 @@ public static class UpdateTransaction
     }
     public static void Commit(string transaction)
     {
-        var journal = JsonSerializer.Deserialize<Journal>(File.ReadAllText(UpdatePackage.Contained(transaction, "journal.json")), UpdatePackage.JsonOptions)
+        var journal = JsonSerializer.Deserialize(File.ReadAllText(UpdatePackage.Contained(transaction, "journal.json")), UpdateJsonContext.Default.Journal)
             ?? throw new InvalidDataException("Invalid transaction journal.");
         journal.Phase = "Committed";
         Save(transaction, journal);
