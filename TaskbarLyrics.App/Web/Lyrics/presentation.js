@@ -137,13 +137,16 @@
     const source = frame && typeof frame === "object" ? frame : {};
     const currentLineIndex = Number(source.currentLineIndex);
     const layout = normalizeLayout(source.layout, source);
+    const translationMode = layout === LAYOUTS.TRANSLATION_PAIR;
+    const currentTranslation = String(source.currentTranslation ?? "");
     const normalized = {
       scene: normalizeScene(source.scene, source),
       layout,
-      translationMode: layout === LAYOUTS.TRANSLATION_PAIR,
+      translationMode,
+      showsTranslation: translationMode && currentTranslation.trim().length > 0,
       current: String(source.current ?? ""),
       next: String(source.next ?? ""),
-      currentTranslation: String(source.currentTranslation ?? ""),
+      currentTranslation,
       nextTranslation: String(source.nextTranslation ?? ""),
       currentLineIndex: Number.isInteger(currentLineIndex) ? currentLineIndex : -1,
       progress: clamp01(source.progress),
@@ -266,7 +269,10 @@
       }
 
       if (target.scene === SCENES.LYRICS && current.scene === SCENES.LYRICS) {
-        const isTranslationPair = target.layout === LAYOUTS.TRANSLATION_PAIR;
+        // A preview can be promoted by one row. A translation leaves with its original.
+        const isTranslationPair = current.translationMode && target.translationMode
+          ? current.showsTranslation
+          : target.showsTranslation;
         return makePlan(
           isTranslationPair
             ? TRANSITIONS.TRANSLATION_PAIR_ROLL
@@ -280,7 +286,7 @@
 
       if (target.scene === SCENES.LYRICS &&
           (current.scene === SCENES.SEARCHING || current.scene === SCENES.NO_PLAYBACK)) {
-        const isTranslationPair = target.layout === LAYOUTS.TRANSLATION_PAIR;
+        const isTranslationPair = target.showsTranslation;
         return makePlan(
           isTranslationPair
             ? TRANSITIONS.TRANSLATION_PAIR_ROLL

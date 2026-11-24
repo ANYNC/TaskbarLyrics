@@ -66,7 +66,7 @@ let transitionUsesTranslationPair = false;
 let isPlaybackPlaying = false;
 let wordScanFreezeState = null;
 let wordScanResumeCatchUpState = null;
-let isTranslationMode = false;
+let secondaryIsTranslation = false;
 let secondaryOpacity = 0.72;
 let lastLineProgress = Number.NaN;
 let lastCurrentLineIndex = -1;
@@ -687,14 +687,6 @@ function updateLyricBackgroundTimer(delay = confirmingLyricBackground
 document.addEventListener("visibilitychange", () => updateLyricBackgroundTimer(0));
 window.matchMedia?.("(forced-colors: active)")?.addEventListener?.("change", () => updateLyricBackgroundTimer(0));
 
-function resolveTranslationDisplay(line) {
-  const text = (line ?? "").toString().trim();
-  return {
-    text: text.length > 0 ? text : "…",
-    isPlaceholder: text.length === 0
-  };
-}
-
 function setTrackOffset(rowCount) {
   const vertical = root.classList.contains("vertical-taskbar");
   const distance = (vertical ? 1 : -1) * linePitchPx * rowCount;
@@ -872,48 +864,49 @@ function updateTransitionWordScanProgress(progress, allowSmoothing = true) {
 }
 
 function setSecondaryLine(line) {
-  const translationDisplay = isTranslationMode
-    ? resolveTranslationDisplay(line)
-    : null;
-  const safe = translationDisplay?.text ?? toDisplayLine(line, " ");
-  nextLineEl.classList.toggle(
-    "translation-placeholder",
-    translationDisplay?.isPlaceholder === true);
+  const safe = toDisplayLine(line, " ");
   setLineText(nextLineEl, nextLineTextEl, nextLineScanTextEl, safe);
   displayedNext = safe;
 }
 
-function setIncomingLine(line) {
+function getFrameSecondaryLine(frame) {
+  return frame.showsTranslation ? frame.currentTranslation : frame.next;
+}
+
+function setFrameSecondaryLine(frame) {
+  setTranslationRowStyle(frame.showsTranslation);
+  setSecondaryLine(getFrameSecondaryLine(frame));
+}
+
+function setIncomingLine(line, isTranslation = false) {
+  incomingLineEl.classList.toggle("translation-line", isTranslation);
   setLineText(incomingLineEl, incomingLineTextEl, null, toDisplayLine(line, " "));
 }
 
-function setTranslationMode(enabled) {
-  isTranslationMode = Boolean(enabled);
-  layoutEl.classList.toggle("translation-mode", isTranslationMode);
-  if (isTranslationMode) {
+function setTranslationRowStyle(enabled) {
+  secondaryIsTranslation = enabled;
+  layoutEl.classList.toggle("translation-mode", enabled);
+  if (enabled) {
     setLineWordScanProgress(nextLineEl, null);
     nextLineEl.style.opacity = "";
-  } else {
-    clearIncomingTranslationPair();
   }
 }
 
-function setIncomingTranslationPair(original, translation, wordScanProgress) {
-  const translationDisplay = resolveTranslationDisplay(translation);
+function setIncomingTranslationPair(frame) {
+  incomingTranslationLineEl.classList.toggle("translation-line", frame.showsTranslation);
+  incomingTranslationLineEl.classList.toggle("next-line", !frame.showsTranslation);
+  incomingTranslationLineEl.style.opacity = frame.showsTranslation ? "" : getNextSecondaryOpacity(frame.progress).toFixed(3);
   setLineText(
     incomingTranslationOriginalLineEl,
     incomingTranslationOriginalTextEl,
     incomingTranslationOriginalScanTextEl,
-    toDisplayLine(original, SEARCHING_TEXT));
+    toDisplayLine(frame.current, SEARCHING_TEXT));
   setLineText(
     incomingTranslationLineEl,
     incomingTranslationTextEl,
     null,
-    translationDisplay.text);
-  incomingTranslationLineEl.classList.toggle(
-    "translation-placeholder",
-    translationDisplay.isPlaceholder);
-  setLineWordScanProgress(incomingTranslationOriginalLineEl, wordScanProgress, false);
+    toDisplayLine(getFrameSecondaryLine(frame), " "));
+  setLineWordScanProgress(incomingTranslationOriginalLineEl, frame.wordScanProgress, false);
 }
 
 function clearIncomingTranslationPair() {
@@ -923,18 +916,23 @@ function clearIncomingTranslationPair() {
   setLineWordScanProgress(incomingTranslationOriginalLineEl, null);
   setLineText(incomingTranslationOriginalLineEl, incomingTranslationOriginalTextEl, incomingTranslationOriginalScanTextEl, " ");
   setLineText(incomingTranslationLineEl, incomingTranslationTextEl, null, " ");
-  incomingTranslationLineEl.classList.remove("translation-placeholder");
+  incomingTranslationLineEl.classList.remove("next-line");
+  incomingTranslationLineEl.classList.add("translation-line");
+  incomingTranslationLineEl.style.opacity = "";
+}
+
+function getNextSecondaryOpacity(progress) {
+  const target = 0.58 + ((1 - clamp01(progress)) * 0.16);
+  return secondaryOpacity + (target - secondaryOpacity) * 0.28;
 }
 
 function updateSecondaryOpacity(progress) {
-  if (isTranslationMode) {
+  if (secondaryIsTranslation) {
     nextLineEl.style.opacity = "";
     return;
   }
 
-  const p = clamp01(progress);
-  const target = 0.58 + ((1 - p) * 0.16);
-  secondaryOpacity += (target - secondaryOpacity) * 0.28;
+  secondaryOpacity = getNextSecondaryOpacity(progress);
   nextLineEl.style.opacity = secondaryOpacity.toFixed(3);
 }
 
@@ -1692,22 +1690,12 @@ function executeReplaceTransition(_plan, parameters) {
   }
 }
 
-function executeRollTransition(_plan, parameters) {
+function executeRollTransition(plan, parameters) {
   if (parameters?.operation !== transitionOperations.LYRICS_FRAME) {
     unsupportedTransitionOperation("rollTransition", parameters?.operation);
   }
 
-  const frame = parameters.frame;
-  startTransition(
-    frame.current,
-    frame.next,
-    frame.progress,
-    frame.currentLineIndex,
-    frame.wordScanProgress,
-    frame.currentTranslation,
-    frame.nextTranslation,
-    frame.layout === presentationApi.LAYOUTS.TRANSLATION_PAIR,
-    frame);
+  startTransition(parameters.frame, plan.kind);
 }
 
 function executeLayerTransition(plan, parameters) {
@@ -1757,17 +1745,10 @@ function applyFrameWithoutTransition(
 
 function renderLyricsFrameContent(frame, allowWordScanSmoothing = true) {
   const normalized = presentationApi.normalizeFrame(frame);
-  const useTranslationPair = normalized.layout === presentationApi.LAYOUTS.TRANSLATION_PAIR;
-  const safeCurrent = toDisplayLine(normalized.current, SEARCHING_TEXT);
-  const visibleSecondary = useTranslationPair
-    ? toDisplayLine(normalized.currentTranslation, " ")
-    : toDisplayLine(normalized.next, " ");
-
-  setTranslationMode(useTranslationPair);
   setIncomingLine("");
-  setCurrentLine(safeCurrent);
+  setCurrentLine(normalized.current);
   setWordScanProgress(normalized.wordScanProgress, allowWordScanSmoothing);
-  setSecondaryLine(visibleSecondary);
+  setFrameSecondaryLine(normalized);
   updateSecondaryOpacity(normalized.progress);
   lastCurrentLineIndex = normalized.currentLineIndex >= 0
     ? normalized.currentLineIndex
@@ -1787,14 +1768,8 @@ function renderLyricsFrame(frame, allowWordScanSmoothing = true) {
 
 function applyProgressPatch(frame) {
   const normalized = presentationApi.normalizeFrame(frame);
-  const useTranslationPair = normalized.layout === presentationApi.LAYOUTS.TRANSLATION_PAIR;
-  const visibleSecondary = useTranslationPair
-    ? toDisplayLine(normalized.currentTranslation, " ")
-    : toDisplayLine(normalized.next, " ");
-
-  setTranslationMode(useTranslationPair);
   setWordScanProgress(normalized.wordScanProgress);
-  setSecondaryLine(visibleSecondary);
+  setFrameSecondaryLine(normalized);
   updateSecondaryOpacity(normalized.progress);
   lastCurrentLineIndex = normalized.currentLineIndex >= 0
     ? normalized.currentLineIndex
@@ -1863,6 +1838,7 @@ function cancelActiveTransition() {
   nextLineEl.style.fontSize = "";
   nextLineEl.style.removeProperty("transform");
   nextLineEl.style.removeProperty("--promotion-scale");
+  setIncomingLine("");
   incomingLineEl.style.opacity = secondaryOpacity.toFixed(3);
   clearIncomingTranslationPair();
   void trackEl.offsetHeight;
@@ -1881,7 +1857,7 @@ function resetForTrackSwitch(
   translationMode,
   targetFrame) {
   cancelActiveTransition();
-  setTranslationMode(false);
+  setTranslationRowStyle(false);
   lastTrackId = trackId;
   lastCurrentLineIndex = -1;
   lastLineProgress = 0;
@@ -1987,8 +1963,6 @@ function runTransitionOpacityAnimation(now) {
 
   currentLineEl.style.opacity = String(currentLineRestOpacity + ((leavingLineOpacity - currentLineRestOpacity) * fadeOutE));
   nextLineEl.style.opacity = String(transitionBaseNextOpacity + ((currentLineRestOpacity - transitionBaseNextOpacity) * fadeInE));
-  incomingLineEl.style.opacity = secondaryOpacity.toFixed(3);
-
   if (t < 1) {
     const generation = presentationCoordinator.activeGeneration;
     presentationCoordinator.requestFrame(generation, runTransitionOpacityAnimation);
@@ -2079,13 +2053,7 @@ function updateMetrics() {
   refreshLineHorizontalScroll(currentLineEl);
 }
 
-function finalizeTransition(
-  promotedCurrent,
-  upcomingNext,
-  progress,
-  promotedLineIndex = -1,
-  wordScanProgress = null,
-  targetFrame = null) {
+function finalizeTransition(targetFrame) {
   const incomingEndOpacity = Number.parseFloat(window.getComputedStyle(incomingLineEl).opacity || "0.72");
   trackSwitchSearchTransitionActive = false;
 
@@ -2095,9 +2063,9 @@ function finalizeTransition(
   currentLineEl.style.opacity = String(leavingLineOpacity);
   nextLineEl.style.opacity = String(currentLineRestOpacity);
   void trackEl.offsetHeight;
-  setCurrentLine(promotedCurrent);
-  setWordScanProgress(wordScanProgress, false);
-  setSecondaryLine(upcomingNext);
+  setCurrentLine(targetFrame.current);
+  setWordScanProgress(transitionWordScanProgress, false);
+  setFrameSecondaryLine(targetFrame);
   setLineWordScanProgress(nextLineEl, null);
   setIncomingLine("");
   trackEl.classList.remove("animating", "vertical-roll", "single-line-roll", "stable-promotion");
@@ -2113,24 +2081,20 @@ function finalizeTransition(
   // Reset inline opacity channels while transitions are disabled; otherwise a brief flash can appear.
   currentLineEl.style.opacity = "";
   nextLineEl.style.opacity = "";
-  secondaryOpacity = Number.isFinite(incomingEndOpacity) ? incomingEndOpacity : 0.72;
+  if (!targetFrame.showsTranslation) {
+    secondaryOpacity = Number.isFinite(incomingEndOpacity) ? incomingEndOpacity : 0.72;
+  }
   incomingLineEl.style.opacity = "";
   nextLineEl.style.fontSize = "";
   nextLineEl.style.removeProperty("transform");
   nextLineEl.style.removeProperty("--promotion-scale");
-  updateSecondaryOpacity(progress);
+  updateSecondaryOpacity(targetFrame.progress);
   void trackEl.offsetHeight;
   trackEl.classList.remove("no-anim");
-  presentationCoordinator.setCurrentFrame(targetFrame || createPresentationFrame({
-    current: promotedCurrent,
-    next: upcomingNext,
-    progress,
-    currentLineIndex: promotedLineIndex,
-    wordScanProgress
-  }));
-  lastLineProgress = clamp01(progress);
-  if (Number.isInteger(promotedLineIndex) && promotedLineIndex >= 0) {
-    lastCurrentLineIndex = promotedLineIndex;
+  presentationCoordinator.setCurrentFrame(targetFrame);
+  lastLineProgress = targetFrame.progress;
+  if (targetFrame.currentLineIndex >= 0) {
+    lastCurrentLineIndex = targetFrame.currentLineIndex;
   }
   if (metricsUpdatePending) {
     updateMetrics();
@@ -2142,60 +2106,31 @@ function finalizeTransition(
   }
 }
 
-function startTransition(
-  newCurrent,
-  newNext,
-  progress,
-  currentLineIndex = -1,
-  wordScanProgress = null,
-  currentTranslation = "",
-  nextTranslation = "",
-  translationMode = false,
-  targetFrame = null) {
-  const resolvedTargetFrame = targetFrame || createPresentationFrame({
-    current: newCurrent,
-    next: newNext,
-    progress,
-    currentLineIndex,
-    currentTranslation,
-    nextTranslation,
-    translationMode
-  });
+function startTransition(targetFrame, kind) {
   if (presentationCoordinator.isTransitioning) {
-    presentationCoordinator.queueLatest(resolvedTargetFrame);
+    presentationCoordinator.queueLatest(targetFrame);
     return;
   }
 
   captureRollEdgeMask();
-  setTranslationMode(Boolean(translationMode));
   const singleLine = root.classList.contains("single-line");
-  if (translationMode && !singleLine) {
-    startTranslationPairTransition(
-      newCurrent,
-      currentTranslation,
-      progress,
-      currentLineIndex,
-      wordScanProgress,
-      resolvedTargetFrame);
+  if (kind === presentationApi.TRANSITIONS.TRANSLATION_PAIR_ROLL && !singleLine) {
+    setTranslationRowStyle(true);
+    startTranslationPairTransition(targetFrame);
     return;
   }
 
-  startStandardTransition(newCurrent, translationMode ? currentTranslation : newNext, progress, currentLineIndex, wordScanProgress, resolvedTargetFrame);
+  setTranslationRowStyle(singleLine && targetFrame.translationMode);
+  startStandardTransition(targetFrame);
 }
 
-function finalizeTranslationPairTransition(
-  promotedCurrent,
-  promotedTranslation,
-  progress,
-  promotedLineIndex,
-  wordScanProgress,
-  targetFrame = null) {
+function finalizeTranslationPairTransition(targetFrame) {
   trackEl.classList.add("no-anim");
   incomingTranslationPairEl.classList.add("no-anim");
   stopTransitionOpacityAnimation();
-  setCurrentLine(promotedCurrent);
-  setWordScanProgress(wordScanProgress, false);
-  setSecondaryLine(promotedTranslation);
+  setCurrentLine(targetFrame.current);
+  setWordScanProgress(transitionWordScanProgress, false);
+  setFrameSecondaryLine(targetFrame);
   setLineWordScanProgress(nextLineEl, null);
   trackEl.classList.remove("translation-pair-animating", "animating", "word-scan-transition", "vertical-roll", "single-line-roll");
   clearRollEdgeMask();
@@ -2209,21 +2144,13 @@ function finalizeTranslationPairTransition(
   currentLineEl.style.opacity = "";
   nextLineEl.style.opacity = "";
   clearIncomingTranslationPair();
+  updateSecondaryOpacity(targetFrame.progress);
   void trackEl.offsetHeight;
   trackEl.classList.remove("no-anim");
-  presentationCoordinator.setCurrentFrame(targetFrame || createPresentationFrame({
-    scene: presentationApi.SCENES.LYRICS,
-    layout: presentationApi.LAYOUTS.TRANSLATION_PAIR,
-    current: promotedCurrent,
-    currentTranslation: promotedTranslation,
-    progress,
-    currentLineIndex: promotedLineIndex,
-    wordScanProgress,
-    translationMode: true
-  }));
-  lastLineProgress = clamp01(progress);
-  if (Number.isInteger(promotedLineIndex) && promotedLineIndex >= 0) {
-    lastCurrentLineIndex = promotedLineIndex;
+  presentationCoordinator.setCurrentFrame(targetFrame);
+  lastLineProgress = targetFrame.progress;
+  if (targetFrame.currentLineIndex >= 0) {
+    lastCurrentLineIndex = targetFrame.currentLineIndex;
   }
   if (metricsUpdatePending) {
     updateMetrics();
@@ -2235,20 +2162,12 @@ function finalizeTranslationPairTransition(
   }
 }
 
-function startTranslationPairTransition(
-  newCurrent,
-  currentTranslation,
-  progress,
-  currentLineIndex,
-  wordScanProgress,
-  targetFrame = null) {
+function startTranslationPairTransition(targetFrame) {
   transitionUsesTranslationPair = true;
   trackEl.classList.toggle("vertical-roll", root.classList.contains("vertical-taskbar"));
-  const promoted = toDisplayLine(newCurrent, SEARCHING_TEXT);
-  const promotedTranslation = toDisplayLine(currentTranslation, " ");
-  transitionPromotedLine = promoted;
-  transitionPromotedLineIndex = currentLineIndex;
-  transitionWordScanProgress = wordScanProgress;
+  transitionPromotedLine = toDisplayLine(targetFrame.current, SEARCHING_TEXT);
+  transitionPromotedLineIndex = targetFrame.currentLineIndex;
+  transitionWordScanProgress = targetFrame.wordScanProgress;
   stopTransitionOpacityAnimation();
 
   const context = presentationCoordinator.beginTransition(
@@ -2257,13 +2176,7 @@ function startTranslationPairTransition(
       durationMs: translationPairTransitionDurationMs
     },
     {
-      complete: () => finalizeTranslationPairTransition(
-        promoted,
-        promotedTranslation,
-        progress,
-        currentLineIndex,
-        transitionWordScanProgress,
-        targetFrame)
+      complete: () => finalizeTranslationPairTransition(targetFrame)
     });
   trackEl.classList.add("no-anim");
   trackEl.classList.remove("animating", "translation-pair-animating");
@@ -2272,7 +2185,7 @@ function startTranslationPairTransition(
   setTrackOffset(0);
   clearIncomingTranslationPair();
   incomingTranslationPairEl.classList.add("preparing", "no-anim");
-  setIncomingTranslationPair(promoted, promotedTranslation, wordScanProgress);
+  setIncomingTranslationPair(targetFrame);
   currentLineEl.style.opacity = "";
   nextLineEl.style.opacity = "";
   void incomingTranslationPairEl.offsetHeight;
@@ -2319,21 +2232,14 @@ function startTranslationPairTransition(
   context.scheduleFallback(finish, translationPairTransitionDurationMs + 120);
 }
 
-function startStandardTransition(
-  newCurrent,
-  newNext,
-  progress,
-  currentLineIndex = -1,
-  wordScanProgress = null,
-  targetFrame = null) {
+function startStandardTransition(targetFrame) {
   transitionUsesTranslationPair = false;
   trackEl.classList.toggle("vertical-roll", root.classList.contains("vertical-taskbar"));
   trackEl.classList.toggle("single-line-roll", root.classList.contains("single-line"));
-  const promoted = toDisplayLine(newCurrent, SEARCHING_TEXT);
-  const upcoming = toDisplayLine(newNext, " ");
+  const promoted = toDisplayLine(targetFrame.current, SEARCHING_TEXT);
   transitionPromotedLine = promoted;
-  transitionPromotedLineIndex = currentLineIndex;
-  transitionWordScanProgress = wordScanProgress;
+  transitionPromotedLineIndex = targetFrame.currentLineIndex;
+  transitionWordScanProgress = targetFrame.wordScanProgress;
   const nextStyle = window.getComputedStyle(nextLineEl);
   const visibleNextOpacity = Number.parseFloat(nextStyle.opacity);
   transitionBaseNextOpacity = Number.isFinite(visibleNextOpacity) ? clamp01(visibleNextOpacity) : secondaryOpacity;
@@ -2351,13 +2257,7 @@ function startStandardTransition(
       durationMs: transitionDurationMs
     },
     {
-      complete: () => finalizeTransition(
-        promoted,
-        upcoming,
-        progress,
-        currentLineIndex,
-        transitionWordScanProgress,
-        targetFrame)
+      complete: () => finalizeTransition(targetFrame)
     });
 
   // Render with final font metrics from the start, then animate only the visual scale.
@@ -2369,7 +2269,7 @@ function startStandardTransition(
   nextLineEl.classList.remove("promoting");
   setTrackOffset(0);
   setLineText(nextLineEl, nextLineTextEl, nextLineScanTextEl, promoted);
-  setIncomingLine(upcoming);
+  setIncomingLine(getFrameSecondaryLine(targetFrame), targetFrame.showsTranslation);
   // Seed both channels before .leaving is applied. The RAF loop owns opacity
   // during this roll, so CSS must not expose its leaving opacity for one frame.
   currentLineEl.style.opacity = String(currentLineRestOpacity);
@@ -2377,8 +2277,8 @@ function startStandardTransition(
   nextLineEl.style.fontSize = `${currentFontSize.toFixed(3)}px`;
   nextLineEl.style.setProperty("--promotion-scale", promotionStartScale.toFixed(6));
   nextLineEl.style.transform = "translateY(0px) scale(var(--promotion-scale))";
-  updateTransitionWordScanProgress(wordScanProgress, false);
-  incomingLineEl.style.opacity = secondaryOpacity.toFixed(3);
+  updateTransitionWordScanProgress(targetFrame.wordScanProgress, false);
+  incomingLineEl.style.opacity = targetFrame.showsTranslation ? "1" : secondaryOpacity.toFixed(3);
   void trackEl.offsetHeight;
   trackEl.classList.remove("no-anim");
 
@@ -2427,7 +2327,7 @@ function applySpectrumFrame(targetFrame, isPlaying) {
   cancelActiveTransition();
   spectrumExitState = null;
   clearSpectrumExitStyles();
-  setTranslationMode(false);
+  setTranslationRowStyle(false);
   clearSpectrumTransitionStyles();
   setWordScanProgress(null, false);
   setSecondaryLine(" ");
@@ -2505,7 +2405,7 @@ function updateResponsiveLayout() {
 }
 
 updateResponsiveLayout();
-setTranslationMode(false);
+setTranslationRowStyle(false);
 setCurrentLine(displayedCurrent);
 setWordScanProgress(null);
 setSecondaryLine(displayedNext);

@@ -393,7 +393,6 @@ describe("lyrics responsive layout", () => {
     expect(style).toContain("--translation: rgba(255, 255, 255, 0.70)");
     expect(style).toMatch(/\.layout\.translation-mode \.track > \.next-line:not\(\.incoming-line\)[\s\S]*color:\s*var\(--translation\)/s);
     expect(style).toMatch(/\.translation-line\s*\{[^}]*color:\s*var\(--translation\)/s);
-    expect(style).toMatch(/\.translation-line\.translation-placeholder\s*\{[^}]*opacity:\s*0\.55/s);
     expect(style).toMatch(/\.track\.animating\s*\{[^}]*transition:\s*transform 560ms cubic-bezier\(0\.22, 0\.72, 0\.24, 1\)/s);
     const translationTrackRule = style.match(/\.track\.animating\.translation-pair-animating\s*\{([^}]*)\}/s)?.[1] ?? "";
     expect(translationTrackRule).toContain("transition-duration: 760ms");
@@ -445,17 +444,12 @@ describe("lyrics responsive layout", () => {
     expect(nextLine.classList.contains("horizontal-scrolling")).toBe(false);
     expect(nextLineStack.style.getPropertyValue("--line-scroll-offset")).toBe("");
 
-    receive("Line one", "Line two", 0, 0.5, "", "译二", true);
-    expect(nextLineText.textContent).toBe("…");
-    expect(nextLine.classList.contains("translation-placeholder")).toBe(true);
-    expect(currentLineScanText.textContent).toBe(currentLineText.textContent);
-
     receive("Line two", "Line three", 1, 0.4, "译二", "译三", true);
     expect(incomingPair.classList.contains("preparing")).toBe(true);
     expect(incomingOriginalText.textContent).toBe("Line two");
     expect(incomingOriginalScanText.textContent).toBe("Line two");
     expect(incomingTranslationText.textContent).toBe("译二");
-    expect(incomingTranslationLine.classList.contains("translation-placeholder")).toBe(false);
+    expect(incomingTranslationLine.classList.contains("translation-line")).toBe(true);
     expect(incomingOriginalLine.classList.contains("word-scanning")).toBe(true);
     expect(incomingOriginalLine.classList.contains("horizontal-scrolling")).toBe(true);
     expect(incomingOriginalStack.style.getPropertyValue("--line-scroll-offset")).toBe("-55px");
@@ -517,8 +511,8 @@ describe("lyrics responsive layout", () => {
     expect(incomingPair.classList.contains("entering")).toBe(false);
     expect(pendingAnimationFrames).toHaveLength(0);
     expect(currentLineText.textContent).toBe("Line three");
-    expect(nextLineText.textContent).toBe("…");
-    expect(nextLine.classList.contains("translation-placeholder")).toBe(true);
+    expect(nextLineText.textContent).toBe("Line four");
+    expect(layout.classList.contains("translation-mode")).toBe(false);
 
     receive("Line three", "Line four", 2, 0.2, "", "", false);
     expect(layout.classList.contains("translation-mode")).toBe(false);
@@ -526,7 +520,6 @@ describe("lyrics responsive layout", () => {
     expect(incomingPair.classList.contains("entering")).toBe(false);
     expect(track.classList.contains("translation-pair-leaving")).toBe(false);
     expect(currentLineText.textContent).toBe("Line three");
-    expect(nextLine.classList.contains("translation-placeholder")).toBe(false);
     expect(nextLineText.textContent).toBe("Line four");
     expect(currentLine.classList.contains("word-scanning")).toBe(true);
     expect(nextLine.classList.contains("word-scanning")).toBe(false);
@@ -834,6 +827,7 @@ describe("lyrics responsive layout", () => {
     const translationPair = {
       scene: SCENES.LYRICS,
       layout: LAYOUTS.TRANSLATION_PAIR,
+      currentTranslation: "Translated line",
       currentLineIndex: 1,
       trackId: "track"
     };
@@ -851,6 +845,9 @@ describe("lyrics responsive layout", () => {
       durationMs: DEFAULT_DURATION_MS.layerSwitch
     });
     expect(planner.plan(single, translationPair).kind).toBe(TRANSITIONS.TRANSLATION_PAIR_ROLL);
+    const untranslated = { ...translationPair, currentTranslation: " ", currentLineIndex: 2 };
+    expect(planner.plan(translationPair, untranslated).kind).toBe(TRANSITIONS.TRANSLATION_PAIR_ROLL);
+    expect(planner.plan(untranslated, { ...translationPair, currentLineIndex: 3 }).kind).toBe(TRANSITIONS.SINGLE_ROLL);
     expect(planner.plan(single, { ...single, progress: 0.75 }).kind).toBe(TRANSITIONS.PROGRESS_PATCH);
     expect(planner.plan(single, { ...single, current: "updated" }).kind).toBe(TRANSITIONS.REPLACE_IN_PLACE);
     expect(planner.plan(single, searching).kind).toBe(TRANSITIONS.SINGLE_ROLL);
