@@ -1578,17 +1578,15 @@ function applyCoverSurfaceMode(isAppIcon) {
     return;
   }
 
-  // App icons fill the cover area without the album art background.
   coverEl.classList.remove("tl-placeholder");
+  coverEl.classList.toggle("album-art", !isAppIcon);
   coverEl.classList.toggle("app-icon", isAppIcon === true);
-  if (isAppIcon) {
-    coverEl.style.backgroundColor = "";
-  }
+  coverEl.style.backgroundColor = "";
 }
 
 function applyFallbackCover(text, fallbackColor) {
   if (coverEl) {
-    coverEl.classList.remove("app-icon");
+    coverEl.classList.remove("app-icon", "album-art");
     coverEl.classList.toggle("tl-placeholder", text === "TL");
     if (text === "TL") coverEl.style.backgroundColor = "";
   }

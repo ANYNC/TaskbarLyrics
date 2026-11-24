@@ -730,7 +730,7 @@ describe("lyrics cover fallback", () => {
     expect(activeImage.getAttribute("src")).toBe(appIconUri);
     expect(activeImage.style.opacity).toBe("1");
     expect(standbyImage.hasAttribute("src")).toBe(false);
-    expect(style).toMatch(/\.cover\.app-icon\s*\{[^}]*background:\s*transparent/s);
+    expect(style).toMatch(/\.cover\.app-icon,\s*\.floating-controls-enabled \.cover\.album-art\s*\{[^}]*background:\s*transparent/s);
   });
 
   it("keeps the letter fallback when no app icon can be resolved", async () => {
@@ -777,6 +777,31 @@ describe("lyrics cover fallback", () => {
 
     expect(cover.classList.contains("app-icon")).toBe(false);
     expect(dom.window.document.querySelector("#coverImage").getAttribute("src")).toBe(artworkUri);
+  });
+
+  it("leaves a floating cover transparent after replacing a colored fallback with album art", async () => {
+    const { dom, showCover, style } = await createHarness();
+    try {
+      const { document } = dom.window;
+      const sheet = document.createElement("style");
+      sheet.textContent = style;
+      document.head.append(sheet);
+      const cover = document.querySelector("#cover");
+      dom.window.taskbarLyrics.receive({
+        version: 1, type: "style", payload: { floatingControlPanel: true, enableControlPanel: true }
+      });
+      const fallback = { dataUri: "", fallbackText: "N", fallbackColor: "#e53935", trackId: "cover" };
+      showCover(fallback);
+      expect(dom.window.getComputedStyle(cover).backgroundColor).toBe("rgb(229, 57, 53)");
+
+      showCover({ ...fallback, dataUri: artworkUri });
+      expect(dom.window.getComputedStyle(cover).backgroundColor).toBe("rgba(0, 0, 0, 0)");
+
+      showCover({ ...fallback, trackId: "next-cover" });
+      expect(dom.window.getComputedStyle(cover).backgroundColor).toBe("rgb(229, 57, 53)");
+    } finally {
+      dom.window.close();
+    }
   });
 
   it("ignores a repeated app icon payload without restarting the fallback timer", async () => {

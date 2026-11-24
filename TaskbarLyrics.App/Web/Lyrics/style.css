@@ -226,7 +226,8 @@ html, body {
   filter: saturate(0.94) brightness(0.96);
 }
 
-.cover.app-icon {
+.cover.app-icon,
+.floating-controls-enabled .cover.album-art {
   background: transparent;
 }
 

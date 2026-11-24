@@ -9,7 +9,9 @@ namespace TaskbarLyrics.App;
 internal sealed class FloatingMaterialFallbackWindow : Window, IFloatingPanelMaterial
 {
     private const int ShadowPaddingDip = 36;
-    private readonly Border _surface = new() { CornerRadius = new CornerRadius(12) };
+    private const double CornerRadiusDip = 12;
+    private const double ShadowCasterInsetDip = 2;
+    private readonly Border _surface = new() { CornerRadius = new CornerRadius(CornerRadiusDip) };
     private readonly Grid _visualRoot = new() { Opacity = 0 };
     private readonly Grid _shadowLayer = new() { Margin = new Thickness(-ShadowPaddingDip), IsHitTestVisible = false };
     private readonly DropShadowEffect _shadow = new()
@@ -33,10 +35,12 @@ internal sealed class FloatingMaterialFallbackWindow : Window, IFloatingPanelMat
         AllowsTransparency = true;
         Background = System.Windows.Media.Brushes.Transparent;
         var grid = new Grid { Margin = new Thickness(ShadowPaddingDip) };
+        // DropShadowEffect also renders its source. Keep the caster inside the cutout
+        // so antialiasing at the card edge cannot reveal opaque black pixels.
         _shadowLayer.Children.Add(new Border
         {
-            Margin = new Thickness(ShadowPaddingDip),
-            CornerRadius = new CornerRadius(12),
+            Margin = new Thickness(ShadowPaddingDip + ShadowCasterInsetDip),
+            CornerRadius = new CornerRadius(CornerRadiusDip - ShadowCasterInsetDip),
             Background = System.Windows.Media.Brushes.Black,
             Effect = _shadow
         });
@@ -55,7 +59,7 @@ internal sealed class FloatingMaterialFallbackWindow : Window, IFloatingPanelMat
         var card = new Rect(ShadowPaddingDip, ShadowPaddingDip, cardBounds.Width / scale, cardBounds.Height / scale);
         var shadowClip = new CombinedGeometry(GeometryCombineMode.Exclude,
             new RectangleGeometry(new Rect(0, 0, card.Width + ShadowPaddingDip * 2, card.Height + ShadowPaddingDip * 2)),
-            new RectangleGeometry(card, 12, 12));
+            new RectangleGeometry(card, CornerRadiusDip, CornerRadiusDip));
         shadowClip.Freeze();
         _shadowLayer.Clip = shadowClip;
         // Resize and move together: changing Height before Top moves the bottom edge.
