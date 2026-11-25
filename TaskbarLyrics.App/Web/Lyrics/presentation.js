@@ -48,11 +48,10 @@
     [TRANSITION_PRIMITIVES.LAYER]: "layerTransition"
   });
 
-  const TRANSLATION_PAIR_ROLL_DURATION_MS = 760;
   const DEFAULT_DURATION_MS = Object.freeze({
     singleRoll: 560,
-    translationPairRoll: TRANSLATION_PAIR_ROLL_DURATION_MS,
-    searchingSpectrumRoll: TRANSLATION_PAIR_ROLL_DURATION_MS,
+    translationPairRoll: 680,
+    searchingSpectrumRoll: 760,
     layerSwitch: 300
   });
 

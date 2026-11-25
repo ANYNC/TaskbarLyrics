@@ -75,7 +75,6 @@ let metricsUpdatePending = false;
 const lineScrollElements = new WeakMap();
 const horizontalScrollMetrics = new WeakMap();
 const transitionDurationMs = 560;
-const translationPairTransitionDurationMs = 760;
 const wordScanResumeCatchUpDurationMs = 180;
 const currentLineRestOpacity = 0.98;
 const leavingLineOpacity = 0.16;
@@ -2163,6 +2162,7 @@ function finalizeTranslationPairTransition(targetFrame) {
 }
 
 function startTranslationPairTransition(targetFrame) {
+  const durationMs = presentationApi.DEFAULT_DURATION_MS.translationPairRoll;
   transitionUsesTranslationPair = true;
   trackEl.classList.toggle("vertical-roll", root.classList.contains("vertical-taskbar"));
   transitionPromotedLine = toDisplayLine(targetFrame.current, SEARCHING_TEXT);
@@ -2173,7 +2173,7 @@ function startTranslationPairTransition(targetFrame) {
   const context = presentationCoordinator.beginTransition(
     {
       kind: presentationApi.TRANSITIONS.TRANSLATION_PAIR_ROLL,
-      durationMs: translationPairTransitionDurationMs
+      durationMs
     },
     {
       complete: () => finalizeTranslationPairTransition(targetFrame)
@@ -2229,7 +2229,7 @@ function startTranslationPairTransition(targetFrame) {
       }
     });
   });
-  context.scheduleFallback(finish, translationPairTransitionDurationMs + 120);
+  context.scheduleFallback(finish, durationMs + 120);
 }
 
 function startStandardTransition(targetFrame) {

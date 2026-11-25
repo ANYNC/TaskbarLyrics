@@ -495,7 +495,8 @@ html, body {
 }
 
 .track.animating.translation-pair-animating {
-  transition-duration: 760ms;
+  transition-duration: 680ms;
+  transition-timing-function: cubic-bezier(0.24, 0.80, 0.20, 1);
 }
 
 /* Standard rolls interpolate opacity in the RAF loop; avoid interpolating

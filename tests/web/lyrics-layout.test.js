@@ -395,8 +395,8 @@ describe("lyrics responsive layout", () => {
     expect(style).toMatch(/\.translation-line\s*\{[^}]*color:\s*var\(--translation\)/s);
     expect(style).toMatch(/\.track\.animating\s*\{[^}]*transition:\s*transform 560ms cubic-bezier\(0\.22, 0\.72, 0\.24, 1\)/s);
     const translationTrackRule = style.match(/\.track\.animating\.translation-pair-animating\s*\{([^}]*)\}/s)?.[1] ?? "";
-    expect(translationTrackRule).toContain("transition-duration: 760ms");
-    expect(translationTrackRule).not.toMatch(/\btransition(?:-timing-function)?\s*:/);
+    expect(translationTrackRule).toContain("transition-duration: 680ms");
+    expect(translationTrackRule).toContain("transition-timing-function: cubic-bezier(0.24, 0.80, 0.20, 1)");
     const translationPairRule = style.match(/\.incoming-translation-pair\s*\{([^}]*)\}/s)?.[1] ?? "";
     expect(translationPairRule).toContain("display: none");
     expect(translationPairRule).not.toMatch(/\b(?:position|opacity|transform|transition)\s*:/);
@@ -551,7 +551,7 @@ describe("lyrics responsive layout", () => {
     const incomingPair = document.querySelector("#incomingTranslationPair");
     expect(currentLineText.textContent).toBe(searchingLine);
     expect(nextLineText.textContent.trim()).toBe("");
-    expect(style).toMatch(/\.track\.animating\.translation-pair-animating\s*\{[^}]*transition-duration:\s*760ms/s);
+    expect(style).toMatch(/\.track\.animating\.translation-pair-animating\s*\{[^}]*transition-duration:\s*680ms/s);
 
     const receive = (translationMode, current, next, currentTranslation, nextTranslation) =>
       dom.window.taskbarLyrics.receive({
@@ -834,11 +834,11 @@ describe("lyrics responsive layout", () => {
 
     expect(planner.plan(searching, spectrum)).toMatchObject({
       kind: TRANSITIONS.SEARCHING_TO_SPECTRUM_ROLL,
-      durationMs: DEFAULT_DURATION_MS.translationPairRoll
+      durationMs: DEFAULT_DURATION_MS.searchingSpectrumRoll
     });
     expect(planner.plan(spectrum, searching)).toMatchObject({
       kind: TRANSITIONS.LAYER_SWITCH,
-      durationMs: DEFAULT_DURATION_MS.translationPairRoll
+      durationMs: DEFAULT_DURATION_MS.searchingSpectrumRoll
     });
     expect(planner.plan(spectrum, single)).toMatchObject({
       kind: TRANSITIONS.LAYER_SWITCH,
