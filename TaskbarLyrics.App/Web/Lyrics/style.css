@@ -378,7 +378,8 @@ html, body {
 }
 
 .lyrics-layer {
-  inset: var(--lyrics-pane-padding-top) var(--lyrics-pane-padding-right) 0 var(--lyrics-pane-padding-left);
+  inset: 0 var(--lyrics-pane-padding-right) 0 var(--lyrics-pane-padding-left);
+  padding-top: var(--lyrics-pane-padding-top);
   opacity: 1;
   transform: translateY(0);
 }
@@ -469,8 +470,16 @@ html, body {
   display: block;
 }
 
+:root:not(.vertical-taskbar) .lyrics-layer:has(.track.animating) {
+  overflow: hidden;
+}
+
+:root:not(.vertical-taskbar) .lyrics-layer:has(.track.animating) > .viewport {
+  overflow: visible;
+}
+
 @media (prefers-reduced-motion: no-preference) {
-  :root:not(.vertical-taskbar) .layout:not(.region-moving) .viewport:has(> .track.animating) {
+  :root:not(.vertical-taskbar) .layout:not(.region-moving) .lyrics-layer:has(.track.animating) {
     --roll-edge-mask: linear-gradient(to bottom,
       transparent 0,
       #000 var(--roll-fade-top, 0px),
@@ -628,8 +637,12 @@ html, body {
   }
 
   /* Preserve the original cut-off and fading while lines roll between rows. */
-  :root:not(.vertical-taskbar) .viewport:has(> .track.animating) {
+  :root:not(.vertical-taskbar) .lyrics-layer:has(.track.animating) {
     overflow: hidden;
+  }
+
+  :root:not(.vertical-taskbar) .lyrics-layer:has(.track.animating) > .viewport {
+    overflow: visible;
   }
 }
 

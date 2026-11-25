@@ -70,14 +70,16 @@ async function createHarness({ deferAnimationFrames = false } = {}) {
 
 describe("taskbar line layout", () => {
   it.each([[true, false], [true, true], [false, false], [false, true]])(
-    "anchors the roll fade to resting text bounds and freezes them through animation (single=%s, translation=%s)", async (singleLine, translationMode) => {
-      const { dom, flushFrames, flushTimers } = await createHarness({ deferAnimationFrames: true });
+    "anchors balanced roll fades to the lyrics layer bounds and freezes them through animation (single=%s, translation=%s)", async (singleLine, translationMode) => {
+      const { dom, flushFrames, flushTimers, style } = await createHarness({ deferAnimationFrames: true });
       const document = dom.window.document;
-      const viewport = document.querySelector(".viewport");
+      const lyricsLayer = document.querySelector("#lyricsLayer");
       const current = document.querySelector("#currentLineText");
       const next = document.querySelector("#nextLineText");
+      expect(style).toMatch(/\.lyrics-layer\s*\{[^}]*inset:\s*0 var\(--lyrics-pane-padding-right\) 0 var\(--lyrics-pane-padding-left\);[^}]*padding-top:\s*var\(--lyrics-pane-padding-top\)/s);
+      expect(style).toMatch(/\.lyrics-layer:has\(\.track\.animating\)\s*>\s*\.viewport\s*\{[^}]*overflow:\s*visible/s);
       const box = (top, bottom) => ({ top, bottom, height: bottom - top, left: 0, right: 200, width: 200 });
-      viewport.getBoundingClientRect = () => box(100, 140);
+      lyricsLayer.getBoundingClientRect = () => box(100, 140);
       let currentBox = singleLine ? box(110, 130) : box(102, 118);
       let nextBox = box(122, 138);
       current.getBoundingClientRect = () => currentBox;
@@ -89,39 +91,39 @@ describe("taskbar line layout", () => {
         translationMode, currentTranslation: "旧译", nextTranslation: "新译" };
       receive("lyrics", { ...frame, animateTransition: false });
       receive("lyrics", { ...frame, current: "新句", currentLineIndex: 1, currentTranslation: "新译" });
-      const top = () => viewport.style.getPropertyValue("--roll-fade-top");
-      const bottom = () => viewport.style.getPropertyValue("--roll-fade-bottom");
+      const top = () => lyricsLayer.style.getPropertyValue("--roll-fade-top");
+      const bottom = () => lyricsLayer.style.getPropertyValue("--roll-fade-bottom");
       expect(top()).toBe(singleLine ? "10px" : "2px");
-      expect(bottom()).toBe(singleLine ? "28px" : "36px");
+      expect(bottom()).toBe(singleLine ? "30px" : "38px");
       // Simulate the moving/promoting text boxes; these must not drag the mask with them.
       currentBox = box(80, 100);
       nextBox = box(100, 120);
       flushFrames();
       flushFrames();
       expect(top()).toBe(singleLine ? "10px" : "2px");
-      expect(bottom()).toBe(singleLine ? "28px" : "36px");
+      expect(bottom()).toBe(singleLine ? "30px" : "38px");
       flushTimers();
       expect(top()).toBe("");
       expect(bottom()).toBe("");
       dom.window.close();
     });
 
-  it("clamps text bounds to the viewport and clears fade stops when the roll is cancelled", async () => {
+  it("clamps text bounds to the lyrics layer and clears fade stops when the roll is cancelled", async () => {
     const { dom } = await createHarness({ deferAnimationFrames: true });
     const document = dom.window.document;
-    const viewport = document.querySelector(".viewport");
-    viewport.getBoundingClientRect = () => ({ top: 100, bottom: 140, height: 40 });
+    const lyricsLayer = document.querySelector("#lyricsLayer");
+    lyricsLayer.getBoundingClientRect = () => ({ top: 100, bottom: 140, height: 40 });
     document.querySelector("#currentLineText").getBoundingClientRect = () => ({ top: 90, bottom: 150, height: 60 });
     const receive = (type, payload) => dom.window.taskbarLyrics.receive({ version: 1, type, payload });
     receive("style", { singleLine: true });
     const frame = { current: "旧句", next: "新句", currentLineIndex: 0, trackId: "fade-cancel", isPlaying: true };
     receive("lyrics", { ...frame, animateTransition: false });
     receive("lyrics", { ...frame, current: "新句", currentLineIndex: 1 });
-    expect(viewport.style.getPropertyValue("--roll-fade-top")).toBe("0px");
-    expect(viewport.style.getPropertyValue("--roll-fade-bottom")).toBe("40px");
+    expect(lyricsLayer.style.getPropertyValue("--roll-fade-top")).toBe("0px");
+    expect(lyricsLayer.style.getPropertyValue("--roll-fade-bottom")).toBe("40px");
     receive("style", { singleLine: true, verticalTaskbar: true });
-    expect(viewport.style.getPropertyValue("--roll-fade-top")).toBe("");
-    expect(viewport.style.getPropertyValue("--roll-fade-bottom")).toBe("");
+    expect(lyricsLayer.style.getPropertyValue("--roll-fade-top")).toBe("");
+    expect(lyricsLayer.style.getPropertyValue("--roll-fade-bottom")).toBe("");
     dom.window.close();
   });
 
@@ -134,9 +136,9 @@ describe("taskbar line layout", () => {
     receive("lyrics", { ...frame, current: "新句", currentLineIndex: 1 });
     flushFrames();
     flushFrames();
-    const viewport = dom.window.document.querySelector(".viewport");
-    expect(viewport.style.getPropertyValue("--roll-fade-top")).toBe("");
-    expect(viewport.style.getPropertyValue("--roll-fade-bottom")).toBe("");
+    const lyricsLayer = dom.window.document.querySelector("#lyricsLayer");
+    expect(lyricsLayer.style.getPropertyValue("--roll-fade-top")).toBe("");
+    expect(lyricsLayer.style.getPropertyValue("--roll-fade-bottom")).toBe("");
     expect(dom.window.document.querySelector(".track").classList.contains("animating")).toBe(true);
     dom.window.close();
   });

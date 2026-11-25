@@ -1781,32 +1781,36 @@ function applyProgressPatch(frame) {
 }
 
 function clearRollEdgeMask() {
-  viewportEl.style.removeProperty("--roll-fade-top");
-  viewportEl.style.removeProperty("--roll-fade-bottom");
+  lyricsLayerEl.style.removeProperty("--roll-fade-top");
+  lyricsLayerEl.style.removeProperty("--roll-fade-bottom");
 }
 
 function captureRollEdgeMask() {
   clearRollEdgeMask();
   if (root.classList.contains("vertical-taskbar") || prefersReducedMotion()) return;
-  const viewport = viewportEl.getBoundingClientRect();
-  if (!Number.isFinite(viewport.height) || viewport.height <= 0) return;
+  const maskBounds = lyricsLayerEl.getBoundingClientRect();
+  if (!Number.isFinite(maskBounds.height) || maskBounds.height <= 0) return;
   const texts = root.classList.contains("single-line") ? [currentLineTextEl] : [currentLineTextEl, nextLineTextEl];
   const bounds = texts.filter(text => text?.textContent.trim()).map(text => {
     const box = text.getBoundingClientRect();
     const style = window.getComputedStyle(text);
     // Measure the resting line box without its descender padding, before promotion changes its metrics.
     return {
-      top: box.top + (Number.parseFloat(style.paddingTop) || 0) - viewport.top,
-      bottom: box.bottom - (Number.parseFloat(style.paddingBottom) || 0) - viewport.top,
+      top: box.top + (Number.parseFloat(style.paddingTop) || 0) - maskBounds.top,
+      bottom: box.bottom - (Number.parseFloat(style.paddingBottom) || 0) - maskBounds.top,
       height: box.height
     };
   }).filter(box => box.height > 0 && Number.isFinite(box.top) && Number.isFinite(box.bottom));
   if (!bounds.length) return;
-  const top = Math.max(0, Math.min(viewport.height, Math.min(...bounds.map(box => box.top))));
-  const bottom = Math.max(top, Math.min(viewport.height, Math.max(...bounds.map(box => box.bottom))));
-  if (bottom <= top) return;
-  viewportEl.style.setProperty("--roll-fade-top", `${top}px`);
-  viewportEl.style.setProperty("--roll-fade-bottom", `${bottom}px`);
+  const topGap = Math.max(0, Math.min(maskBounds.height, Math.min(...bounds.map(box => box.top))));
+  const bottomEdge = Math.max(topGap, Math.min(maskBounds.height, Math.max(...bounds.map(box => box.bottom))));
+  if (bottomEdge <= topGap) return;
+  const bottomGap = maskBounds.height - bottomEdge;
+  const balancedFade = topGap > 0 && bottomGap > 0 ? Math.min(topGap, bottomGap) : null;
+  const top = balancedFade ?? topGap;
+  const bottom = balancedFade !== null ? maskBounds.height - balancedFade : bottomEdge;
+  lyricsLayerEl.style.setProperty("--roll-fade-top", `${top}px`);
+  lyricsLayerEl.style.setProperty("--roll-fade-bottom", `${bottom}px`);
 }
 
 function cancelActiveTransition() {
