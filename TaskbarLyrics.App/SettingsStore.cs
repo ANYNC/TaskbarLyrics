@@ -36,6 +36,14 @@ public sealed class SettingsStore
             if (settings.LyricsFallback is not null)
             {
                 settings.LyricsFallback = settings.GetLyricsFallback();
+                if (ShouldMigrateLegacySpectrumWithLyrics(document.RootElement, settings.LyricsFallback))
+                {
+                    settings.LyricsFallback = settings.LyricsFallback with
+                    {
+                        PrimaryMode = "Spectrum",
+                        SpectrumWithLyrics = false
+                    };
+                }
                 if (!settings.SpectrumAudioAccessGranted) settings.SetLegacySpectrumMode(SpectrumDisplayMode.Disabled);
                 settings.SyncFallbackSpectrumMode();
             }
@@ -120,6 +128,12 @@ public sealed class SettingsStore
             }
         }
     }
+
+    private static bool ShouldMigrateLegacySpectrumWithLyrics(JsonElement root, LyricsFallbackSettings rules) =>
+        rules.SpectrumWithLyrics &&
+        root.TryGetProperty(nameof(AppSettings.LyricsFallback), out var fallbackElement) &&
+        fallbackElement.ValueKind == JsonValueKind.Object &&
+        !fallbackElement.TryGetProperty(nameof(LyricsFallbackSettings.PrimaryMode), out _);
 
     private static void MigrateLegacySpectrumSettings(JsonElement root, AppSettings settings)
     {

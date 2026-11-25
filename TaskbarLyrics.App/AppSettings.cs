@@ -172,11 +172,21 @@ public sealed class AppSettings
         SpectrumDisplayMode = mode;
         if (LyricsFallback is null) return;
         var rules = GetLyricsFallback();
+        var nextPrimaryMode = mode == SpectrumDisplayMode.Always
+            ? "Spectrum"
+            : mode == SpectrumDisplayMode.Disabled
+                ? (rules.PrimaryMode == "Spectrum" ? "Lyrics" : rules.PrimaryMode)
+                : "Lyrics";
         LyricsFallback = rules with
         {
-            Instrumental = rules.Instrumental with { UseSpectrum = mode != SpectrumDisplayMode.Disabled },
-            NotFound = rules.NotFound with { UseSpectrum = mode is SpectrumDisplayMode.PureMusicOrNoLyrics or SpectrumDisplayMode.Always },
-            SpectrumWithLyrics = mode == SpectrumDisplayMode.Always
+            PrimaryMode = nextPrimaryMode,
+            Instrumental = mode == SpectrumDisplayMode.Always
+                ? rules.Instrumental
+                : rules.Instrumental with { UseSpectrum = mode != SpectrumDisplayMode.Disabled },
+            NotFound = mode == SpectrumDisplayMode.Always
+                ? rules.NotFound
+                : rules.NotFound with { UseSpectrum = mode == SpectrumDisplayMode.PureMusicOrNoLyrics },
+            SpectrumWithLyrics = false
         };
     }
 
@@ -185,10 +195,15 @@ public sealed class AppSettings
         if (LyricsFallback is null) return;
         var rules = GetLyricsFallback();
         LyricsFallback = rules;
-        SpectrumDisplayMode = rules.SpectrumWithLyrics && rules.Instrumental.UseSpectrum && rules.NotFound.UseSpectrum ? SpectrumDisplayMode.Always
-            : !rules.SpectrumWithLyrics && rules.Instrumental.UseSpectrum && rules.NotFound.UseSpectrum ? SpectrumDisplayMode.PureMusicOrNoLyrics
-            : !rules.SpectrumWithLyrics && rules.Instrumental.UseSpectrum && !rules.NotFound.UseSpectrum ? SpectrumDisplayMode.PureMusicOnly
-            : !rules.UsesSpectrum ? SpectrumDisplayMode.Disabled : SpectrumDisplayMode.Custom;
+        SpectrumDisplayMode = rules.PrimaryMode switch
+        {
+            "Spectrum" => SpectrumDisplayMode.Always,
+            "Text" => SpectrumDisplayMode.Disabled,
+            _ => rules.SpectrumWithLyrics && rules.Instrumental.UseSpectrum && rules.NotFound.UseSpectrum ? SpectrumDisplayMode.Always
+                : !rules.SpectrumWithLyrics && rules.Instrumental.UseSpectrum && rules.NotFound.UseSpectrum ? SpectrumDisplayMode.PureMusicOrNoLyrics
+                : !rules.SpectrumWithLyrics && rules.Instrumental.UseSpectrum && !rules.NotFound.UseSpectrum ? SpectrumDisplayMode.PureMusicOnly
+                : !rules.UsesSpectrum ? SpectrumDisplayMode.Disabled : SpectrumDisplayMode.Custom
+        };
     }
 
     public bool SpectrumAudioAccessGranted { get; set; }

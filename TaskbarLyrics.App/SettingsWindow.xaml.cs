@@ -323,6 +323,10 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 {
                     await PushLyricsLayoutPreviewAsync();
                 }
+                if (message.Key is "lyricsFallback" or "spectrumDisplayMode")
+                {
+                    await PushSpectrumCaptureStateAsync();
+                }
                 break;
             case "previewUpdate":
                 if (!IsPreviewableSetting(message.Key))

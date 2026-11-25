@@ -134,24 +134,71 @@
 
         <section class="page" data-page="lyrics" aria-labelledby="lyricsHeading">
           <div class="page-inner">
+            <section class="panel playback-display-panel">
+              <div class="panel-head">
+                <div><h2 id="lyricsHeading" tabindex="-1">{{UI_PlaybackDisplayHeading}}</h2><p>{{UI_PlaybackDisplayDescription}}</p></div>
+                <span id="lyricSearchStatusBadge" class="lyric-search-badge is-active"><span class="lyric-search-dot" aria-hidden="true"></span><span data-lyric-search-label>{{UI_LyricSearchActive}}</span></span>
+              </div>
+              <div id="playbackPrimaryModes" class="primary-mode-strip" role="radiogroup" aria-label="{{UI_PlaybackDisplayHeading}}">
+                <button type="button" class="primary-mode-card" role="radio" data-primary-mode="Lyrics" aria-checked="true">
+                  <span class="primary-mode-top"><span class="primary-mode-title"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg><span>{{UI_Lyrics}}</span></span><span class="primary-mode-radio" aria-hidden="true"></span></span>
+                  <span class="primary-mode-desc">{{UI_PrimaryModeLyricsDesc}}</span>
+                </button>
+                <button type="button" class="primary-mode-card" role="radio" data-primary-mode="Spectrum" aria-checked="false" tabindex="-1">
+                  <span class="primary-mode-top"><span class="primary-mode-title"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 14v-4M8 18V6M12 20V4M16 17V7M20 14v-4"/></svg><span>{{UI_Spectrum}}</span></span><span class="primary-mode-radio" aria-hidden="true"></span></span>
+                  <span class="primary-mode-desc">{{UI_PrimaryModeSpectrumDesc}}</span>
+                </button>
+                <button type="button" class="primary-mode-card" role="radio" data-primary-mode="Text" aria-checked="false" tabindex="-1">
+                  <span class="primary-mode-top"><span class="primary-mode-title"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h11M4 17h14"/></svg><span>{{UI_FallbackText}}</span></span><span class="primary-mode-radio" aria-hidden="true"></span></span>
+                  <span class="primary-mode-desc">{{UI_PrimaryModeTextDesc}}</span>
+                </button>
+              </div>
+              <div id="playbackModeStage" class="playback-mode-stage">
+                <div class="playback-mode-body" data-primary-panel="Lyrics">
+                  <div class="playback-subhead"><strong>{{UI_FallbackSectionHeading}}</strong><span>{{UI_FallbackSectionDescription}}</span></div>
+                  <div id="lyricsFallbackRules" class="fallback-rules"></div>
+                </div>
+                <div class="playback-mode-body" data-primary-panel="Spectrum" hidden>
+                  <div class="playback-subhead"><strong>{{UI_SpectrumModeSectionHeading}}</strong><span>{{UI_SpectrumModeSectionDescription}}</span></div>
+                  <article id="playbackSpectrumPreview" class="fallback-rule">
+                    <div class="fallback-summary is-preview-only">
+                      <strong>{{UI_AudioSpectrumLabel}}</strong>
+                      <div class="fallback-preview"><span class="fallback-cover" aria-hidden="true">TL</span><div class="fallback-lines spectrum" data-primary-spectrum-bars></div></div>
+                    </div>
+                  </article>
+                </div>
+                <div class="playback-mode-body" data-primary-panel="Text" hidden>
+                  <div class="playback-subhead"><strong>{{UI_TextModeSectionHeading}}</strong><span>{{UI_TextModeSectionDescription}}</span></div>
+                  <div id="playbackTextRule" class="fallback-rules"></div>
+                </div>
+              </div>
+            </section>
+            <div class="playback-linked-grid">
+              <section class="panel playback-linked-panel">
+                <div class="panel-head compact">
+                  <div><h2>{{UI_LyricsBehaviorTitle}}</h2></div>
+                  <span id="lyricsBehaviorModeBadge" class="fallback-field-pill">{{UI_ModeEffectActive}}</span>
+                </div>
+                <div class="settings">
+                  <div class="setting-row compact" data-lyrics-mode-only><div class="setting-label"><strong>{{UI_ShowLyricTranslations}}</strong></div><label class="switch small"><input type="checkbox" data-setting="showLyricTranslation" aria-label="{{UI_ShowLyricTranslations}}"><span class="switch-track"></span></label></div>
+                  <div class="setting-row compact" data-lyrics-mode-only><div class="setting-label"><strong>{{UI_WordHighlighting}}</strong></div><label class="switch small"><input type="checkbox" data-setting="enableWordScanning" aria-label="{{UI_WordHighlighting}}"><span class="switch-track"></span></label></div>
+                </div>
+              </section>
+              <section class="panel playback-linked-panel">
+                <div class="panel-head compact">
+                  <div><h2>{{UI_SystemAudioAccess}}</h2></div>
+                  <span id="spectrumUsageBadge" class="fallback-field-pill">{{UI_SpectrumNotInUseBadge}}</span>
+                </div>
+                <div class="settings">
+                  <div class="setting-row compact playback-audio-row"><div class="setting-label"><small id="spectrumAudioAccessStatus" class="spectrum-audio-status" role="status" aria-live="polite">{{UI_SpectrumIsOffSystemAudioIsNotBeingCaptured}}</small></div><div class="setting-inline-actions"><button id="retrySpectrumAudioAccessButton" class="btn secondary small" type="button" data-retry-spectrum-capture hidden>{{UI_Retry}}</button><button id="revokeSpectrumAudioAccessButton" class="btn ghost small" type="button" hidden>{{UI_StopAndRevoke}}</button></div></div>
+                </div>
+              </section>
+            </div>
             <section class="panel">
-              <div class="panel-head"><div><h2 id="lyricsHeading" tabindex="-1">{{UI_DisplayBehavior}}</h2><p>{{UI_ChooseWhenLyricsAppearAndHowTranslationsAndWord}}</p></div></div>
+              <div class="panel-head"><div><h2>{{UI_WindowVisibilityTitle}}</h2><p>{{UI_ChooseWhenLyricsAppearAndHowTranslationsAndWord}}</p></div></div>
               <div class="settings">
                 <div class="setting-row compact"><div class="setting-label"><strong>{{UI_ShowLyricsOnStartup}}</strong></div><label class="switch"><input type="checkbox" data-setting="showLyricsOnStartup" aria-label="{{UI_ShowLyricsOnStartup}}"><span class="switch-track"></span></label></div>
                 <div class="setting-row compact"><div class="setting-label"><strong>{{UI_HideWhenNoMediaIsActive}}</strong><small>{{UI_HideTheLyricAreaWhenNoMediaIsDetected}}</small></div><label class="switch"><input type="checkbox" data-setting="autoHideWhenNoPlayback" aria-label="{{UI_HideWhenNoMediaIsActive}}"><span class="switch-track"></span></label></div>
-                <div class="setting-row compact"><div class="setting-label"><strong>{{UI_ShowLyricTranslations}}</strong></div><label class="switch"><input type="checkbox" data-setting="showLyricTranslation" aria-label="{{UI_ShowLyricTranslations}}"><span class="switch-track"></span></label></div>
-                <div class="setting-row compact"><div class="setting-label"><strong>{{UI_WordHighlighting}}</strong></div><label class="switch"><input type="checkbox" data-setting="enableWordScanning" aria-label="{{UI_WordHighlighting}}"><span class="switch-track"></span></label></div>
-              </div>
-            </section>
-            <section class="panel">
-              <div class="panel-head"><div><h2>{{UI_FallbackHeading}}</h2><p>{{UI_FallbackDescription}}</p></div></div>
-              <div id="lyricsFallbackRules" class="fallback-rules"></div>
-            </section>
-            <section class="panel">
-              <div class="panel-head"><div><h2>{{UI_Spectrum}}</h2><p>{{UI_FallbackSpectrumDescription}}</p></div></div>
-              <div class="settings">
-                <div class="setting-row compact"><div class="setting-label"><strong>{{UI_FallbackSpectrumWithLyrics}}</strong></div><label class="switch"><input type="checkbox" id="fallbackSpectrumWithLyrics" aria-label="{{UI_FallbackSpectrumWithLyrics}}"><span class="switch-track"></span></label></div>
-                <div class="setting-row compact"><div class="setting-label"><strong>{{UI_SystemAudioAccess}}</strong><small id="spectrumAudioAccessStatus" class="spectrum-audio-status" role="status" aria-live="polite">{{UI_SpectrumIsOffSystemAudioIsNotBeingCaptured}}</small></div><div class="setting-inline-actions"><button id="retrySpectrumAudioAccessButton" class="btn secondary small" type="button" data-retry-spectrum-capture hidden>{{UI_Retry}}</button><button id="revokeSpectrumAudioAccessButton" class="btn ghost small" type="button" hidden>{{UI_StopAndRevoke}}</button></div></div>
               </div>
             </section>
           </div>

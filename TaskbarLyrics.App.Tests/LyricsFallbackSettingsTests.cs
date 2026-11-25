@@ -97,6 +97,10 @@ public sealed class LyricsFallbackSettingsTests
     [Theory]
     [InlineData("version", "\"bad\"")]
     [InlineData("version", "2")]
+    [InlineData("primaryMode", "\"Unknown\"")]
+    [InlineData("primaryMode", "12")]
+    [InlineData("textMode.useSpectrum", "true")]
+    [InlineData("textMode.firstLine.kind", "\"Unknown\"")]
     [InlineData("searching.useSpectrum", "true")]
     [InlineData("searching.firstLine.kind", "\"Unknown\"")]
     [InlineData("notFound.secondLine.showTitle", "12")]
@@ -162,6 +166,89 @@ public sealed class LyricsFallbackSettingsTests
         Assert.False(LyricsFallbackPresentationPolicy.ShouldShowSpectrum(settings, lyric, true));
         settings.SpectrumAudioAccessGranted = false;
         Assert.False(LyricsFallbackPresentationPolicy.ShouldShowSpectrum(settings, missing, false));
+    }
+
+    [Fact]
+    public void PrimaryModeControlsLyricSearchSkippingSpectrumAndPreservesFallbackRules()
+    {
+        var settings = new AppSettings { SpectrumAudioAccessGranted = true, LyricsFallback = new() };
+        settings.LyricsFallback.Instrumental.UseSpectrum = true;
+        settings.LyricsFallback.NotFound.UseSpectrum = false;
+        settings.LyricsFallback.PrimaryMode = "Text";
+        settings.SyncFallbackSpectrumMode();
+
+        var lyric = new LyricDisplayFrame("lyric", "next", "title", 0, 0);
+        var pure = lyric with { IsPureMusic = true };
+        Assert.True(LyricsFallbackPresentationPolicy.ShouldSkipLyricSearch(settings));
+        Assert.False(settings.GetLyricsFallback().UsesSpectrum);
+        Assert.Equal(SpectrumDisplayMode.Disabled, settings.SpectrumDisplayMode);
+        Assert.False(LyricsFallbackPresentationPolicy.ShouldShowSpectrum(settings, pure, false));
+        Assert.False(LyricsFallbackPresentationPolicy.ShouldShowSpectrum(settings, lyric, false));
+        Assert.True(settings.LyricsFallback.Instrumental.UseSpectrum);
+        Assert.Equal("Metadata", settings.LyricsFallback.TextMode.FirstLine.Kind);
+        Assert.True(settings.LyricsFallback.TextMode.FirstLine.ShowTitle);
+        Assert.False(settings.LyricsFallback.TextMode.FirstLine.ShowArtist);
+        Assert.Equal("Metadata", settings.LyricsFallback.TextMode.SecondLine.Kind);
+        Assert.False(settings.LyricsFallback.TextMode.SecondLine.ShowTitle);
+        Assert.True(settings.LyricsFallback.TextMode.SecondLine.ShowArtist);
+
+        // Revoking audio consent while in Text mode keeps Text mode selected.
+        settings.SetLegacySpectrumMode(SpectrumDisplayMode.Disabled);
+        Assert.Equal("Text", settings.LyricsFallback.PrimaryMode);
+
+        // Switching to Spectrum mode skips lyric search, uses Always spectrum, and preserves fallback flags.
+        settings.LyricsFallback.Instrumental.UseSpectrum = true;
+        settings.LyricsFallback.PrimaryMode = "Spectrum";
+        settings.SyncFallbackSpectrumMode();
+        Assert.True(LyricsFallbackPresentationPolicy.ShouldSkipLyricSearch(settings));
+        Assert.True(settings.GetLyricsFallback().UsesSpectrum);
+        Assert.Equal(SpectrumDisplayMode.Always, settings.SpectrumDisplayMode);
+        Assert.True(LyricsFallbackPresentationPolicy.ShouldShowSpectrum(settings, lyric, true));
+        Assert.True(settings.LyricsFallback.Instrumental.UseSpectrum);
+
+        // Switching back to Lyrics restores lyric search and saved fallback spectrum flags.
+        settings.LyricsFallback.PrimaryMode = "Lyrics";
+        settings.SyncFallbackSpectrumMode();
+        Assert.False(LyricsFallbackPresentationPolicy.ShouldSkipLyricSearch(settings));
+        Assert.Equal(SpectrumDisplayMode.PureMusicOnly, settings.SpectrumDisplayMode);
+        Assert.True(LyricsFallbackPresentationPolicy.ShouldShowSpectrum(settings, pure, false));
+        Assert.False(LyricsFallbackPresentationPolicy.ShouldShowSpectrum(settings, lyric, false));
+    }
+
+    [Fact]
+    public void LegacySpectrumWithLyricsMigratesToSpectrumPrimaryModeAndTextModePersists()
+    {
+        using var directory = new TestDirectory();
+        var legacyPath = Path.Combine(directory.Path, "legacy.json");
+        File.WriteAllText(legacyPath, """
+        {
+          "SpectrumAudioAccessGranted": true,
+          "SpectrumDisplayMode": 2,
+          "LyricsFallback": {
+            "Version": 1,
+            "Searching": { "UseSpectrum": false, "FirstLine": { "Kind": "Metadata", "ShowTitle": true, "ShowArtist": true, "CustomText": null }, "SecondLine": { "Kind": "Text", "ShowTitle": true, "ShowArtist": false, "CustomText": null } },
+            "Instrumental": { "UseSpectrum": true, "FirstLine": { "Kind": "Text", "ShowTitle": true, "ShowArtist": false, "CustomText": null }, "SecondLine": { "Kind": "None", "ShowTitle": true, "ShowArtist": false, "CustomText": null } },
+            "NotFound": { "UseSpectrum": true, "FirstLine": { "Kind": "Text", "ShowTitle": true, "ShowArtist": false, "CustomText": null }, "SecondLine": { "Kind": "None", "ShowTitle": true, "ShowArtist": false, "CustomText": null } },
+            "SpectrumWithLyrics": true
+          }
+        }
+        """);
+        var migrated = new SettingsStore(legacyPath).Load();
+        Assert.Equal("Spectrum", migrated.LyricsFallback!.PrimaryMode);
+        Assert.False(migrated.LyricsFallback.SpectrumWithLyrics);
+        Assert.Equal(SpectrumDisplayMode.Always, migrated.SpectrumDisplayMode);
+
+        var textPath = Path.Combine(directory.Path, "text.json");
+        var store = new SettingsStore(textPath);
+        var textSettings = new AppSettings { SpectrumAudioAccessGranted = true, LyricsFallback = new() { PrimaryMode = "Text" } };
+        textSettings.LyricsFallback.TextMode.FirstLine = new() { Kind = "Metadata", ShowTitle = true, ShowArtist = true };
+        textSettings.LyricsFallback.TextMode.SecondLine = new() { Kind = "Text", CustomText = "Now Playing" };
+        Assert.True(store.Save(textSettings));
+        var reloaded = store.Load();
+        Assert.Equal("Text", reloaded.LyricsFallback!.PrimaryMode);
+        Assert.Equal(SpectrumDisplayMode.Disabled, reloaded.SpectrumDisplayMode);
+        Assert.True(reloaded.LyricsFallback.TextMode.FirstLine.ShowArtist);
+        Assert.Equal("Now Playing", reloaded.LyricsFallback.TextMode.SecondLine.CustomText);
     }
 }
 

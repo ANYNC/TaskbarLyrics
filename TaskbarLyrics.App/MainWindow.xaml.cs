@@ -243,6 +243,13 @@ public partial class MainWindow : Window, IDisposable
             RebuildLyricSyncService(snapshot);
         }
 
+        if (changes.SearchStatusDisplayChanged &&
+            LyricsFallbackPresentationPolicy.ShouldSkipLyricSearch(snapshot))
+        {
+            _lyricSyncService.Reset();
+            _lastWebCurrentLineIndex = -1;
+        }
+
         if (changes.SpectrumDisplayChanged)
         {
             if (!snapshot.GetLyricsFallback().UsesSpectrum)
@@ -827,7 +834,15 @@ public partial class MainWindow : Window, IDisposable
 
             UpdateCover(snapshot);
 
-            var frame = await _lyricSyncService.GetDisplayFrameAsync(snapshot);
+            var fallbackRules = _currentSettings.GetLyricsFallback();
+            var skipLyricSearch = LyricsFallbackPresentationPolicy.ShouldSkipLyricSearch(_currentSettings);
+            if (skipLyricSearch && _lyricSyncService.CurrentLyricAcquisition != LyricAcquisitionKind.Unknown)
+            {
+                _lyricSyncService.Reset();
+            }
+            var frame = skipLyricSearch
+                ? new LyricDisplayFrame(string.Empty, string.Empty, snapshot.Track?.Title ?? string.Empty, 0, -1)
+                : await _lyricSyncService.GetDisplayFrameAsync(snapshot);
             if (_musicSessionProvider is SmtcMusicSessionProvider playbackStateProvider)
             {
                 snapshot = playbackStateProvider.RefreshPlaybackState(snapshot);
@@ -837,12 +852,20 @@ public partial class MainWindow : Window, IDisposable
 
             if (_musicSessionProvider is SmtcMusicSessionProvider smtcProvider)
             {
-                smtcProvider.SetCurrentLyricSource(_lyricSyncService.CurrentLyricSourceApp);
-                var playerOffset = _currentSettings.GetPlayerLyricOffsetMilliseconds(snapshot.Track?.SourceApp);
-                var trackOffset = _trackLyricOffsetStore.GetOffsetMilliseconds(
-                    snapshot.Track,
-                    _lyricSyncService.CurrentLyricSourceApp);
-                smtcProvider.SetCurrentLyricOffsets(playerOffset, trackOffset);
+                if (skipLyricSearch)
+                {
+                    smtcProvider.SetCurrentLyricSource(null);
+                    smtcProvider.SetCurrentLyricOffsets(0, 0);
+                }
+                else
+                {
+                    smtcProvider.SetCurrentLyricSource(_lyricSyncService.CurrentLyricSourceApp);
+                    var playerOffset = _currentSettings.GetPlayerLyricOffsetMilliseconds(snapshot.Track?.SourceApp);
+                    var trackOffset = _trackLyricOffsetStore.GetOffsetMilliseconds(
+                        snapshot.Track,
+                        _lyricSyncService.CurrentLyricSourceApp);
+                    smtcProvider.SetCurrentLyricOffsets(playerOffset, trackOffset);
+                }
             }
 
             var current = string.IsNullOrWhiteSpace(frame.CurrentLine)
@@ -851,9 +874,9 @@ public partial class MainWindow : Window, IDisposable
 
             if (IsLyricsNotFoundFrame(frame)) current = Text.T("Lyrics_NotFound");
             var next = frame.NextLine;
-            var fallbackRules = _currentSettings.GetLyricsFallback();
-            var searching = _lyricSyncService.CurrentLyricAcquisition == LyricAcquisitionKind.Searching;
-            var fallback = searching ? fallbackRules.Searching
+            var searching = !skipLyricSearch && _lyricSyncService.CurrentLyricAcquisition == LyricAcquisitionKind.Searching;
+            var fallback = skipLyricSearch ? fallbackRules.TextMode
+                : searching ? fallbackRules.Searching
                 : frame.IsPureMusic ? fallbackRules.Instrumental
                 : IsLyricsNotFoundFrame(frame) ? fallbackRules.NotFound : null;
             _lastWebCurrentLineIndex = fallback is null ? frame.CurrentLineIndex : -1;
@@ -868,7 +891,8 @@ public partial class MainWindow : Window, IDisposable
             _lyricsPresentationScene = ResolveLyricsPresentationScene(frame);
             if (fallback is not null)
             {
-                var message = searching ? Text.T("UI_SearchingForLyrics")
+                var message = skipLyricSearch ? string.Empty
+                    : searching ? Text.T("UI_SearchingForLyrics")
                     : frame.IsPureMusic ? Text.T("UI_Instrumental") : Text.T("Lyrics_NotFound");
                 var presentation = LyricsFallbackPresentationPolicy.Create(fallback, _currentTrack, message);
                 current = presentation.Current;
@@ -966,8 +990,9 @@ public partial class MainWindow : Window, IDisposable
 
     private bool ShouldShowSpectrum(LyricDisplayFrame frame)
     {
-        return LyricsFallbackPresentationPolicy.ShouldShowSpectrum(
-            _currentSettings, frame, _lyricSyncService.CurrentLyricAcquisition == LyricAcquisitionKind.Searching);
+        var searching = !LyricsFallbackPresentationPolicy.ShouldSkipLyricSearch(_currentSettings) &&
+            _lyricSyncService.CurrentLyricAcquisition == LyricAcquisitionKind.Searching;
+        return LyricsFallbackPresentationPolicy.ShouldShowSpectrum(_currentSettings, frame, searching);
     }
 
     private static bool IsLyricsNotFoundFrame(LyricDisplayFrame frame)
@@ -981,6 +1006,11 @@ public partial class MainWindow : Window, IDisposable
         if (ShouldShowSpectrum(frame))
         {
             return LyricsPresentationScene.Spectrum;
+        }
+
+        if (LyricsFallbackPresentationPolicy.ShouldSkipLyricSearch(_currentSettings))
+        {
+            return LyricsPresentationScene.Message;
         }
 
         if (_lyricSyncService.CurrentLyricAcquisition == LyricAcquisitionKind.Searching)
@@ -998,6 +1028,11 @@ public partial class MainWindow : Window, IDisposable
         if (_isCurrentFramePureMusic)
         {
             return LyricsPresentationScene.Spectrum;
+        }
+
+        if (LyricsFallbackPresentationPolicy.ShouldSkipLyricSearch(_currentSettings))
+        {
+            return LyricsPresentationScene.Message;
         }
 
         if (_lyricSyncService.CurrentLyricAcquisition == LyricAcquisitionKind.Searching)

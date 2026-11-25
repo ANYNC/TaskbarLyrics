@@ -80,6 +80,7 @@ public sealed class LyricSyncServiceTests
     [Theory]
     [InlineData("track-change")]
     [InlineData("no-track")]
+    [InlineData("reset")]
     [InlineData("manual-selection")]
     [InlineData("dispose")]
     public async Task PendingRetryIsCanceledWhenItNoLongerOwnsTheTrack(string action)
@@ -101,6 +102,13 @@ public sealed class LyricSyncServiceTests
             case "no-track":
                 await service.GetDisplayFrameAsync(snapshot with { Track = null });
                 break;
+            case "reset":
+                service.Reset();
+                Assert.Equal(LyricAcquisitionKind.Unknown, service.CurrentLyricAcquisition);
+                Assert.Null(service.CurrentLyricSourceApp);
+                Assert.Equal(0, service.CurrentLyricFetchElapsedMilliseconds);
+                Assert.Null(service.CurrentLyricResolvedAtUtc);
+                break;
             case "manual-selection":
                 Assert.True(service.TryApplyResolvedLyrics(track, CreateResolved("manual", "Manual lyric")));
                 break;
@@ -114,6 +122,11 @@ public sealed class LyricSyncServiceTests
         Assert.Equal(action == "track-change" ? 2 : 1, coordinator.ResolveCallCount);
         if (action == "manual-selection")
             Assert.Equal("Manual lyric", (await service.GetDisplayFrameAsync(snapshot)).CurrentLine);
+        if (action == "reset")
+        {
+            Assert.Equal("New lyric", (await service.GetDisplayFrameAsync(snapshot)).CurrentLine);
+            Assert.Equal(2, coordinator.ResolveCallCount);
+        }
     }
 
     private static async Task WaitForAcquisitionAsync(LyricSyncService service, LyricAcquisitionKind acquisition)

@@ -42,6 +42,7 @@ public sealed record LyricsFallbackState
 public sealed record LyricsFallbackSettings
 {
     public int Version { get; set; } = 1;
+    public string PrimaryMode { get; set; } = "Lyrics";
     public LyricsFallbackState Searching { get; set; } = new()
     {
         FirstLine = new() { Kind = "Metadata", ShowArtist = true },
@@ -49,20 +50,35 @@ public sealed record LyricsFallbackSettings
     };
     public LyricsFallbackState Instrumental { get; set; } = new();
     public LyricsFallbackState NotFound { get; set; } = new();
+    public LyricsFallbackState TextMode { get; set; } = CreateDefaultTextMode();
     public bool SpectrumWithLyrics { get; set; }
 
-    internal bool UsesSpectrum => SpectrumWithLyrics || Instrumental.UseSpectrum || NotFound.UseSpectrum;
+    internal static LyricsFallbackState CreateDefaultTextMode() => new()
+    {
+        FirstLine = new() { Kind = "Metadata", ShowTitle = true, ShowArtist = false },
+        SecondLine = new() { Kind = "Metadata", ShowTitle = false, ShowArtist = true }
+    };
+
+    internal bool UsesSpectrum => PrimaryMode switch
+    {
+        "Spectrum" => true,
+        "Text" => false,
+        _ => SpectrumWithLyrics || Instrumental.UseSpectrum || NotFound.UseSpectrum
+    };
 
     internal LyricsFallbackSettings Normalized() => this with
     {
         Version = 1,
+        PrimaryMode = PrimaryMode is "Lyrics" or "Spectrum" or "Text" ? PrimaryMode : "Lyrics",
         Searching = (Searching ?? new LyricsFallbackSettings().Searching).Normalized() with { UseSpectrum = false },
         Instrumental = (Instrumental ?? new LyricsFallbackState()).Normalized(),
-        NotFound = (NotFound ?? new LyricsFallbackState()).Normalized()
+        NotFound = (NotFound ?? new LyricsFallbackState()).Normalized(),
+        TextMode = (TextMode ?? CreateDefaultTextMode()).Normalized() with { UseSpectrum = false }
     };
 
     internal static LyricsFallbackSettings FromLegacy(AppSettings settings) => new()
     {
+        PrimaryMode = settings.SpectrumDisplayMode == SpectrumDisplayMode.Always ? "Spectrum" : "Lyrics",
         Searching = new()
         {
             FirstLine = new() { Kind = "Metadata", ShowArtist = true },
@@ -70,6 +86,7 @@ public sealed record LyricsFallbackSettings
         },
         Instrumental = new() { UseSpectrum = settings.SpectrumDisplayMode is SpectrumDisplayMode.PureMusicOnly or SpectrumDisplayMode.PureMusicOrNoLyrics or SpectrumDisplayMode.Always },
         NotFound = new() { UseSpectrum = settings.SpectrumDisplayMode is SpectrumDisplayMode.Always or SpectrumDisplayMode.PureMusicOrNoLyrics },
+        TextMode = CreateDefaultTextMode(),
         SpectrumWithLyrics = settings.SpectrumDisplayMode == SpectrumDisplayMode.Always
     };
 
@@ -80,22 +97,34 @@ public sealed record LyricsFallbackSettings
             !value.TryGetProperty("version", out var version) || version.ValueKind != JsonValueKind.Number ||
             !version.TryGetInt32(out var number) || number != 1 ||
             !HasBoolean(value, "spectrumWithLyrics")) return false;
+        if (value.TryGetProperty("primaryMode", out var primaryMode) &&
+            (primaryMode.ValueKind != JsonValueKind.String ||
+             primaryMode.GetString() is not ("Lyrics" or "Spectrum" or "Text"))) return false;
+        if (value.TryGetProperty("textMode", out var textMode) && !IsValidState(textMode, allowSpectrum: false)) return false;
         foreach (var state in new[] { "searching", "instrumental", "notFound" })
         {
-            if (!value.TryGetProperty(state, out var rule) || rule.ValueKind != JsonValueKind.Object ||
-                !HasBoolean(rule, "useSpectrum") || (state == "searching" && rule.GetProperty("useSpectrum").GetBoolean())) return false;
-            foreach (var line in new[] { "firstLine", "secondLine" })
-            {
-                if (!rule.TryGetProperty(line, out var content) || content.ValueKind != JsonValueKind.Object ||
-                    !content.TryGetProperty("kind", out var kind) || kind.ValueKind != JsonValueKind.String ||
-                    kind.GetString() is not ("Metadata" or "Text" or "None") ||
-                    !HasBoolean(content, "showTitle") || !HasBoolean(content, "showArtist") ||
-                    !content.TryGetProperty("customText", out var text) ||
-                    text.ValueKind is not (JsonValueKind.Null or JsonValueKind.String) ||
-                    (text.ValueKind == JsonValueKind.String && text.GetString()!.Length > 120)) return false;
-            }
+            if (!value.TryGetProperty(state, out var rule) ||
+                !IsValidState(rule, allowSpectrum: state != "searching")) return false;
         }
         settings = JsonSerializer.Deserialize<LyricsFallbackSettings>(value.GetRawText(), SettingsWebJson.Options)!.Normalized();
+        return true;
+    }
+
+    private static bool IsValidState(JsonElement rule, bool allowSpectrum)
+    {
+        if (rule.ValueKind != JsonValueKind.Object ||
+            !HasBoolean(rule, "useSpectrum") ||
+            (!allowSpectrum && rule.GetProperty("useSpectrum").GetBoolean())) return false;
+        foreach (var line in new[] { "firstLine", "secondLine" })
+        {
+            if (!rule.TryGetProperty(line, out var content) || content.ValueKind != JsonValueKind.Object ||
+                !content.TryGetProperty("kind", out var kind) || kind.ValueKind != JsonValueKind.String ||
+                kind.GetString() is not ("Metadata" or "Text" or "None") ||
+                !HasBoolean(content, "showTitle") || !HasBoolean(content, "showArtist") ||
+                !content.TryGetProperty("customText", out var text) ||
+                text.ValueKind is not (JsonValueKind.Null or JsonValueKind.String) ||
+                (text.ValueKind == JsonValueKind.String && text.GetString()!.Length > 120)) return false;
+        }
         return true;
     }
 
@@ -107,10 +136,16 @@ internal readonly record struct LyricsFallbackPresentation(string Current, strin
 
 internal static class LyricsFallbackPresentationPolicy
 {
+    internal static bool ShouldSkipLyricSearch(AppSettings settings) =>
+        settings.GetLyricsFallback().PrimaryMode is "Text" or "Spectrum";
+
     internal static bool ShouldShowSpectrum(AppSettings settings, LyricDisplayFrame frame, bool searching)
     {
-        if (searching || !settings.SpectrumAudioAccessGranted) return false;
+        if (!settings.SpectrumAudioAccessGranted) return false;
         var rules = settings.GetLyricsFallback();
+        if (rules.PrimaryMode == "Text") return false;
+        if (rules.PrimaryMode == "Spectrum") return true;
+        if (searching) return false;
         var missing = frame.CurrentLineIndex < 0 && frame.CurrentLine == TaskbarLyrics.Core.Services.LyricSyncService.NoLyricsText;
         return frame.IsPureMusic ? rules.Instrumental.UseSpectrum
             : missing ? rules.NotFound.UseSpectrum : frame.CurrentLineIndex >= 0 && rules.SpectrumWithLyrics;

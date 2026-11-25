@@ -59,22 +59,27 @@ public sealed class LyricSyncService : IDisposable
         }
     }
 
+    public void Reset()
+    {
+        CancelPendingSearch();
+        _currentTrack = null;
+        _currentTrackId = null;
+        _currentDocument = null;
+        _currentDocumentHasTranslation = false;
+        _currentLyricSourceApp = null;
+        _currentLyricAcquisition = LyricAcquisitionKind.Unknown;
+        _currentLyricFetchElapsedMilliseconds = 0;
+        _currentLyricResolvedAtUtc = null;
+        _lastSearchDuration = null;
+        _durationCorrectionConsumed = false;
+        _lastEmittedLineIndex = -1;
+    }
+
     public Task<LyricDisplayFrame> GetDisplayFrameAsync(PlaybackSnapshot snapshot)
     {
         if (snapshot.Track == null)
         {
-            CancelPendingSearch();
-            _currentTrack = null;
-            _currentTrackId = null;
-            _currentDocument = null;
-            _currentDocumentHasTranslation = false;
-            _currentLyricSourceApp = null;
-            _currentLyricAcquisition = LyricAcquisitionKind.Unknown;
-            _currentLyricFetchElapsedMilliseconds = 0;
-            _currentLyricResolvedAtUtc = null;
-            _lastSearchDuration = null;
-            _durationCorrectionConsumed = false;
-            _lastEmittedLineIndex = -1;
+            Reset();
             return Task.FromResult(new LyricDisplayFrame("", "", "", 0, -1));
         }
 

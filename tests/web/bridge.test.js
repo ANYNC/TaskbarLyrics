@@ -76,15 +76,24 @@ describe("settings WebView bridge", () => {
       const root = document.querySelector("#lyricsFallbackRules");
       expect(root.querySelectorAll("[data-fallback-state]")).toHaveLength(3);
       expect(root.querySelectorAll('[data-fallback-state="searching"] [data-fallback-mode]')).toHaveLength(0);
+      expect(root.querySelector('[data-fallback-state="searching"] .fallback-mode-static').textContent.length).toBeGreaterThan(0);
       expect(root.querySelectorAll('[data-fallback-state="instrumental"] [data-fallback-mode]')).toHaveLength(2);
       root.querySelector('[data-fallback-change="searching"]').click();
+      expect(root.querySelector('[data-fallback-state="searching"]').classList.contains("is-open")).toBe(true);
       const field = root.querySelector('[data-fallback-state="searching"] [data-fallback-line="firstLine"]');
+      expect(field.querySelector(".fallback-metadata").hidden).toBe(false);
+      expect(field.querySelector(".fallback-input-wrap").hidden).toBe(true);
+      expect(field.querySelector(".fallback-empty-well").hidden).toBe(true);
       field.querySelector('[data-fallback-part="showArtist"]').click();
       expect(sent.at(-1).payload.value.searching.firstLine).toMatchObject({ kind: "Metadata", showTitle: true, showArtist: false });
+      field.querySelector('[data-fallback-kind="Text"]').click();
+      expect(field.querySelector(".fallback-metadata").hidden).toBe(true);
+      expect(field.querySelector(".fallback-input-wrap").hidden).toBe(false);
       const input = field.querySelector('[data-fallback-text]');
-      input.focus();
+      expect(document.activeElement).toBe(input);
       input.value = "<b>My text</b>";
       input.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+      expect(field.querySelector("[data-fallback-count]").textContent).toBe("14/120");
       expect(sent.at(-1).payload).toMatchObject({ key: "lyricsFallback", value: { searching: { firstLine: { kind: "Text", customText: "<b>My text</b>" } } } });
       const preview = root.querySelector('[data-fallback-state="searching"] .fallback-lines');
       expect(preview.firstElementChild.textContent).toBe("<b>My text</b>");
@@ -98,7 +107,14 @@ describe("settings WebView bridge", () => {
       expect(field.querySelector('[data-fallback-kind="Text"]').checked).toBe(true);
       expect(preview.firstElementChild.textContent).toBe("<b>My text</b>");
       field.querySelector('[data-fallback-kind="None"]').click();
+      expect(field.querySelector(".fallback-empty-well").hidden).toBe(false);
       expect(sent.at(-1).payload.value.searching.firstLine.kind).toBe("None");
+      root.querySelector('[data-fallback-state="searching"] [data-fallback-line="secondLine"] [data-fallback-kind="None"]').click();
+      expect(preview.querySelector(".is-empty")).not.toBeNull();
+      dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings: { singleLineLyrics: true } } });
+      const secondField = root.querySelector('[data-fallback-state="searching"] [data-fallback-line="secondLine"]');
+      expect(secondField.classList.contains("is-dimmed")).toBe(true);
+      expect(secondField.querySelector("[data-fallback-single-pill]").hidden).toBe(false);
       root.querySelector('[data-fallback-change="notFound"]').click();
       expect(document.querySelector("#fallback-editor-searching").hidden).toBe(true);
       expect(document.querySelector("#fallback-editor-notFound").hidden).toBe(false);
@@ -120,13 +136,15 @@ describe("settings WebView bridge", () => {
         expect(editor.hidden).toBe(true);
         card.querySelector('[data-fallback-mode="spectrum"]').click();
         expect(sent.at(-1).payload.value[key].useSpectrum).toBe(true);
-        expect(card.querySelector(".fallback-bars")).not.toBeNull();
+        expect(card.querySelectorAll(".fallback-bars i")).toHaveLength(24);
         expect(editor.hidden).toBe(true);
+        expect(change.hidden).toBe(true);
         expect(change.getAttribute("aria-expanded")).toBe("false");
         const textRules = sent.at(-1).payload.value[key].firstLine;
         card.querySelector('[data-fallback-mode="text"]').click();
         expect(sent.at(-1).payload.value[key]).toMatchObject({ useSpectrum: false, firstLine: textRules });
         expect(editor.hidden).toBe(true);
+        expect(change.hidden).toBe(false);
         expect(card.querySelector(".fallback-bars")).toBeNull();
       }
     } finally { dom.window.close(); }
@@ -165,21 +183,118 @@ describe("settings WebView bridge", () => {
     }
   });
 
-  it("keeps no-lyrics spectrum independent from spectrum with regular lyrics", async () => {
+  it("switches primary playback display modes between Lyrics, Spectrum, and Text while preserving fallback rules", async () => {
     const { dom, sent, script } = await createSettingsDom();
     try {
       dom.window.eval(script);
       const document = dom.window.document;
       dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings: { spectrumDisplayMode: "Disabled", spectrumAudioAccessGranted: true } } });
+      const cards = Array.from(document.querySelectorAll("#playbackPrimaryModes [data-primary-mode]"));
+      expect(cards.map(card => card.dataset.primaryMode)).toEqual(["Lyrics", "Spectrum", "Text"]);
+      expect(document.querySelector("#lyricSearchStatusBadge").classList.contains("is-active")).toBe(true);
+      expect(document.querySelector('[data-primary-panel="Lyrics"]').hidden).toBe(false);
+      expect(document.querySelector('[data-primary-panel="Spectrum"]').hidden).toBe(true);
+      expect(document.querySelector('[data-primary-panel="Text"]').hidden).toBe(true);
+
       document.querySelector('[data-fallback-change="notFound"]').click();
       document.querySelector('[data-fallback-state="notFound"] [data-fallback-mode="spectrum"]').click();
-      expect(sent.at(-1).payload.value).toMatchObject({ searching: { useSpectrum: false }, instrumental: { useSpectrum: false }, notFound: { useSpectrum: true }, spectrumWithLyrics: false });
-      const toggle = document.querySelector("#fallbackSpectrumWithLyrics");
-      toggle.checked = true;
-      toggle.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
-      expect(sent.at(-1).payload.value.spectrumWithLyrics).toBe(true);
-      expect(sent.at(-1).payload.value.instrumental.useSpectrum).toBe(false);
+      expect(sent.at(-1).payload.value).toMatchObject({ primaryMode: "Lyrics", searching: { useSpectrum: false }, instrumental: { useSpectrum: false }, notFound: { useSpectrum: true }, spectrumWithLyrics: false });
       expect(document.querySelector('[data-fallback-state="notFound"] .fallback-bars')).not.toBeNull();
+
+      document.querySelector('[data-primary-mode="Spectrum"]').click();
+      expect(sent.at(-1).payload.value).toMatchObject({ primaryMode: "Spectrum", instrumental: { useSpectrum: false }, notFound: { useSpectrum: true } });
+      expect(document.querySelector('[data-primary-mode="Spectrum"]').getAttribute("aria-checked")).toBe("true");
+      expect(document.querySelector('[data-primary-panel="Spectrum"]').hidden).toBe(false);
+      expect(document.querySelector('[data-primary-panel="Lyrics"]').hidden).toBe(true);
+      expect(document.querySelector("#playbackSpectrumPreview").querySelectorAll(".fallback-bars i")).toHaveLength(24);
+      expect(document.querySelector("#lyricSearchStatusBadge").classList.contains("is-active")).toBe(false);
+      expect(document.querySelectorAll("[data-lyrics-mode-only].is-mode-inactive")).toHaveLength(2);
+
+      document.querySelector('[data-primary-mode="Text"]').click();
+      expect(sent.at(-1).payload.value).toMatchObject({ primaryMode: "Text", notFound: { useSpectrum: true } });
+      expect(document.querySelector('[data-primary-panel="Text"]').hidden).toBe(false);
+      expect(document.querySelector("#spectrumTuningButton").disabled).toBe(true);
+      const textPreview = document.querySelector('#playbackTextRule [data-fallback-state="textMode"] .fallback-lines');
+      expect(Array.from(textPreview.children).map(el => el.textContent)).toEqual(["示例歌曲", "示例歌手"]);
+
+      document.querySelector('[data-fallback-state="textMode"] [data-fallback-line="firstLine"] [data-fallback-part="showArtist"]').click();
+      expect(sent.at(-1).payload.value.textMode.firstLine).toMatchObject({ kind: "Metadata", showTitle: true, showArtist: true });
+      expect(textPreview.firstElementChild.textContent).toBe("示例歌曲 - 示例歌手");
+
+      const secondTextField = document.querySelector('[data-fallback-state="textMode"] [data-fallback-line="secondLine"]');
+      secondTextField.querySelector('[data-fallback-kind="Text"]').click();
+      const textInput = secondTextField.querySelector("[data-fallback-text]");
+      textInput.value = "Now Playing";
+      textInput.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+      expect(sent.at(-1).payload.value.textMode.secondLine).toMatchObject({ kind: "Text", customText: "Now Playing" });
+      expect(secondTextField.querySelector("[data-fallback-count]").textContent).toBe("11/120");
+
+      dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings: { singleLineLyrics: true, spectrumAudioAccessGranted: true, lyricsFallback: sent.at(-1).payload.value } } });
+      expect(secondTextField.classList.contains("is-dimmed")).toBe(true);
+      expect(secondTextField.querySelector("[data-fallback-single-pill]").hidden).toBe(false);
+
+      document.querySelector('[data-primary-mode="Lyrics"]').click();
+      expect(sent.at(-1).payload.value).toMatchObject({ primaryMode: "Lyrics", notFound: { useSpectrum: true }, spectrumWithLyrics: false });
+      expect(document.querySelector("#lyricSearchStatusBadge").classList.contains("is-active")).toBe(true);
+      expect(document.querySelectorAll("[data-lyrics-mode-only].is-mode-inactive")).toHaveLength(0);
+    } finally { dom.window.close(); }
+  });
+
+  it("gates Spectrum primary mode behind audio consent and supports keyboard switching without gating Text mode", async () => {
+    const { dom, sent, script } = await createSettingsDom();
+    enableDialogDomSupport(dom);
+    try {
+      dom.window.eval(script);
+      const document = dom.window.document;
+      dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings: { spectrumDisplayMode: "Disabled", spectrumAudioAccessGranted: false } } });
+      const lyricsCard = document.querySelector('[data-primary-mode="Lyrics"]');
+      const spectrumCard = document.querySelector('[data-primary-mode="Spectrum"]');
+      const textCard = document.querySelector('[data-primary-mode="Text"]');
+      const consentDialog = document.querySelector("#spectrumAudioConsentDialog");
+
+      textCard.click();
+      expect(consentDialog.open).toBe(false);
+      expect(sent.at(-1).payload).toMatchObject({ key: "lyricsFallback", value: { primaryMode: "Text" } });
+
+      lyricsCard.focus();
+      lyricsCard.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+      expect(document.activeElement).toBe(spectrumCard);
+      expect(consentDialog.open).toBe(true);
+      document.querySelector("#confirmSpectrumAudioAccess").click();
+      expect(sent.at(-1)).toMatchObject({
+        version: 1,
+        type: "confirmSpectrumAudioAccess",
+        payload: { spectrumDisplayMode: "Always", lyricsFallback: { primaryMode: "Spectrum" } }
+      });
+    } finally { dom.window.close(); }
+  });
+
+  it("animates playback mode stage height on mode switch and restores auto height after transition", async () => {
+    const { dom, script } = await createSettingsDom({ reducedMotion: false });
+    try {
+      dom.window.eval(script);
+      const document = dom.window.document;
+      const stage = document.querySelector("#playbackModeStage");
+      const heights = { Lyrics: 240, Spectrum: 110, Text: 260 };
+      stage.getBoundingClientRect = () => {
+        const visible = stage.querySelector("[data-primary-panel]:not([hidden])");
+        const measured = stage.style.height ? parseFloat(stage.style.height) : heights[visible?.dataset.primaryPanel ?? "Lyrics"];
+        return { height: measured };
+      };
+      dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings: { spectrumAudioAccessGranted: true } } });
+      expect(stage.classList.contains("is-resizing")).toBe(false);
+
+      document.querySelector('[data-primary-mode="Spectrum"]').click();
+      expect(stage.classList.contains("is-resizing")).toBe(true);
+      expect(stage.style.height).toBe("110px");
+      expect(document.querySelector('[data-primary-panel="Spectrum"]').classList.contains("is-entering")).toBe(true);
+
+      const endEvent = new dom.window.Event("transitionend", { bubbles: true });
+      endEvent.propertyName = "height";
+      stage.dispatchEvent(endEvent);
+      expect(stage.classList.contains("is-resizing")).toBe(false);
+      expect(stage.style.height).toBe("");
+      expect(document.querySelector('[data-primary-panel="Spectrum"]').classList.contains("is-entering")).toBe(false);
     } finally { dom.window.close(); }
   });
 
@@ -1636,7 +1751,7 @@ describe("settings WebView bridge", () => {
     dom.window.settingsApp.receive({ version: 1, type: "settingsState", payload: { settings: {
       spectrumDisplayMode: "Disabled", spectrumAudioAccessGranted: granted
     } } });
-    expect(document.querySelector('#fallbackSpectrumWithLyrics').checked).toBe(false);
+    expect(document.querySelector('[data-primary-mode="Spectrum"]').getAttribute('aria-checked')).toBe('false');
     expect(document.querySelector("#spectrumTuningButton").disabled).toBe(true);
     const initialCount = sent.length;
     dom.window.settingsApp.receive({ version: 1, type: "requestSpectrumDisplayMode", payload: { mode } });
